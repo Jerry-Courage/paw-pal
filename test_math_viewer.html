@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body { background: #020617; color: white; font-family: sans-serif; padding: 50px; }
+        
+        /* THE MATRIX CSS (from globals.css) */
+        .digital-grid {
+            background-color: #031016 !important;
+            background-image: 
+                linear-gradient(rgba(0, 245, 255, 0.15) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 245, 255, 0.15) 1px, transparent 1px);
+            background-size: 30px 30px;
+            background-position: center;
+        }
+
+        .text-phosphor {
+            color: #00f5ff !important;
+            text-shadow: 0 0 5px rgba(0, 245, 255, 1), 0 0 15px rgba(0, 245, 255, 0.4);
+        }
+
+        .prose-math {
+            border-radius: 2rem;
+            border: 2px border solid rgba(6, 182, 212, 0.2);
+            box-shadow: 0 0 50px rgba(0, 245, 255, 0.1);
+            padding: 40px;
+            margin: 40px 0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+        }
+
+        .katex, .katex * {
+            color: #00f5ff !important;
+            text-shadow: 0 0 8px rgba(0, 245, 255, 0.6) !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Math Matrix Diagnostic</h1>
+    
+    <div id="test-board" class="prose-math digital-grid">
+        <div id="math-output"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script>
+        const latex = "\\lim_{x \\to a} [f(x) \\pm g(x)] = \\lim_{x \\to a} f(x) \\pm \\lim_{x \\to a} g(x)";
+        document.getElementById('math-output').innerHTML = katex.renderToString(latex, {
+            displayMode: true,
+            throwOnError: false
+        });
+    </script>
+</body>
+</html>
