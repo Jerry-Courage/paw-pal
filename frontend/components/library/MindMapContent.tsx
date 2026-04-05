@@ -46,7 +46,7 @@ export default function MindMapContent({ data }: MindMapContentProps) {
 
       {/* Connection Paths (Background SVG) */}
       <div className="absolute inset-x-0 top-[150px] bottom-0 pointer-events-none z-0 overflow-hidden hidden lg:block">
-        <svg Title="Neural Paths" width="100%" height="100%" className="opacity-20 dark:opacity-40">
+        <svg aria-label="Neural Paths" width="100%" height="100%" className="opacity-20 dark:opacity-40">
            {/* Dynamic paths could be added here if we had coordinates, but let's use CSS for simplicity for now */}
         </svg>
       </div>

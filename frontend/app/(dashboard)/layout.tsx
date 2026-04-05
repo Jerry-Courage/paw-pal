@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import MobileNav from '@/components/layout/MobileNav'
@@ -13,19 +14,20 @@ const AIGuideTour = dynamic(() => import('@/components/tour/AIGuideTour'), { ssr
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
+  const router = useRouter()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      window.location.href = '/login'
+      router.replace('/login')
       return
     }
     if (status === 'authenticated') {
       const onboarded = localStorage.getItem('flowstate_onboarded')
       if (!onboarded) setShowOnboarding(true)
     }
-  }, [status])
+  }, [status, router])
 
   if (status === 'loading') {
     return (

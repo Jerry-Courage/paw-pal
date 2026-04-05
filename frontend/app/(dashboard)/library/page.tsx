@@ -191,10 +191,10 @@ export default function LibraryPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['resources', typeFilter],
     queryFn: () => libraryApi.getResources(typeFilter).then((r) => r.data),
-    // Auto-refresh if any resource is still processing
+    // Auto-refresh if any resource is still processing (8s to reduce server load)
     refetchInterval: (query) => {
       const results = (query.state.data as any)?.results || []
-      return results.some((r: any) => r.status !== 'ready') ? 4000 : false
+      return results.some((r: any) => r.status !== 'ready') ? 8000 : false
     },
   })
 

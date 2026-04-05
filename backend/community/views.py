@@ -12,7 +12,7 @@ class PostListCreateView(generics.ListCreateAPIView):
     serializer_class = PostSerializer
 
     def get_queryset(self):
-        qs = Post.objects.all().prefetch_related('comments', 'likes')
+        qs = Post.objects.all().select_related('author').prefetch_related('comments', 'likes')
         post_type = self.request.query_params.get('type')
         tag = self.request.query_params.get('tag')
         if post_type:
@@ -33,7 +33,7 @@ class PostDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PostSerializer
 
     def get_queryset(self):
-        return Post.objects.all()
+        return Post.objects.all().select_related('author').prefetch_related('comments', 'likes')
 
     def get_serializer_context(self):
         return {'request': self.request}

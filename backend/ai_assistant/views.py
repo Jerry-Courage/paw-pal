@@ -28,7 +28,7 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatSessionSerializer
 
     def get_queryset(self):
-        return ChatSession.objects.filter(user=self.request.user)
+        return ChatSession.objects.filter(user=self.request.user).prefetch_related('messages')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

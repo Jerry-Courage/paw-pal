@@ -136,7 +136,9 @@ export default function RichNotesViewer({
                     )
                   },
 
-                  // Smart Math Interceptor
+                  // Smart Math Interceptor (remark-math adds 'math'/'inlineMath' not in react-markdown types)
+                  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                  // @ts-ignore
                   math: ({ value, children }: any) => {
                     const latex = (value || (children as any)?.[0] || '').toString().trim()
                     if (!latex) return null

@@ -17,8 +17,8 @@ class GroupListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         filter_type = self.request.query_params.get('filter', 'my')
         if filter_type == 'all':
-            return StudyGroup.objects.filter(is_public=True)
-        return StudyGroup.objects.filter(memberships__user=self.request.user)
+            return StudyGroup.objects.filter(is_public=True).select_related('owner').prefetch_related('memberships')
+        return StudyGroup.objects.filter(memberships__user=self.request.user).select_related('owner').prefetch_related('memberships')
 
     def perform_create(self, serializer):
         group = serializer.save(owner=self.request.user)

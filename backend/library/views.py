@@ -42,7 +42,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         return ResourceSerializer
 
     def get_queryset(self):
-        qs = Resource.objects.filter(owner=self.request.user)
+        qs = Resource.objects.filter(owner=self.request.user).select_related('owner').prefetch_related('extracted_images')
         resource_type = self.request.query_params.get('type')
         if resource_type:
             qs = qs.filter(resource_type=resource_type)
