@@ -7,8 +7,10 @@ from .views import (
     RefetchTranscriptView, MathSolverView,
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
+from .sse import ResourceStatusSSEView
 
 urlpatterns = [
+    path('resources/status-stream/', ResourceStatusSSEView.as_view(), name='resource-status-stream'),
     path('resources/', ResourceListCreateView.as_view(), name='resource-list'),
     path('resources/<int:pk>/', ResourceDetailView.as_view(), name='resource-detail'),
     path('resources/<int:resource_id>/flashcards/generate/', GenerateFlashcardsView.as_view()),

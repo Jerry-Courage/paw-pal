@@ -45,10 +45,35 @@ FlowState is a full-stack AI-powered study platform. Students can upload PDFs, l
 - WhiteNoise for static file serving
 - Apps: `users`, `library`, `ai_assistant`, `groups`, `planner`, `community`, `assignments`, `workspace`
 
+## Database
+- **Primary:** PostgreSQL (Replit-managed, uses `DATABASE_URL` secret automatically)
+- **Fallback:** SQLite (only if DATABASE_URL not set)
+- Driver: psycopg2-binary + dj-database-url
+
+## Key Features Implemented
+- **AI Tutor** — Chat with context from specific documents, vision support for diagrams
+- **FlowCast** — Two-host AI podcast from any document, Whisper interruptions, edge-tts narration
+- **Spaced Repetition Flashcards** — SM-2 algorithm, Anki export
+- **Mind Maps** — AI-generated Mermaid concept maps
+- **Math Solver** — LaTeX rendering, step-by-step derivations
+- **YouTube → Study Kit** — Transcript fetch, Whisper fallback, AI summary
+- **Quiz Generator** — MCQ, short-answer, true/false, AI feedback
+- **Study Planner** — Deadline tracking, AI scheduling
+- **Groups & Collaboration** — Shared resources, AI TA, real-time workspace
+- **Community** — Public notes, flashcard decks, study events
+- **Progress Analytics** — Study streak, weekly goals, retention tracking
+
+## Performance Optimizations
+- GZip middleware on Django
+- In-memory caching layer (LocMemCache)
+- select_related + prefetch_related on all list views
+- Real-time SSE for resource processing status (replaces polling)
+- Auth middleware in Next.js for edge-level route protection
+
 ## Running Locally
 1. Frontend starts automatically on port 5000
 2. Backend starts automatically on port 8000
-3. Django migrations are applied (run `cd backend && python manage.py migrate` if needed)
+3. Django migrations run against PostgreSQL automatically
 4. Static files collected to `backend/staticfiles/`
 
 ## Replit Compatibility Notes

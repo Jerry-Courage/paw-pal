@@ -191,12 +191,63 @@ export default function LibraryPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['resources', typeFilter],
     queryFn: () => libraryApi.getResources(typeFilter).then((r) => r.data),
-    // Auto-refresh if any resource is still processing (8s to reduce server load)
-    refetchInterval: (query) => {
-      const results = (query.state.data as any)?.results || []
-      return results.some((r: any) => r.status !== 'ready') ? 8000 : false
-    },
   })
+
+  // Real-time processing updates via SSE (replaces polling)
+  useEffect(() => {
+    const resources = (data?.results || []) as any[]
+    const hasProcessing = resources.some((r: any) => r.status !== 'ready' && r.status !== 'error')
+    if (!hasProcessing) return
+
+    let aborted = false
+    const ctrl = new AbortController()
+
+    const connectSSE = async () => {
+      try {
+        const { getSession } = await import('next-auth/react')
+        const session = await getSession()
+        const token = (session as any)?.accessToken
+        if (!token || aborted) return
+
+        const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8000'
+        const res = await fetch(`${apiBase}/api/library/resources/status-stream/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ctrl.signal,
+        })
+        if (!res.ok || !res.body) return
+
+        const reader = res.body.getReader()
+        const dec = new TextDecoder()
+        let buf = ''
+
+        while (!aborted) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += dec.decode(value, { stream: true })
+          const parts = buf.split('\n\n')
+          buf = parts.pop() || ''
+          for (const part of parts) {
+            const dataLine = part.split('\n').find((l) => l.startsWith('data:'))
+            const eventLine = part.split('\n').find((l) => l.startsWith('event:'))
+            const evt = eventLine?.replace('event:', '').trim()
+            if (!dataLine || evt === 'heartbeat' || evt === 'timeout') continue
+            try {
+              JSON.parse(dataLine.replace('data:', '').trim())
+              if (evt === 'status' || evt === 'snapshot') {
+                qc.invalidateQueries({ queryKey: ['resources'] })
+              }
+              if (evt === 'done') { reader.cancel(); return }
+            } catch {}
+          }
+        }
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') console.warn('SSE error', e)
+      }
+    }
+
+    connectSSE()
+    return () => { aborted = true; ctrl.abort() }
+  }, [data, qc])
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => libraryApi.deleteResource(id),
