@@ -1,0 +1,65 @@
+modules = ["nodejs-20", "python-3.12", "web"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+NEXT_PUBLIC_API_URL = "http://localhost:8000/api"
+API_URL = "http://localhost:8000/api"
+NEXTAUTH_URL = "https://d57309ca-c663-4100-925d-029d687800b0-00-2dy6syizx5gy8.worf.replit.dev"
+DEBUG = "True"
+ALLOWED_HOSTS = "*"
+NEXTAUTH_SECRET = "576a5acc91c38e346e77a771f0ab801e84c299832aebff8a6c6fc8571c2f65b0"
+DJANGO_SECRET_KEY = "MtTkBD5G6ze49X3LgU9_wHyUNdcZXFoLAYB3ADpdjEMQ9ty3AhgZroJcI9NohrqUGSQ"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Backend API"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Backend API"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:8000"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd frontend && npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 8000
+externalPort = 80

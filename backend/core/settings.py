@@ -132,10 +132,25 @@ SIMPLE_JWT = {
 }
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
+import re as _re
+
+_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+if _cors_env:
+    CORS_ALLOWED_ORIGINS = _cors_env.split(',')
+else:
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:5000',
+        'http://127.0.0.1:5000',
+    ]
+
+# Allow all *.replit.dev and *.repl.co origins for Replit preview environment
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https://.*\.replit\.dev$',
+    r'^https://.*\.repl\.co$',
+    r'^https://.*\.worf\.replit\.dev$',
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # ─── File Upload Security ─────────────────────────────────────────────────────
