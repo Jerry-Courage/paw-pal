@@ -1,0 +1,76 @@
+Critical gaps (things that are broken or misleading):
+
+Media files won't survive deployment — PDFs, images extracted from documents, and FlowCast audio are saved to the local filesystem. When you publish and the container restarts, everything in /media/ is gone. This needs cloud storage (like an S3-compatible service) before you can seriously launch.
+
+Search is fake — The landing page says "search across all documents instantly" but the actual search is just a client-side title filter. There's no full-text search across document content at all.
+
+Groups real-time chat uses basic REST — Group messages are fetched by polling, not WebSockets. The "real-time" feel is simulated.
+
+Features that work but feel incomplete:
+
+Study Planner — You can create sessions and deadlines, but the AI scheduling is minimal. There's no calendar view, no drag-and-drop, and no "reschedule everything" when you miss a session.
+
+Assignments tracker — Basic CRUD only. It doesn't connect to the planner or trigger flashcard generation. Creating an assignment doesn't do anything intelligent.
+
+Community feed — Posts exist but there's no algorithm, no trending content, no topic filtering beyond a simple type selector. It feels like a bulletin board, not a community.
+
+Notifications — The model exists and notifications are written to the database, but there's no push delivery (browser notifications, email, etc). You only see them if you click the bell icon while logged in.
+
+Workspace/collaborative docs — The workspace feature is very thin compared to what the name implies. No real-time co-editing, no rich text, no version history.
+
+Performance issues still remaining:
+
+FlowCast audio — yt-dlp downloads audio to local disk and temp files accumulate. There's no cleanup job.
+
+PDF processing is synchronous within the thread — Large PDFs (50 pages+) block the background thread for a long time. A proper task queue (like Celery) would handle this more robustly.
+
+No image optimization — User avatars and extracted PDF images are served raw with no compression or resizing.
+
+Biggest opportunity:
+
+The app already has the bones of something genuinely great — the SM-2 flashcards, AI tutor with document context, FlowCast, and mind maps are all legitimately impressive. The #1 thing holding it back from being the best study app in the world is media persistence — fix that and you could confidently deploy and let real users upload files without fear of losing their data.
+
+
+
+Planning strategic feature enhancements (14 seconds)
+Here are the improvements that would genuinely separate FlowState from everything else on the market, ordered by impact:
+
+Tier 1 — True Game Changers
+1. RAG across your entire library
+Right now the AI tutor only knows one document at a time. If you could ask "what do my biochem notes, this research paper, and that YouTube lecture all say about enzyme inhibition?" — that's a completely different level. This requires embedding your documents into a vector database (pgvector works with your existing PostgreSQL) and doing semantic search at query time. No mainstream study app does this well.
+
+2. AI Exam Simulator
+Pull from your entire library, generate a full timed mock exam, have the AI mark it, and give you a detailed breakdown of exactly which concepts you failed and why. Automatically creates a targeted revision plan from your results. Students would pay serious money for this alone.
+
+3. Weak Area Detection
+The SM-2 data already tells you which flashcards you fail repeatedly. The missing piece is surfacing that intelligence: "You've gotten questions about oxidative phosphorylation wrong 7 times this week. Here's a focused 15-minute session." Turn your data into action.
+
+4. Focus Mode with Pomodoro
+A full-screen, distraction-free study timer that logs your session, blocks the rest of the UI, and celebrates when you hit your daily goal. Simple but deeply effective for engagement and retention.
+
+Tier 2 — Strong Differentiators
+5. Voice AI Tutor
+The AI already streams text. Adding speech-to-text input (Web Speech API — no backend needed) and text-to-speech output means students can study completely hands-free. Gym, commute, cooking — the tutor goes with them. You already have audio infrastructure from FlowCast.
+
+6. Cross-Document Concept Linking
+When the AI generates notes for a new upload, it checks your existing library and highlights: "This topic connects to what you already studied in 'Biochem Week 3'. Click to compare." Makes your library feel alive instead of a flat list of files.
+
+7. Browser Extension
+Clip any webpage, article, or research paper directly into your FlowState library with one click. Instant Study Kit generation. This creates a habit loop that keeps students coming back every time they do any reading.
+
+8. Group Study Rooms with Real-Time Whiteboard
+Replace the current REST-based group chat with WebSockets and add a shared canvas where group members can draw diagrams, annotate shared notes, and solve problems together. Think Figma-style collaboration but for studying.
+
+Tier 3 — Polish That Converts Visitors to Loyalists
+9. Smart Notifications
+"Your 14-day streak is at risk — you haven't studied today." or "23 flashcards are due for review. Quick 10-minute session?" Push notifications, email reminders, or even a daily digest. The notification model is already in the database, it just needs delivery.
+
+10. Public Profile & Portfolio
+Let students share a public profile showing their study streak, top subjects, and public flashcard decks. Social proof drives word-of-mouth. A student who shares their profile brings in 2-3 new users on average.
+
+11. AI-Generated Practice Papers
+Beyond individual quizzes — generate a full formatted past-paper-style exam document (PDF) from any subject, at a configurable difficulty level, that looks like what their university would hand them in an exam hall.
+
+The One Thing That Unlocks All of It
+Before any of these features matter at scale: fix media storage. Every file upload, extracted image, and FlowCast audio clip disappears on deployment restart. Until that's solved with cloud storage, you can't have real users relying on the app for their actual studies. Everything else sits on top of that foundation.
+
