@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import StudyGroup, GroupMembership, GroupSession, WorkspaceDocument, GroupTask, GroupMessage
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage
 from users.serializers import UserSerializer
 
 
@@ -46,19 +46,6 @@ class GroupSessionSerializer(serializers.ModelSerializer):
     def get_attendee_count(self, obj):
         return obj.attendees.count()
 
-
-class WorkspaceDocumentSerializer(serializers.ModelSerializer):
-    last_edited_by_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = WorkspaceDocument
-        fields = ('id', 'group', 'title', 'content', 'last_edited_by_name', 'updated_at', 'created_at')
-        read_only_fields = ('id', 'created_at', 'updated_at', 'group')
-
-    def get_last_edited_by_name(self, obj):
-        if obj.last_edited_by:
-            return obj.last_edited_by.get_full_name() or obj.last_edited_by.username
-        return None
 
 
 class GroupTaskSerializer(serializers.ModelSerializer):

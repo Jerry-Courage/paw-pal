@@ -1,0 +1,33 @@
+Performing system checks...
+
+System check identified no issues (0 silenced).
+April 05, 2026 - 15:03:23
+Django version 6.0.3, using settings 'core.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+[33;1mWARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/[0m
+Performing system checks...
+
+System check identified no issues (0 silenced).
+[31m
+You have 55 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): admin, ai_assistant, assignments, auth, community, contenttypes, groups, library, planner, sessions, token_blacklist, users, workspace.[0m
+[31mRun 'python manage.py migrate' to apply them.[0m
+April 05, 2026 - 15:11:48
+Django version 6.0.3, using settings 'core.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+[33;1mWARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/[0m
+Performing system checks...
+
+System check identified no issues (0 silenced).
+April 05, 2026 - 15:14:36
+Django version 6.0.3, using settings 'core.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+[33;1mWARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/[0m

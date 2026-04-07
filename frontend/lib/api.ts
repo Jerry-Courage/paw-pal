@@ -2,7 +2,7 @@ import axios from 'axios'
 import { getSession } from 'next-auth/react'
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -56,6 +56,10 @@ export const libraryApi = {
   deleteResource: (id: number) => api.delete(`/library/resources/${id}/`),
   generateFlashcards: (id: number, count = 10, level = 'undergrad') =>
     api.post(`/library/resources/${id}/flashcards/generate/`, { count, level }),
+  getDecks: () => api.get('/library/decks/'),
+  createDeck: (title: string, subject?: string) => api.post('/library/decks/', { title, subject }),
+  saveFlashcardsToDeck: (deckId: number, resourceId: number | null, flashcards: any[]) =>
+    api.post(`/library/decks/${deckId}/save-flashcards/`, { resource_id: resourceId, flashcards }),
   generateQuiz: (id: number, format: string, level: string, count = 10) =>
     api.post(`/library/resources/${id}/quiz/generate/`, { format, level, count }),
   generateMindMap: (id: number) =>
@@ -204,10 +208,13 @@ export const workspaceApi = {
   delete: (id: number) => api.delete(`/workspace/${id}/`),
   join: (invite_code: string) => api.post('/workspace/join/', { invite_code }),
   getMembers: (id: number) => api.get(`/workspace/${id}/members/`),
-  getDocument: (id: number) => api.get(`/workspace/${id}/document/`),
-  updateDocument: (id: number, content: string) => api.patch(`/workspace/${id}/document/`, { content }),
-  getVersions: (id: number) => api.get(`/workspace/${id}/document/versions/`),
-  restoreVersion: (id: number, version_id: number) => api.post(`/workspace/${id}/document/versions/`, { version_id }),
+  getBlocks: (id: number) => api.get(`/workspace/${id}/blocks/`),
+  createBlock: (id: number, data: any) => api.post(`/workspace/${id}/blocks/`, data),
+  updateBlock: (id: number, data: any) => api.patch(`/workspace/${id}/blocks/`, data),
+  deleteBlock: (id: number, blockId: number) => api.delete(`/workspace/${id}/blocks/`, { data: { block_id: blockId } }),
+  reorderBlocks: (id: number, orderList: number[]) => api.patch(`/workspace/${id}/blocks/`, { order_list: orderList }),
+  getVersions: (id: number) => api.get(`/workspace/${id}/versions/`),
+  restoreVersion: (id: number, version_id: number) => api.post(`/workspace/${id}/versions/`, { version_id }),
   getMessages: (id: number) => api.get(`/workspace/${id}/messages/`),
   sendMessage: (id: number, content: string) => api.post(`/workspace/${id}/messages/`, { content }),
   getTasks: (id: number) => api.get(`/workspace/${id}/tasks/`),

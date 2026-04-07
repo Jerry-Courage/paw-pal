@@ -15,9 +15,10 @@ MIN_IMAGE_WIDTH = 80
 MIN_IMAGE_HEIGHT = 80
 
 
-def extract_pdf_content(file_path: str, max_pages: int = 500) -> Dict[str, Any]:
+def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pages: int = 500) -> Dict[str, Any]:
     """
     Extract text, images, and Table of Contents (TOC) from a PDF file.
+    Accepts either a local file_path or raw file_bytes (for S3 storage).
     Returns: {
         'text': str,
         'images': [{'page': int, 'data': bytes, 'ext': str, 'width': int, 'height': int}],
@@ -31,7 +32,12 @@ def extract_pdf_content(file_path: str, max_pages: int = 500) -> Dict[str, Any]:
 
     try:
         import fitz  # PyMuPDF
-        doc = fitz.open(file_path)
+        if file_bytes:
+            doc = fitz.open("pdf", file_bytes)
+        elif file_path:
+            doc = fitz.open(file_path)
+        else:
+            raise ValueError("Either file_path or file_bytes must be provided")
         total_pages = len(doc)
         content['page_count'] = total_pages
         pages_to_read = min(total_pages, max_pages)
@@ -105,7 +111,7 @@ def extract_pdf_content(file_path: str, max_pages: int = 500) -> Dict[str, Any]:
     return content
 
 
-def extract_pdf_text(file_path: str, max_pages: int = 500) -> str:
+def extract_pdf_text(file_path: str = None, file_bytes: bytes = None, max_pages: int = 500) -> str:
     """Legacy wrapper for backward compatibility."""
-    res = extract_pdf_content(file_path, max_pages)
+    res = extract_pdf_content(file_path=file_path, file_bytes=file_bytes, max_pages=max_pages)
     return res['text']

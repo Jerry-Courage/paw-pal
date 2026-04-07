@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import StudyGroup, GroupMembership, GroupSession, WorkspaceDocument, GroupTask, GroupMessage
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage
 
 
 class GroupMembershipInline(admin.TabularInline):
@@ -59,16 +59,10 @@ class GroupSessionAdmin(admin.ModelAdmin):
     attendee_count.short_description = 'Attendees'
 
 
-@admin.register(WorkspaceDocument)
-class WorkspaceDocumentAdmin(admin.ModelAdmin):
-    list_display = ('title', 'group', 'last_edited_by', 'word_count', 'updated_at')
-    list_filter = ('updated_at',)
-    search_fields = ('title', 'group__name')
-    readonly_fields = ('created_at', 'updated_at')
-
-    def word_count(self, obj):
-        return len(obj.content.split()) if obj.content else 0
-    word_count.short_description = 'Words'
+@admin.register(GroupTask)
+class GroupTaskAdmin(admin.ModelAdmin):
+    list_display = ('title', 'group', 'assigned_to', 'is_completed')
+    list_filter = ('is_completed', 'group')
 
 
 @admin.register(GroupMessage)

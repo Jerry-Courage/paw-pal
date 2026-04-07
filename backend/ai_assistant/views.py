@@ -116,7 +116,7 @@ class StreamMessageView(APIView):
 
 
 def _build_resource_messages(ai, resource, content, history):
-    context = ai._get_resource_context(resource)
+    context = ai._get_resource_context(resource, query=content)
     has_notes = bool(resource.ai_notes_json)
     system = (
         f"You are FlowAI, the AI Study Partner for '{resource.title}' (Subject: {resource.subject or 'General'}). "
@@ -231,6 +231,11 @@ class StudyNotesView(APIView):
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
         resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        if resource.status == 'processing':
+            return Response(
+                {'error': 'Resource is still being processed. Please wait a few seconds.'},
+                status=status.HTTP_202_ACCEPTED
+            )
         ai = AIService()
         notes = ai.generate_study_notes(resource)
         return Response({'notes': notes})
@@ -287,7 +292,7 @@ class GradeAnswerView(APIView):
             return Response({'error': 'Question and answer are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         ai = AIService()
-        context = ai._get_resource_context(resource)
+        context = ai._get_resource_context(resource, query=question)
         result = ai.grade_answer(question, user_answer, model_answer, context)
         return Response(result)
 
@@ -379,19 +384,18 @@ class VisionMessageView(APIView):
                 mime = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else f'image/{ext[1:]}'
                 is_vision = True
 
-                # Build multimodal message — include history as text, then the image message
+                # Build multimodal message
                 messages_to_send = history_msgs + [{
                     'role': 'user',
                     'content': [
                         {
                             'type': 'text',
-                            'text': content if content else 'Please analyze this image in detail. Describe what you see, identify any educational content, diagrams, text, or concepts, and explain them clearly.'
+                            'text': content if content else 'Please analyze this image.'
                         },
                         {
                             'type': 'image_url',
                             'image_url': {
-                                'url': f'data:{mime};base64,{img_data}',
-                                'detail': 'high'
+                                'url': f'data:{mime};base64,{img_data}'
                             }
                         }
                     ]
@@ -545,17 +549,6 @@ class GenerateImageView(APIView):
         enhance = request.data.get('enhance', True)
         final_prompt = prompt
         
-        # Check for API Key first to prevent wasting credits on enhancement if it will fail anyway
-        import os
-        from django.conf import settings
-        hf_token = os.environ.get('HF_API_TOKEN', getattr(settings, 'HF_API_TOKEN', None))
-        
-        if not hf_token:
-            return Response(
-                {'error': 'Missing HF_API_TOKEN in the backend environment. Please configure your Hugging Face API key.'}, 
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
         if enhance:
             try:
                 ai = AIService()
@@ -572,50 +565,22 @@ class GenerateImageView(APIView):
                 logger.warning(f"Failed to enhance image prompt: {e}")
                 final_prompt = prompt
 
-        import requests
-        import base64
         try:
-            logger.info(f"Generating image via Hugging Face FLUX with prompt: {final_prompt[:50]}...")
+            ai = AIService()
+            image_data_uri = ai.generate_image(final_prompt)
             
-            # Using the new Hugging Face Inference Router (Legacy api-inference was deprecated with 410)
-            API_URL = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
-            
-            res = requests.post(
-                API_URL,
-                headers={"Authorization": f"Bearer {hf_token}"},
-                json={"inputs": final_prompt},
-                timeout=120
-            )
-            
-            if res.status_code == 200:
-                # Hugging Face returns the raw image bytes.
-                img_encoded = base64.b64encode(res.content).decode('utf-8')
-                content_type = res.headers.get('Content-Type', 'image/jpeg')
-                
-                # Convert to a data URI for the frontend image tag
-                image_data_uri = f"data:{content_type};base64,{img_encoded}"
-                
+            if image_data_uri:
                 return Response({
                     'url': image_data_uri,
                     'prompt': final_prompt,
                     'original_prompt': prompt,
                 })
             else:
-                logger.error(f"HF Image Gen Error {res.status_code}: {res.text}")
-                error_msg = 'Failed to generate image via Hugging Face. The model might be loading or the token is invalid.'
-                try:
-                    error_body = res.json()
-                    error_msg = error_body.get('error', error_msg)
-                except Exception:
-                    pass
-                
                 return Response(
-                    {'error': f"Hugging Face Error: {error_msg}"}, 
+                    {'error': "Failed to generate image. All available models are currently unavailable."}, 
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-        except requests.exceptions.Timeout:
-            return Response({'error': 'Image generation timed out. Please try again later.'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
         except Exception as e:
             logger.error(f"Generate Image exception: {e}")
             return Response({'error': f'Failed to generate image: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

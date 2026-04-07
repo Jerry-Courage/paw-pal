@@ -1,0 +1,17 @@
+
+> flowstate@0.1.0 dev
+> next dev -p 5000 -H 0.0.0.0
+
+[1G[0K  [1m[38;2;173;127;168m▲ Next.js 14.2.5[39m[22m
+  - Local:        http://localhost:5000
+  - Network:      http://0.0.0.0:5000
+
+ [32m[1m✓[22m[39m Starting...
+ [32m[1m✓[22m[39m Ready in 1369ms
+ [37m[1m○[22m[39m Compiling / ...
+
+[1m[33mwarn[39m[22m - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+[1m[33mwarn[39m[22m - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+ [32m[1m✓[22m[39m Compiled / in 2.8s (713 modules)
+ GET / [32m200[39m in 3062ms
+ [32m[1m✓[22m[39m Compiled in 746ms (355 modules)

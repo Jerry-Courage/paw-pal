@@ -1,0 +1,128 @@
+
+> flowstate@0.1.0 dev
+> next dev -p 5000 -H 0.0.0.0
+
+[1G[0K  [1m[38;2;173;127;168m▲ Next.js 14.2.5[39m[22m
+  - Local:        http://localhost:5000
+  - Network:      http://0.0.0.0:5000
+
+ [32m[1m✓[22m[39m Starting...
+ [32m[1m✓[22m[39m Ready in 1537ms
+ [37m[1m○[22m[39m Compiling / ...
+
+[1m[33mwarn[39m[22m - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+[1m[33mwarn[39m[22m - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+ [32m[1m✓[22m[39m Compiled / in 3.9s (713 modules)
+ GET / [32m200[39m in 4096ms
+ [32m[1m✓[22m[39m Compiled in 656ms (355 modules)
+ [37m[1m○[22m[39m Compiling /api/auth/[...nextauth] ...
+ [32m[1m✓[22m[39m Compiled /api/auth/[...nextauth] in 1030ms (719 modules)
+ GET /api/auth/session [32m200[39m in 1548ms
+ GET /api/auth/session [32m200[39m in 21ms
+ [32m[1m✓[22m[39m Compiled in 935ms (355 modules)
+ [31m[1m⨯[22m[39m Error: Cannot find module './276.js'
+Require stack:
+- /home/runner/workspace/frontend/.next/server/webpack-runtime.js
+- /home/runner/workspace/frontend/.next/server/app/api/auth/[...nextauth]/route.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/require.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/load-components.js
+- /home/runner/workspace/frontend/node_modules/next/dist/build/utils.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/dev/hot-middleware.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/lib/router-server.js
+- /home/runner/workspace/frontend/node_modules/next/dist/server/lib/start-server.js
+[90m    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)[39m
+    at [90m/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/require-hook.js:55:36
+[90m    at Module._load (node:internal/modules/cjs/loader:1038:27)[39m
+[90m    at Module.require (node:internal/modules/cjs/loader:1289:19)[39m
+    at mod.require [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/require-hook.js:65:28[90m)[39m
+[90m    at require (node:internal/modules/helpers:182:18)[39m
+    at __webpack_require__.f.require [90m(/home/runner/workspace/frontend/[39m.next/server/webpack-runtime.js:198:28[90m)[39m
+    at [90m/home/runner/workspace/frontend/[39m.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e [90m(/home/runner/workspace/frontend/[39m.next/server/webpack-runtime.js:110:67[90m)[39m
+    at Array.map (<anonymous>)
+    at __webpack_require__.X [90m(/home/runner/workspace/frontend/[39m.next/server/webpack-runtime.js:162:22[90m)[39m
+    at [90m/home/runner/workspace/frontend/[39m.next/server/app/page.js:16:17124
+    at Object.<anonymous> [90m(/home/runner/workspace/frontend/[39m.next/server/app/page.js:16:17171[90m)[39m
+[90m    at Module._compile (node:internal/modules/cjs/loader:1521:14)[39m
+[90m    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)[39m
+[90m    at Module.load (node:internal/modules/cjs/loader:1266:32)[39m
+[90m    at Module._load (node:internal/modules/cjs/loader:1091:12)[39m
+[90m    at Module.require (node:internal/modules/cjs/loader:1289:19)[39m
+    at mod.require [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/require-hook.js:65:28[90m)[39m
+[90m    at require (node:internal/modules/helpers:182:18)[39m
+    at requirePage [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/require.js:109:84[90m)[39m
+    at [90m/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/load-components.js:98:84
+    at async loadComponentsImpl [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/load-components.js:98:26[90m)[39m
+    at async DevServer.findPageComponentsImpl [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/next-server.js:710:36[90m)[39m
+    at async DevServer.findPageComponents [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/dev/next-dev-server.js:577:20[90m)[39m
+    at async DevServer.renderPageComponent [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/base-server.js:1917:24[90m)[39m
+    at async DevServer.renderToResponseImpl [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/base-server.js:1969:32[90m)[39m
+    at async DevServer.pipeImpl [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/base-server.js:920:25[90m)[39m
+    at async NextNodeServer.handleCatchallRenderRequest [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/next-server.js:272:17[90m)[39m
+    at async DevServer.handleRequestImpl [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/base-server.js:816:17[90m)[39m
+    at async [90m/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/trace/trace.js:154:20[90m)[39m
+    at async DevServer.handleRequest [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/dev/next-dev-server.js:336:24[90m)[39m
+    at async invokeRender [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/lib/router-server.js:174:21[90m)[39m
+    at async handleRequest [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/lib/router-server.js:353:24[90m)[39m
+    at async requestHandlerImpl [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/lib/router-server.js:377:13[90m)[39m
+    at async Server.requestListener [90m(/home/runner/workspace/frontend/[39mnode_modules/[4mnext[24m/dist/server/lib/start-server.js:141:13[90m)[39m {
+  code: [32m'MODULE_NOT_FOUND'[39m,
+  requireStack: [
+    [32m'/home/runner/workspace/frontend/.next/server/webpack-runtime.js'[39m,
+    [32m'/home/runner/workspace/frontend/.next/server/app/api/auth/[...nextauth]/route.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/require.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/load-components.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/build/utils.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/dev/hot-middleware.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/dev/hot-reloader-webpack.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/lib/router-server.js'[39m,
+    [32m'/home/runner/workspace/frontend/node_modules/next/dist/server/lib/start-server.js'[39m
+  ],
+  page: [32m'/'[39m
+}
+ [37m[1m○[22m[39m Compiling /_error ...
+ [32m[1m✓[22m[39m Compiled /_error in 1863ms (937 modules)
+ GET / [32m200[39m in 85ms
+ [32m[1m✓[22m[39m Compiled /_not-found in 129ms (926 modules)
+ GET /_next/static/css/app/layout.css?v=1775401330812 [33m404[39m in 227ms
+ GET /_next/static/chunks/main-app.js?v=1775401330812 [33m404[39m in 15ms
+ GET /_next/static/chunks/app-pages-internals.js [33m404[39m in 20ms
+ GET /_next/static/chunks/app/page.js [33m404[39m in 16ms
+ [32m[1m✓[22m[39m Compiled in 677ms (540 modules)
+ [32m[1m✓[22m[39m Compiled in 504ms (540 modules)
+<w> [1m[33m[webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat '/home/runner/workspace/frontend/.next/server/vendor-chunks/object-assign.js'[39m[22m
+<w> [1m[33m[webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving './vendor-chunks/object-assign' in /home/runner/workspace/frontend/.next/server for build dependencies doesn't lead to expected result '/home/runner/workspace/frontend/.next/server/vendor-chunks/object-assign.js', but to 'Error: Can't resolve './vendor-chunks/object-assign' in '/home/runner/workspace/frontend/.next/server'' instead. Resolving dependencies are ignored for this path.[39m[22m
+<w> [1m[33m at resolve commonjs file ./vendor-chunks/object-assign (expected /home/runner/workspace/frontend/.next/server/vendor-chunks/object-assign.js)[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/.next/server/webpack-runtime.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/.next/server/webpack-runtime.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/.next/server/app/api/auth/[...nextauth]/route.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/.next/server/app/api/auth/[...nextauth]/route.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/server/require.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/server/require.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/server/load-components.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/server/load-components.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/build/utils.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/build/utils.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/build/webpack/loaders/next-route-loader/index.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/build/webpack/loaders/next-route-loader/index.js[39m[22m
+<w> [1m[33m at resolve commonjs /home/runner/workspace/frontend/node_modules/next/dist/build/webpack/loaders/next-route-loader/index.js[39m[22m
+<w> [1m[33m[webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving './vendor-chunks/next-themes' in /home/runner/workspace/frontend/.next/server for build dependencies doesn't lead to expected result '/home/runner/workspace/frontend/.next/server/vendor-chunks/next-themes.js', but to 'Error: Can't resolve './vendor-chunks/next-themes' in '/home/runner/workspace/frontend/.next/server'' instead. Resolving dependencies are ignored for this path.[39m[22m
+<w> [1m[33m at resolve commonjs file ./vendor-chunks/next-themes (expected /home/runner/workspace/frontend/.next/server/vendor-chunks/next-themes.js)[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/.next/server/webpack-runtime.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/.next/server/webpack-runtime.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/.next/server/app/api/auth/[...nextauth]/route.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/.next/server/app/api/auth/[...nextauth]/route.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/server/require.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/server/require.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/server/load-components.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/server/load-components.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/build/utils.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/build/utils.js[39m[22m
+<w> [1m[33m at file dependencies /home/runner/workspace/frontend/node_modules/next/dist/build/webpack/loaders/next-route-loader/index.js[39m[22m
+<w> [1m[33m at file /home/runner/workspace/frontend/node_modules/next/dist/build/webpack/loaders/next-route-loader/index.js[39m[22m
+<w> [1m[33m at resolve commonjs /home/runner/workspace/frontend/node_modules/next/dist/build/webpack/loaders/next-route-loader/index.js[39m[22m

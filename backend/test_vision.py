@@ -24,7 +24,7 @@ if GROQ_KEY:
             'https://api.groq.com/openai/v1/chat/completions',
             headers={'Authorization': f'Bearer {GROQ_KEY}', 'Content-Type': 'application/json'},
             json={
-                'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                'model': 'llama-3.2-11b-vision-preview',
                 'messages': [{
                     'role': 'user',
                     'content': [
@@ -73,6 +73,38 @@ if GOOGLE_KEY:
         print(f"  ✗ Google error: {e}")
 else:
     print("\n[Google] No GOOGLE_AI_KEY set — skipping")
+
+# ── Test OpenRouter Vision ───────────────────────────────
+OPENROUTER_KEY = os.environ.get('OPENROUTER_API_KEY', '').strip()
+if OPENROUTER_KEY:
+    print(f"\n[OpenRouter] Testing qwen/qwen2.5-vl-72b-instruct:free with key {OPENROUTER_KEY[:8]}...")
+    try:
+        resp = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers={'Authorization': f'Bearer {OPENROUTER_KEY}', 'Content-Type': 'application/json'},
+            json={
+                'model': 'qwen/qwen2.5-vl-72b-instruct:free',
+                'messages': [{
+                    'role': 'user',
+                    'content': [
+                        {'type': 'text', 'text': 'What color is this image? One word.'},
+                        {'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{RED}'}}
+                    ]
+                }],
+                'max_tokens': 20,
+            },
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            answer = resp.json()['choices'][0]['message']['content'].strip()
+            print(f"  ✓ OpenRouter vision works! Response: '{answer}'")
+        else:
+            err = resp.json().get('error', {}).get('message', resp.text[:80])
+            print(f"  ✗ OpenRouter failed {resp.status_code}: {err}")
+    except Exception as e:
+        print(f"  ✗ OpenRouter error: {e}")
+else:
+    print("\n[OpenRouter] No OPENROUTER_API_KEY set — skipping")
 
 print("\n" + "=" * 55)
 if not GROQ_KEY and not GOOGLE_KEY:

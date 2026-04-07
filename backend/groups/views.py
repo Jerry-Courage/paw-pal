@@ -2,10 +2,10 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from .models import StudyGroup, GroupMembership, GroupSession, WorkspaceDocument, GroupTask, GroupMessage
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage
 from .serializers import (
     StudyGroupSerializer, GroupSessionSerializer,
-    WorkspaceDocumentSerializer, GroupTaskSerializer, GroupMessageSerializer
+    GroupTaskSerializer, GroupMessageSerializer
 )
 from ai_assistant.services import AIService
 
@@ -66,29 +66,6 @@ class GroupSessionListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         group = get_object_or_404(StudyGroup, pk=self.kwargs['group_id'])
         serializer.save(group=group)
-
-
-class WorkspaceDocumentView(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = WorkspaceDocumentSerializer
-
-    def get_queryset(self):
-        return WorkspaceDocument.objects.filter(group_id=self.kwargs['group_id'])
-
-    def perform_create(self, serializer):
-        group = get_object_or_404(StudyGroup, pk=self.kwargs['group_id'])
-        serializer.save(group=group, last_edited_by=self.request.user)
-
-
-class WorkspaceDocumentDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = WorkspaceDocumentSerializer
-
-    def get_queryset(self):
-        return WorkspaceDocument.objects.filter(group_id=self.kwargs['group_id'])
-
-    def perform_update(self, serializer):
-        serializer.save(last_edited_by=self.request.user)
 
 
 class GroupTaskView(generics.ListCreateAPIView):

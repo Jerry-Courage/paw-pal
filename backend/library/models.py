@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from pgvector.django import VectorField
 
 
 class Resource(models.Model):
@@ -49,7 +50,23 @@ class ResourceImage(models.Model):
         return f"Image from {self.resource.title} - Page {self.page_number}"
 
 
+class Deck(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='decks')
+    title = models.CharField(max_length=200)
+    subject = models.CharField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.subject})"
+
+
 class Flashcard(models.Model):
+    deck = models.ForeignKey(Deck, on_delete=models.SET_NULL, null=True, blank=True, related_name='cards')
     resource = models.ForeignKey(Resource, on_delete=models.CASCADE, related_name='flashcards')
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='flashcards')
     question = models.TextField()
@@ -120,3 +137,17 @@ class PodcastSession(models.Model):
 
     def __str__(self):
         return f"Podcast for {self.resource.title}"
+
+class DocumentChunk(models.Model):
+    """Stores text fragments and their vector embeddings for Semantic RAG Search"""
+    resource = models.ForeignKey(Resource, on_delete=models.CASCADE, related_name='chunks', db_index=True)
+    text_content = models.TextField()
+    
+    # We use 384 dimensions since we target sentence-transformers/all-MiniLM-L6-v2 which is
+    # incredibly fast and accurate for RAG use cases.
+    embedding = VectorField(dimensions=384)
+    page_number = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Chunk for {self.resource.title}"

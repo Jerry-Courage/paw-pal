@@ -1,0 +1,32 @@
+
+> flowstate@0.1.0 dev
+> next dev -p 5000 -H 0.0.0.0
+
+[1G[0K  [1m[38;2;173;127;168m▲ Next.js 14.2.5[39m[22m
+  - Local:        http://localhost:5000
+  - Network:      http://0.0.0.0:5000
+
+ [32m[1m✓[22m[39m Starting...
+ [32m[1m✓[22m[39m Ready in 1328ms
+ [37m[1m○[22m[39m Compiling / ...
+
+[1m[33mwarn[39m[22m - The class `ease-[cubic-bezier(0.25,1,0.5,1)]` is ambiguous and matches multiple utilities.
+[1m[33mwarn[39m[22m - If this is content and not a class, replace it with `ease-&lsqb;cubic-bezier(0.25,1,0.5,1)&rsqb;` to silence this warning.
+ [32m[1m✓[22m[39m Compiled / in 2.4s (713 modules)
+ GET / [32m200[39m in 2629ms
+ [32m[1m✓[22m[39m Compiled in 611ms (355 modules)
+ [37m[1m○[22m[39m Compiling /api/auth/[...nextauth] ...
+ [32m[1m✓[22m[39m Compiled /api/auth/[...nextauth] in 557ms (719 modules)
+ GET /api/auth/session [32m200[39m in 1071ms
+ GET /api/auth/session [32m200[39m in 19ms
+ [37m[1m○[22m[39m Compiling /login ...
+ [32m[1m✓[22m[39m Compiled /login in 525ms (733 modules)
+ [37m[1m○[22m[39m Compiling /signup ...
+ [32m[1m✓[22m[39m Compiled /signup in 1010ms (943 modules)
+ GET / [32m200[39m in 115ms
+ [32m[1m✓[22m[39m Compiled /api/auth/[...nextauth] in 300ms (869 modules)
+ GET /api/auth/session [32m200[39m in 445ms
+ GET /api/auth/session [32m200[39m in 7ms
+ [32m[1m✓[22m[39m Compiled in 1966ms (1318 modules)
+ [32m[1m✓[22m[39m Compiled in 699ms (435 modules)
+ [32m[1m✓[22m[39m Compiled in 595ms (435 modules)

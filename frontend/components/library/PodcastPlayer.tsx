@@ -421,7 +421,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
        </div>
 
        {/* INTERACTION DOCK: Bottom 30% / Mobile Floating Bar - Sticky for visibility */}
-       <div className="sticky bottom-0 lg:static h-auto lg:h-[180px] bg-slate-900 shadow-2xl border-t border-white/5 z-50 flex items-center p-4 sm:p-6 lg:p-12">
+       <div className="sticky bottom-0 lg:static h-auto lg:h-[180px] bg-slate-900 shadow-2xl border-t border-white/5 z-50 flex items-center p-4 pb-24 sm:p-6 lg:p-12 lg:pb-12">
           <div className="max-w-6xl mx-auto w-full flex flex-col lg:flex-row items-center justify-between gap-4 sm:gap-6 lg:gap-8">
              
              {/* Controls Group */}

@@ -6,11 +6,13 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from django.db.models import Count, Q
+from django.utils import timezone
 
-from .models import Resource, Flashcard, Quiz
+from .models import Resource, Flashcard, Quiz, Deck
 from .serializers import (
     ResourceSerializer, ResourceUploadSerializer,
-    FlashcardSerializer, QuizSerializer
+    FlashcardSerializer, QuizSerializer, DeckSerializer
 )
 from .youtube import process_youtube_url
 from .pdf_extractor import extract_pdf_text
@@ -59,114 +61,16 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        import threading
-        from .models import ResourceImage
-        from .pdf_extractor import extract_pdf_content
-        from django.core.files.base import ContentFile
+        from django_q.tasks import async_task
 
         resource = serializer.save(owner=self.request.user)
         resource.file_size = resource.file.size if resource.file else 0
         resource.save()
 
-        def process_resource_async(res_id):
-            try:
-                from .models import Resource
-                res = Resource.objects.get(id=res_id)
-                
-                if res.resource_type == 'pdf' and res.file:
-                    try:
-                        pdf_data = extract_pdf_content(res.file.path)
-                        text = pdf_data['text']
-                        images = pdf_data.get('images', [])
-                        page_count = pdf_data.get('page_count', 0)
-                        logger.info(f'Resource {res.id}: {page_count} pages, {len(images)} images extracted')
-
-                        # 1. Save extracted images to DB & build page → URL map
-                        from django.conf import settings as django_settings
-                        page_image_map = {}  # {page_number: absolute_media_url}
-
-                        for img_data in images:
-                            res_img = ResourceImage(
-                                resource=res,
-                                page_number=img_data['page']
-                            )
-                            image_name = f"res_{res.id}_p{img_data['page']}_{img_data.get('width',0)}x{img_data.get('height',0)}.{img_data['ext']}"
-                            res_img.image.save(image_name, ContentFile(img_data['data']), save=False)
-                            res_img.save()
-                            # Build URL — stored as media path, frontend will prepend API_BASE
-                            page_image_map[img_data['page']] = res_img.image.url
-
-                        # 2. Store raw text for AI chat context
-                        if text:
-                            existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
-                            res.ai_concepts = existing_concepts + [{'extracted_text': text[:80000]}]
-
-                        # 3. Generate Study Kit (AI Matrix Transformation)
-                        # We pass context (text) and vision_data (page images) for OCR fallback.
-                        ai = AIService()
-                        try:
-                            kit = ai.generate_study_kit(
-                                res,
-                                context=text or '',
-                                page_image_map=page_image_map if page_image_map else None,
-                                vision_data=pdf_data.get('page_images', [])
-                            )
-                            res.ai_notes_json = kit
-                            res.has_study_kit = True
-                            if not res.ai_summary:
-                                res.ai_summary = kit.get('overview', {}).get('summary', '')[:1000]
-                        except Exception as e:
-                            logger.error(f'AI Study kit failed for {res.id}: {e}')
-                    except Exception as e:
-                        logger.error(f'PDF extract failed for {res.id}: {e}')
-
-                elif res.resource_type == 'video' and res.url:
-                    try:
-                        yt_data = process_youtube_url(res.url)
-                        if not yt_data.get('success'):
-                            logger.error(f"YouTube processing returned not success for {res.id}: {yt_data.get('error', 'Unknown Error')}")
-                            res.status = 'failed'
-                            res.save()
-                            return
-                            
-                        if not res.title or res.title == 'YouTube Video':
-                            res.title = yt_data.get('title', 'YouTube Video')
-                        
-                        # Always generate a study kit to prevent infinite UI loader.
-                        # If no transcript, AI handles it via _generate_basic_kit fallback.
-                        ai = AIService()
-                        kit = ai.generate_study_kit(res, context=yt_data.get('transcript') or '')
-                        res.ai_notes_json = kit
-                        res.has_study_kit = True
-                        
-                    except Exception as e:
-                        logger.error(f'YouTube processing failed for {res.id}: {e}')
-                        res.status = 'failed'
-                        res.save()
-                        return
-
-                res.status = 'ready'
-                res.save()
-                
-                # Notification
-                try:
-                    from users.notifications import notify_resource_ready
-                    notify_resource_ready(res.owner, res.title, res.id)
-                except Exception:
-                    pass
-
-            except Exception as e:
-                logger.error(f'Background process failed for {res_id}: {e}')
-
-        # Start background thread
-        threading.Thread(target=process_resource_async, args=(resource.id,)).start()
-        logger.info(f'Resource {resource.id} created by user {self.request.user.id}')
-        # Notify user
-        try:
-            from users.notifications import notify_resource_ready
-            notify_resource_ready(self.request.user, resource.title, resource.id)
-        except Exception:
-            pass
+        # Delegate heavy extraction to the asynchronous Q2 broker
+        async_task('library.tasks.process_resource_task', resource.id)
+        
+        logger.info(f'Resource {resource.id} async task dispatched for user {self.request.user.id}')
 
     def get_serializer_context(self):
         return {'request': self.request}
@@ -203,19 +107,61 @@ class GenerateFlashcardsView(APIView):
         ai = AIService()
         flashcards_data = ai.generate_flashcards(resource, count, level, context=context)
 
-        flashcards = []
-        for item in flashcards_data:
+        return Response({"preview_cards": flashcards_data})
+
+class DeckListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DeckSerializer
+
+    def get_queryset(self):
+        now = timezone.now()
+        due_q = Q(cards__next_review__isnull=True) | Q(cards__next_review__lte=now)
+        return Deck.objects.filter(owner=self.request.user).annotate(
+            total_cards=Count('cards', distinct=True),
+            due_count=Count('cards', filter=due_q, distinct=True)
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+class DeckDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = DeckSerializer
+
+    def get_queryset(self):
+        now = timezone.now()
+        due_q = Q(cards__next_review__isnull=True) | Q(cards__next_review__lte=now)
+        return Deck.objects.filter(owner=self.request.user).annotate(
+            total_cards=Count('cards', distinct=True),
+            due_count=Count('cards', filter=due_q, distinct=True)
+        )
+
+class SaveFlashcardsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, deck_id):
+        deck = get_object_or_404(Deck, id=deck_id, owner=request.user)
+        resource_id = request.data.get('resource_id')
+        cards_data = request.data.get('flashcards', [])
+
+        resource = None
+        if resource_id:
+            resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+
+        saved_cards = []
+        for item in cards_data:
             fc = Flashcard.objects.create(
+                deck=deck,
                 resource=resource,
                 owner=request.user,
                 question=item.get('question', ''),
                 answer=item.get('answer', ''),
-                subject=resource.subject,
+                subject=deck.subject or deck.title,
                 difficulty=item.get('difficulty', 'medium'),
             )
-            flashcards.append(fc)
+            saved_cards.append(fc)
 
-        return Response(FlashcardSerializer(flashcards, many=True).data)
+        return Response(FlashcardSerializer(saved_cards, many=True).data)
 
 
 class GenerateQuizView(APIView):

@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Resource, Flashcard, Quiz, ResourceImage
+from django.conf import settings
+from .models import Resource, Deck, Flashcard, Quiz, ResourceImage
 
 
 class ResourceImageSerializer(serializers.ModelSerializer):
@@ -47,10 +48,20 @@ class ResourceUploadSerializer(serializers.ModelSerializer):
         fields = ('title', 'resource_type', 'file', 'url', 'subject')
 
 
+class DeckSerializer(serializers.ModelSerializer):
+    total_cards = serializers.IntegerField(read_only=True)
+    due_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Deck
+        fields = ('id', 'title', 'subject', 'description', 'total_cards', 'due_count', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+
 class FlashcardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Flashcard
-        fields = ('id', 'resource', 'question', 'answer', 'subject', 'difficulty', 'created_at')
+        fields = ('id', 'deck', 'resource', 'question', 'answer', 'subject', 'difficulty', 'created_at')
         read_only_fields = ('id', 'created_at')
 
 

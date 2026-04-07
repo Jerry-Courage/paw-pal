@@ -12,6 +12,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 INSTALLED_APPS = [
     # Unfold must come before django.contrib.admin
+    'daphne',
     'unfold',
     'unfold.contrib.filters',
     'unfold.contrib.forms',
@@ -36,6 +37,10 @@ INSTALLED_APPS = [
     'community',
     'assignments',
     'workspace',
+    'storages',
+    'django_q',
+    'pgvector',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -77,6 +82,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'core.wsgi.application'
+ASGI_APPLICATION = 'core.asgi.application'
+
+# Channel Layers - Using InMemory for Dev, should swap to Redis for production
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 import dj_database_url as _dj_db_url
 
@@ -107,10 +120,51 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# ─── STORAGE CONFIGURATION (S3 / Cloudflare R2) ──────────────────────────────
+USE_S3 = os.getenv('USE_S3', 'False') == 'True'
+
+if USE_S3:
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME')
+    
+    # Required for Cloudflare R2 or DigitalOcean Spaces
+    if os.getenv('AWS_S3_ENDPOINT_URL'):
+        AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')
+    
+    # Defines the base URL for files. E.g. cdn.yourdomain.com
+    if os.getenv('AWS_S3_CUSTOM_DOMAIN'):
+        AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+        
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    
+    # Use presigned URLs so Cloudflare buckets can remain Private but serve short-lived links
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = 3600 # 1 hour
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    # ── Local Storage Fallback (Development Only) ──
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -157,6 +211,8 @@ else:
         'http://127.0.0.1:3000',
         'http://localhost:5000',
         'http://127.0.0.1:5000',
+        'http://localhost:5002',
+        'http://127.0.0.1:5002',
     ]
 
 # Allow all *.replit.dev and *.repl.co origins for Replit preview environment
@@ -166,6 +222,14 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https://.*\.worf\.replit\.dev$',
 ]
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    'http://localhost:5002',
+    'http://127.0.0.1:5002',
+]
 
 # ─── File Upload Security ─────────────────────────────────────────────────────
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
@@ -176,6 +240,7 @@ API_URL = os.getenv('API_URL', 'http://localhost:8000')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3.5-sonnet')
+GOOGLE_STUDIO_API_KEY = os.getenv('GOOGLE_STUDIO_API_KEY', '')
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 LOGGING = {
@@ -280,3 +345,16 @@ UNFOLD = {
         ],
     },
 }
+
+# ─── DJANGO Q BACKGROUND WORKER ─────────────────────────────────────────────
+Q_CLUSTER = {
+    'name': 'flowstate_worker',
+    'orm': 'default',   # Use DB instead of Redis for easier local testing
+    'timeout': 180,     # Max time for a RAG vectorization task
+    'retry': 240,
+    'workers': 4,
+    'recycle': 500,
+    'save_limit': 250,
+    'label': 'Django Q',
+}
+# Signal: Forced Reload 2026-04-07

@@ -5,11 +5,15 @@ from .views import (
     GenerateMindMapView, GeneratePracticeQuestionsView,
     FlashcardListView, QuizListView, AnkiExportView,
     RefetchTranscriptView, MathSolverView,
+    DeckListCreateView, DeckDetailView, SaveFlashcardsView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
 
 urlpatterns = [
+    path('decks/', DeckListCreateView.as_view(), name='deck-list-create'),
+    path('decks/<int:pk>/', DeckDetailView.as_view(), name='deck-detail'),
+    path('decks/<int:deck_id>/save-flashcards/', SaveFlashcardsView.as_view(), name='save-flashcards'),
     path('resources/status-stream/', ResourceStatusSSEView.as_view(), name='resource-status-stream'),
     path('resources/', ResourceListCreateView.as_view(), name='resource-list'),
     path('resources/<int:pk>/', ResourceDetailView.as_view(), name='resource-detail'),

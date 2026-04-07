@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Workspace, WorkspaceMember, WorkspaceDocument, WorkspaceMessage, WorkspaceTask, DocumentVersion, WorkspaceFile
+from .models import Workspace, WorkspaceMember, WorkspaceBlock, WorkspaceMessage, WorkspaceTask, DocumentVersion, WorkspaceFile
 from users.serializers import UserSerializer
 
 
@@ -62,10 +62,10 @@ class DocumentVersionSerializer(serializers.ModelSerializer):
         return obj.saved_by.get_full_name() or obj.saved_by.username if obj.saved_by else 'Unknown'
 
 
-class WorkspaceDocumentSerializer(serializers.ModelSerializer):
+class WorkspaceBlockSerializer(serializers.ModelSerializer):
     class Meta:
-        model = WorkspaceDocument
-        fields = ('content', 'version', 'updated_at')
+        model = WorkspaceBlock
+        fields = ('id', 'block_type', 'content', 'metadata', 'order', 'updated_at')
 
 
 class WorkspaceFileSerializer(serializers.ModelSerializer):
@@ -93,15 +93,16 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     my_role = serializers.SerializerMethodField()
     assignment_title = serializers.SerializerMethodField()
     resource_titles = serializers.SerializerMethodField()
-    document_preview = serializers.SerializerMethodField()
+    blocks = WorkspaceBlockSerializer(many=True, read_only=True)
+    group_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Workspace
         fields = (
             'id', 'name', 'subject', 'description', 'invite_code',
             'assignment', 'assignment_title', 'resources', 'resource_titles',
-            'member_count', 'is_owner', 'my_role',
-            'document_preview', 'is_active', 'created_at', 'updated_at',
+            'member_count', 'is_owner', 'my_role', 'blocks', 'group', 'group_name',
+            'is_active', 'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'invite_code', 'created_at', 'updated_at')
 
@@ -125,9 +126,5 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     def get_resource_titles(self, obj):
         return [{'id': r.id, 'title': r.title, 'type': r.resource_type} for r in obj.resources.all()]
 
-    def get_document_preview(self, obj):
-        try:
-            content = obj.document.content
-            return content[:200] if content else ''
-        except Exception:
-            return ''
+    def get_group_name(self, obj):
+        return obj.group.name if obj.group else None

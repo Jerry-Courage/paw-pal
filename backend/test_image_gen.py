@@ -1,41 +1,45 @@
-"""Test Pollinations.ai image generation — no API key needed."""
-import os, django, requests, urllib.parse
+import os
+import django
+import sys
+
+# Setup Django environment
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 
 from ai_assistant.services import AIService
 
-print("Testing image generation with Pollinations.ai\n")
+def test_generation():
+    ai = AIService()
+    prompt = "A high-tech library for futuristic students, with glowing hologram study guides and a sleek modern interior, highly realistic, masterpiece quality."
+    
+    print(f"--- Testing Image Generation ---")
+    print(f"Prompt: {prompt}")
+    
+    # This calls the new method we just added
+    image_url = ai.generate_image(prompt)
+    
+    if image_url:
+        print(f"\u2705 SUCCESS!")
+        # Truncate if it's a long base64 string
+        display_url = image_url[:100] + "..." if len(image_url) > 100 else image_url
+        print(f"Image Data: {display_url}")
+        
+        # Save to file for manual preview
+        if image_url.startswith('data:image'):
+            try:
+                import base64
+                header, base64_str = image_url.split(',', 1)
+                ext = header.split('/')[1].split(';')[0]
+                with open(f"final_gen_test.{ext}", "wb") as f:
+                    f.write(base64.b64decode(base64_str))
+                print(f"Saved preview image to final_gen_test.{ext}")
+            except Exception as e:
+                print(f"Error saving image file: {e}")
+        else:
+            print(f"Result is a URL list: {image_url}")
+    else:
+        print(f"\u274c FAILED: Check vision_debug.log")
 
-# Test 1: Direct URL generation
-prompt = "A colorful diagram of the water cycle with labels"
-encoded = urllib.parse.quote(prompt)
-url = f"https://image.pollinations.ai/prompt/{encoded}?width=800&height=600&nologo=true"
-print(f"Test 1: Direct URL")
-print(f"  Prompt: {prompt}")
-print(f"  URL: {url[:80]}...")
-
-resp = requests.head(url, timeout=15, allow_redirects=True)
-print(f"  Status: {resp.status_code}")
-if resp.status_code == 200:
-    print(f"  Content-Type: {resp.headers.get('content-type', 'unknown')}")
-    print(f"  ✓ Image generation works!")
-else:
-    print(f"  ✗ Failed")
-
-# Test 2: Full backend endpoint simulation
-print("\nTest 2: Backend GenerateImageView simulation")
-ai = AIService()
-enhanced = ai.chat([{
-    'role': 'user',
-    'content': (
-        "Rewrite this image generation prompt to be more detailed and visually descriptive "
-        "for an educational context. Keep it under 200 characters. "
-        f"Original: photosynthesis diagram\n\nReturn ONLY the improved prompt, nothing else."
-    )
-}])
-print(f"  Original: 'photosynthesis diagram'")
-print(f"  Enhanced: '{enhanced.strip()[:150]}'")
-final_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(enhanced.strip()[:300])}?width=800&height=600&nologo=true"
-print(f"  Generated URL: {final_url[:80]}...")
-print(f"  ✓ Image generation endpoint ready!")
+if __name__ == "__main__":
+    test_generation()

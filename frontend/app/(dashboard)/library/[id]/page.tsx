@@ -24,6 +24,8 @@ import MusicGeneratorModal from '@/components/library/MusicGeneratorModal'
 import MathSolverModal from '@/components/library/MathSolverModal'
 import MindMapContent from '@/components/library/MindMapContent'
 
+import FlashcardGeneratorModal from '@/components/library/FlashcardGeneratorModal'
+
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
 
 export default function ResourcePage({ params }: { params: { id: string } }) {
@@ -36,6 +38,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const [currentTheme, setCurrentTheme] = useState('theme-slate')
   const [showMusic, setShowMusic] = useState(false)
   const [showMath, setShowMath] = useState(false)
+  const [showFlashcards, setShowFlashcards] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false) 
   const [mindMapData, setMindMapData] = useState<any>(null)
   const [practiceData, setPracticeData] = useState<any>(null)
@@ -99,16 +102,8 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
     }
   }
 
-  const handleOpenFlashcards = async () => {
-    setGeneratingTool('flashcards')
-    try {
-      await libraryApi.generateFlashcards(id)
-      window.location.href = `/library/flashcards?resource=${id}`
-    } catch {
-      toast.error('Failed to generate flashcards.')
-    } finally {
-      setGeneratingTool(null)
-    }
+  const handleOpenFlashcards = () => {
+    setShowFlashcards(true)
   }
 
   const handleOpenMath = (prob?: string) => {
@@ -380,7 +375,15 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       {showMusic && (
         <MusicGeneratorModal
           resourceId={id}
-          onClose={() => setShowMusic(true)}
+          onClose={() => setShowMusic(false)}
+        />
+      )}
+
+      {showFlashcards && (
+        <FlashcardGeneratorModal
+          resourceId={id}
+          onClose={() => setShowFlashcards(false)}
+          onGenerated={() => setShowFlashcards(false)}
         />
       )}
 

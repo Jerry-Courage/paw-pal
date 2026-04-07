@@ -10,6 +10,7 @@ class Workspace(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_workspaces')
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='workspaces', through='WorkspaceMember')
     invite_code = models.CharField(max_length=12, unique=True, blank=True)
+    group = models.ForeignKey('groups.StudyGroup', on_delete=models.CASCADE, null=True, blank=True, related_name='workspaces')
     assignment = models.ForeignKey('assignments.Assignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='workspaces')
     resources = models.ManyToManyField('library.Resource', blank=True, related_name='workspaces')
     is_active = models.BooleanField(default=True)
@@ -40,21 +41,36 @@ class WorkspaceMember(models.Model):
         unique_together = ('workspace', 'user')
 
 
-class WorkspaceDocument(models.Model):
-    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name='document')
-    content = models.TextField(blank=True, default='')  # Markdown content
-    version = models.IntegerField(default=1)
+class WorkspaceBlock(models.Model):
+    BLOCK_TYPES = [
+        ('text', 'Text/Markdown'),
+        ('ai_note', 'AI Generated Note'),
+        ('pdf_snippet', 'PDF Snippet'),
+        ('image', 'Image/Diagram'),
+        ('quiz', 'Practice Quiz'),
+        ('flashcard', 'Flashcard Set'),
+        ('code', 'Code Snippet'),
+        ('video_quote', 'YouTube Transcript Quote'),
+    ]
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='blocks')
+    block_type = models.CharField(max_length=20, choices=BLOCK_TYPES, default='text')
+    content = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True) # For coordinates, source IDs, etc.
+    order = models.IntegerField(default=0)
     last_edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
 
     def __str__(self):
-        return f'Doc: {self.workspace.name}'
-
+        return f'{self.block_type} in {self.workspace.name}'
 
 class DocumentVersion(models.Model):
-    """Snapshot of document at a point in time."""
-    document = models.ForeignKey(WorkspaceDocument, on_delete=models.CASCADE, related_name='versions')
-    content = models.TextField()
+    """Snapshot of workspace state at a point in time."""
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='versions')
+    blocks_snapshot = models.JSONField() # Store state of all blocks
     saved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     version = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)

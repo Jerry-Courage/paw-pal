@@ -4,14 +4,13 @@ import json
 import sys
 
 # Setup Django environment
-sys.path.append(os.path.join(os.getcwd(), 'backend'))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+sys.path.append(os.path.join(os.getcwd()))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 try:
     django.setup()
 except Exception as e:
-    # Fallback if working directory is already inside backend
-    sys.path.append(os.getcwd())
-    django.setup()
+    # Already setup
+    pass
 
 
 from ai_assistant.podcast import generate_podcast_script

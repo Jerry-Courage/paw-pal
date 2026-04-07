@@ -2,20 +2,19 @@ import os
 import json
 import requests
 import logging
+import base64
 from concurrent.futures import ThreadPoolExecutor
+import google.generativeai as genai
 from django.conf import settings
+from django.db import models
 
 logger = logging.getLogger('flowstate')
 
 FALLBACK_MODELS = [
-    'openrouter/free',
-    'deepseek/deepseek-v3:free',
-    'deepseek/deepseek-chat:free',
+    'google/gemini-2.0-flash-lite-preview-02-05:free',
     'meta-llama/llama-3.3-70b-instruct:free',
-    'google/gemini-2.0-flash-001:free',
-    'google/gemma-3-27b-it:free',
-    'qwen/qwen-2.5-72b-instruct:free',
-    'mistralai/pixtral-12b:free',
+    'mistralai/mistral-7b-instruct:free',
+    'openrouter/auto',
 ]
 
 FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the intelligent AI study assistant built into FlowState — an AI-powered study platform for students.
@@ -61,6 +60,10 @@ class AIService:
             'HTTP-Referer': 'https://flowstate.app',
             'X-Title': 'FlowState',
         }
+        # Initialize Google GenAI for Vision tasks
+        self.google_key = getattr(settings, 'GOOGLE_STUDIO_API_KEY', '')
+        if self.google_key:
+            genai.configure(api_key=self.google_key)
 
     def _call(self, messages: list, model: str, max_tokens: int = 8192, timeout: int = 120):
         return requests.post(
@@ -148,18 +151,6 @@ class AIService:
         
         return self.chat(messages)
 
-    def _call_vision(self, messages: list, max_tokens: int = 4096) -> str:
-        """Specialized call for Vision-capable models."""
-        # Use a reliable free vision model
-        vision_model = "google/gemini-2.0-flash-001:free"
-        try:
-            response = self._call(messages, vision_model, max_tokens=max_tokens)
-            if response.status_code == 200:
-                return self._extract_content(response.json())
-        except Exception as e:
-            logger.error(f"Vision AI Call failed: {e}")
-        return ""
-
     def groq_chat(self, messages: list, max_tokens: int = 1024) -> str:
         """Sub-second chat bridge using Groq directly for interruptions."""
         log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
@@ -235,16 +226,36 @@ class AIService:
 
         yield "Streaming unavailable. Please try again."
 
-    def _get_resource_context(self, resource) -> str:
-        """Build the richest context possible for this resource."""
+    def _get_resource_context(self, resource, query=None) -> str:
+        """Build the richest context possible for this resource, optionally isolating relevance via Semantic Search."""
         parts = []
 
-        # 1. Raw extracted text (primary source)
-        if resource.ai_concepts:
+        # 1. Vector Search text (primary RAG approach)
+        text_context = ""
+        try:
+            if query and resource.chunks.exists():
+                from langchain_huggingface import HuggingFaceEmbeddings
+                logger.info(f"[RAG] Executing vector similarity search for query: {query}")
+                emb = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                query_vector = emb.embed_query(query)
+                
+                # Retrieve the top 5 closest chunks using PGVector L2 distance operator
+                top_chunks = resource.chunks.order_by(
+                    models.OrderBy(models.F('embedding').l2_distance(query_vector))
+                )[:5]
+                
+                text_context = "\n...".join([c.text_content for c in top_chunks])
+                if text_context:
+                    parts.append(f"--- High-Relevance Extracted Context ---\n{text_context}")
+        except Exception as e:
+            logger.error(f"[RAG Error]: {e}")
+            
+        # Fallback to standard extracted text if RAG fails or isn't requested
+        if not text_context and resource.ai_concepts:
             for concept in resource.ai_concepts:
                 text = concept.get('extracted_text', '') or concept.get('transcript', '')
                 if text:
-                    parts.append(f'--- Document Text ---\n{text[:25000]}')
+                    parts.append(f'--- Document Text ---\n{text[:15000]}')
                     break
 
         # 2. AI-generated study notes (lets chat AI reference what the student sees)
@@ -306,10 +317,11 @@ class AIService:
     def generate_flashcards(self, resource, count: int = 10, level: str = 'undergrad', context: str = '') -> list:
         content = context or self._get_resource_context(resource)
         base = f"for '{resource.title}' at {level} level"
+        latex_rule = " Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry."
         if content:
-            prompt = f"Generate {count} flashcards {base} based on:\n\n{content[:15000]}\n\nReturn ONLY a JSON array: [{{\"question\": ..., \"answer\": ..., \"difficulty\": \"easy|medium|hard\"}}]"
+            prompt = f"Generate {count} flashcards {base} based on:\n\n{content[:15000]}\n\nReturn ONLY a JSON array: [{{\"question\": ..., \"answer\": ..., \"difficulty\": \"easy|medium|hard\"}}].{latex_rule}"
         else:
-            prompt = f"Generate {count} flashcards {base}. Return ONLY a JSON array: [{{\"question\": ..., \"answer\": ..., \"difficulty\": \"easy|medium|hard\"}}]"
+            prompt = f"Generate {count} flashcards {base}. Return ONLY a JSON array: [{{\"question\": ..., \"answer\": ..., \"difficulty\": \"easy|medium|hard\"}}].{latex_rule}"
         return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
 
     def generate_quiz(self, resource, fmt: str, level: str, count: int) -> list:
@@ -321,7 +333,10 @@ class AIService:
             'mixed': 'mix of MCQ and short answer',
         }
         content_part = f"\n\nBased on:\n{context[:15000]}" if context else ""
-        prompt = f"Generate {count} {fmt_map.get(fmt, 'questions')} for '{resource.title}' at {level} level{content_part}. Return ONLY a JSON array."
+        prompt = (
+            f"Generate {count} {fmt_map.get(fmt, 'questions')} for '{resource.title}' at {level} level{content_part}. "
+            "Return ONLY a JSON array. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry."
+        )
         return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
 
     def generate_study_nudge(self, user, recent_topics: list) -> str:
@@ -359,7 +374,7 @@ class AIService:
         prompt = (
             f"Explain this text clearly and concisely for a student:\n\n\"{text}\"\n\n"
             "Give: 1) Simple explanation, 2) Why it matters, 3) A real-world example if relevant. "
-            "Keep it under 150 words. Use markdown."
+            "Keep it under 150 words. Use markdown. Use LaTeX ($) for any math/formulas."
         )
         return self.chat([{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}])
 
@@ -401,7 +416,7 @@ class AIService:
                     },
                     {
                         'type': 'image_url',
-                        'image_url': {'url': f'data:{mime};base64,{b64}', 'detail': 'high'}
+                        'image_url': {'url': f'data:{mime};base64,{b64}'}
                     }
                 ]
             }]
@@ -442,13 +457,14 @@ class AIService:
         if is_math_intensive:
             math_hint = (
                 "\n\nDETECTION: This content is Mathematics-Intensive. "
-                "USE ```math ... ``` code blocks for all major formulas (at least 3 per section). "
+                "Use standard LaTeX delimiters: $$[formula]$$ for block math and $[formula]$ for inline math. "
                 "Break down complex equations into logical 'Derivation Steps' with 'Variable Intuition'."
             )
 
-        # Chunking (15k chars, 1k overlap)
-        chunk_size = 15000
-        overlap = 1000
+        # ─── OPTIMIZED CHUNKING ───
+        # For large documents, we use larger chunks (12k) to reduce the number of API calls
+        chunk_size = 12000
+        overlap = 1500
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         all_sections = []
@@ -456,34 +472,46 @@ class AIService:
         all_tips = []
         overview = {}
 
-        # Parallel Chunk Processing (Speed: 10x)
+        import time
+        # Parallel Chunk Processing (REDUCED worker count to avoid triggering Quota Limits/429)
         def process_chunk(idx, chunk_text):
+            # Proactive Jitter: wait to stagger requests to OpenRouter
+            time.sleep(idx * 2.5) 
+            
             prompt = (
                 f"You are creating a FlowAI Study Kit. Analyze PART {idx+1} of '{resource.title}'."
                 f"{image_hint if idx == 0 else ''}{math_hint}\n\n"
-                f"Content:\n{chunk_text}\n\n"
+                f"Content Snippet:\n{chunk_text}\n\n"
                 "Return ONLY a JSON object:\n"
                 "- 'overview': {\"title\": str, \"icon\": emoji, \"summary\": str}\n"
                 "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int], \"mermaid_diagram\": str}]\n"
-                f"  content RULES: Use **bold** for key terms. For formulas and derivations, strictly use ```math \\LaTeX ``` blocks. "
-                "  EVERY complex calculation (more than 5 chars) MUST be in its own ```math ``` block. "
-                "  STRIKT: content MUST be a single string. NEVER put a list or object inside 'content'.\n"
+                "  STRIKT content RULES: Use **bold** for key terms. For formulas, use standard LaTeX ($$ for blocks, $ for inline). "
+                "  content MUST be a single string. NEVER put a list or object inside 'content'.\n"
                 "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
                 "- 'exam_tips': [str]\n"
             )
             try:
-                res_content = self.chat([{'role': 'user', 'content': prompt}])
+                # Use a specific stable model for kit generation
+                res_content = self.chat([{'role': 'user', 'content': prompt}], max_tokens=4096)
+                
+                # If we get a "trouble connecting" message, it means all fallbacks failed
+                if "trouble connecting" in res_content.lower():
+                    logger.error(f"[Quota Failure] AI could not process chunk {idx}")
+                    return idx, {}
+                    
                 return idx, self._parse_json(res_content, {})
             except Exception as e:
-                logger.error(f"Chunk {idx} failed: {e}")
+                logger.error(f"Chunk {idx} failed: {str(e)}")
                 return idx, {}
 
-        max_chunks = 30
+        # Limit to 10 chunks max to prevent absolute quota burnout for one user
+        max_chunks = 10
         active_chunks = chunks[:max_chunks]
         
-        # Parallelize the AI calls
+        # Reduced max_workers to 1 (Sequential) for free tier stability if needed, 
+        # but let's try 2 with a longer sleep.
         results = []
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(process_chunk, i, c) for i, c in enumerate(active_chunks)]
             for future in futures:
                 results.append(future.result())
@@ -578,17 +606,17 @@ class AIService:
                 b64 = base64.b64encode(p['data']).decode('utf-8')
                 imgs_content.append({
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "low"}
+                    "image_url": {"url": f"data:image/png;base64,{b64}"}
                 })
             
             text_prompt = {
                 "type": "text",
                 "text": (
                     f"Analyze these SCANNED pages ({', '.join(map(str, page_nums))}) from '{resource.title}'. "
-                    "This is a high-speed Study Kit scan. Extract the text and mathematical formulas. "
+                    "This is a high-speed Study Kit scan. Extract the text and mathematical/chemical formulas. "
                     "Return ONLY a JSON object:\n"
                     "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int]}]\n"
-                    "  content RULES: Use ```math \\LaTeX ``` blocks for ALL formulas. Break down steps. "
+                    "  content RULES: Use standard LaTeX ($$ for blocks, $ for inline) for ALL formulas and chemical equations (e.g., $H_2O$, $NH_3$). "
                     "  STRIKT: content MUST be a string. NEVER a list or object.\n"
                     "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
                     "- 'exam_tips': [str]\n"
@@ -673,7 +701,7 @@ class AIService:
             f"Content:\n{context[:15000] if context else resource.title}\n\n"
             "Return ONLY a JSON array of objects:\n"
             '[{"question": "...", "type": "short_answer|essay|analysis", "hint": "...", "model_answer": "..."}]\n'
-            "Ensure the model_answer is detailed (2-3 paragraphs). No extra text."
+            "Ensure the model_answer is detailed (2-3 paragraphs). Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. No extra text."
         )
         return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
 
@@ -701,68 +729,93 @@ class AIService:
 
     def _call_vision(self, messages: list) -> str:
         """
-        Vision-only method. Priority:
-        1. OpenRouter Free Vision (High Reliability)
-        2. Google Gemini 2.0 Flash (Free Tier)
-        3. Groq (Llama-3.2-11b-vision)
-        4. Text-only graceful fallback
+        Vision-heavy method. Priority:
+        1. Direct Google AI Studio (Try 1.5 Flash first for reliability, then 2.0)
+        2. Groq (Llama-3.2-11b-vision)
+        3. OPENROUTER MULTI-MODEL FALLBACK (Free Tier)
         """
-        # ── 1. Groq vision ────────────────────────────────────────────────────
+        log_path = os.path.join(settings.BASE_DIR, 'vision_debug.log')
+        
+        # ── 1. Google Gemini (Dedicated Key) ──────────────────────────────────
+        if self.google_key:
+            # Try 1.5 versions first for balance of reliability and performance
+            for model_attempt in ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b']:
+                try:
+                    with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
+                    result = self._call_google_studio_vision(messages, model_name=model_attempt)
+                    if result and "Vision analysis returned no text" not in result:
+                        with open(log_path, 'a') as f:
+                            f.write(f"[VISION-SIGNAL] Success via Direct Google Studio ({model_attempt})\n")
+                        return result
+                except Exception as e:
+                    with open(log_path, 'a') as f:
+                        f.write(f"[VISION-SIGNAL] Direct Google Studio ({model_attempt}) Failed: {str(e)[:200]}\n")
+                    continue
+
+            # Then try 2.0 (often has lower free quotas)
+            try:
+                model_attempt = 'gemini-2.0-flash'
+                with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
+                result = self._call_google_studio_vision(messages, model_name=model_attempt)
+                if result:
+                    return result
+            except Exception as e:
+                with open(log_path, 'a') as f:
+                    f.write(f"[VISION-SIGNAL] Direct Google Studio (2.0) Failed: {str(e)[:200]}\n")
+
+        # ── 2. Groq vision ────────────────────────────────────────────────────
         groq_key = os.environ.get('GROQ_API_KEY', '').strip()
         if groq_key:
             try:
                 result = self._call_groq_vision(messages, groq_key)
                 if result:
+                    with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Success via Groq Llama-3.2\n")
                     return result
             except Exception as e:
                 logger.warning(f'Groq vision failed: {e}')
+                with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Groq failed: {str(e)}\n")
 
-        # ── 2. Google Gemini fallback ─────────────────────────────────────────
-        google_key = os.environ.get('GOOGLE_AI_KEY', '').strip()
-        if google_key:
-            try:
-                result = self._call_google_vision(messages, google_key)
-                if result:
-                    return result
-            except Exception as e:
-                logger.warning(f'Google vision failed: {e}')
-
-        # ── 1. OpenRouter free vision models ─────────────────────────────────
+        # ── 3. OPENROUTER MULTI-MODEL FALLBACK (FREE TIER) ───────────────────
         vision_models = [
-            'nvidia/nemotron-nano-12b-v2-vl:free',
+            'openrouter/auto',
+            'google/gemini-2.0-flash-001',
+            'google/gemini-pro-1.5-exp:free',
+            'google/gemini-flash-1.5-8b',
+            'google/gemini-flash-1.5',
+            'mistralai/pixtral-12b',
+            'qwen/qwen-2.5-vl-72b-instruct',
             'qwen/qwen-2-vl-7b-instruct:free',
-            'mistralai/pixtral-12b:free',
+            'openrouter/free',
         ]
+        
         msgs_with_sys = messages if (messages and messages[0].get('role') == 'system') else \
             [{'role': 'system', 'content': FLOWAI_SYSTEM_PROMPT}] + messages
 
+        import time
         for model in vision_models:
             try:
                 response = self._call(msgs_with_sys, model, max_tokens=2048)
+                
                 if response.status_code == 200:
                     content = self._extract_content(response.json())
-                    if content.strip():
-                        logger.info(f'Vision model used: {model}')
+                    if content.strip() and "error" not in content.lower()[:50]:
+                        with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Success via {model}\n")
                         return content
+                
+                with open(log_path, 'a') as f: 
+                    f.write(f"[VISION-SIGNAL] {model} failed ({response.status_code})\n")
+                    if response.status_code != 200:
+                        f.write(f"Response body: {response.text[:200]}\n")
+                
+                if response.status_code == 429:
+                    time.sleep(1.5)
+                    continue
             except Exception as e:
-                logger.warning(f'Vision model {model} failed: {e}')
+                logger.warning(f'Vision model {model} error: {e}')
+                with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Exception for {model}: {str(e)}\n")
                 continue
 
-        # ── 4. Graceful text-only fallback ────────────────────────────────────
-        text_only = []
-        for msg in messages:
-            if isinstance(msg.get('content'), list):
-                text_parts = [p['text'] for p in msg['content'] if p.get('type') == 'text']
-                text_only.append({
-                    'role': msg['role'],
-                    'content': ' '.join(text_parts) + (
-                        '\n\n[Note: Image analysis is temporarily unavailable. '
-                        'Please try again in a moment.]'
-                    )
-                })
-            else:
-                text_only.append(msg)
-        return self.chat(text_only)
+        return "I encountered an error while trying to process this image. All available vision models are currently unresponsive. Please try again in a few minutes or check your OpenRouter API credits."
 
     def _call_groq_vision(self, messages: list, api_key: str) -> str:
         """
@@ -793,47 +846,127 @@ class AIService:
             logger.warning(f'Groq vision error {response.status_code}: {response.text[:200]}')
             return ''
 
-    def _call_google_vision(self, messages: list, api_key: str) -> str:
-        """
-        Google Gemini 2.0 Flash vision fallback.
-        Only called from _call_vision().
-        """
-        import requests as req
-        user_msg = next((m for m in reversed(messages) if m['role'] == 'user'), None)
-        if not user_msg:
-            return ''
+    def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-2.0-flash') -> str:
+        """Helper to call Google AI Studio directly using the SDK."""
+        import google.generativeai as genai
+        import base64
 
-        parts = []
+        user_msg = messages[-1]
+        prompt_parts = []
+        
+        # Extract visual/text components
         if isinstance(user_msg['content'], list):
             for part in user_msg['content']:
                 if part['type'] == 'text':
-                    parts.append({'text': part['text']})
+                    prompt_parts.append(part['text'])
                 elif part['type'] == 'image_url':
                     url = part['image_url']['url']
                     if url.startswith('data:'):
-                        header, data = url.split(',', 1)
-                        mime = header.split(':')[1].split(';')[0]
-                        parts.append({'inline_data': {'mime_type': mime, 'data': data}})
+                        header, base64_str = url.split(',', 1)
+                        mime_type = header.split(':')[1].split(';')[0]
+                        prompt_parts.append({
+                            "mime_type": mime_type,
+                            "data": base64.b64decode(base64_str)
+                        })
         else:
-            parts.append({'text': str(user_msg['content'])})
+            prompt_parts.append(str(user_msg['content']))
 
-        parts.insert(0, {'text': FLOWAI_SYSTEM_PROMPT + '\n\n'})
-        payload = {
-            'contents': [{'role': 'user', 'parts': parts}],
-            'generationConfig': {'maxOutputTokens': 2048, 'temperature': 0.7},
-        }
-        response = req.post(
-            f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}',
-            json=payload, timeout=60,
-        )
-        if response.status_code == 200:
+    def _get_style_suffix(self, prompt: str) -> str:
+        """
+        Returns a specific style suffix based on prompt analysis to improve visual quality.
+        """
+        prompt_l = prompt.lower()
+        if any(k in prompt_l for k in ['medical', 'anatomy', 'organ', 'heart', 'diagram', 'science', 'biological']):
+            return "Professional medical illustration, clean scientific diagram, 4k, high resolution, white background"
+        if any(k in prompt_l for k in ['app', 'ui', 'interface', 'dashboard', 'website']):
+            return "Modern UI design, sleek app interface, high-end digital design, minimalist, 4k"
+        if any(k in prompt_l for k in ['logo', 'icon', 'symbol', 'branding']):
+            return "Professional vector logo design, minimalist, clean lines, high quality, white background"
+        
+        return "Professional digital art illustration, photorealistic, vibrant colors, detailed, 4k, masterpiece"
+
+    def generate_image(self, prompt: str, model: str = 'black-forest-labs/flux-schnell') -> str:
+        """
+        Generates an image from a text prompt using a resilient multi-tier fallback strategy.
+        Tier 1: Pollinations AI (Generative, Free, Fast)
+        Tier 2: Lexica.art (Search-based retrieval)
+        Tier 3: OpenRouter (Generative, Paid)
+        """
+        log_path = os.path.join(settings.BASE_DIR, 'vision_debug.log')
+        style = self._get_style_suffix(prompt)
+        full_enhanced_prompt = f"{prompt}. {style}"
+
+        # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
+        try:
+            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 1: Attempting Pollinations for: {prompt[:50]}...\n")
+            import requests
+            import base64
+            
+            encoded_prompt = requests.utils.quote(full_enhanced_prompt)
+            # Use Flux model via Pollinations
+            poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model=flux"
+            
+            res = requests.get(poll_url, timeout=30)
+            if res.status_code == 200:
+                encoded = base64.b64encode(res.content).decode('utf-8')
+                with open(log_path, 'a', encoding='utf-8') as f: f.write("[OK] Tier 1 Success (Pollinations AI)\n")
+                return f"data:image/jpeg;base64,{encoded}"
+        except Exception as e:
+            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 1 Failed: {str(e)}\n")
+
+        # --- TIER 2: LEXICA.ART (High Quality Search) ---
+        try:
+            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 2: Attempting Lexica Search for: {prompt[:50]}...\n")
+            # Extract main keywords for better search - remove punctuation
+            import re
+            clean_prompt = re.sub(r'[^\w\s]', '', prompt)
+            keywords = "+".join([w for w in clean_prompt.split() if len(w) > 3][:6])
+            lexica_url = f"https://lexica.art/api/v1/search?q={keywords}"
+            
+            res = requests.get(lexica_url, timeout=15)
+            if res.status_code == 200:
+                images = res.json().get('images', [])
+                if images:
+                    import random
+                    best_match = random.choice(images[:3])
+                    img_url = best_match.get('src')
+                    # Download and convert to base64 to ensure persistent availability
+                    img_res = requests.get(img_url, timeout=15)
+                    if img_res.status_code == 200:
+                        encoded = base64.b64encode(img_res.content).decode('utf-8')
+                        with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 2 Success (Lexica Search: {best_match.get('id')})\n")
+                        return f"data:image/jpeg;base64,{encoded}"
+                else:
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write("[INFO] Tier 2: No Lexica images found for these keywords.\n")
+        except Exception as e:
+            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 Failed: {str(e)}\n")
+
+        # --- TIER 3: OPENROUTER (Generative, Paid) ---
+        models_to_try = [model, 'openrouter/auto']
+        for current_model in models_to_try:
             try:
-                return response.json()['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError):
-                return ''
-        else:
-            logger.warning(f'Google Gemini vision error {response.status_code}: {response.text[:200]}')
-            return ''
+                with open(log_path, 'a', encoding='utf-8') as f: 
+                    f.write(f"[GEN-SIGNAL] Tier 3: Attempting OpenRouter {current_model}...\n")
+                
+                payload = {
+                    "model": current_model,
+                    "messages": [{"role": "user", "content": [{"type": "text", "text": full_enhanced_prompt}]}],
+                    "modalities": ["image"]
+                }
+                
+                response = requests.post(f"{self.base_url}/chat/completions", headers=self.headers, json=payload, timeout=60)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    images = data.get('choices', [{}])[0].get('message', {}).get('images', [])
+                    if images and images[0].get('type') == 'image_url':
+                        with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 3 Success via {current_model}\n")
+                        return images[0]['image_url']['url']
+            except Exception as e:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 3 Failed ({current_model}): {str(e)}\n")
+                continue
+
+        return ""
 
     def solve_assignment(self, assignment) -> dict:
         """
@@ -865,7 +998,7 @@ class AIService:
             "- Well-organized body sections with headings\n"
             "- Supporting evidence/examples from the resources if available\n"
             "- Conclusion\n\n"
-            "Use markdown formatting. Be thorough and academic in tone."
+            "Use markdown formatting. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. Be thorough and academic in tone."
         )
 
         response = self.chat([{'role': 'user', 'content': prompt}])

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { cn } from '@/lib/utils'
@@ -101,6 +102,7 @@ export default function RichNotesViewer({
             )}>
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
                   h1: ({ children }) => <h1 className="text-3xl sm:text-5xl font-black mb-8 leading-tight">{children}</h1>,
                   h2: ({ children }) => <h2 className="text-2xl sm:text-4xl font-black mb-6 leading-tight">{children}</h2>,
@@ -133,6 +135,61 @@ export default function RichNotesViewer({
                         </button>
                         {alt && <p className="mt-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] text-center">{alt}</p>}
                       </div>
+                    )
+                  },
+
+                  // Code Block Interceptor (Handles ```math ... ``` blocks and standard code)
+                  code: ({ node, inline, className, children, ...props }: any) => {
+                    const match = /language-(\w+)/.exec(className || '')
+                    const content = Array.isArray(children) ? children.join('') : String(children || '')
+                    const cleanContent = content.replace(/\n$/, '')
+                    
+                    // If it's explicitly marked as math OR it looks like a lone LaTeX formula in a block
+                    const isMath = match?.[1] === 'math' || (!inline && (cleanContent.includes('\\') || cleanContent.includes('_') || cleanContent.includes('^')))
+
+                    if (isMath) {
+                      return (
+                        <div className="math-block-container my-12 py-10 px-6 sm:px-12 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-900 dark:text-white overflow-x-auto scrollbar-hide shadow-inner group/math relative w-full">
+                          <div 
+                            className="katex-display-wrapper"
+                            dangerouslySetInnerHTML={{ 
+                              __html: katex.renderToString(cleanContent.replace(/\\\\/g, '\\'), { 
+                                displayMode: true, 
+                                throwOnError: false,
+                                trust: true 
+                              }) 
+                            }} 
+                          />
+                          {/* Premium Micro-Animation Label */}
+                          <div className="absolute top-4 right-6 opacity-0 group-hover/math:opacity-100 transition-all duration-300 transform translate-y-2 group-hover/math:translate-y-0">
+                             <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full border border-primary/20">
+                               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                               <span className="text-[10px] font-black uppercase tracking-widest text-primary">Intelligent Formula</span>
+                             </div>
+                          </div>
+                        </div>
+                      )
+                    }
+                    
+                    // Fallback for inline code that might be math
+                    if (inline && (cleanContent.startsWith('\\') || (cleanContent.includes('_') && cleanContent.length < 20))) {
+                       return (
+                        <span 
+                          className="font-bold text-slate-900 dark:text-white mx-1"
+                          dangerouslySetInnerHTML={{ 
+                            __html: katex.renderToString(cleanContent.replace(/\\\\/g, '\\'), { 
+                              displayMode: false, 
+                              throwOnError: false 
+                            }) 
+                          }} 
+                        />
+                      )
+                    }
+
+                    return (
+                      <code className={cn("px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 font-mono text-sm", className)} {...props}>
+                        {children}
+                      </code>
                     )
                   },
 

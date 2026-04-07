@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { 
   X, Brain, HelpCircle, GitGraph, Wand2, 
   BookOpen, Music2, Headphones, Sparkles, Radio, Mic2,
@@ -110,8 +111,13 @@ export default function ExpandableMobileHUD({
     action()
   }
 
+  const constraintsRef = useRef(null)
+
   return (
-    <div className={cn("fixed bottom-24 right-6 z-[120] lg:hidden", className)}>
+    <>
+      {/* Invisible constraint boundary for dragging */}
+      <div className="fixed inset-4 pointer-events-none z-[110] lg:hidden" ref={constraintsRef} />
+
       {/* Global Loading Overlay (Pops over the whole screen) */}
       {isGenerating && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-2xl animate-in fade-in duration-500">
@@ -138,13 +144,20 @@ export default function ExpandableMobileHUD({
       {/* Backdrop */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300 pointer-events-auto"
+          className="fixed inset-0 z-[115] lg:hidden bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300 pointer-events-auto"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Tools Container */}
-      {isOpen && (
+      {/* Draggable HUD Container */}
+      <motion.div 
+        drag
+        dragConstraints={constraintsRef}
+        dragMomentum={false}
+        className={cn("fixed bottom-24 right-6 z-[120] lg:hidden", className)}
+      >
+        {/* Tools Container */}
+        {isOpen && (
         <div className="absolute bottom-20 right-0 w-[85vw] max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-10 zoom-in-95 duration-300">
           
           {/* Header Action - Chat */}
@@ -225,6 +238,7 @@ export default function ExpandableMobileHUD({
       >
         {isOpen ? <X className="w-7 h-7" /> : <Brain className="w-8 h-8 group-hover:animate-pulse" />}
       </button>
-    </div>
+      </motion.div>
+    </>
   )
 }
