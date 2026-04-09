@@ -139,7 +139,19 @@ class WorkspaceConsumer(AsyncWebsocketConsumer):
     # ─── BROADCAST HANDLERS ──────────────────────────────────────────────────
 
     async def broadcast_block_update(self, event):
-        if self.user.id != event['sender_id']:
+        if self.user.id != event.get('sender_id'):
+            await self.send(text_data=json.dumps(event))
+
+    async def block_created(self, event):
+        if self.user.id != event.get('sender_id'):
+            await self.send(text_data=json.dumps(event))
+
+    async def block_updated(self, event):
+        if self.user.id != event.get('sender_id'):
+            await self.send(text_data=json.dumps(event))
+
+    async def block_deleted(self, event):
+        if self.user.id != event.get('sender_id'):
             await self.send(text_data=json.dumps(event))
 
     async def broadcast_chat_message(self, event):

@@ -36,18 +36,8 @@ export default function AIAssistantSidebar({ workspaceId, onInsertToCanvas, sock
   const sendMutation = useMutation({
     mutationFn: (content: string) => workspaceApi.sendMessage(workspaceId, content),
     onSuccess: (res) => {
-      // Broadcast via socket
-      sendMessage({
-        type: 'chat_message',
-        content: msg,
-        created_at: new Date().toISOString()
-      })
-      
       setMsg('')
       qc.invalidateQueries({ queryKey: ['workspace-messages', workspaceId] })
-      if (res.data?.ai_message) {
-        setTimeout(() => qc.invalidateQueries({ queryKey: ['workspace-messages', workspaceId] }), 500)
-      }
     },
   })
 
@@ -73,95 +63,107 @@ export default function AIAssistantSidebar({ workspaceId, onInsertToCanvas, sock
   ]
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-l border-gray-100 dark:border-gray-800 transition-all duration-500 animate-in slide-in-from-right-2">
-      {/* AI Header */}
-      <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-sky-500 flex items-center justify-center shadow-lg shadow-violet-200 dark:shadow-none">
-              <Sparkles className="w-4 h-4 text-white" />
+    <div className={cn(
+      "flex flex-col h-full bg-transparent overflow-hidden transition-all duration-700 relative",
+      (isThinking || sendMutation.isPending) && "after:absolute after:inset-0 after:pointer-events-none after:border-t-2 after:border-violet-500/40 after:animate-pulse"
+    )}>
+      {/* HUD Header */}
+      <div className="px-6 py-6 border-b border-white/5 bg-white/[0.02] backdrop-blur-md flex-shrink-0">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 bg-violet-600/30 blur-xl rounded-full animate-pulse" />
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-2xl relative z-10 border border-white/20">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm">FlowAI Expert</h3>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-widest">Active Assistant</span>
+              <h3 className="font-black text-white text-sm uppercase tracking-widest">FlowAI Master</h3>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" />
+                <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest opacity-80">Cognitive Stream Active</span>
               </div>
             </div>
           </div>
-          <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          <button className="p-2.5 text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all">
             <History className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Action Pills */}
+        {/* Neural Suggestion Matrix */}
         <div className="flex flex-wrap gap-2">
           {SUGGESTIONS.map(s => (
             <button key={s.action} onClick={() => handleAction(s.action)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">
-              <s.icon className="w-3 h-3" />
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-2xl text-[10px] font-black text-white/40 uppercase tracking-widest hover:border-violet-500/50 hover:text-violet-400 hover:bg-violet-500/10 transition-all shadow-xl group/s">
+              <s.icon className="w-3 h-3 group-hover/s:scale-110 transition-transform" />
               {s.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+      {/* Intelligence Stream */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
         {messages?.map((m: any) => (
-          <div key={m.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex items-center gap-2 mb-2">
-               <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm",
-                 m.is_ai ? "bg-gradient-to-br from-violet-400 to-sky-400" : "bg-sky-500")}>
-                 {m.is_ai ? <Sparkles className="w-3 h-3" /> : m.author_name[0]}
+          <div key={m.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500 group/msg">
+            <div className="flex items-center gap-3 mb-3">
+               <div className={cn("w-7 h-7 rounded-xl flex items-center justify-center text-[10px] font-black text-white shadow-2xl border border-white/10",
+                 m.is_ai ? "bg-gradient-to-br from-violet-600 to-indigo-700" : "bg-white/10")}>
+                 {m.is_ai ? <Sparkles className="w-3.5 h-3.5" /> : (m.author_name?.[0] || 'U')}
                </div>
-               <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{m.is_ai ? 'FlowAI' : m.author_name}</span>
-               <span className="text-[10px] text-gray-300 dark:text-gray-600 ml-auto">{format(new Date(m.created_at), 'HH:mm')}</span>
+               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{m.is_ai ? 'FlowAI Core' : m.author_name}</span>
+               <span className="text-[10px] text-white/10 font-black ml-auto">{format(new Date(m.created_at), 'HH:mm')}</span>
             </div>
             <div className={cn(
-              "px-4 py-3 rounded-2xl text-[13px] leading-relaxed shadow-sm",
-              m.is_ai ? "bg-violet-50 dark:bg-violet-950/20 text-gray-800 dark:text-gray-200 border-l-4 border-violet-500 prose prose-sm dark:prose-invert max-w-none" : 
-              "bg-gray-50/50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 border border-gray-100 dark:border-gray-800"
+              "relative px-5 py-4 rounded-[1.8rem] text-[13px] lg:text-sm leading-[1.8] shadow-2xl transition-all duration-500 border border-transparent",
+              m.is_ai ? "bg-violet-500/5 text-white/90 border-violet-500/10 backdrop-blur-sm" : 
+              "bg-white/[0.03] text-white/60 border-white/5"
             )}>
               {m.is_ai ? (
-                <>
+                <div className="prose prose-invert prose-sm max-w-none prose-p:mb-4 prose-p:last:mb-0 prose-strong:text-violet-400 prose-code:text-sky-400 prose-code:bg-white/5">
                   <ReactMarkdown>{m.content}</ReactMarkdown>
                   <button onClick={() => onInsertToCanvas(m.content)}
-                    className="mt-3 w-full flex items-center justify-center gap-2 py-1.5 rounded-xl bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-900/50 text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 transition-all shadow-sm">
-                    <Plus className="w-3.5 h-3.5" /> Insert into Workspace
+                    className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] hover:bg-violet-400 hover:text-white transition-all shadow-xl active:scale-95">
+                    <Plus className="w-3.5 h-3.5" /> Inject Specimen
                   </button>
-                </>
+                </div>
               ) : m.content}
             </div>
           </div>
         ))}
-        {isThinking && (
-          <div className="flex items-center gap-3 px-4 py-3 bg-violet-50/50 dark:bg-violet-950/10 rounded-2xl border border-dashed border-violet-200 dark:border-violet-900/50 animate-pulse transition-all">
-             <Loader2 className="w-4 h-4 text-violet-500 animate-spin" />
-             <span className="text-[11px] font-bold text-violet-400 uppercase tracking-widest">Expert Thinking...</span>
+        {(isThinking || sendMutation.isPending) && (
+          <div className="flex items-center gap-4 px-6 py-4 bg-violet-600/10 rounded-[2rem] border border-dashed border-violet-500/30 animate-pulse">
+             <div className="relative">
+                <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                <div className="absolute inset-0 bg-violet-500 blur-lg rounded-full opacity-50" />
+             </div>
+             <span className="text-[11px] font-black text-violet-400 uppercase tracking-[0.3em]">Synthesizing Intelligence...</span>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
-        <div className="relative group">
+      {/* Input Command HUD */}
+      <div className="p-6 border-t border-white/5 bg-white/[0.01] flex-shrink-0">
+        <div className="relative group/input">
           <textarea
             value={msg}
             onChange={e => setMsg(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMutation.mutate(msg))}
-            placeholder="Ask FlowAI for help..."
-            className="w-full pl-4 pr-12 py-3 bg-gray-50 dark:bg-gray-800 rounded-2xl border-2 border-transparent focus:border-violet-400 dark:focus:border-violet-500 text-[13px] outline-none transition-all resize-none shadow-inner min-h-[50px] max-h-[150px]"
+            placeholder="Initialize cognitive query..."
+            className="w-full pl-6 pr-14 py-4 bg-white/5 rounded-[2rem] border-2 border-transparent focus:border-violet-500/40 text-[13px] text-white outline-none transition-all resize-none shadow-2xl min-h-[60px] max-h-[200px] selection:bg-violet-500/30"
           />
           <button 
             disabled={!msg.trim() || sendMutation.isPending}
             onClick={() => sendMutation.mutate(msg)}
-            className="absolute right-3 bottom-3 p-2 bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition-all disabled:bg-gray-200 dark:disabled:bg-gray-700 shadow-lg shadow-violet-200 dark:shadow-none">
-            {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            className="absolute right-3 bottom-3 p-3 bg-white text-black rounded-2xl hover:bg-violet-400 hover:text-white transition-all disabled:opacity-20 shadow-2xl active:scale-90 group">
+            {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />}
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 text-center mt-2 font-medium">FlowAI is aware of all linked sources & canvas content.</p>
+        <div className="flex items-center justify-center gap-2 mt-4">
+           <Zap className="w-2.5 h-2.5 text-violet-400/40" />
+           <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.3em] text-center">Neural Link Context Locked</p>
+        </div>
       </div>
     </div>
   )

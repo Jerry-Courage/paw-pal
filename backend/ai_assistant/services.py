@@ -4,11 +4,84 @@ import requests
 import logging
 import base64
 from concurrent.futures import ThreadPoolExecutor
-import google.generativeai as genai
+from google import genai
 from django.conf import settings
 from django.db import models
 
+import re
+import hashlib
+from django.conf import settings
+
 logger = logging.getLogger('flowstate')
+
+class VoiceSanitizer:
+    """
+    Robust utility to clean AI responses for Text-to-Speech engines.
+    Strips markdown artifacts, emojis, and rigid list markers to ensure
+    natural conversational cadence.
+    """
+    @staticmethod
+    def clean(text: str) -> str:
+        if not text:
+            return ""
+        
+        # 1. Strip Action tag if present (don't speak the internal action JSON)
+        text = text.split('ACTION:')[0].strip()
+        
+        # 2. Remove Markdown code blocks entirely for speech
+        text = re.sub(r'```[\s\S]*?```', '', text)
+        
+        # 3. Handle Links and Images: ![alt](url) -> "" and [text](url) -> text
+        text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+        text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+        
+        # 4. Strip Headers: # Title -> Title
+        text = re.sub(r'#+\s?', '', text)
+        
+        # 5. Handle Inline code: `code` -> code
+        text = re.sub(r'`(.*?)`', r'\1', text)
+        
+        # 6. Comprehensive Markdown Symbol Removal (Bold, Italic, Strikethrough)
+        # First, preserve the text inside the markers
+        text = re.sub(r'(\*\*\*|\*\*|\*|___|__|~{2}|~)(.*?)\1', r'\2', text)
+        # Then, blunt removal of any stray markers
+        text = re.sub(r'[*_#~]', '', text)
+        
+        # 7. Remove List Indicators (e.g., "1. " or "- " at start of lines)
+        text = re.sub(r'^\s*[\d\-.*+]+\s+', ' ', text, flags=re.MULTILINE)
+
+        # 8. EXTREME EMOJI & NON-PRONOUNCEABLE SYMBOL REMOVAL
+        # This replaces all Unicode symbols, dingbats, and unpronounceable markers
+        # with empty space, while specifically keeping alphanumeric, basic punctuation, 
+        # and currency for natural reading.
+        import unicodedata
+        
+        def is_pronounceable(char):
+            cat = unicodedata.category(char)
+            # L: Letter, N: Number, P: Punctuation, Z: Separator, M: Mark
+            # S: Symbol, C: Other
+            if cat.startswith('L') or cat.startswith('N') or cat.startswith('Z'):
+                return True
+            if cat.startswith('P'): # Allow punctuation for pauses
+                return True
+            if cat == 'Sc': # Allow currency ($)
+                return True
+            return False
+
+        text = "".join(c if is_pronounceable(c) else " " for c in text)
+        
+        # 9. LaTeX / Math Cleanup for Speech
+        # Replace common markers with their verbal equivalents or just strip them
+        text = text.replace('$', '')
+        text = text.replace('\\', ' ')
+        text = text.replace('^', ' to the power of ')
+        text = text.replace('_', ' ')
+        
+        # 10. Whitespace Normalization
+        # Replace multiple spaces/newlines with a single space for smooth speech
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
 
 FALLBACK_MODELS = [
     'google/gemini-2.0-flash-lite-preview-02-05:free',
@@ -17,36 +90,22 @@ FALLBACK_MODELS = [
     'openrouter/auto',
 ]
 
-FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the intelligent AI study assistant built into FlowState — an AI-powered study platform for students.
+FLOWAI_SYSTEM_PROMPT = """You are FlowAI, a vibrant and intelligent AI study partner built into FlowState. 
 
 Your identity:
-- Name: FlowAI (also called the "Third Member" of any study group)
-- Built by: FlowState
-- Purpose: Help students learn smarter, not harder
+- Name: FlowAI (the "Third Member" of the study group)
+- Purpose: Help students learn smarter with high-fidelity conversational support.
+
+CONVERSATIONAL GUIDELINES (CRITICAL FOR VOICE):
+- BE HUMAN: Use a warm, expressive, and natural tone. Use subtle fillers like "Hmm," "Got it," or "Actually" when transitioning between thoughts.
+- BE SNAPPY: Keep spoken responses concise. Don't speak in walls of text.
+- STRICT NO EMOJIS: Never use emojis, symbols, or special characters (like 👋, 🌿, ✨). They break the Text-to-Speech engine.
+- NO ROBOT SPEECH: Speak like a peer, not a manual. Avoid phrases like "I will now list..." or "Here is your summary."
+- PRONUNCIATION FRIENDLY: Avoid complex markdown or symbols that sound robotic when read aloud.
+- AGENTIC LOGIC: You can search resources, create flashcards, and group-chat. When you do, summarize the action verbally in a natural way.
 
 Your capabilities:
-- Explain complex concepts clearly at any academic level
-- Generate flashcards, quizzes, and summaries from study materials
-- Help students prepare for exams with targeted practice questions
-- Analyze uploaded PDFs, YouTube transcripts, and code files
-- Support collaborative group study sessions
-- Provide personalized study nudges and learning insights
-- Solve math, science, coding, and humanities problems
-- Cite sources and suggest further reading when relevant
-
-Your personality:
-- Warm, encouraging, and patient — never condescending
-- Concise but thorough — get to the point, then elaborate if needed
-- Use markdown formatting (bold, bullet points, code blocks) for clarity
-- Celebrate student progress and effort
-- If you don't know something, say so honestly
-
-Rules:
-- Always stay focused on educational topics
-- Never write harmful, unethical, or off-topic content
-- If asked who made you, say you are FlowAI by FlowState
-- Format code with proper syntax highlighting
-- Keep responses focused and actionable"""
+..."""
 
 
 class AIService:
@@ -63,7 +122,12 @@ class AIService:
         # Initialize Google GenAI for Vision tasks
         self.google_key = getattr(settings, 'GOOGLE_STUDIO_API_KEY', '')
         if self.google_key:
-            genai.configure(api_key=self.google_key)
+            self.google_client = genai.Client(api_key=self.google_key)
+        else:
+            self.google_client = None
+        
+        # Singleton Embedding Model to prevent lag
+        self._emb = None
 
     def _call(self, messages: list, model: str, max_tokens: int = 8192, timeout: int = 120):
         return requests.post(
@@ -226,7 +290,58 @@ class AIService:
 
         yield "Streaming unavailable. Please try again."
 
+    def perform_global_search(self, query: str, user, limit: int = 7) -> str:
+        """
+        Search across the user's entire library for the most relevant context.
+        Returns a formatted context string including source attribution.
+        """
+        if not query:
+            return ""
+            
+        try:
+            try:
+                from langchain_text_splitters import RecursiveCharacterTextSplitter
+            except ImportError:
+                from langchain.text_splitter import RecursiveCharacterTextSplitter
+            from langchain_huggingface import HuggingFaceEmbeddings
+            from library.models import DocumentChunk
+            from django.db import models
+            from pgvector.django import L2Distance
+            
+            logger.info(f"[Global RAG] Searching across entire library for: {query[:50]}...")
+            
+            if not hasattr(self, '_emb_model') or self._emb_model is None:
+                logger.info("[RAG] Loading Embedding Model for the first time...")
+                self._emb_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            
+            query_vector = self._emb_model.embed_query(query)
+            
+            # Retrieve the top N closest fragments from ANY document owned by the user
+            top_chunks = DocumentChunk.objects.filter(
+                resource__owner=user
+            ).annotate(
+                distance=L2Distance('embedding', query_vector)
+            ).order_by('distance').select_related('resource')[:limit]
+            
+            if not top_chunks:
+                return ""
+            
+            context_parts = ["--- RELEVANT CONTEXT FROM YOUR ENTIRE LIBRARY ---"]
+            for chunk in top_chunks:
+                source_label = f"From '{chunk.resource.title}'"
+                if chunk.page_number:
+                    source_label += f" (p. {chunk.page_number})"
+                
+                context_parts.append(f"{source_label}:\n{chunk.text_content.strip()}")
+                
+            return "\n\n".join(context_parts)
+            
+        except Exception as e:
+            logger.error(f"[Global RAG Error]: {e}")
+            return ""
+
     def _get_resource_context(self, resource, query=None) -> str:
+
         """Build the richest context possible for this resource, optionally isolating relevance via Semantic Search."""
         parts = []
 
@@ -234,15 +349,18 @@ class AIService:
         text_context = ""
         try:
             if query and resource.chunks.exists():
-                from langchain_huggingface import HuggingFaceEmbeddings
                 logger.info(f"[RAG] Executing vector similarity search for query: {query}")
-                emb = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-                query_vector = emb.embed_query(query)
+                
+                if not hasattr(self, '_emb_model') or self._emb_model is None:
+                    from langchain_huggingface import HuggingFaceEmbeddings
+                    self._emb_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                
+                query_vector = self._emb_model.embed_query(query)
                 
                 # Retrieve the top 5 closest chunks using PGVector L2 distance operator
-                top_chunks = resource.chunks.order_by(
-                    models.OrderBy(models.F('embedding').l2_distance(query_vector))
-                )[:5]
+                top_chunks = resource.chunks.annotate(
+                    distance=L2Distance('embedding', query_vector)
+                ).order_by('distance')[:5]
                 
                 text_context = "\n...".join([c.text_content for c in top_chunks])
                 if text_context:
@@ -847,9 +965,9 @@ class AIService:
             return ''
 
     def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-2.0-flash') -> str:
-        """Helper to call Google AI Studio directly using the SDK."""
-        import google.generativeai as genai
-        import base64
+        """Helper to call Google AI Studio directly using the NEW SDK."""
+        if not self.google_client:
+            return ""
 
         user_msg = messages[-1]
         prompt_parts = []
@@ -864,12 +982,24 @@ class AIService:
                     if url.startswith('data:'):
                         header, base64_str = url.split(',', 1)
                         mime_type = header.split(':')[1].split(';')[0]
-                        prompt_parts.append({
-                            "mime_type": mime_type,
-                            "data": base64.b64decode(base64_str)
-                        })
+                        from google.genai import types
+                        prompt_parts.append(types.Part.from_bytes(
+                            data=base64.b64decode(base64_str),
+                            mime_type=mime_type
+                        ))
         else:
             prompt_parts.append(str(user_msg['content']))
+
+        try:
+            # New SDK call format
+            response = self.google_client.models.generate_content(
+                model=model_name,
+                contents=prompt_parts
+            )
+            return response.text or ""
+        except Exception as e:
+            logger.error(f"Google SDK Error ({model_name}): {e}")
+            raise e
 
     def _get_style_suffix(self, prompt: str) -> str:
         """
@@ -1032,6 +1162,64 @@ class AIService:
             'outline': outline,
         }
 
+    def refine_assignment(self, assignment, prompt: str) -> dict:
+        """
+        Iteratively refine an assignment based on user feedback.
+        Uses a structured response format to separate the draft from the commentary.
+        """
+        history = assignment.chat_history or []
+        
+        # Build the initial system context
+        system_instruction = (
+            f"You are FlowAI, a world-class academic researcher and technical writer.\n"
+            f"You are refining the document titled '{assignment.title}'.\n\n"
+            f"ORIGINAL INSTRUCTIONS: {assignment.instructions}\n"
+            f"CURRENT DRAFT TO EDIT:\n{assignment.ai_response}\n\n"
+            "INSTRUCTIONS: Re-read the current draft and user feedback. Rewrite the FULL document.\n"
+            "STRUCTURE: Your response MUST be split into exactly two parts like this:\n"
+            "---DRAFT---\n"
+            "[The full, rewritten markdown document. NO conversational text here. Use headers, bolding, and academic tone.]\n"
+            "---COMMENT---\n"
+            "[A short (1-2 sentence) friendly explanation of the edits you made.]\n\n"
+            "DO NOT FORGET THE ---DRAFT--- AND ---COMMENT--- MARKERS."
+        )
+
+        messages = [{'role': 'system', 'content': system_instruction}] + history + [{'role': 'user', 'content': prompt}]
+        
+        # Call AI
+        raw_response = self.chat(messages)
+
+        # Parse structured response
+        draft = ""
+        comment = ""
+        
+        if "---DRAFT---" in raw_response and "---COMMENT---" in raw_response:
+            parts = raw_response.split("---COMMENT---")
+            draft_part = parts[0].replace("---DRAFT---", "").strip()
+            comment_part = parts[1].strip()
+            if draft_part: draft = draft_part
+            if comment_part: comment = comment_part
+        
+        # Fallback logic if structure is missed
+        if not draft:
+            # Check if AI just returned the draft without markers
+            if len(raw_response) > 500:
+                draft = raw_response
+                comment = "I've updated the draft for you."
+            else:
+                # If short, it's likely just a comment; don't overwrite the draft
+                draft = assignment.ai_response
+                comment = raw_response
+
+        history.append({'role': 'user', 'content': prompt})
+        history.append({'role': 'assistant', 'content': comment})
+
+        return {
+            'response': draft,
+            'overview': comment,
+            'chat_history': history[-20:]
+        }
+
     def solve_math_problem(self, problem: str, context: str = "") -> dict:
         """
         Specialized Math Solver using Chain-of-Thought reasoning.
@@ -1078,6 +1266,78 @@ class AIService:
             "final_answer": "Processing complete.",
             "key_theorems": ["Math Matrix Optimization"]
         })
+
+    def transcribe_audio(self, audio_file) -> str:
+        """
+        Transcribes audio using a Multimodal model on OpenRouter (Gemini 2.0 Flash).
+        This replaces the need for a dedicated Groq Whisper key.
+        """
+        import base64
+        import requests
+        
+        log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
+        try:
+            # 1. Read and Encode Audio
+            audio_bytes = audio_file.read()
+            if not audio_bytes:
+                return ""
+            b64_audio = base64.b64encode(audio_bytes).decode('utf-8')
+            
+            # 2. Use a dedicated STT model for speed (Whisper Large v3)
+            # This is significantly faster for pure transcription than multimodal Gemini
+            target_model = "openai/whisper-large-v3"
+            
+            # 3. Construct Multimodal Prompt (OpenRouter standard)
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text", 
+                            "text": "Transcribe."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:audio/webm;base64,{b64_audio}"
+                            }
+                        }
+                    ]
+                }
+            ]
+
+            url = f"{self.base_url}/chat/completions"
+            response = requests.post(
+                url,
+                headers=self.headers,
+                json={'model': target_model, 'messages': messages, 'max_tokens': 512},
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                content = self._extract_content(response.json())
+                with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] Success: {content[:30]}...\n")
+                return content.strip()
+            else:
+                # Fallback to free instance if paid/specific version fails
+                if response.status_code != 200:
+                    with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] Main model failed ({response.status_code}), trying free-tier fallback...\n")
+                    response = requests.post(
+                        url,
+                        headers=self.headers,
+                        json={'model': "google/gemini-2.0-flash-exp:free", 'messages': messages, 'max_tokens': 512},
+                        timeout=30
+                    )
+                    if response.status_code == 200:
+                        content = self._extract_content(response.json())
+                        return content.strip()
+
+                with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] STT Failed ({response.status_code}): {response.text[:200]}\n")
+                return ""
+                
+        except Exception as e:
+            with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] STT Runtime Error: {str(e)}\n")
+            return ""
 
     def _parse_json(self, text: str, default):
         """Safely parse JSON from AI response, stripping markdown code blocks and extra text."""

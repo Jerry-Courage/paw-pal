@@ -104,54 +104,70 @@ class SmartScheduleView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        now = timezone.now()
+        
+        # 1. Fetch Deadlines (from Assignments)
         deadlines = Deadline.objects.filter(
             user=request.user, is_completed=False
         ).order_by('due_date')[:5]
 
-        now = timezone.now()
+        # 2. Fetch Workspace Tasks with due dates
+        from workspace.models import WorkspaceTask
+        ws_tasks = WorkspaceTask.objects.filter(
+            workspace__memberships__user=request.user,
+            due_date__isnull=False,
+            status__in=['todo', 'in_progress']
+        ).order_by('due_date')[:5]
+
         suggestions = []
 
+        # Process standard deadlines
         for deadline in deadlines:
             days_left = max(1, (deadline.due_date - now).days)
-            # Spread sessions: 1 session per 2 days leading up to deadline, max 4
-            num_sessions = min(4, max(1, days_left // 2))
+            num_sessions = min(3, max(1, days_left // 2))
             interval = max(1, days_left // (num_sessions + 1))
 
             for i in range(1, num_sessions + 1):
                 study_day = now + timedelta(days=interval * i)
-                # Skip if already past deadline
-                if study_day >= deadline.due_date:
-                    break
+                if study_day >= deadline.due_date: break
                 suggestions.append({
                     'title': f'{deadline.subject or deadline.title} Study',
                     'subject': deadline.subject or '',
                     'deadline_title': deadline.title,
-                    'deadline_id': deadline.id,
+                    'type': 'assignment_deadline',
                     'suggested_date': study_day.date().isoformat(),
                     'duration_minutes': 60,
-                    'reason': f'Deadline "{deadline.title}" in {days_left} days',
-                    'urgency': 'high' if days_left <= 3 else 'medium' if days_left <= 7 else 'low',
+                    'urgency': 'high' if days_left <= 3 else 'medium',
                 })
 
-        # Also suggest flashcard review if due cards exist
+        # Process Workspace Tasks
+        for task in ws_tasks:
+            days_left = max(1, (task.due_date - now).days)
+            suggestions.append({
+                'title': f'Task: {task.title}',
+                'subject': task.workspace.subject or '',
+                'workspace_name': task.workspace.name,
+                'deadline_title': f'Task in {task.workspace.name}',
+                'type': 'workspace_task',
+                'suggested_date': now.date().isoformat() if days_left < 1 else (now + timedelta(days=1)).date().isoformat(),
+                'duration_minutes': 30,
+                'urgency': 'high' if days_left <= 2 else 'medium',
+            })
+
+        # 3. Flashcard Review Suggestion
         try:
             from library.models import Flashcard
-            due_count = Flashcard.objects.filter(
-                owner=request.user,
-                next_review__lte=now
-            ).count()
+            due_count = Flashcard.objects.filter(owner=request.user, next_review__lte=now).count()
             if due_count > 0:
                 suggestions.insert(0, {
                     'title': 'Flashcard Review',
                     'subject': 'Spaced Repetition',
-                    'deadline_title': None,
-                    'deadline_id': None,
+                    'type': 'review',
                     'suggested_date': now.date().isoformat(),
                     'duration_minutes': 20,
-                    'reason': f'{due_count} flashcard{"s" if due_count != 1 else ""} due for review',
+                    'reason': f'{due_count} flashcards due',
                     'urgency': 'high',
                 })
-        except Exception:
-            pass
+        except Exception: pass
 
-        return Response({'suggestions': suggestions[:8]})
+        return Response({'suggestions': suggestions[:10]})

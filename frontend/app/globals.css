@@ -178,91 +178,27 @@
     @apply font-black tracking-tight text-slate-900 dark:text-white uppercase mt-12 mb-6;
   }
 
-  /* Scanner scanning effect for HUD */
-  .animate-hud-pulse {
-    animation: hud-pulse 4s infinite ease-in-out;
+  /* ─── DIGITAL BLACKBOARD (CLEAN ACADEMIC) ────────────────────────── */
+  .prose-math {
+    @apply bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm p-10 my-10 relative overflow-hidden;
   }
-
-  @keyframes hud-pulse {
-    0%, 100% { box-shadow: 0 0 20px rgba(0, 245, 255, 0.05); }
-    50% { box-shadow: 0 0 40px rgba(0, 245, 255, 0.15); }
+  /* ─── PREMIUM ANIMATIONS ─────────────────────────────────────────── */
+  @keyframes sparkle {
+    0%, 100% { opacity: 0.5; transform: scale(1) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.1) rotate(5deg); }
   }
-
-  @keyframes shine {
-    to { background-position: 200% center; }
+  .animate-sparkle {
+    animation: sparkle 3s ease-in-out infinite;
   }
 
   .shimmer {
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.2) 50%,
-      rgba(255, 255, 255, 0) 100%
-    );
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
   }
-
   @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
-  }
-
-  @keyframes sparkle {
-    0%, 100% { opacity: 0.5; transform: scale(1) rotate(0deg); filter: brightness(1) blur(0px); }
-    50% { opacity: 1; transform: scale(1.2) rotate(15deg); filter: brightness(1.5) blur(1px); }
-  }
-  .animate-sparkle {
-    animation: sparkle 2s ease-in-out infinite;
-  }
-
-  @keyframes bioluminescent {
-    0%, 100% { opacity: 0.2; transform: scale(1) translate(0, 0); }
-    33% { opacity: 0.4; transform: scale(1.1) translate(10px, -10px); }
-    66% { opacity: 0.3; transform: scale(0.9) translate(-10px, 10px); }
-  }
-  .animate-glow {
-    animation: bioluminescent 8s ease-in-out infinite;
-  }
-
-  /* ─── DIGITAL BLACKBOARD ─────────────────────────────────────────────── */
-  /* ─── DIGITAL BLACKBOARD (THE MATRIX) ────────────────────────────────── */
-  .digital-grid {
-    background-color: #031016 !important; /* Deep Blueprint Teal */
-    background-image: 
-      linear-gradient(rgba(0, 245, 255, 0.12) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 245, 255, 0.12) 1px, transparent 1px);
-    background-size: 30px 30px;
-    background-position: center;
-  }
-
-  .text-phosphor {
-    color: #00f5ff !important;
-    text-shadow: 
-      0 0 5px rgba(0, 245, 255, 1),
-      0 0 15px rgba(0, 245, 255, 0.4);
-    -webkit-text-fill-color: #00f5ff !important;
-  }
-
-  /* Force KaTeX to use the Matrix Aesthetics */
-  .katex, .katex * {
-    color: #00f5ff !important;
-    text-shadow: 0 0 8px rgba(0, 245, 255, 0.6) !important;
-  }
-
-  .prose-math {
-    @apply digital-grid rounded-[2rem] border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,245,255,0.1)] p-10 my-10 relative overflow-hidden;
-  }
-
-  .animate-scan {
-    animation: scanline 10s linear infinite;
-  }
-
-  @keyframes scanline {
-    0% { transform: translateY(-100%); opacity: 0; }
-    5% { opacity: 0.15; }
-    95% { opacity: 0.15; }
-    100% { transform: translateY(1000%); opacity: 0; }
   }
 }
 

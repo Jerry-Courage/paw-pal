@@ -22,6 +22,7 @@ class Assignment(models.Model):
     ai_response = models.TextField(blank=True)       # Full structured response
     ai_overview = models.TextField(blank=True)       # Brief overview of what AI did
     ai_outline = models.JSONField(default=list)      # Structured outline sections
+    chat_history = models.JSONField(default=list)    # Conversation history for refinement
 
     due_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

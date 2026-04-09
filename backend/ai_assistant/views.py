@@ -1,5 +1,9 @@
 import json
 import logging
+import os
+import hashlib
+import re
+from django.conf import settings
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,8 +12,10 @@ from django.http import StreamingHttpResponse
 
 from .models import ChatSession, ChatMessage
 from .serializers import ChatSessionSerializer, ChatMessageSerializer
-from .services import AIService
+from .services import AIService, VoiceSanitizer
 from library.models import Resource
+from .agent import FlowAgent
+from .podcast import generate_tts_file, SUPPORTED_VOICES
 from core.throttling import AIRateThrottle
 
 logger = logging.getLogger('flowstate')
@@ -62,7 +68,12 @@ class SendMessageView(APIView):
             elif session.context_type == 'group' and session.group:
                 reply = ai.group_chat_assist(session.group.name, '', content)
             else:
-                reply = ai.chat(history + [{'role': 'user', 'content': content}])
+                # Universal Library Intelligence
+                library_context = ai.perform_global_search(content, request.user)
+                reply = ai.chat(history + [
+                    {'role': 'system', 'content': library_context},
+                    {'role': 'user', 'content': content}
+                ])
         except Exception as e:
             logger.error(f'AI error in session {session_id}: {e}')
             return Response({'error': f"AI Assist failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -98,7 +109,12 @@ class StreamMessageView(APIView):
                     {'role': 'user', 'content': content}
                 ]
             else:
-                messages = history + [{'role': 'user', 'content': content}]
+                # Universal Library Intelligence
+                library_context = ai.perform_global_search(content, request.user)
+                messages = history + [
+                    {'role': 'system', 'content': library_context},
+                    {'role': 'user', 'content': content}
+                ]
 
             for chunk in ai.chat_stream(messages):
                 full_reply.append(chunk)
@@ -124,6 +140,12 @@ def _build_resource_messages(ai, resource, content, history):
     )
     if context:
         system += f"\n\n{context}\n\nUse the above as your primary reference. When referencing notes, be specific about section names and vocabulary."
+    
+    # Add cross-document context from the rest of the library
+    global_context = ai.perform_global_search(content, resource.owner)
+    if global_context:
+        system += f"\n\n{global_context}\n\nYou can use the above supplementary library knowledge to provide broader context or compare documents if relevant."
+
     messages = [{'role': 'system', 'content': system}]
     messages.extend(history[-10:])
     messages.append({'role': 'user', 'content': content})
@@ -146,7 +168,12 @@ class QuickAskView(APIView):
                 resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
                 answer = ai.ask_about_resource(resource, question)
             else:
-                answer = ai.chat([{'role': 'user', 'content': question}])
+                # Universal Library Intelligence
+                library_context = ai.perform_global_search(question, request.user)
+                answer = ai.chat([
+                    {'role': 'system', 'content': library_context},
+                    {'role': 'user', 'content': question}
+                ])
         except Exception as e:
             logger.error(f'QuickAsk error: {e}')
             answer = "Error processing your question. Please try again."
@@ -584,3 +611,136 @@ class GenerateImageView(APIView):
         except Exception as e:
             logger.error(f"Generate Image exception: {e}")
             return Response({'error': f'Failed to generate image: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AgentView(APIView):
+    """Universal platform agent endpoint."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    def post(self, request):
+        query = request.data.get('query', '').strip()
+        context = request.data.get('context', '')
+        history = request.data.get('history', [])
+        if not query:
+            return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = FlowAgent(request.user)
+        is_tutor = request.data.get('is_tutor_mode') == True or request.data.get('is_tutor_mode') == 'true'
+        reply, action = agent.process_request(query, context, history=history, is_tutor_mode=is_tutor)
+        
+        execution_result = None
+        if action:
+            execution_result = agent.execute_action(action)
+
+        # UI Cleanup: Strip technical ACTION tags from the display text
+        display_reply = reply.split('ACTION:')[0].strip()
+
+        # High-Fidelity Voice Synthesis (Podcast Style)
+        audio_url = None
+        speech_text = VoiceSanitizer.clean(reply)
+        
+        if request.data.get('voice_enabled') and speech_text:
+            try:
+                # Asset management (Caching)
+                h = hashlib.md5(speech_text.encode('utf-8')).hexdigest()
+                out_dir = os.path.join(settings.MEDIA_ROOT, 'agent_responses')
+                os.makedirs(out_dir, exist_ok=True)
+                f_name = f"{h}.mp3"
+                f_path = os.path.join(out_dir, f_name)
+                
+                if not os.path.exists(f_path):
+                    # Use the premium Ava/Andrew voice
+                    voice = request.data.get('voice_id', SUPPORTED_VOICES['Andrew'])
+                    generate_tts_file(speech_text, voice, f_path)
+                
+                audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
+            except Exception as e:
+                logger.error(f"Agent Voice Synthesis Error: {e}")
+
+        return Response({
+            'reply': display_reply,
+            'speech_text': speech_text,
+            'action': action,
+            'execution_result': execution_result,
+            'audio_url': audio_url
+        })
+
+class AgentAudioView(APIView):
+    """
+    Accepts an audio blob, transcribes it via Groq Whisper,
+    and then processes the query through the FlowAgent.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    def post(self, request):
+        audio_file = request.FILES.get('audio')
+        context = request.data.get('context', '')
+        voice_enabled = request.data.get('voice_enabled') == 'true'
+        voice_id = request.data.get('voice_id')
+        
+        # Load history if sent as a JSON string (typical for multipart/form-data)
+        history = []
+        history_raw = request.data.get('history')
+        if history_raw:
+            try:
+                history = json.loads(history_raw)
+            except:
+                pass
+
+        if not audio_file:
+            return Response({'error': 'No audio file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Transcribe via AIService (Multi-modal OpenRouter/Gemini fallback)
+        # Bypasses Groq dependency entirely for the Voice Assistant Agent.
+        agent = FlowAgent(request.user)
+        try:
+            logger.info("[Agent] Attempting backend transcription via OpenRouter fallback...")
+            query = agent.ai.transcribe_audio(audio_file)
+        except Exception as e:
+            logger.error(f"Agent Audio STT Exception: {e}")
+            return Response({'error': f'STT Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not query:
+            logger.warning("[Agent] Audio transcription returned empty. Ensure browser STT is working.")
+            return Response({'error': 'Transcription failed or returned empty. Please speak clearly.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Process with FlowAgent
+        reply, action = agent.process_request(query, context, history=history, is_tutor_mode=request.data.get('is_tutor_mode') == 'true')
+        
+        execution_result = None
+        if action:
+            execution_result = agent.execute_action(action)
+
+        # UI Cleanup: Strip technical ACTION tags from the display text
+        display_reply = reply.split('ACTION:')[0].strip()
+
+        # 3. High-Fidelity Voice Synthesis (Optional)
+        audio_url = None
+        speech_text = VoiceSanitizer.clean(reply)
+        
+        if voice_enabled and speech_text:
+            try:
+                h = hashlib.md5(speech_text.encode('utf-8')).hexdigest()
+                out_dir = os.path.join(settings.MEDIA_ROOT, 'agent_responses')
+                os.makedirs(out_dir, exist_ok=True)
+                f_name = f"{h}.mp3"
+                f_path = os.path.join(out_dir, f_name)
+                
+                if not os.path.exists(f_path):
+                    v_id = voice_id or SUPPORTED_VOICES['Andrew']
+                    generate_tts_file(speech_text, v_id, f_path)
+                
+                audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
+            except Exception as e:
+                logger.error(f"Agent Voice Synthesis Error: {e}")
+
+        return Response({
+            'query': query,
+            'reply': display_reply,
+            'speech_text': speech_text,
+            'action': action,
+            'execution_result': execution_result,
+            'audio_url': audio_url
+        })

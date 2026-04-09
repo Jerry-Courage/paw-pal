@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { useMedia } from 'react-use'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // New Workspace 2.0 Components
 import ResourceShelf from '@/components/workspace/ResourceShelf'
@@ -64,179 +65,204 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
     } catch { toast.error('Export failed.') }
   }
 
-  const copyInviteCode = () => {
-    if (ws?.invite_code) {
-      navigator.clipboard.writeText(ws.invite_code)
-      setCodeCopied(true)
-      setTimeout(() => setCodeCopied(false), 2000)
-      toast.success('Invite code copied!')
-    }
-  }
-
   const handleInsertAIResponse = (text: string) => {
     qc.invalidateQueries({ queryKey: ['workspace-blocks', id] })
   }
 
   if (isLoading) return (
-    <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="flex flex-col items-center gap-4">
+    <div className="flex items-center justify-center h-screen bg-[#020202]">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex flex-col items-center gap-6">
         <div className="relative">
-          <Loader2 className="w-12 h-12 animate-spin text-violet-500" />
-          <Sparkles className="absolute -top-1 -right-1 w-5 h-5 text-sky-400 animate-pulse" />
+          <div className="absolute inset-0 bg-violet-600/20 blur-3xl rounded-full animate-pulse" />
+          <Loader2 className="w-16 h-16 animate-spin text-violet-500 relative z-10" />
+          <Sparkles className="absolute -top-2 -right-2 w-7 h-7 text-sky-400 animate-bounce relative z-20" />
         </div>
-        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest animate-pulse">Initializing Mission Control...</p>
-      </div>
+        <p className="text-xs font-black text-violet-400/60 uppercase tracking-[0.3em] animate-pulse">Neural Genesis in Progress...</p>
+      </motion.div>
     </div>
   )
 
-  if (!ws) return <div className="p-10 text-center">Workspace not found</div>
+  if (!ws) return <div className="p-10 text-center text-white">Workspace not found</div>
 
   return (
-    <div className="flex flex-col h-screen bg-[#fafafa] dark:bg-gray-950 overflow-hidden -m-4 md:-m-6">
+    <div className="relative flex flex-col h-screen bg-[#050505] text-white overflow-hidden -m-4 md:-m-6 selection:bg-violet-500/30">
       
-      {/* Premium Top Bar */}
-      <header className="h-16 lg:h-14 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-3 lg:px-4 z-50 flex-shrink-0">
-        <div className="flex items-center gap-2 lg:gap-3">
-          <Link href="/workspace" className="p-1.5 lg:p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
-            <ArrowLeft className="w-4 h-4 text-gray-400" />
+      {/* Dynamic Ambient Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-600/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-sky-600/10 blur-[120px] rounded-full" />
+        <div className="absolute inset-0 opacity-[0.03]" 
+             style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+      </div>
+
+      {/* Floating Glass Header */}
+      <motion.header 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="relative h-16 lg:h-14 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 z-50 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <Link href="/workspace" className="p-2 hover:bg-white/5 rounded-xl transition-all hover:scale-105">
+            <ArrowLeft className="w-4 h-4 text-white/40 hover:text-white" />
           </Link>
-          <div className="h-6 w-[1.5px] bg-gray-100 dark:bg-gray-800 mx-0.5 lg:mx-1" />
-          <div>
-            <div className="flex items-center gap-1.5 lg:gap-2">
-              <h1 className="text-xs lg:text-sm font-black text-gray-900 dark:text-white tracking-tight truncate max-w-[120px] lg:max-w-none">{ws.name}</h1>
-              <div className="px-1.5 py-0.5 bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 rounded-full text-[8px] lg:text-[9px] font-bold uppercase tracking-wider border border-sky-100 dark:border-sky-900">
-                {ws.subject || 'Research'}
-              </div>
+          <div className="h-6 w-[1px] bg-white/10" />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <h1 className="text-sm font-black tracking-tight text-white/90">{ws.name}</h1>
+              <span className="px-2 py-0.5 bg-violet-500/10 text-violet-400 rounded-full text-[9px] font-black uppercase tracking-widest border border-violet-500/20">
+                {ws.subject || 'Scientific'}
+              </span>
             </div>
-            <div className="flex items-center gap-2 mt-0.5 lg:mt-0">
-               <span className="flex items-center gap-1 text-[9px] lg:text-[10px] text-gray-400 font-medium whitespace-nowrap">
-                 <Users className="w-2.5 h-2.5" /> {ws.member_count}
-               </span>
-               <div className="flex items-center gap-1">
-                 <div className="w-1 h-1 lg:w-1.5 lg:h-1.5 bg-emerald-500 rounded-full" />
-                 <span className="text-[8px] lg:text-[10px] text-emerald-600 dark:text-emerald-500 font-bold uppercase tracking-tighter">Live</span>
+            <div className="flex items-center gap-2">
+               <div className="flex items-center gap-1 text-[10px] text-white/30 font-bold uppercase tracking-tighter">
+                 <Users className="w-2.5 h-2.5" /> {ws.member_count} Members
                </div>
+               <div className="w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" />
+               <span className="text-[9px] text-emerald-500 font-black uppercase tracking-widest">Neural Link Syncing</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 lg:gap-2">
-          {/* Active Users - Hidden on very small screens to save space */}
-          <div className="hidden sm:flex -space-x-1.5 mr-2 lg:mr-4">
+        <div className="flex items-center gap-3">
+          {/* Presence Ring */}
+          <div className="hidden sm:flex -space-x-2 mr-4">
             {activeUsers.slice(0, 3).map((user, i) => (
-              <div key={user.id} 
+              <motion.div 
+                key={user.id} 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                whileHover={{ y: -4, scale: 1.1 }}
                 className={cn(
-                  "w-6 h-6 lg:w-7 lg:h-7 rounded-full border-2 border-white dark:border-gray-900 bg-gradient-to-br flex items-center justify-center text-[8px] lg:text-[10px] font-black text-white shadow-sm transition-all hover:scale-110",
-                  i % 3 === 0 ? "from-indigo-500 to-violet-500" : i % 3 === 1 ? "from-sky-500 to-indigo-500" : "from-violet-500 to-fuchsia-500"
+                  "w-8 h-8 rounded-full border-2 border-[#050505] bg-gradient-to-br flex items-center justify-center text-[10px] font-black text-white shadow-xl cursor-help",
+                  i % 3 === 0 ? "from-violet-500 to-indigo-600" : i % 3 === 1 ? "from-blue-500 to-sky-600" : "from-fuchsia-500 to-pink-600"
                 )}>
                 {user.name[0].toUpperCase()}
-              </div>
+              </motion.div>
             ))}
-            {activeUsers.length > 3 && (
-              <div className="w-6 h-6 lg:w-7 lg:h-7 rounded-full border-2 border-white dark:border-gray-900 bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500">
-                +{activeUsers.length - 3}
-              </div>
-            )}
           </div>
 
-          {/* Panes Toggle - Integrated into mobile/tab experience */}
-          <div className="flex bg-gray-50 dark:bg-gray-800 rounded-xl p-0.5 lg:p-1 mr-1 lg:mr-2">
-            <button onClick={() => { setShowLeft(!showLeft); if (isMobile) setShowRight(false); }}
-              title="Toggle Resource Cabinet"
-              className={cn("p-1.5 rounded-lg transition-all", showLeft ? "bg-white dark:bg-gray-700 text-violet-600 shadow-sm" : "text-gray-400 hover:text-gray-600")}>
+          <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 gap-1">
+            <button onClick={() => setShowLeft(!showLeft)}
+              className={cn("p-1.5 rounded-lg transition-all hover:bg-white/10", showLeft ? "text-violet-400 bg-violet-500/10 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]" : "text-white/40")}>
               <Library className="w-4 h-4" />
             </button>
-            <button onClick={() => { setShowRight(!showRight); if (isMobile) setShowLeft(false); }}
-              title="Toggle AI Assistant"
-              className={cn("p-1.5 rounded-lg transition-all", showRight ? "bg-white dark:bg-gray-700 text-violet-600 shadow-sm" : "text-gray-400 hover:text-gray-600")}>
+            <button onClick={() => setShowRight(!showRight)}
+              className={cn("p-1.5 rounded-lg transition-all hover:bg-white/10", showRight ? "text-violet-400 bg-violet-500/10 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]" : "text-white/40")}>
               <MessageSquare className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Export - Icon only on mobile */}
-          <div className="relative">
-            <button onClick={() => setExportOpen(!exportOpen)}
-              className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 p-2 lg:px-4 lg:py-2 rounded-xl text-[10px] lg:text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-gray-200 dark:shadow-none">
-              <Download className="w-4 h-4 lg:w-3.5 lg:h-3.5" />
-              <span className="hidden lg:inline">Export</span>
-            </button>
-            {exportOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-                <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl z-20 w-48 lg:w-56 overflow-hidden animate-in zoom-in-95 slide-in-from-top-2 duration-200">
-                  {['pdf', 'pptx', 'docx'].map(fmt => (
-                    <button key={fmt} onClick={() => handleExport(fmt)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-b last:border-0 border-gray-50 dark:border-gray-800">
-                      <File className="w-4 h-4 text-violet-500" />
-                      <span className="text-[11px] font-bold text-gray-900 dark:text-white uppercase">{fmt} Document</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <button onClick={() => setExportOpen(!exportOpen)}
+            className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-violet-400 hover:text-white transition-all shadow-xl active:scale-95 group">
+            <Download className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5" />
+            <span className="hidden lg:inline">Transmit</span>
+          </button>
         </div>
-      </header>
+      </motion.header>
 
-      {/* 3-Pane Mission Control Workspace */}
+      {/* Neural Lab Workspace */}
       <main className="flex-1 flex min-h-0 overflow-hidden relative">
         
-        {/* Left Pane: Resource Shelf - Responsive Overlay */}
-        <aside className={cn(
-          "fixed inset-y-16 lg:static z-40 bg-white lg:bg-transparent transition-all duration-300 shadow-2xl lg:shadow-none w-72 xl:w-80",
-          showLeft ? "left-0" : "-left-full"
-        )}>
-           <ResourceShelf workspaceId={id} />
-           {/* Close button for mobile */}
-           <button onClick={() => setShowLeft(false)} className="lg:hidden absolute top-4 right-4 p-2 text-gray-400 bg-gray-50 rounded-full">
-             <X className="w-4 h-4" />
-           </button>
-        </aside>
-
-        {/* Center Pane: Collaborative Block Canvas */}
-        <section className="flex-1 overflow-y-auto bg-gray-50/30 dark:bg-gray-950/50 custom-scrollbar relative">
-          <div className="absolute inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.05]" 
-               style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-          
-          <BlockList workspaceId={id} socket={{ isConnected, sendMessage, activeUsers, userFocus, lockedBlocks }} />
-          
-          {/* Backdrop for mobile overlays */}
-          {(showLeft || showRight) && isMobile && (
-            <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-30 lg:hidden" 
-                 onClick={() => { setShowLeft(false); setShowRight(false); }} />
+        {/* Floating Intelligence Islands (Sidebars) */}
+        <AnimatePresence mode="wait">
+          {showLeft && (
+            <motion.aside 
+              initial={{ x: -300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -300, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute lg:relative z-40 h-[calc(100%-2rem)] m-4 left-0 w-80 lg:w-80 group">
+              <div className="h-full bg-black/40 backdrop-blur-2xl border border-white/5 rounded-3xl shadow-2xl overflow-hidden relative">
+                <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
+                <ResourceShelf workspaceId={id} />
+                <button onClick={() => setShowLeft(false)} className="lg:hidden absolute top-4 right-4 p-2 text-white/40 bg-white/5 rounded-xl hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.aside>
           )}
+        </AnimatePresence>
+
+        {/* Cinematic Blocks Canvas */}
+        <section className="flex-1 overflow-y-auto custom-scrollbar relative px-4 lg:px-0">
+          <BlockList workspaceId={id} socket={{ isConnected, sendMessage, activeUsers, userFocus, lockedBlocks }} />
         </section>
 
-        {/* Right Pane: AI Assistant Command Center - Responsive Overlay */}
-        <aside className={cn(
-          "fixed inset-y-16 lg:static z-40 bg-white lg:bg-transparent transition-all duration-300 shadow-2xl lg:shadow-none w-[85%] sm:w-80 xl:w-96",
-          showRight ? "right-0" : "-right-full text-transparent"
-        )}>
-          <AIAssistantSidebar workspaceId={id} onInsertToCanvas={handleInsertAIResponse} socket={{ sendMessage }} />
-          {/* Close button for mobile */}
-          <button onClick={() => setShowRight(false)} className="lg:hidden absolute top-4 left-4 p-2 text-gray-400 bg-gray-50 rounded-full">
-             <X className="w-4 h-4" />
-           </button>
-        </aside>
+        <AnimatePresence mode="wait">
+          {showRight && (
+            <motion.aside 
+              initial={{ x: 300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 300, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute lg:relative z-40 h-[calc(100%-2rem)] m-4 right-0 w-[85%] lg:w-96 group">
+              <div className="h-full bg-black/40 backdrop-blur-2xl border border-white/5 rounded-3xl shadow-2xl overflow-hidden relative">
+                <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
+                <AIAssistantSidebar workspaceId={id} onInsertToCanvas={handleInsertAIResponse} socket={{ sendMessage }} />
+                <button onClick={() => setShowRight(false)} className="lg:hidden absolute top-4 left-4 p-2 text-white/40 bg-white/5 rounded-xl hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
       </main>
 
-      {/* Collaborative Presence Footer (Subtle) */}
-      <footer className="h-10 lg:h-8 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 px-3 lg:px-4 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2 lg:gap-4">
-          <div className="hidden sm:flex -space-x-2">
-            {[1, 2].map(i => (
-              <div key={i} className="w-4 h-4 lg:w-5 lg:h-5 rounded-full border-2 border-white dark:border-gray-900 bg-gray-200 flex items-center justify-center text-[7px] lg:text-[8px] font-bold text-gray-500">
-                +1
-              </div>
-            ))}
+      {/* Futuristic Neural Presence Footer */}
+      <footer className="h-10 bg-black/80 backdrop-blur-xl border-t border-white/5 px-6 flex items-center justify-between z-50">
+        <div className="flex items-center gap-6">
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="flex -space-x-1.5">
+               {[1, 2].map(i => <div key={i} className="w-5 h-5 rounded-full border border-[#050505] bg-white/10 flex items-center justify-center text-[7px] font-black text-white/40 tracking-tighter">AI</div>)}
+            </div>
+            <span className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em]">Synchronous Node Active</span>
           </div>
-          <span className="text-[8px] lg:text-[9px] text-gray-400 font-bold uppercase tracking-widest">Global State Ready</span>
         </div>
-        <div className="flex items-center gap-1.5">
-           <Zap className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-sky-500" />
-           <span className="text-[8px] lg:text-[9px] text-sky-600 dark:text-sky-400 font-black uppercase tracking-tighter lg:tracking-widest">Neural Link Active</span>
+        <div className="flex items-center gap-4">
+           <div className="flex items-center gap-2 group cursor-none">
+              <Sparkles className="w-3 h-3 text-violet-400 animate-pulse" />
+              <span className="text-[10px] text-violet-400 font-black uppercase tracking-[0.3em] group-hover:text-white transition-colors">Neural Intelligence Engaged</span>
+           </div>
+           <div className="h-4 w-[1px] bg-white/10 mx-2" />
+           <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping opacity-50" />
+              <span className="text-[10px] text-sky-400 font-bold uppercase tracking-widest">Global State 1.0</span>
+           </div>
         </div>
       </footer>
+
+      {/* Export Overlay */}
+      <AnimatePresence>
+        {exportOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" 
+              onClick={() => setExportOpen(false)} 
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 bg-gray-900 border border-white/10 p-2 rounded-3xl shadow-2xl z-[101] overflow-hidden">
+                <div className="px-4 py-3 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] border-b border-white/5 mb-2">Select Transmission Format</div>
+                {['pdf', 'pptx', 'docx'].map(fmt => (
+                  <button key={fmt} onClick={() => handleExport(fmt)}
+                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-all text-left group rounded-2xl">
+                    <div className="p-2 bg-violet-500/10 rounded-xl group-hover:bg-violet-500 group-hover:text-white transition-all">
+                      <File className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-black text-white/80 uppercase group-hover:text-white">{fmt} Master Document</span>
+                  </button>
+                ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

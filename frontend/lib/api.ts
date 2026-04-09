@@ -24,8 +24,8 @@ api.interceptors.response.use(
   }
 )
 
-export default api
 export const API_BASE = api.defaults.baseURL
+export const SERVER_URL = API_BASE.replace(/\/api$/, '')
 
 // Auth
 export const authApi = {
@@ -125,6 +125,19 @@ export const aiApi = {
     api.get(`/ai/resources/${resourceId}/chapters/`),
   gradeAnswer: (resourceId: number, question: string, userAnswer: string, modelAnswer: string) =>
     api.post(`/ai/resources/${resourceId}/grade/`, { question, user_answer: userAnswer, model_answer: modelAnswer }),
+  askAgent: (query: string, context?: string, voice_enabled?: boolean, voice_id?: string, history: any[] = [], is_tutor_mode: boolean = false) =>
+    api.post('/ai/agent/', { query, context, voice_enabled, voice_id, history, is_tutor_mode }),
+  askAgentAudio: (audioBlob: Blob, context: string = '', voice_enabled: boolean = false, voice_id?: string, is_tutor_mode: boolean = false) => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'query.webm');
+    formData.append('context', context);
+    formData.append('voice_enabled', String(voice_enabled));
+    formData.append('is_tutor_mode', String(is_tutor_mode));
+    if (voice_id) formData.append('voice_id', voice_id);
+    return api.post('/ai/agent/audio/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
 }
 
 // Podcast
@@ -194,10 +207,13 @@ export const assignmentsApi = {
   update: (id: number, data: any) => api.patch(`/assignments/${id}/`, data),
   delete: (id: number) => api.delete(`/assignments/${id}/`),
   solve: (id: number) => api.post(`/assignments/${id}/solve/`),
-  export: (id: number, format: string) =>
-    api.get(`/assignments/${id}/export/`, { params: { format }, responseType: 'blob' }),
+  refine: (id: number, prompt: string) => api.post(`/assignments/${id}/refine/`, { prompt }),
+  generateRoadmap: (id: number) => api.post(`/assignments/${id}/roadmap/`),
   scheduleSession: (id: number, start_time: string, end_time: string) =>
     api.post(`/assignments/${id}/schedule/`, { start_time, end_time }),
+  export: (id: number, format: string) =>
+    api.get(`/assignments/${id}/export/`, { params: { format }, responseType: 'blob' }),
+  transformToWorkspace: (id: number) => api.post(`/assignments/${id}/transform/`),
 }
 // Workspace
 export const workspaceApi = {
@@ -214,7 +230,8 @@ export const workspaceApi = {
   deleteBlock: (id: number, blockId: number) => api.delete(`/workspace/${id}/blocks/`, { data: { block_id: blockId } }),
   reorderBlocks: (id: number, orderList: number[]) => api.patch(`/workspace/${id}/blocks/`, { order_list: orderList }),
   getVersions: (id: number) => api.get(`/workspace/${id}/versions/`),
-  restoreVersion: (id: number, version_id: number) => api.post(`/workspace/${id}/versions/`, { version_id }),
+  createVersion: (id: number) => api.post(`/workspace/${id}/versions/`),
+  restoreVersion: (id: number, version_id: number) => api.put(`/workspace/${id}/versions/`, { version_id }),
   getMessages: (id: number) => api.get(`/workspace/${id}/messages/`),
   sendMessage: (id: number, content: string) => api.post(`/workspace/${id}/messages/`, { content }),
   getTasks: (id: number) => api.get(`/workspace/${id}/tasks/`),

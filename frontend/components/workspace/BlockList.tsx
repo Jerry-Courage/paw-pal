@@ -12,12 +12,13 @@ import {
   useSensors,
   DragEndEvent
 } from '@dnd-kit/core'
-import {
+import { 
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { motion } from 'framer-motion'
 
 interface BlockListProps {
   workspaceId: number
@@ -105,17 +106,7 @@ export default function BlockList({ workspaceId, socket }: BlockListProps) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto w-full px-6 py-10 min-h-full">
-      {/* Canvas Header */}
-      <div className="mb-12 text-center space-y-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-violet-100 dark:border-violet-800">
-          <Sparkles className="w-3 h-3" />
-          Interactive Canvas
-          {isConnected && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse ml-1" />}
-        </div>
-        <h2 className="text-3xl font-black tracking-tight text-gray-900 dark:text-white">Workspace 2.0</h2>
-        <p className="text-sm text-gray-400">Add blocks, generate AI notes, and build your study masterpiece.</p>
-      </div>
+    <div className="max-w-5xl mx-auto w-full px-6 py-12 min-h-full">
 
       {/* Block List with DND */}
       <DndContext 
@@ -154,30 +145,41 @@ export default function BlockList({ workspaceId, socket }: BlockListProps) {
 
       {/* Empty State / Initial Block */}
       {blocks?.length === 0 && (
-        <div className="text-center py-20 bg-gray-50/50 dark:bg-white/5 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-          <div className="w-16 h-16 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100 dark:border-gray-800">
-            <Plus className="w-8 h-8 text-violet-500" />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-32 bg-white/[0.02] backdrop-blur-sm rounded-[3rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-b from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+          <div className="relative z-10">
+            <div className="w-20 h-20 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(139,92,246,0.3)] group-hover:scale-110 transition-transform duration-500">
+              <Plus className="w-10 h-10 text-white" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-3">Begin Your Genesis</h3>
+            <p className="text-sm text-white/40 mb-10 max-w-xs mx-auto font-medium">Your canvas is a void waiting for intelligence. Add your first block to start the collaboration.</p>
+            <button 
+              onClick={() => handleAddBlock('text')}
+              className="px-8 py-3 bg-white text-black rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:bg-violet-400 hover:text-white transition-all shadow-2xl">
+              Initialize Canvas
+            </button>
           </div>
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Your canvas is empty</h3>
-          <p className="text-xs text-gray-400 mb-6 px-10">Start your collaboration by adding your first block.</p>
-          <button 
-            onClick={() => handleAddBlock('text')}
-            className="px-6 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-700 transition-all hover:scale-105 shadow-lg shadow-violet-200 dark:shadow-none">
-            Add First Block
-          </button>
-        </div>
+        </motion.div>
       )}
 
       {/* Add Suggestion at the bottom */}
       {blocks?.length > 0 && (
-        <div className="pt-8 flex justify-center">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="pt-16 pb-20 flex justify-center">
           <button 
             onClick={() => handleAddBlock('text')}
-            className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-950/30 rounded-xl transition-all border border-transparent hover:border-violet-100 dark:hover:border-violet-800 text-xs font-medium">
-            <Plus className="w-4 h-4" />
-            Click to add another block
+            className="group flex flex-col items-center gap-4">
+            <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/20 group-hover:text-violet-400 group-hover:border-violet-500/50 group-hover:bg-violet-500/10 transition-all duration-300">
+              <Plus className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] group-hover:text-violet-400 transition-colors">Append New Specimen</span>
           </button>
-        </div>
+        </motion.div>
       )}
     </div>
   )

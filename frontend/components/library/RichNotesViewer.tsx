@@ -223,7 +223,7 @@ export default function RichNotesViewer({
                       const solveProblem = `Explain the mathematical meaning of: ${latex}`
                       return (
                         <span 
-                          className="text-phosphor font-black cursor-help hover:text-primary transition-colors inline-block mx-1 px-2 py-0.5 bg-primary/5 rounded-lg whitespace-nowrap" 
+                          className="text-sky-600 font-extrabold cursor-help hover:text-sky-700 transition-colors inline-block mx-1 px-2 py-0.5 bg-sky-50 border border-sky-100 rounded-lg whitespace-nowrap" 
                           onClick={() => onOpenMath?.(solveProblem)}
                           dangerouslySetInnerHTML={{ __html: katex.renderToString(latex, { displayMode: false, throwOnError: false }) }} 
                         />

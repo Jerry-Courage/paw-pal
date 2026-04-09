@@ -13,7 +13,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
         model = Assignment
         fields = (
             'id', 'title', 'subject', 'instructions', 'file', 'file_name',
-            'resources', 'resource_titles', 'status',
+            'resources', 'resource_titles', 'status', 'chat_history',
             'ai_response', 'ai_overview', 'ai_outline',
             'due_date', 'deadline_id', 'deadline_date', 'session_count',
             'created_at', 'updated_at',

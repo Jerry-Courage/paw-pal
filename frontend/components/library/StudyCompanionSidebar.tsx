@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { 
   Sparkles, Send, BookOpen, HelpCircle, 
   MessageSquare, Wand2, X, Loader2,
-  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator
+  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator, Phone
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { aiApi } from '@/lib/api'
@@ -130,6 +130,7 @@ export default function StudyCompanionSidebar({
             <ToolCard id="flashcards" icon={BookOpen} title="Flash" desc="Recall Boost" onClick={onOpenFlashcards} color="bg-sky-500/10 text-sky-500" />
             <ToolCard id="mindmap" icon={Sparkles} title="Map" desc="Neural Web" onClick={onOpenMindMap} color="bg-violet-500/10 text-violet-500" />
             <ToolCard id="podcast" icon={Radio} title="Podcast" desc="FlowCast AI" onClick={onOpenPodcast} color="bg-pink-500/10 text-pink-500" badge="AI" />
+            <ToolCard id="tutor" icon={Phone} title="Tutor" desc="Live Call" onClick={() => window.location.href = '/tutor-call'} color="bg-indigo-500/10 text-indigo-500" badge="LIVE" />
             <ToolCard id="math" icon={Calculator} title="Solver" desc="Step Logic" onClick={onOpenMath} color="bg-indigo-500/10 text-indigo-500" badge="PRO" />
             <ToolCard id="practice" icon={Wand2} title="Drill" desc="Mock Exam" onClick={onOpenPractice} color="bg-emerald-500/10 text-emerald-500" />
             <ToolCard id="music" icon={Mic2} title="Focus" desc="Alpha Wave" onClick={onOpenMusic} color="bg-rose-500/10 text-rose-500" badge="Lofi" />

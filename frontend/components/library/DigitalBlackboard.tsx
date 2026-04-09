@@ -31,52 +31,47 @@ export default function DigitalBlackboard({
       )} />
       
       <div className={cn(
-        "relative overflow-hidden bg-slate-950 border border-primary/30 shadow-2xl",
-        isMini ? "rounded-xl p-4" : "rounded-[2.5rem] p-8 sm:p-12"
+        "relative overflow-hidden bg-white border border-slate-200 shadow-xl",
+        isMini ? "rounded-xl p-4" : "rounded-[3rem] p-10 sm:p-14"
       )}>
-        {/* The Digital Grid */}
-        <div className="absolute inset-0 digital-grid opacity-20" />
+        {/* Subtle Background Detail */}
+        <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-40" />
         
-        {/* Header HUD */}
-        <div className="relative flex items-center justify-between mb-6 z-10">
-          <div className="flex items-center gap-3">
+        {/* Header HUD - Refined */}
+        <div className="relative flex items-center justify-between mb-10 z-10">
+          <div className="flex items-center gap-4">
             <div className={cn(
-              "rounded-lg bg-primary/10 flex items-center justify-center text-primary",
-              isMini ? "w-6 h-6" : "w-10 h-10"
+              "rounded-2xl bg-sky-50 flex items-center justify-center text-sky-500 shadow-sm border border-sky-100/50",
+              isMini ? "w-8 h-8" : "w-12 h-12"
             )}>
-              <Cpu className={isMini ? "w-3 h-3" : "w-5 h-5"} />
+              <Cpu className={isMini ? "w-4 h-4" : "w-6 h-6"} />
             </div>
             <div>
-              <div className="text-[8px] font-black text-primary/60 uppercase tracking-[0.3em] leading-none mb-1">Matrix v2.4</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">Logic Synthesis</div>
               <h4 className={cn(
-                "font-black text-white uppercase tracking-tighter",
-                isMini ? "text-[10px]" : "text-sm"
+                "font-black text-slate-900 uppercase tracking-tight",
+                isMini ? "text-xs" : "text-lg"
               )}>{label}</h4>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex gap-1">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="w-1 h-1 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />
-              ))}
-            </div>
+          <div className="flex items-center gap-3">
             {onSolve && !isMini && (
               <button 
                 onClick={onSolve}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-slate-800 active:scale-95 transition-all shadow-xl shadow-slate-200"
               >
-                <Sparkles className="w-3 h-3" />
-                Analyze Logic
+                <Sparkles className="w-4 h-4" />
+                Solve Step
               </button>
             )}
           </div>
         </div>
 
-        {/* Content Area */}
+        {/* Content Area - Clean Academic */}
         <div className={cn(
-          "relative z-10 text-phosphor overflow-x-auto scrollbar-hide flex items-center justify-center",
-          isMini ? "py-2 min-h-[60px]" : "py-4 min-h-[100px]"
+          "relative z-10 text-slate-800 overflow-x-auto scrollbar-hide flex items-center justify-center font-medium",
+          isMini ? "py-4 min-h-[80px]" : "py-8 min-h-[140px]"
         )}>
           <div className={cn(
             "transition-all duration-700 group-hover/bb:scale-[1.02]",
@@ -86,8 +81,10 @@ export default function DigitalBlackboard({
           </div>
         </div>
 
-        {/* Scanline Effect */}
-        <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-primary/5 to-transparent animate-scan pointer-events-none opacity-20" />
+        {/* Decorative corner accent */}
+        <div className="absolute bottom-0 right-0 p-4 opacity-5 pointer-events-none">
+          <Cpu className="w-24 h-24 text-slate-900" />
+        </div>
       </div>
     </div>
   )

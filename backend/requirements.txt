@@ -15,7 +15,7 @@ yt-dlp>=2024.1.1
 groq>=0.9.0
 psycopg2-binary>=2.9.0
 dj-database-url>=2.0.0
-google-generativeai>=0.8.3
+google-genai
 l a n g c h a i n = = 1 . 2 . 1 5  
  l a n g c h a i n - c o r e = = 1 . 2 . 2 6  
  l a n g c h a i n - h u g g i n g f a c e = = 1 . 2 . 1  

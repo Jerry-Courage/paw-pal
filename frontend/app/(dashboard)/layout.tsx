@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import MobileNav from '@/components/layout/MobileNav'
 import MobileSidebar from '@/components/layout/MobileSidebar'
 import dynamic from 'next/dynamic'
+import { cn } from '@/lib/utils'
 
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 const AIGuideTour = dynamic(() => import('@/components/tour/AIGuideTour'), { ssr: false })
+const GlobalAgentAssistant = dynamic(() => import('@/components/ai/GlobalAgentAssistant'), { ssr: false })
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
@@ -55,13 +58,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <TopBar onMenuClick={() => setMobileSidebarOpen(true)} />
         {/* pb-16 on mobile to account for bottom nav */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6 relative z-0">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6 relative">
           {children}
         </main>
       </div>
 
       {/* Mobile bottom nav */}
       <MobileNav />
+
+      <GlobalAgentAssistant />
 
       {showOnboarding && (
         <OnboardingWizard onComplete={() => setShowOnboarding(false)} />

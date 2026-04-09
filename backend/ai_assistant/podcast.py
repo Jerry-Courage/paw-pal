@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import json
 import time
 import re
@@ -13,6 +14,9 @@ SUPPORTED_VOICES = {
     'Jenny': 'en-US-JennyNeural',
     'Guy': 'en-US-GuyNeural',
     'Aria': 'en-US-AriaNeural',
+    'Ava': 'en-US-AvaNeural',
+    'Emma': 'en-US-EmmaNeural',
+    'Andrew': 'en-US-AndrewNeural',
 }
 
 def json_repair(json_str):
@@ -82,7 +86,7 @@ def generate_tts_file(text, voice, output_path):
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     # Using --rate +0% to ensure standard speed
-    cmd = ["python", "-m", "edge_tts", "--voice", voice, "--text", text, "--write-media", output_path]
+    cmd = [sys.executable, "-m", "edge_tts", "--voice", voice, "--text", text, "--write-media", output_path]
     
     for attempt in range(3):
         try:

@@ -6,7 +6,7 @@ import { signOut, useSession } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Calendar, BookOpen, Users, Sparkles,
-  Settings, LogOut, Zap, FileText, Layers
+  Settings, LogOut, Zap, FileText, Layers, Phone
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { groupsApi } from '@/lib/api'
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/library', icon: BookOpen, label: 'Library' },
   { href: '/assignments', icon: FileText, label: 'Assignments' },
   { href: '/workspace', icon: Layers, label: 'Workspace' },
+  { href: '/tutor-call', icon: Phone, label: 'Talk to a Tutor' },
   { href: '/community', icon: Users, label: 'Community' },
   { href: '/ai', icon: Sparkles, label: 'AI Assistant' },
 ]
