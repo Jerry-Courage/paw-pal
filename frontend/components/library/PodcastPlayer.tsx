@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { podcastApi } from '@/lib/api'
-import { Play, Pause, Loader2, Mic, Settings2, X, Image as ImageIcon, Sparkles, RefreshCw, XCircle, Quote, Hand, Radio } from 'lucide-react'
+import { Play, Pause, Loader2, Settings2, X, Image as ImageIcon, XCircle, Quote, Hand } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { libraryApi } from '@/lib/api'
@@ -14,15 +14,19 @@ interface PodcastPlayerProps {
 }
 
 export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProps) {
-  const [sessionId, setSessionId] = useState<number | null>(null)
   const [status, setStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle')
-  const [chunksTotal, setChunksTotal] = useState(0)
-  const [script, setScript] = useState<any[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
   const [visuals, setVisuals] = useState<any[]>([])
   const [showVisual, setShowVisual] = useState(false)
   
-  const { state: audio, play: globalPlay, pause: globalPause, resume: globalResume, audioRef: globalAudioRef } = useAudio()
+  const { 
+    state: audio, 
+    startPodcast, 
+    pause: globalPause, 
+    resume: globalResume, 
+    updateScript, 
+    setCurrentIndex,
+    stop: globalStop
+  } = useAudio()
   
   const [isInterrupting, setIsInterrupting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
@@ -32,7 +36,6 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
-  const preloadedBlobs = useRef<Record<number, string>>({})
 
   // Setup Form
   const [voiceA, setVoiceA] = useState('Ava')
@@ -44,16 +47,19 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     libraryApi.getResource(resourceId).then(res => {
       setVisuals(res.data.extracted_images || [])
     })
-    if (sessionId) {
-      podcastApi.getStatus(sessionId).then(res => {
+    
+    // If a session already exists for this resource in the global state, restore view
+    if (audio.activeResourceId === resourceId && audio.sessionId) {
+      setStatus('ready')
+      podcastApi.getStatus(audio.sessionId).then(res => {
         if (res.data.interjection_urls) {
           setInterjectionUrls(res.data.interjection_urls)
         }
       })
     }
-  }, [resourceId, sessionId])
+  }, [resourceId, audio.activeResourceId, audio.sessionId])
 
-  const currentChunk = script && script.length > currentIndex ? script[currentIndex] : null
+  const currentChunk = audio.script && audio.script.length > audio.currentIndex ? audio.script[audio.currentIndex] : null
   const activeVisual = visuals.find(v => {
     if (!v.id || !currentChunk?.visual_ref) return false
     return String(v.id) === String(currentChunk.visual_ref)
@@ -63,14 +69,14 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     setShowVisual(!!(activeVisual || currentChunk?.visual_url))
   }, [activeVisual, currentChunk])
 
-  // Polling for status
+  // Polling for status updates (global script updates)
   useEffect(() => {
-    if (status === 'generating' && sessionId) {
+    if (status === 'generating' && audio.sessionId) {
       const interval = setInterval(async () => {
         try {
-          const res = await podcastApi.getStatus(sessionId)
-          setChunksTotal(res.data.chunks_total)
-          setScript(res.data.script)
+          const res = await podcastApi.getStatus(audio.sessionId!)
+          updateScript(res.data.script, res.data.chunks_total)
+          
           if (res.data.status === 'ready') {
             setStatus('ready')
             clearInterval(interval)
@@ -84,91 +90,19 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
       }, 3000)
       return () => clearInterval(interval)
     }
-  }, [status, sessionId])
-
-  // Prefetching
-  useEffect(() => {
-    if (status !== 'ready' || !sessionId) return
-    const prefetch = async (idx: number) => {
-      if (preloadedBlobs.current[idx] || idx >= chunksTotal) return
-      try {
-        const text = script[idx]?.text || ""
-        const res = await podcastApi.getChunk(sessionId, idx, text)
-        if (res.data && res.data.type !== 'application/json') {
-           preloadedBlobs.current[idx] = URL.createObjectURL(res.data)
-        }
-      } catch (e) {
-        console.error("Prefetch failed for chunk", idx)
-      }
-    }
-    prefetch(currentIndex + 1)
-    prefetch(currentIndex + 2)
-  }, [currentIndex, status, sessionId, chunksTotal, script])
-
-  // Global Audio Sequential Manager
-  useEffect(() => {
-    const audioEl = globalAudioRef.current
-    if (!audioEl) return
-
-    const handleEnded = () => {
-      if (currentIndex < chunksTotal - 1) {
-        setCurrentIndex(prev => prev + 1)
-      } else {
-        globalPause()
-        setCurrentIndex(0)
-      }
-    }
-
-    audioEl.addEventListener('ended', handleEnded)
-    return () => audioEl.removeEventListener('ended', handleEnded)
-  }, [currentIndex, chunksTotal, globalAudioRef, globalPause])
-
-  // Player Trigger
-  useEffect(() => {
-    if (status === 'ready' && sessionId && audio.isPlaying) {
-      const fetchAndPlay = async () => {
-        try {
-          if (preloadedBlobs.current[currentIndex]) {
-             const resObj = await libraryApi.getResource(resourceId)
-             globalPlay(resourceId, resObj.data.title, preloadedBlobs.current[currentIndex], currentIndex, chunksTotal)
-             return
-          }
-          const text = script[currentIndex]?.text || ""
-          const res = await podcastApi.getChunk(sessionId, currentIndex, text)
-          if (res.data.type === 'application/json') throw new Error("JSON response")
-          const url = URL.createObjectURL(res.data)
-          preloadedBlobs.current[currentIndex] = url
-          
-          const resObj = await libraryApi.getResource(resourceId)
-          globalPlay(resourceId, resObj.data.title, url, currentIndex, chunksTotal)
-          
-          if (isAnswering) {
-            setIsAnswering(false)
-            toast.dismiss('answering-toast')
-          }
-        } catch (e) {
-          console.error("Playback error:", e)
-          if (currentIndex < chunksTotal - 1) {
-            setCurrentIndex(prev => prev + 1)
-          } else {
-            globalPause()
-            setCurrentIndex(0)
-          }
-        }
-      }
-      fetchAndPlay()
-    }
-  }, [currentIndex, status, sessionId, audio.isPlaying, chunksTotal, globalPlay, globalPause, resourceId])
+  }, [status, audio.sessionId, updateScript])
 
   const handleStartGeneration = async () => {
     try {
       setStatus('generating')
       const res = await podcastApi.createSession(resourceId, voiceA, voiceB, 15)
-      setSessionId(res.data.session_id)
+      const resObj = await libraryApi.getResource(resourceId)
+      
+      // Initialize global state
+      startPodcast(resourceId, resObj.data.title, res.data.session_id, res.data.script)
+      
       if (res.data.status === 'ready') {
         setStatus('ready')
-        const resObj = await libraryApi.getResource(resourceId)
-        globalPlay(resourceId, resObj.data.title)
       }
     } catch (e) {
       toast.error('Failed to start podcast generation')
@@ -181,7 +115,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
   }
 
   const handleInterrupt = async () => {
-    if (!sessionId) return
+    if (!audio.sessionId) return
     if (isRecording) {
       mediaRecorderRef.current?.stop()
       return
@@ -208,11 +142,9 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
           toast.loading("Hosts are thinking...", { id: 'answering-toast' })
           try {
             setIsAnswering(true)
-            const res = await podcastApi.interrupt(sessionId, audioBlob, currentIndex)
-            preloadedBlobs.current = {}
-            setScript(res.data.script)
-            setChunksTotal(res.data.new_total)
-            setCurrentIndex(currentIndex + 1)
+            const res = await podcastApi.interrupt(audio.sessionId!, audioBlob, audio.currentIndex)
+            updateScript(res.data.script, res.data.new_total)
+            setCurrentIndex(audio.currentIndex + 1)
             globalResume()
           } catch(e) {
             toast.dismiss('answering-toast')
@@ -229,12 +161,12 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     }
 
     if (introUrl) { 
-      const interAudio = new Audio(introUrl)
-      setIsAcknowledging(true)
-      interAudio.onended = () => { setIsAcknowledging(false); startRecordingFlow(); }
-      interAudio.play().catch(() => { setIsAcknowledging(false); startRecordingFlow(); })
+        const interAudio = new Audio(introUrl)
+        setIsAcknowledging(true)
+        interAudio.onended = () => { setIsAcknowledging(false); startRecordingFlow(); }
+        interAudio.play().catch(() => { setIsAcknowledging(false); startRecordingFlow(); })
     } else {
-      startRecordingFlow()
+        startRecordingFlow()
     }
   }
 
@@ -309,7 +241,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
              <div className="w-full h-full rounded-[3rem] overflow-hidden shadow-2xl border border-white/10 relative group bg-slate-900/50 backdrop-blur-sm" onClick={() => (activeVisual || currentChunk?.visual_url) && setEnlargedImage(activeVisual?.image || currentChunk?.visual_url)}>
                 {(activeVisual || currentChunk?.visual_url) ? (
                    <>
-                     <img src={activeVisual?.image || currentChunk?.visual_url} key={currentIndex} className="w-full h-full object-cover animate-in fade-in duration-1000" />
+                     <img src={activeVisual?.image || currentChunk?.visual_url} key={audio.currentIndex} className="w-full h-full object-cover animate-in fade-in duration-1000" />
                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
                    </>
                 ) : (
@@ -335,7 +267,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
              <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 space-y-8">
                 <div className="flex gap-4">
                    <Quote className="w-8 h-8 text-indigo-500/20 shrink-0" />
-                   <p className="text-xl lg:text-3xl font-medium leading-relaxed text-white/90" key={currentIndex}>{currentChunk?.text || "Initializing..."}</p>
+                   <p className="text-xl lg:text-3xl font-medium leading-relaxed text-white/90" key={audio.currentIndex}>{currentChunk?.text || "Initializing..."}</p>
                 </div>
              </div>
           </div>
@@ -349,13 +281,13 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
                 </button>
                 <div className="hidden sm:block">
                    <p className="text-white font-black lg:text-lg">FlowCast Session</p>
-                   <p className="text-slate-500 text-sm">Segment {currentIndex + 1} of {chunksTotal}</p>
+                   <p className="text-slate-500 text-sm">Segment {audio.currentIndex + 1} of {audio.totalChunks}</p>
                 </div>
              </div>
              
              <div className="flex-1 max-w-xl hidden lg:block mx-12">
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                   <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${((currentIndex + 1) / (chunksTotal || 1)) * 100}%` }} />
+                   <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${((audio.currentIndex + 1) / (audio.totalChunks || 1)) * 100}%` }} />
                 </div>
              </div>
 

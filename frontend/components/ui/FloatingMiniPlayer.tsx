@@ -81,6 +81,11 @@ export default function FloatingMiniPlayer() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary">FlowCast Live</span>
+               {state.script.length > 0 && (
+                 <span className="text-[9px] font-bold text-slate-500">
+                   Segment {state.currentIndex + 1}/{state.totalChunks}
+                 </span>
+               )}
                {state.isPlaying && (
                  <div className="flex items-end gap-0.5 h-3">
                    <div className="w-0.5 bg-primary animate-[musicBar_1s_infinite]" />
