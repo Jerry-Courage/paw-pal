@@ -46,10 +46,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const preloadedBlobs = useRef<Record<number, string>>({})
 
-  // Initialize Audio Element once
+  // 1. Initialize Audio Element with persistent configuration
   useEffect(() => {
     const audio = new Audio()
+    // Explicitly set properties for better browser compatibility
+    audio.preload = 'auto'
     audioRef.current = audio
+    
     return () => {
       audio.pause()
       audio.src = ''
@@ -57,8 +60,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // The Autonomous Driver: Loads and plays a specific chunk
-  const handleNextChunk = useCallback(async (idx: number) => {
+  // 2. The Autonomous Driver: Loads and plays a specific chunk
+  const handleNextChunk = useCallback(async (idx: number, autoPlay: boolean = true) => {
     if (!state.sessionId || idx >= state.totalChunks || !audioRef.current) return
 
     try {
@@ -74,30 +77,37 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
       if (url && audioRef.current) {
         audioRef.current.src = url
-        audioRef.current.play().catch(console.error)
         
-        setState(prev => ({
-          ...prev,
-          currentIndex: idx,
-          isPlaying: true,
-          playbackProgress: prev.totalChunks > 0 ? ((idx + 1) / prev.totalChunks) * 100 : 0
-        }))
+        if (autoPlay) {
+          try {
+            await audioRef.current.play()
+            setState(prev => ({ ...prev, isPlaying: true, currentIndex: idx }))
+          } catch (err) {
+            console.warn("Autoplay blocked or failed:", err)
+            // If play fails, we stay on this segment but show "Play" button
+            setState(prev => ({ ...prev, isPlaying: false, currentIndex: idx }))
+          }
+        } else {
+            setState(prev => ({ ...prev, currentIndex: idx }))
+        }
       }
     } catch (e) {
       console.error("Chunk load failed:", e)
-      // If one fails, try to skip to next
+      // Skip logic: if a chunk literally fails to load, try the next one
       if (idx + 1 < state.totalChunks) {
-         handleNextChunk(idx + 1)
+         handleNextChunk(idx + 1, autoPlay)
       }
     }
   }, [state.sessionId, state.script, state.totalChunks])
 
+  // 3. Audio UI Actions
   const startPodcast = (resourceId: number, title: string, sessionId: number, script: any[]) => {
     // Revoke old URLs to prevent memory leaks
     Object.values(preloadedBlobs.current).forEach(url => URL.revokeObjectURL(url))
     preloadedBlobs.current = {}
     
     if (audioRef.current) {
+      audioRef.current.pause()
       audioRef.current.src = ''
     }
 
@@ -109,9 +119,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       script: safeScript,
       totalChunks: safeScript.length,
       currentIndex: 0,
-      isPlaying: true,
+      isPlaying: false, // Wait for first chunk play success
       isMiniPlayerVisible: true,
-      playbackProgress: safeScript.length > 0 ? (1 / safeScript.length) * 100 : 0
+      playbackProgress: 0
     })
   }
 
@@ -127,43 +137,48 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       isPlaying: true,
       isMiniPlayerVisible: true,
       currentIndex: index !== undefined ? index : prev.currentIndex,
-      totalChunks: total !== undefined ? total : prev.totalChunks,
-      playbackProgress: total ? ((index || 0) + 1) / total * 100 : prev.playbackProgress
+      totalChunks: total !== undefined ? total : prev.totalChunks
     }))
   }
 
   const pause = () => {
-    audioRef.current?.pause()
+    if (audioRef.current) {
+        audioRef.current.pause()
+    }
     setState(prev => ({ ...prev, isPlaying: false }))
   }
 
-  const resume = () => {
-    if (audioRef.current?.src) {
-        audioRef.current.play().catch(console.error)
-        setState(prev => ({ ...prev, isPlaying: true }))
+  const resume = async () => {
+    if (audioRef.current && audioRef.current.src) {
+        try {
+            await audioRef.current.play()
+            setState(prev => ({ ...prev, isPlaying: true }))
+        } catch (e) {
+            console.error("Resume failed:", e)
+        }
     } else if (state.sessionId) {
-        handleNextChunk(state.currentIndex)
+        handleNextChunk(state.currentIndex, true)
     }
   }
 
   const stop = () => {
-    audioRef.current?.pause()
     if (audioRef.current) {
+        audioRef.current.pause()
         audioRef.current.src = ''
     }
     Object.values(preloadedBlobs.current).forEach(url => URL.revokeObjectURL(url))
     preloadedBlobs.current = {}
-    setState(prev => ({
-      ...prev,
+    setState({
       isPlaying: false,
       activeResourceId: null,
+      activeResourceTitle: '',
       sessionId: null,
       script: [],
       isMiniPlayerVisible: false,
       playbackProgress: 0,
       currentIndex: 0,
       totalChunks: 0
-    }))
+    })
   }
 
   const setMiniPlayerVisible = (visible: boolean) => {
@@ -175,18 +190,38 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setCurrentIndex = (index: number) => {
-    handleNextChunk(index)
+    handleNextChunk(index, true)
   }
 
-  // --- AUTOMATIC SEQUENCER & INITIAL TRIGGER ---
+  // 4. Smooth Progress Tracker (TimeUpdate)
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !state.sessionId || !state.isPlaying) return
+    if (!audio) return
+
+    const handleTimeUpdate = () => {
+      if (!audio.duration || state.totalChunks === 0) return
+      
+      // Calculate local progress (current chunk)
+      const chunkProgress = audio.currentTime / audio.duration
+      // Calculate global progress
+      const globalProgress = ((state.currentIndex + chunkProgress) / state.totalChunks) * 100
+      
+      setState(prev => ({ ...prev, playbackProgress: globalProgress }))
+    }
+
+    audio.addEventListener('timeupdate', handleTimeUpdate)
+    return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
+  }, [state.currentIndex, state.totalChunks])
+
+  // 5. Automatic Sequencer & Kickstart Trigger
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !state.sessionId) return
 
     const handleEnded = () => {
       const nextIdx = state.currentIndex + 1
       if (nextIdx < state.totalChunks) {
-        handleNextChunk(nextIdx)
+        handleNextChunk(nextIdx, true)
       } else {
         setState(prev => ({ ...prev, isPlaying: false }))
       }
@@ -194,17 +229,17 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     audio.onended = handleEnded
 
-    // Initial Trigger: Kickstart if we have a session/script but nothing is playing
+    // Kickstart logic: If we have a script but haven't started yet
     if (state.script.length > 0 && !audio.src) {
-      handleNextChunk(0)
+      handleNextChunk(0, true)
     }
 
     return () => { audio.onended = null }
-  }, [state.sessionId, state.isPlaying, state.currentIndex, state.script.length, state.totalChunks, handleNextChunk])
+  }, [state.sessionId, state.currentIndex, state.script.length, state.totalChunks, handleNextChunk])
 
-  // --- BACKGROUND PRELOADER ---
+  // 6. Background Preloader (Advanced)
   useEffect(() => {
-    if (!state.sessionId || !state.isPlaying || state.script.length === 0) return
+    if (!state.sessionId || state.script.length === 0) return
 
     const preload = async (idx: number) => {
       if (idx >= state.totalChunks || preloadedBlobs.current[idx]) return
@@ -215,13 +250,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           preloadedBlobs.current[idx] = URL.createObjectURL(res.data)
         }
       } catch (e) {
-        console.error("Global preload failed:", e)
+        console.error("Global preload failed for chunk", idx, e)
       }
     }
 
+    // Preload next 2 chunks
     preload(state.currentIndex + 1)
     preload(state.currentIndex + 2)
-  }, [state.sessionId, state.isPlaying, state.currentIndex, state.script, state.totalChunks])
+  }, [state.sessionId, state.currentIndex, state.script, state.totalChunks])
 
   return (
     <AudioContext.Provider value={{ 

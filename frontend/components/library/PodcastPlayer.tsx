@@ -287,16 +287,26 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
        </div>
 
        <div className="sticky bottom-0 h-auto lg:h-[150px] bg-slate-900 border-t border-white/5 p-6 lg:p-12">
-          <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-8">
-             <div className="flex items-center gap-8">
-                <button onClick={togglePlay} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-xl hover:scale-110 transition-all">
-                   {audio.isPlaying ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
-                </button>
-                <div className="hidden sm:block">
-                   <p className="text-white font-black lg:text-lg">FlowCast Session</p>
-                   <p className="text-slate-500 text-sm">Segment {audio.currentIndex + 1} of {audio.totalChunks}</p>
-                </div>
-             </div>
+           <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-8">
+              <div className="flex items-center gap-8">
+                 <button onClick={togglePlay} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-xl hover:scale-110 transition-all relative">
+                    {!audio.isPlaying && !audioRef.current?.src ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                    ) : audio.isPlaying ? (
+                        <Pause className="w-8 h-8 fill-current" />
+                    ) : (
+                        <Play className="w-8 h-8 fill-current ml-1" />
+                    )}
+                 </button>
+                 <div className="hidden sm:block">
+                    <p className="text-white font-black lg:text-lg">FlowCast Session</p>
+                    <p className="text-slate-500 text-sm">
+                        {audio.isPlaying ? `Segment ${audio.currentIndex + 1} of ${audio.totalChunks}` : (
+                           !audioRef.current?.src ? "Connecting Audio..." : "Ready to Start"
+                        )}
+                    </p>
+                 </div>
+              </div>
              
              <div className="flex-1 max-w-xl hidden lg:block mx-12">
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
