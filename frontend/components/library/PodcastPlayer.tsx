@@ -25,8 +25,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     resume: globalResume, 
     updateScript, 
     setCurrentIndex,
-    stop: globalStop,
-    audioRef
+    stop: globalStop
   } = useAudio()
   
   const [isInterrupting, setIsInterrupting] = useState(false)
@@ -125,7 +124,11 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
   }
 
   const togglePlay = () => {
-    audio.isPlaying ? globalPause() : globalResume()
+    if (audio.isPlaying) {
+      globalPause()
+    } else {
+      globalResume()
+    }
   }
 
   const handleInterrupt = async () => {
@@ -291,7 +294,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
            <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-8">
               <div className="flex items-center gap-8">
                  <button onClick={togglePlay} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-xl hover:scale-110 transition-all relative">
-                    {!audio.isPlaying && !audioRef.current?.src ? (
+                    {!audio.isChunkLoaded && !audio.isPlaying ? (
                         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                     ) : audio.isPlaying ? (
                         <Pause className="w-8 h-8 fill-current" />
@@ -303,7 +306,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
                     <p className="text-white font-black lg:text-lg">FlowCast Session</p>
                     <p className="text-slate-500 text-sm">
                         {audio.isPlaying ? `Segment ${audio.currentIndex + 1} of ${audio.totalChunks}` : (
-                           !audioRef.current?.src ? "Connecting Audio..." : "Ready to Start"
+                           audio.isChunkLoaded ? "Ready to Start" : "Connecting Audio..."
                         )}
                     </p>
                  </div>

@@ -41,7 +41,13 @@ export default function FloatingMiniPlayer() {
     })
   }
 
-  if (!state.activeResourceId || !state.isMiniPlayerVisible) return null
+  // Show the mini-player if:
+  // 1. There's an active session and the user hasn't explicitly stopped it
+  // 2. OR there's an active resource with mini-player visible
+  const isVisible = (state.sessionId && state.isMiniPlayerVisible) || 
+                    (state.activeResourceId && state.isMiniPlayerVisible)
+  
+  if (!isVisible) return null
 
   return (
     <AnimatePresence mode="wait">
