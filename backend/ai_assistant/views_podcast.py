@@ -316,7 +316,11 @@ class PodcastChunkAudioView(APIView):
             if not success:
                 return Response({'error': 'TTS failed'}, status=500)
                 
-        return FileResponse(open(file_path, 'rb'), content_type='audio/mpeg')
+        # Optimized FileResponse for media streaming
+        response = FileResponse(open(file_path, 'rb'), content_type='audio/mpeg')
+        response['Content-Length'] = os.path.getsize(file_path)
+        response['Accept-Ranges'] = 'bytes'
+        return response
 
 class PodcastInterruptView(APIView):
     def post(self, request, session_id):

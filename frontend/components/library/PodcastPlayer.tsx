@@ -311,7 +311,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
              
              <div className="flex-1 max-w-xl hidden lg:block mx-12">
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                   <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${((audio.currentIndex + 1) / (audio.totalChunks || 1)) * 100}%` }} />
+                   <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${audio.playbackProgress}%` }} />
                 </div>
              </div>
 

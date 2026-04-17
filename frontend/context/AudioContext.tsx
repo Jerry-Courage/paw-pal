@@ -154,9 +154,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
             await audioRef.current.play()
             setState(prev => ({ ...prev, isPlaying: true }))
         } catch (e) {
-            console.error("Resume failed:", e)
+            console.warn("Resume play failed:", e)
         }
     } else if (state.sessionId) {
+        // Force reload the current chunk if src is missing or invalid
         handleNextChunk(state.currentIndex, true)
     }
   }
@@ -186,7 +187,19 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateScript = (newScript: any[], newTotal: number) => {
-    setState(prev => ({ ...prev, script: newScript, totalChunks: newTotal }))
+    setState(prev => {
+        // If we were waiting at 0 progress and script finally arrives, set initial head
+        const initialProgress = prev.playbackProgress === 0 && newTotal > 0 
+           ? (1 / newTotal) * 100 
+           : prev.playbackProgress
+
+        return { 
+           ...prev, 
+           script: newScript, 
+           totalChunks: newTotal,
+           playbackProgress: initialProgress
+        }
+    })
   }
 
   const setCurrentIndex = (index: number) => {
