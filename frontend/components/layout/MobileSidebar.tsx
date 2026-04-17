@@ -7,7 +7,7 @@ import { signOut } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Calendar, BookOpen, Users, Sparkles,
-  Settings, LogOut, Zap, X, FileText, Layers
+  Settings, LogOut, Zap, X, FileText, Layers, LayoutGrid, Brain
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { groupsApi } from '@/lib/api'
@@ -17,7 +17,7 @@ const navItems = [
   { href: '/planner', icon: Calendar, label: 'Planner' },
   { href: '/library', icon: BookOpen, label: 'Library' },
   { href: '/assignments', icon: FileText, label: 'Assignments' },
-  { href: '/workspace', icon: Layers, label: 'Workspace' },
+  { href: '/workspace', icon: LayoutGrid, label: 'Collab Space' },
   { href: '/community', icon: Users, label: 'Community' },
   { href: '/ai', icon: Sparkles, label: 'AI Assistant' },
 ]
@@ -64,19 +64,37 @@ export default function MobileSidebar({ open, onClose }: Props) {
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-sky-500 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-gray-900 dark:text-white">FlowState</span>
-          </Link>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          <div className="flex flex-col items-center py-6 mb-4 gap-4">
+            <Link 
+              href="/dashboard" 
+              className="group relative"
+              onClick={onClose}
+            >
+              <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-indigo-700 p-[2px] shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform duration-500">
+                <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center overflow-hidden">
+                  <Brain className="w-9 h-9 text-primary" />
+                </div>
+              </div>
+            </Link>
+            <Link 
+              href="/dashboard" 
+              className="flex flex-col items-center"
+              onClick={onClose}
+            >
+              <span className="text-xl font-black tracking-[0.4em] bg-gradient-to-r from-primary via-indigo-400 to-primary bg-[length:200%_auto] bg-clip-text text-transparent animate-shine uppercase">
+                Flow
+              </span>
+              <span className="text-[10px] font-black tracking-[0.6em] text-slate-500 -mt-1 uppercase opacity-80">
+                State
+              </span>
+            </Link>
+          </div>
+          <div className="flex justify-end p-2 md:hidden">
+             <button onClick={onClose} className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+               <X className="w-6 h-6" />
+             </button>
+          </div>
           {navItems.map((item) => {
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
             return (

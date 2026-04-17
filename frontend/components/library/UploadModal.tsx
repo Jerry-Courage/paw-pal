@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { libraryApi } from '@/lib/api'
-import { X, Upload, FileText, Youtube, Code, Presentation, Plus, Cloud, Loader2, Sparkles } from 'lucide-react'
+import { libraryApi, API_BASE, getAuthToken } from '@/lib/api'
+import { X, Upload, FileText, Youtube, Code, Presentation, Plus, Loader2, Sparkles, CheckCircle2, ShieldAlert, Cloud } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -21,16 +21,76 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
   const [subject, setSubject] = useState('')
   const [url, setUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  
+  // Progress States
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [stage, setStage] = useState<'idle' | 'uploading' | 'building' | 'complete'>('idle')
+  const [processingStatus, setProcessingStatus] = useState({ progress: 0, text: 'Preparing ingestion...' })
+  const [resourceId, setResourceId] = useState<number | null>(null)
+
   const qc = useQueryClient()
 
+  // SSD Stream Management
+  useEffect(() => {
+    if (stage !== 'building' || !resourceId) return
+
+    let eventSource: EventSource | null = null
+    
+    const connectSSE = async () => {
+        const token = await getAuthToken()
+        const sseUrl = `${API_BASE}/library/resources/status-stream/?token=${token}`
+        eventSource = new EventSource(sseUrl)
+
+        eventSource.addEventListener('status', (e: any) => {
+            const data = JSON.parse(e.data)
+            const myResource = data.find((r: any) => r.id === resourceId)
+            if (myResource) {
+                setProcessingStatus({ 
+                    progress: myResource.progress || 0, 
+                    text: myResource.text || 'Building your study kit...' 
+                })
+                if (myResource.status === 'ready') {
+                    setStage('complete')
+                    setProcessingStatus({ progress: 100, text: 'Study Kit Ready!' })
+                    qc.invalidateQueries({ queryKey: ['resources'] })
+                    toast.success('Your Hyper-Notes are ready!')
+                    setTimeout(onClose, 1500)
+                }
+            }
+        })
+
+        eventSource.onerror = () => {
+            eventSource?.close()
+        }
+    }
+
+    connectSSE()
+    return () => eventSource?.close()
+  }, [stage, resourceId, qc, onClose])
+
   const mutation = useMutation({
-    mutationFn: (data: FormData) => libraryApi.uploadResource(data),
-    onSuccess: () => {
+    mutationFn: (data: FormData) => libraryApi.uploadResource(data, (pe) => {
+        const p = Math.round((pe.loaded * 100) / pe.total)
+        setUploadProgress(p)
+    }),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['resources'] })
-      toast.success('Resource uploaded! FlowAI is building your study kit.')
-      onClose()
+      const id = res.data?.id
+      if (id) {
+          setResourceId(id)
+          setStage('building')
+      } else {
+          toast.success('Resource uploaded!')
+          onClose()
+      }
     },
-    onError: () => toast.error('Upload failed. Please try a smaller file or check connection.'),
+    onError: () => {
+        setStage('idle')
+        setIsUploading(false)
+        setUploadProgress(0)
+        toast.error('Upload failed. Please try a smaller file.')
+    },
   })
 
   const onDrop = useCallback((files: File[]) => {
@@ -52,6 +112,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
       'image/*': [] 
     },
     maxFiles: 1,
+    disabled: stage !== 'idle'
   })
 
   const handleSubmit = () => {
@@ -59,6 +120,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     if (type !== 'video' && !file) { toast.error('Please select a file to upload.'); return }
     if (type === 'video' && !url) { toast.error('Please provide a YouTube URL.'); return }
     
+    setStage('uploading')
     const fd = new FormData()
     fd.append('title', title)
     fd.append('resource_type', type)
@@ -70,8 +132,59 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-900 rounded-t-[1.5rem] sm:rounded-[2rem] w-full max-w-2xl shadow-2xl border border-slate-200/50 dark:border-slate-800/50 flex flex-col max-h-[92vh] sm:max-h-[95vh] animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-2 duration-300">
+      <div className="bg-white dark:bg-slate-900 rounded-t-[1.5rem] sm:rounded-[2rem] w-full max-w-2xl shadow-2xl border border-slate-200/50 dark:border-slate-800/50 flex flex-col max-h-[92vh] sm:max-h-[95vh] animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-2 duration-300 overflow-hidden">
         
+        {/* Progress Overlay - High Fidelity */}
+        {stage !== 'idle' && (
+            <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+                <div className="w-full max-w-md space-y-8">
+                    <div className="relative mx-auto w-24 h-24">
+                        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-25" />
+                        <div className="relative bg-white dark:bg-slate-800 rounded-full w-full h-full flex items-center justify-center shadow-xl border border-slate-100 dark:border-slate-700">
+                            {stage === 'complete' ? (
+                                <CheckCircle2 className="w-12 h-12 text-emerald-500 animate-in zoom-in duration-300" />
+                            ) : (
+                                <Sparkles className="w-10 h-10 text-primary animate-pulse" />
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                            {stage === 'uploading' ? 'Ingesting Material...' : 
+                             stage === 'building' ? 'Building Hyper-Notes Kit' : 'Kit Complete!'}
+                        </h3>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium italic">
+                            {stage === 'uploading' ? `Uploading ${title}...` : processingStatus.text}
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner p-1">
+                            <div 
+                                className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-700 ease-out relative"
+                                style={{ width: `${stage === 'uploading' ? uploadProgress : processingStatus.progress}%` }}
+                            >
+                                <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">
+                            <span>{stage === 'uploading' ? 'Upload Phase' : 'AI Ingestion'}</span>
+                            <span className="text-primary">{stage === 'uploading' ? uploadProgress : processingStatus.progress}%</span>
+                        </div>
+                    </div>
+
+                    {stage === 'building' && (
+                        <div className="p-4 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/10 animate-in slide-in-from-bottom-4 duration-1000">
+                            <p className="text-xs text-primary font-bold leading-relaxed">
+                                Our Hyper-Notes engine uses Macro-Chunking to synthesize your content 5x faster than before. Hang tight!
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between p-4 sm:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -171,21 +284,20 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
         <div className="flex-shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 sm:p-8 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 pb-8 sm:pb-8">
           <button onClick={onClose} className="hidden sm:block flex-shrink-0 px-6 py-2.5 text-xs font-black text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 uppercase tracking-widest transition-colors">Cancel</button>
           
-          {/* Mobile Cancel - inline with others */}
           <div className="flex w-full sm:w-auto items-center gap-2 sm:gap-3">
             <button onClick={onClose} className="sm:hidden flex-1 py-3 text-xs font-black text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-800 rounded-xl uppercase tracking-widest transition-colors">Cancel</button>
             <button className="hidden sm:flex flex-1 sm:flex-none btn-secondary border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 px-5 text-xs py-3 justify-center items-center gap-1.5 transition-colors">
-              <Cloud className="w-3.5 h-3.5" /> <span>Import</span>
+              <Sparkles className="w-3.5 h-3.5" /> <span>Import</span>
             </button>
             <button 
               onClick={handleSubmit} 
-              disabled={mutation.isPending} 
+              disabled={mutation.isPending || stage !== 'idle'} 
               className={cn(
                 "flex-[2] sm:flex-none btn-primary px-4 sm:px-8 py-3.5 shadow-xl shadow-primary/20 text-xs flex justify-center items-center gap-2",
-                mutation.isPending ? "opacity-75 cursor-wait" : ""
+                mutation.isPending || stage !== 'idle' ? "opacity-75 cursor-wait" : ""
               )}
             >
-              {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Sparkles className="w-4 h-4" /> Ingest Now</>}
+              {mutation.isPending || stage !== 'idle' ? <><Loader2 className="w-4 h-4 animate-spin" /> Working...</> : <><Sparkles className="w-4 h-4" /> Ingest Now</>}
             </button>
           </div>
         </div>

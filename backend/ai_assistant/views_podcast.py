@@ -9,6 +9,7 @@ from .podcast import generate_podcast_script, generate_tts_file, handle_interrup
 import threading
 import hashlib
 import re
+import io
 
 def dialogue_bouncer(text):
     """Surgically strips visual prompts or instructions leaking into spoken text."""
@@ -48,22 +49,24 @@ def bg_generate_script(session_id, notes):
         safe_ses = str(session.id)
         out_dir = os.path.join(settings.MEDIA_ROOT, 'podcasts', safe_res, safe_ses)
         os.makedirs(out_dir, exist_ok=True)
-        generate_tts_file(f"Oh, wait! Looks like {name_b} and I have another question.", session.voice_a, os.path.join(out_dir, "Stop-A.mp3"))
-        generate_tts_file(f"Hold that thought, {name_a}! Someone has a question.", session.voice_b, os.path.join(out_dir, "Stop-B.mp3"))
+        generate_tts_file(f"Oh! Looks like we have a question!", session.voice_a, os.path.join(out_dir, "Stop-A.mp3"))
+        generate_tts_file(f"Wait! Someone wants to say something!", session.voice_b, os.path.join(out_dir, "Stop-B.mp3"))
+        
+        with open(log_path, 'a') as f:
+            f.write(f"[INIT] Humanoid Interjections generated in {out_dir}\n")
 
         # 3. Fetch visuals
         images = ResourceImage.objects.filter(resource=resource).values('id', 'page_number', 'description', 'image')
         image_list = list(images)
         
         # 4. Generate script text (Instant)
-        sys_inst = f"You are a sophisticated podcast script writer. Write EXACTLY what {name_a} and {name_b} say. USE ONLY DIALOGUE. Do not describe actions. Do not use third person. Output raw JSON array only."
-        
+        # Use None for system_instruction to trigger the Humanoid Naturalism default in podcast.py
         script = generate_podcast_script(
             notes, 
             available_images=image_list,
             name_a=name_a,
             name_b=name_b,
-            system_instruction=sys_inst
+            system_instruction=None
         )
 
         if not script or not isinstance(script, list):
@@ -224,14 +227,14 @@ class PodcastInitView(APIView):
         except Resource.DoesNotExist:
             return Response({'error': 'Resource not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        voice_a = request.data.get('voice_a', 'Christopher')
-        voice_b = request.data.get('voice_b', 'Jenny')
+        voice_a = request.data.get('voice_a', 'Ava')
+        voice_b = request.data.get('voice_b', 'Andrew')
 
         session = PodcastSession.objects.create(
             resource=resource,
             owner=request.user,
-            voice_a=SUPPORTED_VOICES.get(voice_a, SUPPORTED_VOICES['Christopher']),
-            voice_b=SUPPORTED_VOICES.get(voice_b, SUPPORTED_VOICES['Jenny']),
+            voice_a=SUPPORTED_VOICES.get(voice_a, SUPPORTED_VOICES['Ava']),
+            voice_b=SUPPORTED_VOICES.get(voice_b, SUPPORTED_VOICES['Andrew']),
             status='generating',
             script_chunks=[]
         )
@@ -265,10 +268,11 @@ class PodcastStatusView(APIView):
         inter_b_path = os.path.join(settings.MEDIA_ROOT, 'podcasts', safe_res, safe_ses, "Stop-B.mp3")
 
         inter_urls = {}
+        api_root = getattr(settings, 'API_URL', 'http://localhost:8000').rstrip('/')
         if os.path.exists(inter_a_path):
-            inter_urls['A'] = f"{base_url}Stop-A.mp3"
+            inter_urls['A'] = f"{api_root}{base_url}Stop-A.mp3"
         if os.path.exists(inter_b_path):
-            inter_urls['B'] = f"{base_url}Stop-B.mp3"
+            inter_urls['B'] = f"{api_root}{base_url}Stop-B.mp3"
 
         return Response({
             'status': session.status,
@@ -331,17 +335,40 @@ class PodcastInterruptView(APIView):
         # 2. Transcribe via Groq Whisper API
         import requests
         groq_key = os.getenv('GROQ_API_KEY')
-        res = requests.post(
-            "https://api.groq.com/openai/v1/audio/transcriptions",
-            headers={"Authorization": f"Bearer {groq_key}"},
-            files={"file": ('interrupt.webm', audio_file.read())},
-            data={"model": "whisper-large-v3", "response_format": "text"}
-        )
         
-        if res.status_code != 200:
-            return Response({'error': 'STT Transcription failed'}, status=500)
+        # LOG: STT Start
+        log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
+        with open(log_path, 'a') as f: 
+            f.write(f"\n[INTERRUPT] Session {session_id} - Audio Size: {audio_file.size} bytes\n")
+        
+        try:
+            # We use io.BytesIO to ensure we have a clean stream for requests
+            audio_data = audio_file.read()
+            audio_io = io.BytesIO(audio_data)
             
-        user_query = res.text.strip()
+            res = requests.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {groq_key}"},
+                files={"file": ('interrupt.webm', audio_io)},
+                data={"model": "whisper-large-v3", "response_format": "text"},
+                timeout=20
+            )
+            
+            if res.status_code != 200:
+                with open(log_path, 'a') as f: f.write(f"[INTERRUPT] STT Failed (Status {res.status_code}): {res.text}\n")
+                return Response({'error': 'STT Transcription failed'}, status=500)
+                
+            user_query = res.text.strip()
+            with open(log_path, 'a') as f: f.write(f"[INTERRUPT] Transcribed Query: \"{user_query}\"\n")
+            
+            if not user_query:
+                # Early exit if we heard nothing to prevent Guru from hallucinating an answer to silence
+                return Response({'status': 'success', 'transcribed_query': '', 'bridge_length': 0, 'script': session.script_chunks})
+
+        except Exception as e:
+            with open(log_path, 'a') as f: f.write(f"[INTERRUPT] STT Exception: {str(e)}\n")
+            return Response({'error': 'STT Exception'}, status=500)
+        
         print("User raised hand and asked:", user_query)
         
         # 3. Identify names and visuals
@@ -379,6 +406,9 @@ class PodcastInterruptView(APIView):
             name_a=name_a,
             name_b=name_b
         )
+        
+        with open(log_path, 'a') as f: 
+            f.write(f"[INTERRUPT] Guru Response Type: {type(bridge)} - Count: {len(bridge) if isinstance(bridge, list) else 'N/A'}\n")
 
         # 3.7. VISUAL MAPPING (Guru)
         # Connect visual_ref IDs to actual image URLs or generate one via AI
@@ -399,45 +429,44 @@ class PodcastInterruptView(APIView):
                             chunk['visual_url'] = image_path
 
                 if chunk.get('visual_prompt') and not chunk.get('visual_url'):
-                    try:
-                        res_url = generate_ai_image(chunk['visual_prompt'])
-                        if not res_url: res_url = get_fallback_image(chunk['visual_prompt'])
-                        chunk['visual_url'] = res_url
-                    except Exception:
-                        chunk['visual_url'] = get_fallback_image(chunk['visual_prompt'])
+                    # SKIP synchronous AI generation for interruptions to achieve sub-second response times.
+                    # The host will speak while remaining on the current slide or show a focus state.
+                    pass
 
-        # 3.8. PRE-WARM AUDIO: While returning JSON, start generating answer MP3s in background
+        # 3.8. PRE-WARM AUDIO: Serialized Background Rendering
         if isinstance(bridge, list) and len(bridge) > 0:
-            for chunk in bridge:
-                if not isinstance(chunk, dict): continue
-                
-                # CLEAN AND SIGN every Guru chunk before splicing
-                raw_text = chunk.get('text') or chunk.get('line') or chunk.get('content') or ''
-                chunk['text'] = dialogue_bouncer(raw_text)
+            def serialized_prewarm(chunks, v_a, v_b, n_b, res_id, ses_id):
+                try:
+                    import hashlib, time
+                    out_dir = os.path.join(settings.MEDIA_ROOT, 'podcasts', str(res_id), str(ses_id))
+                    os.makedirs(out_dir, exist_ok=True)
+                    
+                    for chunk in chunks:
+                        if not isinstance(chunk, dict): continue
+                        
+                        # CLEAN AND SIGN every Guru chunk before rendering
+                        raw_text = chunk.get('text') or chunk.get('line') or chunk.get('content') or ''
+                        chunk_text = dialogue_bouncer(raw_text)
+                        if not chunk_text.strip(): continue
 
-                def prewarm_worker(text, voice, res_id, ses_id):
-                    try:
-                        import hashlib
-                        out_dir = os.path.join(settings.MEDIA_ROOT, 'podcasts', str(res_id), str(ses_id))
-                        os.makedirs(out_dir, exist_ok=True)
-                        h = hashlib.md5(text.strip().encode('utf-8')).hexdigest()
+                        # Identifying Voice (Shield Logic)
+                        s_val = str(chunk.get('speaker', 'A')).upper()
+                        v_id = v_b if ('B' in s_val or n_b.upper() in s_val) else v_a
+                        
+                        h = hashlib.md5(chunk_text.strip().encode('utf-8')).hexdigest()
                         f_path = os.path.join(out_dir, f"{h}.mp3")
+                        
                         if not os.path.exists(f_path):
-                            generate_tts_file(text, voice, f_path)
-                    except Exception: pass
+                            # Sequential generation prevents 503 errors
+                            generate_tts_file(chunk_text, v_id, f_path)
+                            time.sleep(0.3) # Avoid throttling
+                except Exception as e:
+                    with open(log_path, 'a') as f: f.write(f"[PREWARM-FATAL] {str(e)}\n")
 
-                # --- SPEAKER MAPPING SHIELD (Guru) ---
-                s_val = str(chunk.get('speaker', 'A')).upper()
-                if 'B' in s_val or name_b.upper() in s_val:
-                    v_id = session.voice_b
-                else:
-                    v_id = session.voice_a
-                # --- END SHIELD ---
-
-                threading.Thread(
-                    target=prewarm_worker, 
-                    args=(chunk['text'], v_id, session.resource.id, session.id)
-                ).start()
+            threading.Thread(
+                target=serialized_prewarm, 
+                args=(bridge, session.voice_a, session.voice_b, name_b, session.resource.id, session.id)
+            ).start()
 
         # 4. Splice the bridge into the script immediately after current_index
         if isinstance(bridge, list) and len(bridge) > 0:
@@ -459,4 +488,3 @@ class PodcastInterruptView(APIView):
             'new_total': len(new_script_full),
             'script': new_script_full # RETURN THE UPDATED SCRIPT
         })
-

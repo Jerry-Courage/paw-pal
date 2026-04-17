@@ -37,14 +37,25 @@ export default function GlobalAgentAssistant() {
   const { 
     state: speechState,
     isSpeaking, isThinking,
-    startListening, stopListening, 
+    startListening, stopListening, isAwake, isHearing,
+    micVolume, rawTranscription, forceSession,
+    isListening: isStarted,
     speak, playAudio, error: speechError 
   } = useSpeechExchange({
     isVoiceResponseEnabled,
     onCommand: (cmd) => {
+      console.log('[Assistant] Voice command received:', cmd)
       // Auto-open the panel if a command is received while closed
       setIsOpen(true)
       handleSend(cmd)
+    },
+    onWake: () => {
+      setIsOpen(true)
+      toast.success('Flow Awakened', { 
+        id: 'voice-wake',
+        icon: '✨',
+        duration: 2000 
+      })
     }
   })
 
@@ -58,7 +69,7 @@ export default function GlobalAgentAssistant() {
     if (speechState !== 'idle' && speechState !== 'error') {
       stopListening()
     } else {
-      startListening()
+      startListening(true)
     }
   }
 
@@ -82,6 +93,18 @@ export default function GlobalAgentAssistant() {
     if (!overrideQuery) setQuery('')
     setIsLoading(true)
 
+    // OPTIMISTIC HUMAN BRIDGE: Instant humanoid hesitation to mask thinking
+    if (isVoiceResponseEnabled) {
+      const isComplex = finalQuery.length > 25
+      const fillers = isComplex 
+        ? ["/audio/think.mp3", "/audio/see.mp3"] 
+        : ["/audio/hmm.mp3", "/audio/uh.mp3", "/audio/um.mp3"]
+      
+      const randomAudio = fillers[Math.floor(Math.random() * fillers.length)]
+      // Using playAudio ensures the Acoustic Shield keeps the mic MUTED during the bridge
+      playAudio(randomAudio)
+    }
+
     try {
       const context = `User is currently viewing the ${pathname} page.`
       // Format history for the AI (last 10 turns)
@@ -100,12 +123,22 @@ export default function GlobalAgentAssistant() {
 
       setMessages(prev => [...prev, assistantMsg])
       
-      // Voice Response: Prioritize high-fidelity backend audio
+      // Voice Response: Handle Humanoid Expressions
       if (isVoiceResponseEnabled) {
+        // MASKER: If AI clears throat or coughs, play the real audio before speaking
+        if (assistantMsg.content.toLowerCase().includes('(clears throat)')) {
+          new Audio('/audio/ahem.mp3').play().catch(() => {})
+        } else if (assistantMsg.content.toLowerCase().includes('[coughs]')) {
+          new Audio('/audio/cough.mp3').play().catch(() => {})
+        }
+
         if (response.data.audio_url) {
-          playAudio(`${SERVER_URL}${response.data.audio_url}`)
+          // DELAY FOR ASYNC: Wait 400ms to ensure the backend background thread
+          // has finished writing the MP3 file to disk.
+          setTimeout(() => {
+            playAudio(`${SERVER_URL}${response.data.audio_url}`)
+          }, 400)
         } else {
-          // Fallback to local speech synthesis using the backend-cleaned text
           speak(response.data.speech_text || response.data.reply)
         }
       }
@@ -144,36 +177,100 @@ export default function GlobalAgentAssistant() {
   const isFlowActive = speechState !== 'idle' && speechState !== 'error'
 
   return (
-    <div ref={containerRef} className="fixed inset-0 pointer-events-none z-[60]">
-      {/* Floating Action Button */}
+    <div ref={containerRef} className="fixed inset-0 pointer-events-none z-[99999] active-orb-layer">
+      {/* Floating Action Button - Visible on all pages for voice feedback */}
       <motion.button
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         drag
-        dragConstraints={containerRef}
-        dragElastic={0.1}
-        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 pointer-events-auto p-4 rounded-full shadow-xl transition-all duration-500 border border-white/20 group overflow-hidden touch-none ${
-          speechError ? 'bg-red-500' :
-          isLoading ? 'bg-amber-500 shadow-amber-500/20' : 
-          isSpeaking ? 'bg-emerald-500 shadow-emerald-500/20' : 
-          speechState === 'listening' ? 'bg-rose-500 shadow-rose-500/20' : 
-          'bg-gradient-to-br from-sky-500 to-indigo-600 shadow-sky-500/20'
+        dragMomentum={true}
+        dragConstraints={{ left: -1000, right: 100, top: -1000, bottom: 100 }}
+        dragElastic={0.6}
+        dragTransition={{ bounceStiffness: 200, bounceDamping: 20 }}
+        onClick={() => {
+          if (!isAwake) {
+            forceSession()
+          } else {
+            setIsOpen(true)
+          }
+        }}
+        className={`fixed bottom-8 right-8 pointer-events-auto p-7 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.3)] dark:shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/40 group overflow-hidden touch-none z-[9999] active:scale-95 ${
+          speechError ? 'bg-red-500 shadow-red-500/40' :
+          isLoading ? 'bg-amber-500 shadow-amber-500/40' : 
+          isSpeaking ? 'bg-emerald-500 shadow-emerald-500/40' : 
+          isAwake ? 'bg-rose-500 shadow-rose-500/60 ring-4 ring-white/30' : 
+          'bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 shadow-sky-500/40'
         }`}
       >
-        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-        {/* State-aware inner pulse for the FAB */}
-        {(speechState !== 'idle' || isLoading) && (
+        {/* RAW VOLUME BAR - Visual hardware confirmation */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 overflow-hidden">
+            <motion.div 
+               animate={{ width: `${micVolume}%` }}
+               className="h-full bg-white/60"
+            />
+        </div>
+
+        {/* RAW TRANSCRIPTION OVERLAY (Debug Mode) */}
+        {rawTranscription && (
+          <div className="absolute bottom-full right-0 mb-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[10px] text-white/80 whitespace-nowrap border border-white/10 pointer-events-none shadow-lg">
+             Hearing: "{rawTranscription}"
+          </div>
+        )}
+
+        {/* WAKE HINT: If mic is blocked by browser, show a hint */}
+        {!isStarted && !speechError && (
           <motion.div 
-            animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ repeat: Infinity, duration: 2 }}
-            className="absolute inset-0 bg-white/30 rounded-full"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute bottom-full right-0 mb-4 px-3 py-2 bg-sky-500 rounded-xl text-[11px] text-white font-semibold whitespace-nowrap shadow-xl shadow-sky-500/30"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-3 h-3 animate-spin" />
+              <span>Tap to Wake Flow</span>
+            </div>
+            {/* Pointer arrow */}
+            <div className="absolute top-full right-6 -mt-1 border-8 border-transparent border-t-sky-500" />
+          </motion.div>
+        )}
+
+        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+        
+        {/* The Mist Orb - Multi-layered glowing gradients */}
+        <div className="absolute inset-0 overflow-hidden rounded-full">
+            <motion.div 
+              animate={{ 
+                rotate: 360,
+                scale: [1, 1.1, 1],
+              }}
+              transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
+              className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent,rgb(56,189,248),transparent,rgb(99,102,241),transparent)] opacity-70 blur-2xl"
+            />
+            <motion.div 
+              animate={{ 
+                rotate: -360,
+                scale: [1, 1.4, 1],
+              }}
+              transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
+              className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent,rgb(244,63,94),transparent,rgb(168,85,247),transparent)] opacity-50 blur-3xl"
+            />
+        </div>
+
+        {/* State-aware inner pulse for the FAB */}
+        {(speechState !== 'idle' || isLoading || isAwake || isHearing) && (
+          <motion.div 
+            animate={{ 
+              scale: (isAwake || isHearing) ? [1, 1.6, 1] : [1, 1.3, 1], 
+              opacity: (isAwake || isHearing) ? [0.6, 0.9, 0.6] : [0.2, 0.5, 0.2] 
+            }}
+            transition={{ repeat: Infinity, duration: (isAwake || isHearing) ? 1.5 : 3 }}
+            className={`absolute inset-0 rounded-full blur-md ${(isAwake || isHearing) ? 'bg-white/40' : 'bg-white/20'}`}
           />
         )}
-        <Sparkles className={`w-6 h-6 text-white relative z-10 ${isLoading || speechState === 'listening' ? 'animate-pulse' : ''}`} />
+        
+        {/* Core Glow */}
+        <div className="absolute inset-2 bg-gradient-to-br from-white/40 to-white/10 rounded-full blur-sm z-20" />
       </motion.button>
 
       {/* Agent Panel */}

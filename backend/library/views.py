@@ -9,7 +9,7 @@ from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .models import Resource, Flashcard, Quiz, Deck
+from .models import Resource, Flashcard, Quiz, Deck, ResourceImage
 from .serializers import (
     ResourceSerializer, ResourceUploadSerializer,
     FlashcardSerializer, QuizSerializer, DeckSerializer
@@ -81,7 +81,20 @@ class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ResourceSerializer
 
     def get_queryset(self):
-        return Resource.objects.filter(owner=self.request.user)
+        # Allow owner OR workspace member access
+        return Resource.objects.filter(
+            Q(owner=self.request.user) | 
+            Q(workspaces__members=self.request.user)
+        ).distinct()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.owner != request.user:
+            return Response(
+                {"error": "Only the original owner can delete this resource from the library."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
 
     def get_serializer_context(self):
         return {'request': self.request}
@@ -243,17 +256,20 @@ class RefetchTranscriptView(APIView):
             return Response({'error': 'Could not process video URL.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if yt_data['has_transcript']:
+            # Reset study kit state to force regeneration with new authentic transcript
+            resource.has_study_kit = False
+            resource.ai_notes_json = {}
+            resource.status = 'processing'
+            
             existing = [c for c in (resource.ai_concepts or []) if 'transcript' not in c]
-            resource.ai_concepts = existing + [{'transcript': yt_data['transcript'][:5000]}]
-            # Auto-summarize
-            ai = AIService()
-            try:
-                summary = ai.chat([{'role': 'user', 'content': f"Summarize this video in key points:\n\n{yt_data['transcript'][:3000]}"}])
-                resource.ai_summary = summary
-            except Exception:
-                pass
+            resource.ai_concepts = existing + [{'transcript': yt_data['transcript'][:80000]}]
+            
+            # Use background worker to regenerate the kit (avoids timeout)
+            from django_q.tasks import async_task
+            async_task('library.tasks.process_resource_task', resource.id)
+            
             resource.save()
-            return Response({'success': True, 'has_transcript': True, 'message': 'Transcript fetched successfully!'})
+            return Response({'success': True, 'has_transcript': True, 'message': 'New authentic transcript secured! Regenerating Study Kit...'})
         else:
             return Response({'success': True, 'has_transcript': False, 'message': 'This video does not have captions available. AI will use general knowledge about the topic.'})
 
@@ -294,3 +310,65 @@ class MathSolverView(APIView):
         ai = AIService()
         solution = ai.solve_math_problem(problem, context=ai._get_resource_context(resource))
         return Response(solution)
+
+class CloneResourceView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, resource_id):
+        # We allow cloning if they have access to view it (owner or workspace member)
+        source = get_object_or_404(Resource, id=resource_id)
+        
+        # Access check
+        if source.owner != request.user:
+            from workspace.models import Workspace
+            has_access = Workspace.objects.filter(resources=source, members=request.user).exists()
+            if not has_access:
+                return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Clone basic fields
+        cloned = Resource.objects.create(
+            owner=request.user,
+            title=f"Saved: {source.title}",
+            resource_type=source.resource_type,
+            file=source.file,
+            url=source.url,
+            subject=source.subject,
+            status=source.status,
+            file_size=source.file_size,
+            ai_summary=source.ai_summary,
+            ai_notes_json=source.ai_notes_json,
+            ai_concepts=source.ai_concepts,
+            has_study_kit=source.has_study_kit,
+        )
+
+        # Clone extracted images
+        for img in source.extracted_images.all():
+            ResourceImage.objects.create(
+                resource=cloned,
+                image=img.image,
+                page_number=img.page_number,
+                description=img.description
+            )
+
+        return Response(ResourceSerializer(cloned, context={'request': request}).data)
+
+class ResourceFileView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, resource_id):
+        # The "Nuclear Option": Encode PDF to Base64 and return as JSON text
+        # This makes it impossible for IDM to recognize it as a file to intercept.
+        resource = get_object_or_404(Resource, id=resource_id)
+        
+        if not resource.file:
+            return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
+            
+        import base64
+        file_data = resource.file.read()
+        base64_data = base64.b64encode(file_data).decode('utf-8')
+        
+        return Response({
+            'data': base64_data,
+            'file_name': resource.file.name,
+            'size': len(file_data)
+        })

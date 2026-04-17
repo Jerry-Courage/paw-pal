@@ -24,7 +24,10 @@ class JWTAuthMiddleware:
         # Extract the token from the query string
         query_params = parse_qs(scope['query_string'].decode())
         token = query_params.get('token', [None])[0]
-        print(f"[WS] Auth attempt with token: {token[:15]}...")
+        if token:
+            print(f"[WS] Auth attempt with token: {token[:15]}...")
+        else:
+            print("[WS] Auth attempt with no token")
 
         if token:
             try:

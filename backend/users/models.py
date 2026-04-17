@@ -13,6 +13,7 @@ class User(AbstractUser):
     total_study_time = models.FloatField(default=0)  # hours
     weekly_goal_hours = models.FloatField(default=10)
     last_study_date = models.DateField(null=True, blank=True)
+    onboarding_status = models.JSONField(default=dict, blank=True) # Tracks which tours are seen
     created_at = models.DateTimeField(auto_now_add=True)
 
     USERNAME_FIELD = 'email'
@@ -20,6 +21,15 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    def validate_streak(self):
+        """Reset streak if last study date is too old. Called on user login/fetch."""
+        today = timezone.now().date()
+        if self.last_study_date and self.last_study_date < today - timedelta(days=1):
+            if self.study_streak > 0:
+                self.study_streak = 0
+                self.save(update_fields=['study_streak'])
+        return self.study_streak
 
     def log_study_time(self, minutes: float):
         """Call this when a study session completes."""
@@ -40,6 +50,21 @@ class User(AbstractUser):
         
         self.last_study_date = today
         self.save(update_fields=['total_study_time', 'study_streak', 'last_study_date'])
+
+        # Sync with Planner: Create a recorded session so dashboard graphs update
+        try:
+            from planner.models import StudySession
+            now = timezone.now()
+            StudySession.objects.create(
+                user=self,
+                title=f"Focus Flow ({int(minutes)}m)",
+                start_time=now - timedelta(minutes=minutes),
+                end_time=now,
+                status='completed',
+                session_type='study'
+            )
+        except Exception as e:
+            print(f"Error syncing study session: {e}")
 
 
 NOTIFICATION_TYPES = [

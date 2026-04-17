@@ -4,7 +4,7 @@ from .views import (
     CommentListCreateView, LikeCommentView, AIAnswerView,
     StudyRoomListCreateView, StudyRoomJoinLeaveView,
     StudyEventListCreateView, RegisterEventView,
-    LeaderboardView,
+    LeaderboardView, StoryListCreateView
 )
 
 urlpatterns = [
@@ -19,4 +19,5 @@ urlpatterns = [
     path('events/', StudyEventListCreateView.as_view()),
     path('events/<int:pk>/register/', RegisterEventView.as_view()),
     path('leaderboard/', LeaderboardView.as_view()),
+    path('stories/', StoryListCreateView.as_view()),
 ]

@@ -5,7 +5,8 @@ from .views import (
     GenerateMindMapView, GeneratePracticeQuestionsView,
     FlashcardListView, QuizListView, AnkiExportView,
     RefetchTranscriptView, MathSolverView,
-    DeckListCreateView, DeckDetailView, SaveFlashcardsView
+    DeckListCreateView, DeckDetailView, SaveFlashcardsView,
+    CloneResourceView, ResourceFileView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
@@ -24,6 +25,8 @@ urlpatterns = [
     path('resources/<int:resource_id>/export/anki/', AnkiExportView.as_view()),
     path('resources/<int:resource_id>/math/solve/', MathSolverView.as_view()),
     path('resources/<int:resource_id>/refetch-transcript/', RefetchTranscriptView.as_view()),
+    path('resources/<int:resource_id>/clone/', CloneResourceView.as_view()),
+    path('resources/<int:resource_id>/file/', ResourceFileView.as_view(), name='resource-file'),
     path('flashcards/', FlashcardListView.as_view(), name='flashcard-list'),
     path('flashcards/due/', DueFlashcardsView.as_view()),
     path('flashcards/<int:flashcard_id>/review/', ReviewFlashcardView.as_view()),

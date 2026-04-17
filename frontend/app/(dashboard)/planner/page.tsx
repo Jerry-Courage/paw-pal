@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { plannerApi, libraryApi, assignmentsApi } from '@/lib/api'
 import {
   ChevronLeft, ChevronRight, Plus, Sparkles, Clock, AlertCircle,
-  CheckCircle2, Trash2, Pencil, X, BookOpen, Zap, Calendar, Play, FileText, ArrowRight
+  CheckCircle2, Trash2, Pencil, X, BookOpen, Zap, Calendar, Play, FileText, ArrowRight,
+  Hash, Target, GraduationCap
 } from 'lucide-react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns'
 import { toast } from 'sonner'
@@ -15,17 +16,25 @@ import { useSearchParams, useRouter } from 'next/navigation'
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7am–9pm
 
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
-  active:    'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 shadow-emerald-500/10 shadow-lg',
-  completed: 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 line-through opacity-60',
-  skipped:   'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800 text-orange-500 opacity-80',
+const STATUS_STYLES: Record<string, string> = {
+  scheduled: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900',
+  active:    'border-emerald-500 bg-emerald-500/5 shadow-emerald-500/20 shadow-xl ring-2 ring-emerald-500/20',
+  completed: 'opacity-40 grayscale-[0.5] line-through bg-slate-50 dark:bg-slate-900/50',
+  skipped:   'opacity-40 border-dashed bg-transparent',
 }
 
-const URGENCY_COLORS: Record<string, string> = {
-  high:   'text-rose-500 bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',
-  medium: 'text-orange-500 bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20',
-  low:    'text-sky-500 bg-sky-50 dark:bg-sky-500/10 border-sky-100 dark:border-sky-500/20',
+const TYPE_STYLES: Record<string, { bg: string, border: string, text: string, icon: any, glow: string }> = {
+  class:      { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-600 dark:text-emerald-400', glow: 'shadow-emerald-500/10', icon: GraduationCap },
+  study:      { bg: 'bg-violet-500/10',  border: 'border-violet-500/30',  text: 'text-violet-600 dark:text-violet-400',   glow: 'shadow-violet-500/10',  icon: BookOpen },
+  exam:       { bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    text: 'text-rose-600 dark:text-rose-400',     glow: 'shadow-rose-500/10',    icon: Target },
+  assignment: { bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   text: 'text-amber-600 dark:text-amber-400',   glow: 'shadow-amber-500/10',   icon: FileText },
+  personal:   { bg: 'bg-slate-500/10',   border: 'border-slate-500/30',   text: 'text-slate-600 dark:text-slate-400',   glow: 'shadow-slate-500/10',   icon: Clock },
+}
+
+const URGENCY_STYLES: Record<string, string> = {
+  high:   'text-rose-600 bg-rose-500/10 border-rose-500/20 shadow-rose-500/5 shadow-lg',
+  medium: 'text-orange-600 bg-orange-500/10 border-orange-500/20',
+  low:    'text-sky-600 bg-sky-500/10 border-sky-500/20',
 }
 
 export default function PlannerPage() {
@@ -98,41 +107,95 @@ export default function PlannerPage() {
   const closePanel = () => { setActivePanel('none'); setTimeout(() => setPanelSession(null), 300) } // delay clear for exit animation
 
   return (
-    <div className="max-w-7xl mx-auto flex h-[calc(100vh-64px)] -m-4 md:-m-6 overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+    <div className="w-full flex h-[calc(100vh-64px)] overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
       
       {/* ── Main Canvas (Calendar & Actions) ── */}
       <div className={cn(
-        "flex-1 flex flex-col min-w-0 p-6 md:p-8 overflow-y-auto custom-scrollbar transition-all duration-500 ease-in-out",
+        "flex-1 flex flex-col min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar transition-all duration-500 ease-in-out scroll-smooth",
         activePanel !== 'none' ? "md:pr-[420px]" : ""
       )}>
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Study Planner</h1>
-            <p className="text-sm font-semibold text-sky-500 flex items-center gap-1 mt-1">
-              <Sparkles className="w-4 h-4" /> AI-Optimized Roadmap
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-xl p-1 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <button onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="px-3 flex flex-col items-center justify-center min-w-[130px]">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(weekStart, 'MMM yyyy')}</span>
-                <span className="text-sm font-bold text-slate-900 dark:text-white">
-                  {format(weekStart, 'd')} – {format(weekEnd, 'd')}
-                </span>
+        <div className="flex flex-col gap-6 mb-8 pt-2">
+           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">Command Center</h1>
+                <p className="text-sm font-bold text-slate-400 flex items-center gap-2 mt-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Operational Intelligence Protocol
+                </p>
               </div>
-              <button onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            <button onClick={() => openForm(null)} className="btn-primary flex items-center gap-2 text-sm shadow-lg shadow-sky-500/20 active:scale-95">
-              <Plus className="w-4 h-4" /> New Session
-            </button>
-          </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                <div className="flex items-center justify-between gap-1 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-[1.5rem] p-1.5 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all">
+                  <button onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all active:scale-90">
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <div className="px-6 flex flex-col items-center justify-center min-w-[150px]">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{format(weekStart, 'MMM yyyy')}</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white mt-0.5 whitespace-nowrap">
+                      {format(weekStart, 'd')} – {format(weekEnd, 'd')}
+                    </span>
+                  </div>
+                  <button onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all active:scale-90">
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+                <button onClick={() => openForm(null)} className="btn-primary px-8 py-4 rounded-[1.5rem] flex items-center justify-center gap-3 text-sm font-black shadow-2xl shadow-sky-500/40 active:scale-95 transition-all group overflow-hidden relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                  <Plus className="w-5 h-5" /> New Mission
+                </button>
+              </div>
+           </div>
+
+           {/* AI Command Bar */}
+           <AICommandBar onInterpret={(data) => openForm(data)} />
+
+           {/* TodayHUD */}
+           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+                 <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
+                    <GraduationCap className="w-7 h-7" />
+                 </div>
+                 <div>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Today's Lessons</h4>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
+                       {sessions.filter(s => isSameDay(new Date(s.start_time), new Date()) && s.session_type === 'class').length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Fixed</span>
+                    </p>
+                 </div>
+              </div>
+              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-violet-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+                 <div className="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
+                    <BookOpen className="w-7 h-7" />
+                 </div>
+                 <div>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Study Sprints</h4>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
+                       {sessions.filter(s => isSameDay(new Date(s.start_time), new Date()) && s.session_type === 'study').length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Fluid</span>
+                    </p>
+                 </div>
+              </div>
+              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-rose-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+                 <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
+                    <Target className="w-7 h-7" />
+                 </div>
+                 <div>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Active Goals</h4>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
+                       {deadlines.length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Objectives</span>
+                    </p>
+                 </div>
+              </div>
+              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-sky-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+                 <div className="w-14 h-14 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
+                    <Zap className="w-7 h-7" />
+                 </div>
+                 <div>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Schedule Density</h4>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
+                       {Math.round((sessions.filter(s => isSameDay(new Date(s.start_time), new Date())).length / 8) * 100)}%
+                    </p>
+                 </div>
+              </div>
+           </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -168,7 +231,7 @@ export default function PlannerPage() {
             </div>
 
             {/* Desktop week grid */}
-            <div className="hidden xl:flex flex-col flex-1">
+            <div id="tour-planner-calendar" className="hidden xl:flex flex-col flex-1">
               <div className="grid grid-cols-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 sticky top-0">
                 <div className="p-4" />
                 {days.map(day => (
@@ -195,22 +258,36 @@ export default function PlannerPage() {
                     {days.map(day => {
                       const daySessions = getSessionsForDay(day).filter((s: any) => new Date(s.start_time).getHours() === hour)
                       return (
-                        <div key={day.toISOString()} className="border-l border-b border-slate-100 dark:border-slate-800 transition-colors group-hover:bg-slate-50/50 dark:group-hover:bg-slate-800/20 p-1.5 relative">
-                          {daySessions.map((s: any) => (
-                            <button key={s.id} onClick={() => openDetail(s)}
-                              className={cn(
-                                'w-full rounded-xl border p-2 text-left transition-all hover:scale-[1.02] active:scale-95 group/card overflow-hidden relative', 
-                                STATUS_COLORS[s.status] || STATUS_COLORS.scheduled, 
-                                s.is_ai_suggested && 'border-dashed border-sky-300 dark:border-sky-700 bg-sky-50/50 dark:bg-sky-900/20'
-                              )}
-                            >
-                              {s.is_ai_suggested && <div className="absolute top-0 right-0 p-1 line-clamp-1"><Sparkles className="w-3 h-3 text-sky-400 opacity-50 block" /></div>}
-                              <div className="font-bold text-xs truncate pr-3">{s.title}</div>
-                              <div className="opacity-70 flex items-center gap-1 mt-1 text-[10px] font-semibold">
-                                <Clock className="w-3 h-3" />{format(new Date(s.start_time), 'HH:mm')}
-                              </div>
-                            </button>
-                          ))}
+                        <div key={day.toISOString()} className="border-l border-b border-slate-100 dark:border-slate-800 transition-colors group-hover:bg-slate-50/50 dark:group-hover:bg-slate-800/20 p-1.5 relative min-w-0">
+                          {daySessions.map((s: any) => {
+                            const typeStyle = TYPE_STYLES[s.session_type] || TYPE_STYLES.study
+                            const TypeIcon = typeStyle.icon
+                            const isFixed = s.session_type === 'class'
+                            
+                            return (
+                              <button key={s.id} onClick={() => openDetail(s)}
+                                className={cn(
+                                  'w-full rounded-xl border p-2 text-left transition-all hover:scale-[1.02] active:scale-95 group/card overflow-hidden relative mb-1 last:mb-0', 
+                                  typeStyle.bg, typeStyle.border, typeStyle.text, typeStyle.glow,
+                                  STATUS_STYLES[s.status] || STATUS_STYLES.scheduled,
+                                  isFixed ? 'border-l-4 font-black' : 'border-dashed opacity-90'
+                                )}
+                              >
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <TypeIcon className="w-3 h-3 flex-shrink-0" />
+                                  <span className="text-[9px] font-black uppercase tracking-tighter opacity-70">
+                                    {s.session_type}
+                                  </span>
+                                  {s.status === 'active' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                                </div>
+                                <div className="font-black text-xs truncate pr-3">{s.title}</div>
+                                {s.is_ai_suggested && <div className="absolute top-0 right-1 p-0.5"><Sparkles className="w-2.5 h-2.5 text-sky-400/80" /></div>}
+                                <div className="opacity-70 flex items-center gap-1 mt-1 text-[9px] font-bold">
+                                  <Clock className="w-2.5 h-2.5" />{format(new Date(s.start_time), 'HH:mm')}
+                                </div>
+                              </button>
+                            )
+                          })}
                         </div>
                       )
                     })}
@@ -237,16 +314,40 @@ export default function PlannerPage() {
                      <p className="text-xs font-semibold text-slate-500">Provide deadlines to generate.</p>
                   </div>
                 )}
-                {suggestions.map((s: any, i: number) => (
-                  <div key={i} className={cn('rounded-2xl p-4 border transition-colors', URGENCY_COLORS[s.urgency] || URGENCY_COLORS.low)}>
-                    <div className="font-bold text-xs mb-1">{s.title}</div>
-                    <div className="opacity-75 text-[11px] mb-3 leading-relaxed">{s.reason}</div>
-                    <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-3 mt-1">
-                      <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"><Clock className="w-3 h-3" /> {s.duration_minutes}m</span>
-                      <button onClick={() => openForm({ title: s.title, duration: s.duration_minutes, notes: s.reason })} className="text-xs font-black underline hover:no-underline transition-all">Add to plan</button>
+                {suggestions.map((s: any, i: number) => {
+                  const handleAdd = () => {
+                    if (s.suggested_date && s.suggested_time) {
+                      const start = new Date(`${s.suggested_date}T${s.suggested_time}:00`)
+                      const end = new Date(start.getTime() + (s.duration_minutes || 60) * 60000)
+                      openForm({ 
+                        title: s.title, 
+                        subject: s.subject,
+                        start_time: start.toISOString(), 
+                        end_time: end.toISOString(),
+                        notes: s.reason,
+                        is_ai_suggested: true
+                      })
+                    } else {
+                      openForm({ title: s.title, subject: s.subject, notes: s.reason, is_ai_suggested: true })
+                    }
+                  }
+
+                  return (
+                    <div key={i} className={cn('rounded-[1.5rem] p-5 border transition-all relative overflow-hidden group/sug hover:shadow-xl', URGENCY_STYLES[s.urgency] || URGENCY_STYLES.low)}>
+                      <div className="font-black text-sm mb-2 flex items-center gap-2">
+                        {s.title}
+                        {s.urgency === 'high' && <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />}
+                      </div>
+                      <div className="opacity-80 text-[11px] font-extrabold mb-4 leading-relaxed">{s.reason}</div>
+                      <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-4 mt-1">
+                        <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] opacity-60">
+                          <Clock className="w-4 h-4" /> {s.suggested_time ? `${s.suggested_time} (${s.duration_minutes}m)` : `${s.duration_minutes}m`}
+                        </span>
+                        <button onClick={handleAdd} className="text-[10px] font-black px-4 py-2 bg-white/70 dark:bg-black/40 rounded-xl hover:bg-white dark:hover:bg-black/60 transition-all border border-black/5 dark:border-white/10 shadow-sm uppercase tracking-widest active:scale-90">Secure Slot</button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -309,20 +410,90 @@ export default function PlannerPage() {
 
 /* ── Components ────────────────────────────────────────── */
 
-function SessionCard({ session: s, onClick }: { session: any; onClick: () => void }) {
+function AICommandBar({ onInterpret }: { onInterpret: (data: any) => void }) {
+  const [prompt, setPrompt] = useState('')
+  const [interpreting, setInterpreting] = useState(false)
+
+  const handleCommand = async () => {
+    if (!prompt.trim() || interpreting) return
+    setInterpreting(true)
+    try {
+      const res = await plannerApi.interpret(prompt)
+      onInterpret(res.data)
+      setPrompt('')
+      toast.success("Intelligence Received. Operational drafting complete.")
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || err.response?.data?.error || "Neural Handshake Stalled"
+      toast.error(`Tactical Interpretation Conflict: ${detail}`)
+    } finally {
+      setInterpreting(false)
+    }
+  }
+
   return (
-    <button onClick={onClick} className={cn('w-full rounded-2xl border p-4 text-left transition-all hover:scale-[1.01] active:scale-95', STATUS_COLORS[s.status] || STATUS_COLORS.scheduled)}>
-      {s.is_ai_suggested && <div className="text-[10px] font-black uppercase tracking-widest text-sky-500 mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> AI Suggested</div>}
-      <div className="font-bold text-sm text-slate-900 dark:text-white leading-tight">{s.title}</div>
-      <div className="text-xs font-semibold text-slate-500 flex items-center gap-2 mt-2">
-        <Clock className="w-3.5 h-3.5 text-slate-400" />
+    <div className="relative group animate-in fade-in slide-in-from-top-4 duration-1000">
+      <div className="absolute -inset-1 bg-gradient-to-r from-sky-500 to-violet-600 rounded-[2.5rem] blur opacity-5 group-hover:opacity-15 transition duration-1000 group-hover:duration-200"></div>
+      <div className="relative bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-[2rem] p-2 flex items-center gap-2 shadow-2xl shadow-slate-200/30 dark:shadow-none">
+        <div className="pl-4 sm:pl-6 flex items-center gap-3 text-sky-500">
+          <Zap className={cn("w-6 h-6", interpreting && "animate-pulse")} />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden md:inline-block">Command Intel</span>
+        </div>
+        <input 
+          type="text" 
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleCommand()}
+          placeholder="Schedule math lesson tomorrow at 3pm..."
+          disabled={interpreting}
+          className="flex-1 bg-transparent px-2 sm:px-4 py-3 outline-none text-slate-900 dark:text-white font-bold text-base placeholder:text-slate-400 placeholder:font-bold disabled:opacity-50 min-w-0"
+        />
+        <button 
+          onClick={handleCommand}
+          disabled={interpreting || !prompt.trim()}
+          className={cn(
+            "p-4 rounded-2xl transition-all flex items-center gap-2 flex-shrink-0",
+            prompt.trim() ? "bg-sky-500 text-white shadow-xl shadow-sky-500/20" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+          )}
+        >
+          {interpreting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+          <span className="text-xs font-black uppercase tracking-widest hidden lg:inline-block">Draft Mission</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SessionCard({ session: s, onClick }: { session: any; onClick: () => void }) {
+  const typeStyle = TYPE_STYLES[s.session_type] || TYPE_STYLES.study
+  const TypeIcon = typeStyle.icon
+  const isFixed = s.session_type === 'class'
+
+  return (
+    <button onClick={onClick} className={cn(
+      'w-full rounded-[1.5rem] border p-5 text-left transition-all hover:scale-[1.02] active:scale-95 relative overflow-hidden group shadow-xl shadow-slate-200/50 dark:shadow-none', 
+      typeStyle.bg, typeStyle.border, typeStyle.text, typeStyle.glow,
+      STATUS_STYLES[s.status] || STATUS_STYLES.scheduled,
+      isFixed && 'border-l-4 font-black'
+    )}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={cn("p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm border", typeStyle.border)}>
+           <TypeIcon className="w-4 h-4" />
+        </div>
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">
+          {s.session_type}
+        </span>
+        {s.is_ai_suggested && <Sparkles className="w-4 h-4 text-sky-400 ml-auto" />}
+      </div>
+      <div className="font-black text-base text-slate-900 dark:text-white leading-tight mb-3 group-hover:translate-x-1 transition-transform">{s.title}</div>
+      <div className="text-[11px] font-extrabold text-slate-500 flex items-center gap-2">
+        <Clock className="w-4 h-4 opacity-40" />
         {format(new Date(s.start_time), 'HH:mm')} – {format(new Date(s.end_time), 'HH:mm')}
-        {s.subject && <span className="opacity-50">|</span>}
-        {s.subject && <span>{s.subject}</span>}
+        {s.subject && <span className="opacity-30">|</span>}
+        {s.subject && <span className="text-slate-400">{s.subject}</span>}
       </div>
       {s.resource_title && (
-        <div className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 rounded-lg px-2 py-1 mt-3 flex items-center gap-1.5 w-fit">
-          <BookOpen className="w-3 h-3" /> {s.resource_title}
+        <div className="text-[10px] font-black text-sky-600 dark:text-sky-400 bg-sky-500/10 rounded-xl px-3 py-1.5 mt-4 flex items-center gap-2 w-fit border border-sky-500/20">
+          <BookOpen className="w-3.5 h-3.5" /> {s.resource_title}
         </div>
       )}
     </button>
@@ -330,19 +501,28 @@ function SessionCard({ session: s, onClick }: { session: any; onClick: () => voi
 }
 
 function SlideDetailPanel({ session: s, onClose, onEdit, onDelete, onComplete, completing, deleting }: any) {
+  const typeStyle = TYPE_STYLES[s.session_type] || TYPE_STYLES.study
+  const TypeIcon = typeStyle.icon
+
   return (
     <>
-      <div className={cn("p-6 md:p-8 flex-shrink-0 transition-colors", STATUS_COLORS[s.status]?.split(' ')[0] || 'bg-slate-50')}>
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div className="p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            {s.status === 'completed' ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Clock className="w-6 h-6 text-sky-500" />}
+      <div className={cn("p-6 md:p-8 flex-shrink-0 transition-colors border-b relative overflow-hidden", typeStyle.bg)}>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 dark:bg-black/10 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+        <div className="flex items-start justify-between gap-4 mb-8 relative z-10">
+          <div className={cn("p-4 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border flex items-center justify-center", typeStyle.border)}>
+            <TypeIcon className={cn("w-8 h-8", typeStyle.text)} />
           </div>
-          <button onClick={onClose} className="p-2 bg-white/50 hover:bg-white dark:bg-slate-800/50 dark:hover:bg-slate-800 rounded-xl transition-all"><X className="w-5 h-5 text-slate-500" /></button>
+          <button onClick={onClose} className="p-3 bg-white/50 hover:bg-white dark:bg-slate-800/50 dark:hover:bg-slate-800 rounded-2xl transition-all shadow-xl backdrop-blur-md"><X className="w-6 h-6 text-slate-500" /></button>
         </div>
         
-        {s.is_ai_suggested && <div className="text-[10px] font-black uppercase tracking-widest text-sky-600 mb-2 flex items-center gap-1"><Sparkles className="w-3 h-3" /> FlowAI Roadmap Node</div>}
-        <h2 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{s.title}</h2>
-        {s.subject && <p className="text-sm font-bold text-slate-500 mt-2">{s.subject}</p>}
+        <div className="flex items-center gap-2 mb-3 relative z-10">
+          {s.is_ai_suggested && <Sparkles className="w-4 h-4 text-sky-500" />}
+          <span className={cn("text-[11px] font-black uppercase tracking-[0.3em]", typeStyle.text)}>
+            {s.session_type} Phase
+          </span>
+        </div>
+        <h2 className="text-3xl font-black text-slate-900 dark:text-white leading-tight tracking-tighter relative z-10">{s.title}</h2>
+        {s.subject && <p className="text-sm font-extrabold text-slate-500 mt-3 flex items-center gap-2 relative z-10"><Hash className="w-4 h-4 opacity-30" /> {s.subject}</p>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-white dark:bg-slate-900">
@@ -431,12 +611,16 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
   const [form, setForm] = useState({
     title: defaultTitle,
     subject: session?.subject || '',
+    session_type: session?.session_type || 'study',
     start_time: defaultStartTime,
     end_time: toLocal(session?.end_time) || '',
     location: session?.location || '',
     notes: session?.notes || '',
     resource: session?.resource || '',
     assignment: session?.assignment || '',
+    // Recurrence fields
+    days: session?.days || [] as number[],
+    weeks_count: session?.weeks_count || 12
   })
 
   const { data: resourcesData } = useQuery({ queryKey: ['resources'], queryFn: () => libraryApi.getResources().then(r => r.data) })
@@ -445,6 +629,13 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
   const assignments: any[] = assignmentsData?.results || []
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+  
+  const toggleDay = (day: number) => {
+    setForm(f => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day]
+    }))
+  }
 
   const handleAssignmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value
@@ -457,13 +648,21 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
 
   const mutation = useMutation({
     mutationFn: () => {
+      if (!isEdit && form.session_type === 'class' && form.days.length > 0) {
+         return plannerApi.createRecurring({
+           ...form,
+           resource: form.resource || null,
+           assignment: form.assignment || null
+         })
+      }
       const payload = { ...form, resource: form.resource || null, assignment: form.assignment || null }
       return isEdit && session?.id ? plannerApi.updateSession(session.id, payload) : plannerApi.createSession(payload)
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ['planner-sessions'] })
       onClose()
-      toast.success(isEdit ? 'Session updated.' : 'Session added.')
+      const count = res.data?.count
+      toast.success(count ? `Successfully generated ${count} recurring classes.` : (isEdit ? 'Session updated.' : 'Session added.'))
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail || 'Failed to save session.'),
   })
@@ -472,7 +671,7 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
     <>
       <div className="p-6 md:p-8 flex-shrink-0 border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{isEdit ? 'Edit Session' : 'New Plan Phase'}</h2>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{isEdit ? 'Edit Directive' : 'New Plan Phase'}</h2>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Schedule Architecture</p>
         </div>
         <button onClick={onClose} className="p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 rounded-xl transition-all"><X className="w-5 h-5 text-slate-500" /></button>
@@ -484,44 +683,84 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Logistics</h4>
           <div className="space-y-4">
              <div>
+               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Phase Type</label>
+               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                 {Object.entries(TYPE_STYLES).map(([type, style]) => (
+                   <button 
+                     key={type}
+                     onClick={() => setForm(f => ({ ...f, session_type: type }))}
+                     className={cn(
+                       "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter border transition-all",
+                       form.session_type === type ? `${style.bg} ${style.border} ${style.text}` : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400"
+                     )}
+                   >
+                     <style.icon className="w-3.5 h-3.5" /> {type}
+                   </button>
+                 ))}
+               </div>
+             </div>
+             <div>
                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Operation Title <span className="text-rose-500">*</span></label>
-               <input value={form.title} onChange={set('title')} placeholder="e.g. Master Calculus Physics" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-900 dark:text-white" />
+               <input value={form.title} onChange={set('title')} placeholder="e.g. Master Calculus Physics" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-900 dark:text-white shadow-sm" />
              </div>
              <div>
                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Subject Category</label>
-               <input value={form.subject} onChange={set('subject')} placeholder="e.g. Physics" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-900 dark:text-white" />
+               <input value={form.subject} onChange={set('subject')} placeholder="e.g. Physics" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-900 dark:text-white shadow-sm" />
              </div>
           </div>
         </div>
 
         <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
-          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Window</h4>
+          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Temporal Intelligence</h4>
+          {form.session_type === 'class' && !isEdit && (
+            <div className="space-y-4 bg-emerald-500/5 border border-emerald-500/10 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-500">
+               <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-400 mb-3">Recurrence Pattern</label>
+               <div className="flex flex-wrap gap-2">
+                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
+                   <button 
+                     key={day}
+                     onClick={() => toggleDay(idx)}
+                     className={cn(
+                       "w-10 h-10 rounded-xl text-[10px] font-black uppercase flex items-center justify-center transition-all",
+                       form.days.includes(idx) ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-white dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-slate-800"
+                     )}
+                   >
+                     {day[0]}
+                   </button>
+                 ))}
+               </div>
+               <div className="pt-2">
+                 <label className="block text-[10px] font-bold text-slate-500 mb-2">GENERATE FOR (WEEKS)</label>
+                 <input type="number" min={1} max={52} value={form.weeks_count} onChange={set('weeks_count')} className="w-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-2 rounded-xl text-xs font-black" />
+               </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
              <div>
-               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">From <span className="text-rose-500">*</span></label>
-               <input type="datetime-local" value={form.start_time} onChange={set('start_time')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300" />
+               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Time Start <span className="text-rose-500">*</span></label>
+               <input type="datetime-local" value={form.start_time} onChange={set('start_time')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm" />
              </div>
              <div>
-               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">To <span className="text-rose-500">*</span></label>
-               <input type="datetime-local" value={form.end_time} onChange={set('end_time')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300" />
+               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Time End <span className="text-rose-500">*</span></label>
+               <input type="datetime-local" value={form.end_time} onChange={set('end_time')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm" />
              </div>
           </div>
         </div>
 
         <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
-          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Integration Links</h4>
+          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Library Integration</h4>
           {assignments.length > 0 && (
              <div>
-               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Connect Assignment Target</label>
-               <select value={form.assignment} onChange={handleAssignmentChange} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 appearance-none">
+               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Relate to Assignment</label>
+               <select value={form.assignment} onChange={handleAssignmentChange} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 appearance-none shadow-sm">
                  <option value="">No assignment attached</option>
                  {assignments.map((a: any) => <option key={a.id} value={a.id}>{a.title}{a.subject ? ` · ${a.subject}` : ''}</option>)}
                </select>
              </div>
           )}
           <div>
-             <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Connect Library Resource</label>
-             <select value={form.resource} onChange={set('resource')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 appearance-none">
+             <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Relate to Study Resource</label>
+             <select value={form.resource} onChange={set('resource')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 appearance-none shadow-sm">
                <option value="">No resource attached</option>
                {resources.map((r: any) => <option key={r.id} value={r.id}>{r.title} ({r.resource_type})</option>)}
              </select>
@@ -529,16 +768,16 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
         </div>
 
         <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
-          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Additional Context</h4>
-          <textarea placeholder="Specific focus areas, chapters, or goals for this session..." value={form.notes} onChange={set('notes')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-medium text-slate-900 dark:text-white resize-none" rows={3} />
+          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Intel</h4>
+          <textarea placeholder="Specific focus areas, chapters, or goals for this phase..." value={form.notes} onChange={set('notes')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-medium text-slate-900 dark:text-white resize-none shadow-sm" rows={3} />
         </div>
 
       </div>
 
       <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-4">
-        <button onClick={onClose} className="btn-secondary flex-1 py-3.5 rounded-xl font-bold">Cancel</button>
+        <button onClick={onClose} className="btn-secondary flex-1 py-3.5 rounded-xl font-bold">Abort</button>
         <button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.title || !form.start_time || !form.end_time} className="btn-primary flex-1 py-3.5 rounded-xl font-bold shadow-lg shadow-sky-500/20 active:scale-95 disabled:opacity-50 disabled:active:scale-100">
-          {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (isEdit ? 'Compile Update' : 'Initialize Session')}
+          {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (isEdit ? 'Authorize Update' : 'Initialize Plan')}
         </button>
       </div>
     </>

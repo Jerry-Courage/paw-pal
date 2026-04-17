@@ -30,6 +30,11 @@ export default function RichNotesRenderer({ data }: Props) {
   const sections: { type: string; content: string; items: string[] }[] = []
   let current: { type: string; content: string; items: string[] } | null = null
 
+  const cleanse = (text: string) => {
+    if (!text) return ''
+    return text.replace(/ACTION:\s*\{.*?\}/gi, '').trim()
+  }
+
   const flush = () => { if (current) { sections.push(current); current = null } }
 
   for (const line of lines) {
@@ -61,7 +66,7 @@ export default function RichNotesRenderer({ data }: Props) {
       {sections.map((s, i) => {
         if (s.type === 'h1') return (
           <div key={i} className="text-center py-1">
-            <h1 className="text-base font-bold text-gray-900 dark:text-white">{s.content}</h1>
+            <h1 className="text-base font-bold text-gray-900 dark:text-white">{cleanse(s.content)}</h1>
           </div>
         )
 
@@ -70,7 +75,7 @@ export default function RichNotesRenderer({ data }: Props) {
           return (
             <div key={i} className={cn('rounded-xl border px-3 py-2.5 mt-2', style.bg)}>
               <div className={cn('flex items-center gap-2 font-bold text-sm', style.color)}>
-                <span>{style.icon}</span>{s.content}
+                <span>{style.icon}</span>{cleanse(s.content)}
               </div>
             </div>
           )
@@ -79,7 +84,7 @@ export default function RichNotesRenderer({ data }: Props) {
         if (s.type === 'h3') return (
           <div key={i} className="flex items-center gap-2 mt-1">
             <div className="w-1 h-4 bg-sky-400 rounded-full flex-shrink-0" />
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{s.content}</h3>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{cleanse(s.content)}</h3>
           </div>
         )
 
@@ -88,7 +93,7 @@ export default function RichNotesRenderer({ data }: Props) {
             {s.items.map((item, j) => (
               <li key={j} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <span className="text-sky-400 mt-1 flex-shrink-0 text-xs">●</span>
-                <span className="leading-relaxed">{item}</span>
+                <span className="leading-relaxed">{cleanse(item)}</span>
               </li>
             ))}
           </ul>
@@ -99,7 +104,7 @@ export default function RichNotesRenderer({ data }: Props) {
             {s.items.map((item, j) => (
               <li key={j} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <span className="text-sky-500 font-bold flex-shrink-0 text-xs mt-0.5">{j + 1}.</span>
-                <span className="leading-relaxed">{item}</span>
+                <span className="leading-relaxed">{cleanse(item)}</span>
               </li>
             ))}
           </ol>
@@ -107,18 +112,18 @@ export default function RichNotesRenderer({ data }: Props) {
 
         if (s.type === 'quote') return (
           <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
-            <p className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed">{s.content}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed">{cleanse(s.content)}</p>
           </div>
         )
 
         if (s.type === 'bold') return (
           <div key={i} className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">💡 {s.content}</p>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">💡 {cleanse(s.content)}</p>
           </div>
         )
 
         if (s.type === 'p' && s.content) return (
-          <p key={i} className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{s.content}</p>
+          <p key={i} className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{cleanse(s.content)}</p>
         )
 
         return null

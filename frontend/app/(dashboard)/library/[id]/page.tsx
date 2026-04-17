@@ -6,7 +6,8 @@ import { libraryApi } from '@/lib/api'
 import {
   ArrowLeft, Sparkles, HelpCircle, Loader2,
   Brain, Map, X, RotateCcw, Save, Wand2, BookOpen,
-  PanelBottomOpen, ChevronDown, Radio
+  PanelBottomOpen, ChevronDown, Radio,
+  PanelRightOpen, PanelRightClose
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -42,6 +43,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const [showSidebar, setShowSidebar] = useState(false) 
   const [mindMapData, setMindMapData] = useState<any>(null)
   const [practiceData, setPracticeData] = useState<any>(null)
+  const [isCompanionVisible, setIsCompanionVisible] = useState(true)
   const [generatingTool, setGeneratingTool] = useState<string | null>(null)
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [selectedProblem, setSelectedProblem] = useState('')
@@ -135,7 +137,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
 
   return (
     <div className={cn(
-      "flex flex-col lg:flex-row h-[calc(100vh-64px)] -m-4 md:-m-6 overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500",
+      "flex flex-col lg:flex-row h-[calc(100dvh-64px)] -m-4 md:-m-6 overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500",
       currentTheme
     )}>
 
@@ -144,39 +146,59 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         
         {/* Top Navigation Header */}
         <div className="px-6 py-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-20 flex-shrink-0">
-          <div className="flex items-center gap-4 min-w-0">
-            <Link href="/library" className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <Link href="/library" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all shrink-0">
               <ArrowLeft className="w-5 h-5 text-slate-500" />
             </Link>
             <div className="min-w-0">
-              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-0.5">FlowState Matrix</div>
-              <h1 className="text-lg font-black text-slate-900 dark:text-white truncate">{resource.title}</h1>
+              <div className="hidden sm:block text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-0.5">FlowState Matrix</div>
+              <h1 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white truncate">{resource.title}</h1>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
               {(['notes', 'original'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
                   className={cn(
-                    'px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all',
+                    'px-3 sm:px-4 py-1.5 sm:py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-xl transition-all',
                     tab === t 
                       ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' 
                       : 'text-slate-400 hover:text-slate-600'
                   )}
                 >
-                  {t === 'notes' ? 'Study Kit' : 'Source PDF'}
+                  {t === 'notes' ? 'Notes' : (resource.resource_type === 'video' ? 'Video' : 'PDF')}
                 </button>
               ))}
             </div>
             
-            <Link href={`/api/library/resources/${id}/export/anki//`} className="p-2.5 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 rounded-2xl transition-all" title="Export Anki">
+            <Link href={`/api/library/resources/${id}/export/anki//`} className="hidden sm:flex p-2.5 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 rounded-2xl transition-all" title="Export Anki">
               <Save className="w-5 h-5" />
             </Link>
-            <button onClick={() => refetch()} className="p-2.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-2xl transition-all">
+            <button 
+              onClick={() => {
+                toast.promise(libraryApi.refetchTranscript(id), {
+                  loading: 'Re-extracting authentic content...',
+                  success: 'Authentic signal found! Regenerating Study Kit...',
+                  error: 'Failed to trigger recovery.'
+                })
+              }} 
+              className="hidden sm:flex p-2.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-2xl transition-all"
+              title="Re-Analyze Material (High Fidelity)"
+            >
               <RotateCcw className="w-5 h-5" />
+            </button>
+            <button onClick={() => refetch()} className="p-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-2xl transition-all" title="Refresh">
+              <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button 
+              onClick={() => setIsCompanionVisible(!isCompanionVisible)} 
+              className="hidden lg:flex p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary rounded-2xl transition-all"
+              title={isCompanionVisible ? "Hide Companion" : "Show Companion"}
+            >
+              {isCompanionVisible ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
             </button>
           </div>
         </div>
@@ -211,6 +233,21 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
             <div className="h-full">
               {resource.resource_type === 'pdf' && resource.file_url ? (
                 <PDFViewer fileUrl={resource.file_url} title={resource.title} />
+              ) : resource.resource_type === 'video' && resource.url ? (
+                <div className="h-full flex flex-col p-6 space-y-4">
+                  <div className="flex-1 bg-black rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-100 dark:border-slate-800 relative group">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${resource.url.includes('v=') ? resource.url.split('v=')[1].split('&')[0] : resource.url.split('youtu.be/')[1]?.split('?')[0]}`}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider mb-2">Original Context</h3>
+                    <p className="text-xs text-slate-500 italic">You are currently viewing the synchronized source video. The Study Kit below was generated from this timestamped transcript.</p>
+                  </div>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full p-12 text-center">
                   <BookOpen className="w-12 h-12 text-slate-300 mb-4" />
@@ -223,23 +260,25 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       </div>
 
       {/* ── Fixed Sidebar: Traditional Support Desk ─────────────────────────── */}
-      <div className="hidden lg:flex border-l border-slate-100 dark:border-slate-800 flex-shrink-0 w-[400px]">
-        <StudyCompanionSidebar
-          resourceId={id}
-          resourceTitle={resource.title}
-          hasNotes={hasNotes}
-          onOpenQuiz={handleOpenQuiz}
-          onOpenFlashcards={handleOpenFlashcards}
-          onOpenMindMap={handleOpenMindMap}
-          onOpenPractice={handleOpenPractice}
-          onOpenMusic={() => setShowMusic(true)}
-          onOpenPodcast={() => setShowPodcast(true)}
-          onOpenMath={() => handleOpenMath()}
-          isGenerating={generatingTool}
-          currentTheme={currentTheme}
-          onThemeChange={(t) => setCurrentTheme(t)}
-        />
-      </div>
+      {isCompanionVisible && (
+        <div className="hidden lg:flex border-l border-slate-100 dark:border-slate-800 flex-shrink-0 w-[400px] animate-in slide-in-from-right duration-300">
+          <StudyCompanionSidebar
+            resourceId={id}
+            resourceTitle={resource.title}
+            hasNotes={hasNotes}
+            onOpenQuiz={handleOpenQuiz}
+            onOpenFlashcards={handleOpenFlashcards}
+            onOpenMindMap={handleOpenMindMap}
+            onOpenPractice={handleOpenPractice}
+            onOpenMusic={() => setShowMusic(true)}
+            onOpenPodcast={() => setShowPodcast(true)}
+            onOpenMath={() => handleOpenMath()}
+            isGenerating={generatingTool}
+            currentTheme={currentTheme}
+            onThemeChange={(t) => setCurrentTheme(t)}
+          />
+        </div>
+      )}
 
       {/* ── Mobile Sidebar Drawer ─────────────────────────────────── */}
       {showSidebar && (
@@ -327,29 +366,31 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {showPodcast && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-950 w-full sm:max-w-6xl h-full sm:h-auto max-h-screen rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden text-slate-900 dark:text-white">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-pink-500 shadow-lg shadow-pink-500/30">
-                  <Radio className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-base font-black uppercase tracking-tight">FlowCast AI</h2>
-                  <p className="text-xs text-slate-500">Immersive Audio Kit</p>
-                </div>
+      {/* Podcast (FlowCast) Modal - Persistently mounted to allow background audio logic */}
+      <div className={cn(
+        "fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 transition-all duration-300",
+        showPodcast ? "opacity-100 pointer-events-auto scale-100" : "opacity-0 pointer-events-none scale-95"
+      )}>
+        <div className="bg-white dark:bg-slate-950 w-full sm:max-w-6xl h-full sm:h-auto max-h-[92vh] sm:rounded-[2.5rem] shadow-2xl border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden text-slate-900 dark:text-white">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-primary shadow-lg shadow-primary/30">
+                <Radio className="w-5 h-5 text-white" />
               </div>
-              <button onClick={() => setShowPodcast(false)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
-                <X className="w-5 h-5" />
-              </button>
+              <div>
+                <h2 className="text-base font-black uppercase tracking-tight">FlowCast AI</h2>
+                <p className="text-xs text-slate-500">Immersive Audio Analysis</p>
+              </div>
             </div>
-            <div className="p-0">
-              <PodcastPlayer resourceId={id} onClose={() => setShowPodcast(false)} />
-            </div>
+            <button onClick={() => setShowPodcast(false)} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Minimize to Background
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <PodcastPlayer resourceId={id} onClose={() => setShowPodcast(false)} />
           </div>
         </div>
-      )}
+      </div>
 
       {showMindMap && mindMapData && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in zoom-in-95 duration-300">

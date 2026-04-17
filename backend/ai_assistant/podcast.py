@@ -6,7 +6,7 @@ import time
 import re
 import requests as req
 from django.conf import settings
-from .services import AIService
+from .services import AIService, VoiceSanitizer
 
 # Default voices available for users to pick from
 SUPPORTED_VOICES = {
@@ -85,8 +85,23 @@ def generate_tts_file(text, voice, output_path):
     Safely invokes edge-tts via subprocess to render an MP3 file locally.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    # Using --rate +0% to ensure standard speed
-    cmd = [sys.executable, "-m", "edge_tts", "--voice", voice, "--text", text, "--write-media", output_path]
+    
+    # 1. Humanoid Cleanup: Strip artifacts and handle organic pauses
+    clean_text = VoiceSanitizer.clean(text)
+    
+    # 2. Render via edge-tts with voice-specific prosody tuning
+    # Andrew (Multilingual) sounds best slightly slower (-5%) for humanoid naturalism
+    rate = "+0%"
+    if 'AndrewNeural' in voice:
+        rate = "-5%"
+    
+    cmd = [
+        sys.executable, "-m", "edge_tts", 
+        "--voice", voice, 
+        "--text", clean_text, 
+        "--rate", rate,
+        "--write-media", output_path
+    ]
     
     for attempt in range(3):
         try:
@@ -99,6 +114,24 @@ def generate_tts_file(text, voice, output_path):
         except Exception as e:
             print(f"TTS Exception: {str(e)}")
             time.sleep(1)
+            
+    # FINAL FALLBACK: If edge-tts (Microsoft) is down/busy (503), use gTTS (Google)
+    try:
+        from gtts import gTTS
+        print(f"[TTS-FALLBACK] edge-tts failed. Engaged Google (gTTS) for path: {output_path}")
+        
+        # Mapping: Use 'en' as default for most humanoid voices
+        lang = 'en'
+        if 'fr-' in voice.lower(): lang = 'fr'
+        elif 'es-' in voice.lower(): lang = 'es'
+        elif 'de-' in voice.lower(): lang = 'de'
+        
+        tts = gTTS(text=clean_text, lang=lang)
+        tts.save(output_path)
+        return True
+    except Exception as e:
+        print(f"[TTS-FATAL] gTTS fallback also failed: {str(e)}")
+        
     return False
 
 def generate_podcast_script(notes_json, length_pref=15, available_images=None, name_a="Host A", name_b="Host B", system_instruction=None):
@@ -126,7 +159,14 @@ def generate_podcast_script(notes_json, length_pref=15, available_images=None, n
         for img in available_images[:10]:
             img_context += f"- ID {img['id']} (Page {img['page_number']}): {str(img.get('description') or 'Diagram')[:70]}\n"
 
-    sys_inst = system_instruction or f"You are a professional podcast script writer. You write ONLY the spoken dialogue for {name_a} (A) and {name_b} (B). NO narration. NO stage directions. Output raw JSON array only."
+    sys_inst = system_instruction or (
+        f"You are a professional podcast script writer. You write ONLY the spoken dialogue for {name_a} (A) and {name_b} (B). "
+        "HUMANOID NATURALISM (REQUIRED): "
+        "- Use discourse markers: 'Hmm', 'Uh', 'Well', 'Actually', 'Right?'. "
+        "- Use organic fillers naturally: '(clears throat)', '[hesitates]', '[coughs]'. "
+        "- Use ellipses '...' mid-sentence for natural pondering. "
+        "NO narration. NO stage directions. Output raw JSON array only."
+    )
     
     prompt = f"""Write a HIGH-FIDELITY, DEEP-DIVE podcast script based on these notes:
     {sections_text[:5000]}
@@ -140,7 +180,7 @@ def generate_podcast_script(notes_json, length_pref=15, available_images=None, n
         1. Use "visual_ref" ID if the dialogue directly discusses an existing diagram from the notes.
         2. Use "visual_prompt": "description" for a new concept illustration NOT in the notes.
         3. DO NOT repeat the same visual! CHANGE the visual (ref or prompt) every 4 segments.
-    - STYLE: Professional, academic but engaging. {name_a} is the expert guide, {name_b} is the inquisitive analyst asking deep follow-up questions.
+    - STYLE: Deeply conversational and human. {name_a} is the expert guide, {name_b} is the inquisitive analyst.
     - CRITICAL: Output ONLY the raw JSON array. Start immediately with '['. Do not include markdown formatting or talk outside the JSON.
     """
 
@@ -239,12 +279,16 @@ def handle_interruption(user_query, current_script, current_index, full_material
     {img_context}
     
     INSTRUCTIONS:
-    - Give 2-3 dialogue segments in a JSON array.
+    - CONCISE: Give exactly 1-2 rapid dialogue segments in a JSON array.
+    - BE DIRECT: Jump straight into the answer. 
     - If a specific visual ID explains it, use "visual_ref": ID. 
-    - CRITICAL: If no relevant image exists, PROVIDE a descriptive "visual_prompt": "concept illustration".
     - Output ONLY JSON array [{{'speaker': 'A' or 'B', 'text': '...', 'visual_ref': ID, 'visual_prompt': '...'}}]."""
 
-    sys_inst = f"You are {name_a} and {name_b}. Speak ONLY as the host. No stage directions."
+    sys_inst = (
+        f"You are {name_a} and {name_b}. Speak ONLY as the host. "
+        "HUMANOID NATURALISM: Use fillers like 'Hmm', 'Actually', or '(clears throat)' naturally. "
+        "No stage directions. Output ONLY JSON."
+    )
 
     def validate_guru(res_text):
         if not res_text or not isinstance(res_text, str): return []
@@ -276,7 +320,11 @@ def handle_interruption(user_query, current_script, current_index, full_material
     res = ai_service.groq_chat([
         {"role": "system", "content": sys_inst},
         {"role": "user", "content": prompt}
-    ])
+    ], max_tokens=512)
     
-    data = validate_guru(res)
+    # LOG: Guru response (for debugging)
+    with open(log_path, 'a') as f:
+        f.write(f"[GURU-RAW] {res[:300]}...\n")
+        
+    data = validate_guru(json_repair(res))
     return data if data else [{"speaker": "A", "text": "That's a great question."}]

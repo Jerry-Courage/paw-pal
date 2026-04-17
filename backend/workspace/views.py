@@ -1,247 +1,99 @@
-import io
 import logging
 import re
-from rest_framework import generics, permissions, status
-from rest_framework.response import Response
-from rest_framework.views import APIView
+import threading
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponse
+from django.conf import settings
+from rest_framework import viewsets, permissions, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.views import APIView
 from django.utils import timezone
-from .models import Workspace, WorkspaceMember, WorkspaceBlock, WorkspaceMessage, WorkspaceTask, DocumentVersion, WorkspaceFile
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from .models import Workspace, WorkspaceMember, WorkspaceMessage
 from .serializers import (
-    WorkspaceSerializer, WorkspaceMemberSerializer, WorkspaceBlockSerializer,
-    WorkspaceMessageSerializer, WorkspaceTaskSerializer, DocumentVersionSerializer,
-    WorkspaceFileSerializer
+    WorkspaceSerializer, WorkspaceDetailSerializer, WorkspaceMemberSerializer,
+    WorkspaceMessageSerializer
 )
+from library.models import Resource
+from ai_assistant.services import AIService, FLOWAI_SYSTEM_PROMPT
 
 logger = logging.getLogger('flowstate')
 
-
-def _get_workspace(pk, user):
-    ws = get_object_or_404(Workspace, pk=pk)
-    if not ws.memberships.filter(user=user).exists():
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied('You are not a member of this workspace.')
-    return ws
-
-
-class WorkspaceListCreateView(generics.ListCreateAPIView):
+class WorkspaceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = WorkspaceSerializer
 
     def get_queryset(self):
-        return Workspace.objects.filter(memberships__user=self.request.user, is_active=True)
+        return Workspace.objects.filter(members=self.request.user, is_active=True)
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return WorkspaceDetailSerializer
+        return WorkspaceSerializer
 
     def perform_create(self, serializer):
         ws = serializer.save(owner=self.request.user)
         WorkspaceMember.objects.create(workspace=ws, user=self.request.user, role='owner')
-        # Create initial welcome block
-        WorkspaceBlock.objects.create(
-            workspace=ws,
-            block_type='text',
-            content='# Welcome to your new workspace!\n\nFlowAI is ready to help you collaborate.',
-            order=0
-        )
 
-    def get_serializer_context(self):
-        return {'request': self.request}
-
-
-class WorkspaceDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = WorkspaceSerializer
-
-    def get_queryset(self):
-        return Workspace.objects.filter(memberships__user=self.request.user)
-
-    def get_serializer_context(self):
-        return {'request': self.request}
-
-
-class JoinWorkspaceView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
+    @action(detail=False, methods=['post'])
+    def join(self, request):
         code = request.data.get('invite_code', '').strip().upper()
-        if not code:
-            return Response({'error': 'Invite code required.'}, status=status.HTTP_400_BAD_REQUEST)
         ws = get_object_or_404(Workspace, invite_code=code, is_active=True)
         member, created = WorkspaceMember.objects.get_or_create(
             workspace=ws, user=request.user,
             defaults={'role': 'editor'}
         )
-        if not created:
-            return Response({'detail': 'Already a member.'})
-        return Response(WorkspaceSerializer(ws, context={'request': request}).data, status=status.HTTP_201_CREATED)
+        return Response(WorkspaceSerializer(ws, context={'request': request}).data)
 
-
-class WorkspaceMembersView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, pk):
-        ws = _get_workspace(pk, request.user)
-        # Update last_seen
-        WorkspaceMember.objects.filter(workspace=ws, user=request.user).update(last_seen=timezone.now())
-        members = ws.memberships.select_related('user').all()
-        return Response(WorkspaceMemberSerializer(members, many=True).data)
-
-
-class WorkspaceBlocksView(APIView):
-    """View to list, create, and update blocks in a workspace."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        blocks = ws.blocks.all().order_by('order', 'created_at')
-        return Response(WorkspaceBlockSerializer(blocks, many=True).data)
-
-    def post(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        serializer = WorkspaceBlockSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Auto-calculate order if not provided
-        order = request.data.get('order')
-        if order is None:
-            last_block = ws.blocks.last()
-            order = (last_block.order + 1) if last_block else 0
-            
-        serializer.save(workspace=ws, order=order, last_edited_by=request.user)
-        
-        # Broadcast block creation to WebSocket
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        layer = get_channel_layer()
-        async_to_sync(layer.group_send)(
-            f'workspace_{workspace_id}',
-            {
-                'type': 'block_created',
-                'block': serializer.data,
-                'sender_id': request.user.id
-            }
-        )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def patch(self, request, workspace_id):
-        """Bulk update block order or specific block content."""
-        ws = _get_workspace(workspace_id, request.user)
-        block_id = request.data.get('block_id')
-        if not block_id:
-            # Handle reordering if a list of IDs is sent
-            block_ids = request.data.get('order_list', [])
-            for i, bid in enumerate(block_ids):
-                WorkspaceBlock.objects.filter(id=bid, workspace=ws).update(order=i)
-            return Response({'status': 'reordered'})
-
-        block = get_object_or_404(WorkspaceBlock, id=block_id, workspace=ws)
-        serializer = WorkspaceBlockSerializer(block, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(last_edited_by=request.user)
-        
-        # Broadcast block update to WebSocket
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        layer = get_channel_layer()
-        async_to_sync(layer.group_send)(
-            f'workspace_{workspace_id}',
-            {
-                'type': 'block_updated',
-                'block': serializer.data,
-                'sender_id': request.user.id
-            }
-        )
-        return Response(serializer.data)
-
-    def delete(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        block_id = request.data.get('block_id')
-        block = get_object_or_404(WorkspaceBlock, id=block_id, workspace=ws)
-        block.delete()
-
-        # Broadcast block deletion to WebSocket
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        layer = get_channel_layer()
-        async_to_sync(layer.group_send)(
-            f'workspace_{workspace_id}',
-            {
-                'type': 'block_deleted',
-                'block_id': block_id,
-                'sender_id': request.user.id
-            }
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class DocumentVersionsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        versions = ws.versions.all().order_by('-created_at')
-        return Response(DocumentVersionSerializer(versions, many=True).data)
-
-    def post(self, request, workspace_id):
-        """Create a new manual snapshot of the workspace."""
-        ws = _get_workspace(workspace_id, request.user)
-        blocks = ws.blocks.all().order_by('order')
-        snapshot = [
-            {
-                'block_type': b.block_type,
-                'content': b.content,
-                'metadata': b.metadata,
-                'order': b.order
-            }
-            for b in blocks
-        ]
-        
-        last_v = ws.versions.order_by('-version').first()
-        new_v_num = (last_v.version + 1) if last_v else 1
-        
-        v = DocumentVersion.objects.create(
-            workspace=ws,
-            blocks_snapshot=snapshot,
-            saved_by=request.user,
-            version=new_v_num
-        )
-        return Response(DocumentVersionSerializer(v).data, status=status.HTTP_201_CREATED)
-
-    def put(self, request, workspace_id):
-        """Restore a version (restores all blocks from snapshot)."""
-        ws = _get_workspace(workspace_id, request.user)
-        version_id = request.data.get('version_id')
-        v = get_object_or_404(DocumentVersion, id=version_id, workspace=ws)
-        
-        # Clear current blocks and restore from snapshot
-        ws.blocks.all().delete()
-        for b_data in v.blocks_snapshot:
-            WorkspaceBlock.objects.create(
-                workspace=ws,
-                block_type=b_data.get('block_type', 'text'),
-                content=b_data.get('content', ''),
-                metadata=b_data.get('metadata', {}),
-                order=b_data.get('order', 0)
+    def destroy(self, request, *args, **kwargs):
+        """Owner-only Deletion Protocol."""
+        instance = self.get_object()
+        if instance.owner != request.user:
+            return Response(
+                {"error": "Only the creator can decommission this Collab Space."}, 
+                status=status.HTTP_403_FORBIDDEN
             )
-        return Response({'status': 'restored', 'version': v.version})
+        return super().destroy(request, *args, **kwargs)
 
-
-class MessagesView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        msgs = ws.messages.select_related('author').order_by('-created_at')[:50]
-        return Response(WorkspaceMessageSerializer(list(reversed(msgs)), many=True).data)
-
-    def post(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        content = request.data.get('content', '').strip()
-        if not content:
-            return Response({'error': 'Content required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        msg = WorkspaceMessage.objects.create(workspace=ws, author=request.user, content=content)
+    @action(detail=True, methods=['post'])
+    def leave(self, request, pk=None):
+        """Member departure protocol."""
+        ws = self.get_object()
+        if ws.owner == request.user:
+            return Response(
+                {"error": "Creators cannot leave. Use 'Delete' to decommission the space."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        # Broadcast user message to WebSocket
+        member = WorkspaceMember.objects.filter(workspace=ws, user=request.user).first()
+        if not member:
+            return Response({"error": "You are not a member of this space."}, status=status.HTTP_404_NOT_FOUND)
+            
+        member.delete()
+        return Response({"message": "You have left the Collab Space."})
+
+    @action(detail=True, methods=['post'])
+    def share_resource(self, request, pk=None):
+        workspace = self.get_object()
+        resource_id = request.data.get('resource_id')
+        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        
+        workspace.resources.add(resource)
+        
+        # Create a "System" message about the shared resource
+        msg = WorkspaceMessage.objects.create(
+            workspace=workspace,
+            author=request.user,
+            content=f"shared a note: **{resource.title}**",
+            pinned_resource=resource
+        )
+        
+        # Broadcast via WebSocket (Handled in Consumer usually, but we can trigger it here)
+        self._broadcast_message(workspace.id, msg)
+        
+        return Response(WorkspaceMessageSerializer(msg).data)
+
+    def _broadcast_message(self, workspace_id, msg):
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         layer = get_channel_layer()
@@ -249,506 +101,173 @@ class MessagesView(APIView):
             f'workspace_{workspace_id}',
             {
                 'type': 'broadcast_chat_message',
-                'content': msg.content,
-                'author_name': request.user.username,
-                'author_id': request.user.id,
-                'is_ai': False,
-                'created_at': msg.created_at.isoformat()
+                'message': WorkspaceMessageSerializer(msg).data
             }
         )
+
+
+class WorkspaceMessageView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, workspace_id):
+        ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
+        msgs = ws.messages.all().order_by('created_at')
+        return Response(WorkspaceMessageSerializer(msgs, many=True).data)
+
+    def post(self, request, workspace_id):
+        ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
+        content = request.data.get('content', '').strip()
+        audio_file = request.FILES.get('audio')
         
-        response_data = {'user_message': WorkspaceMessageSerializer(msg).data, 'ai_message': None}
+        if not content and not audio_file:
+            return Response({'error': 'Content or audio required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # If message starts with @FlowAI, trigger AI response and return it immediately
-        if content.lower().startswith('@flowai') or content.lower().startswith('@ai'):
-            question = re.sub(r'^@(flowai|ai)\s*', '', content, flags=re.IGNORECASE).strip()
-            if question:
-                ai_reply = _get_ai_response(ws, question, request.user)
-                ai_msg = WorkspaceMessage.objects.create(workspace=ws, content=ai_reply, is_ai=True)
-                
-                # Broadcast AI message to WebSocket
-                from channels.layers import get_channel_layer
-                from asgiref.sync import async_to_sync
-                layer = get_channel_layer()
-                async_to_sync(layer.group_send)(
-                    f'workspace_{workspace_id}',
-                    {
-                        'type': 'broadcast_chat_message',
-                        'content': ai_msg.content,
-                        'author_name': 'FlowAI',
-                        'author_id': None,
-                        'is_ai': True,
-                        'created_at': ai_msg.created_at.isoformat()
-                    }
-                )
-                
-                response_data['ai_message'] = WorkspaceMessageSerializer(ai_msg).data
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
-
-
-class TasksView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        tasks = ws.tasks.select_related('assigned_to', 'created_by').all()
-        return Response(WorkspaceTaskSerializer(tasks, many=True).data)
-
-    def post(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        serializer = WorkspaceTaskSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(workspace=ws, created_by=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-class TaskDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, workspace_id, task_id):
-        ws = _get_workspace(workspace_id, request.user)
-        task = get_object_or_404(WorkspaceTask, id=task_id, workspace=ws)
-        serializer = WorkspaceTaskSerializer(task, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    def delete(self, request, workspace_id, task_id):
-        ws = _get_workspace(workspace_id, request.user)
-        task = get_object_or_404(WorkspaceTask, id=task_id, workspace=ws)
-        task.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class FilesView(APIView):
-    """Upload files directly to a workspace or link library resources."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        files = ws.files.select_related('uploaded_by').all()
-        linked = ws.resources.all()
-        return Response({
-            'uploaded': WorkspaceFileSerializer(files, many=True, context={'request': request}).data,
-            'linked_resources': [
-                {'id': r.id, 'title': r.title, 'type': r.resource_type, 'subject': r.subject}
-                for r in linked
-            ],
-        })
-
-    def post(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        uploaded_file = request.FILES.get('file')
-        resource_id = request.data.get('resource_id')
-
-        # Link an existing library resource
-        if resource_id:
-            from library.models import Resource
-            resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
-            ws.resources.add(resource)
-            return Response({'linked': True, 'resource_id': resource_id})
-
-        # Upload a new file
-        if not uploaded_file:
-            return Response({'error': 'No file provided.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        import os
-        name = uploaded_file.name
-        ext = os.path.splitext(name)[1].lower()
-        if ext not in ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg']:
-            return Response({'error': 'Unsupported file type.'}, status=status.HTTP_400_BAD_REQUEST)
-        if uploaded_file.size > 20 * 1024 * 1024:
-            return Response({'error': 'File too large. Max 20MB.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        ws_file = WorkspaceFile.objects.create(
-            workspace=ws,
-            uploaded_by=request.user,
-            file=uploaded_file,
-            name=name,
-            file_size=uploaded_file.size,
+        # 1. Save user message
+        parent_id = request.data.get('parent_id')
+        msg = WorkspaceMessage.objects.create(
+            workspace=ws, 
+            author=request.user, 
+            content=content or "Voice Note",
+            audio_file=audio_file,
+            parent_id=parent_id
         )
 
-        # Extract text from PDF for AI context
-        if ext == '.pdf':
+        # 2. Neural Transcription (Background Transcription)
+        if audio_file:
+            ai = AIService()
+            transcript = ai.transcribe_audio(msg.audio_file.path)
+            if transcript:
+                msg.content = transcript
+                msg.save()
+                content = transcript # Update local content for AI trigger check
+        
+        # 3. Broadcast user message (with transcript if available)
+        self._broadcast(ws.id, msg)
+
+        # 4. AI Name Check & Thread Intelligence
+        # We listen for wake words OR if the user is replying to an AI message
+        is_reply_to_ai = False
+        if parent_id:
             try:
-                from library.pdf_extractor import extract_pdf_content
-                file_bytes = ws_file.file.read()
-                pdf_data = extract_pdf_content(file_bytes=file_bytes)
-                if pdf_data['text']:
-                    ws_file.extracted_text = pdf_data['text'][:20000]
-                    ws_file.save(update_fields=['extracted_text'])
-            except Exception as e:
-                logger.warning(f'Could not extract text from workspace file: {e}')
+                parent_msg = WorkspaceMessage.objects.get(id=parent_id)
+                if parent_msg.is_ai:
+                    is_reply_to_ai = True
+            except: pass
 
-        return Response(
-            WorkspaceFileSerializer(ws_file, context={'request': request}).data,
-            status=status.HTTP_201_CREATED
-        )
+        wake_words = r'\b(flow|flo|flowai|flowstate|assistant|hey flow|hey flo|yo flow|yo flo)\b'
+        if is_reply_to_ai or re.search(wake_words, content, re.IGNORECASE):
+            self._trigger_ai_response(ws, content, request.user, is_audio_trigger=bool(audio_file), msg=msg)
 
-    def delete(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        file_id = request.query_params.get('file_id')
-        resource_id = request.query_params.get('resource_id')
+        return Response(WorkspaceMessageSerializer(msg, context={'request': request}).data)
 
-        if file_id:
-            f = get_object_or_404(WorkspaceFile, id=file_id, workspace=ws)
-            f.file.delete(save=False)
-            f.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        if resource_id:
-            from library.models import Resource
-            try:
-                ws.resources.remove(int(resource_id))
-            except Exception:
-                pass
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        return Response({'error': 'Provide file_id or resource_id.'}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class AIAssistView(APIView):
-    """FlowAI workspace assistant — full context access."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        action = request.data.get('action', 'ask')  # ask | generate_outline | improve | expand | simplify | review | generate_slides | write_section
-        text = request.data.get('text', '')
-        question = request.data.get('question', '')
-
+    def _broadcast(self, workspace_id, msg):
+        """Helper to send message data to all workspace subscribers via Channels."""
+        layer = get_channel_layer()
+        # Manually serialize to ensure absolute URLs in broadcast
+        data = WorkspaceMessageSerializer(msg).data
+        if msg.audio_file:
+            data['audio_file'] = f"{settings.API_URL}{msg.audio_file.url}"
+        
         try:
-            if action == 'generate_outline':
-                result = _ai_generate_outline(ws, request.user)
-            elif action == 'improve':
-                result = _ai_improve_text(ws, text)
-            elif action == 'expand':
-                result = _ai_expand_text(ws, text, request.user)
-            elif action == 'simplify':
-                result = _ai_simplify_text(ws, text)
-            elif action == 'review':
-                result = _ai_review_doc(ws, request.user)
-            elif action == 'write_section':
-                result = _ai_write_section(ws, text, request.user)
-            elif action == 'generate_slides':
-                result = _ai_generate_slides_outline(ws, request.user)
-            elif action == 'generate_flashcards':
-                block_id = request.data.get('block_id')
-                block = get_object_or_404(WorkspaceBlock, id=block_id, workspace=ws)
-                result = _ai_generate_flashcards(ws, block.content, request.user)
-            else:
-                result = _get_ai_response(ws, question or text, request.user)
-
-            # Save AI response as chat message
-            msg = WorkspaceMessage.objects.create(workspace=ws, content=result, is_ai=True)
-            
-            # Broadcast AI message to WebSocket
-            from channels.layers import get_channel_layer
-            from asgiref.sync import async_to_sync
-            layer = get_channel_layer()
             async_to_sync(layer.group_send)(
                 f'workspace_{workspace_id}',
                 {
                     'type': 'broadcast_chat_message',
-                    'content': msg.content,
-                    'author_name': 'FlowAI',
-                    'author_id': None,
-                    'is_ai': True,
-                    'created_at': msg.created_at.isoformat()
+                    'message': data
                 }
             )
-            
-            return Response({'result': result})
         except Exception as e:
-            logger.error(f'Workspace AI error: {e}')
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.debug(f"Broadcast failed (likely client disconnected): {e}")
 
+    def _trigger_ai_response(self, workspace, content, user, is_audio_trigger=False, msg=None):
+        import threading
+        from django.db import close_old_connections
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from django.conf import settings
+        from django.utils import timezone
 
-class ExportView(APIView):
-    """Export workspace document as PDF, DOCX, PPTX, or TXT."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, workspace_id):
-        ws = _get_workspace(workspace_id, request.user)
-        fmt = request.query_params.get('format', 'pdf').lower()
-        
-        # Concatenate block contents for export
-        blocks = ws.blocks.all().order_by('order', 'created_at')
-        full_content = '\n\n'.join([b.content for b in blocks if b.content])
-
-        if fmt == 'pdf':
-            return _export_pdf(ws, full_content)
-        elif fmt == 'docx':
-            return _export_docx(ws, full_content)
-        elif fmt == 'pptx':
-            return _export_pptx(ws, full_content)
-        elif fmt == 'txt':
-            return _export_txt(ws, full_content)
-        return Response({'error': 'Unsupported format.'}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# ─── AI HELPERS (Updated for Blocks) ──────────────────────────────────────────
-
-def _build_workspace_context(ws, query=None, user=None) -> str:
-    """Build full workspace context for FlowAI from Blocks and Resources."""
-    parts = [f"Workspace: {ws.name}", f"Subject: {ws.subject or 'General'}"]
-
-    if ws.description:
-        parts.append(f"Description: {ws.description}")
-
-    if ws.assignment:
-        parts.append(f"Assignment: {ws.assignment.title}\nInstructions: {ws.assignment.instructions[:1000]}")
-
-    # Concatenate blocks for context
-    blocks = ws.blocks.all()[:15]
-    if blocks:
-        block_text = '\n'.join([f"[{b.block_type}] {b.content[:1000]}" for b in blocks])
-        parts.append(f"Workspace Blocks:\n{block_text}")
-
-    # Recent chat
-    recent_msgs = ws.messages.order_by('-created_at')[:8]
-    if recent_msgs:
-        chat = '\n'.join([f"{'FlowAI' if m.is_ai else (m.author.username if m.author else 'User')}: {m.content}" for m in reversed(recent_msgs)])
-        parts.append(f"Recent chat:\n{chat}")
-
-    # ─── GLOBAL RAG (Library-Wide Search) ───
-    from ai_assistant.services import AIService
-    ai = AIService()
-    if query and user:
-        rag_context = ai.perform_global_search(query, user)
-        if rag_context:
-            parts.append(rag_context)
-
-    # Static Resources (workspace-linked references)
-    for r in ws.resources.all()[:2]:
-        ctx = ai._get_resource_context(r)
-        if ctx:
-            parts.append(f"Reference Resource '{r.title}':\n{ctx[:1500]}")
-
-    return '\n\n'.join(parts)
-
-
-def _get_ai_response(ws, question: str, user) -> str:
-    from ai_assistant.services import AIService, FLOWAI_SYSTEM_PROMPT
-    ai = AIService()
-    context = _build_workspace_context(ws, query=question, user=user)
-    system = (
-        f"{FLOWAI_SYSTEM_PROMPT}\n\n"
-        f"You are FlowAI inside a collaborative workspace. You have FULL ACCESS to everything in this workspace and any relevant documents from your library.\n\n"
-        f"WORKSPACE & LIBRARY CONTEXT:\n{context}"
-    )
-    return ai.chat([{'role': 'system', 'content': system}, {'role': 'user', 'content': question}])
-
-
-def _ai_generate_outline(ws, user) -> str:
-    from ai_assistant.services import AIService, FLOWAI_SYSTEM_PROMPT
-    ai = AIService()
-    context = _build_workspace_context(ws, query="Generate a detailed document outline for this project", user=user)
-    prompt = (
-        f"Based on this workspace context, generate a detailed document outline with sections and subsections.\n\n"
-        f"{context}\n\n"
-        "Return a well-structured markdown outline that the team can use as their document skeleton. "
-        "Include an introduction, main sections based on the assignment/topic, and a conclusion."
-    )
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-def _ai_improve_text(ws, text: str) -> str:
-    from ai_assistant.services import AIService
-    ai = AIService()
-    prompt = (
-        f"Improve this text to be more academic, clear, and well-structured.\n\n"
-        f"Text:\n{text}\n\n"
-        "Return only the improved version, no explanation."
-    )
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-def _ai_expand_text(ws, text: str, user) -> str:
-    from ai_assistant.services import AIService
-    ai = AIService()
-    context = _build_workspace_context(ws, query=text, user=user)
-    prompt = (
-        f"Expand this text with more detail, using the workspace context where relevant.\n\n"
-        f"Context Snippet: {context[:1000]}\n\nText:\n{text}\n\nReturn only the expanded version."
-    )
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-def _ai_simplify_text(ws, text: str) -> str:
-    from ai_assistant.services import AIService
-    ai = AIService()
-    prompt = f"Simplify this text while keeping all key information:\n\n{text}\n\nReturn only the simplified version."
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-def _ai_review_doc(ws, user) -> str:
-    from ai_assistant.services import AIService
-    ai = AIService()
-    blocks = ws.blocks.all().order_by('order')
-    content = '\n'.join([b.content for b in blocks if b.content])
-    if not content.strip():
-        return "The workspace is empty. Add some blocks and I'll review it for you!"
-        
-    context = _build_workspace_context(ws, query="Review this document", user=user)
-    prompt = (
-        f"Review this collective work for the workspace '{ws.name}' using provided context.\n\n"
-        f"Context:\n{context[:3000]}\n\n"
-        f"Content to Review:\n{content[:6000]}\n\n"
-        "Provide structured feedback on quality, gaps, and specific suggestions to improve."
-    )
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-def _ai_write_section(ws, section_title: str, user) -> str:
-    from ai_assistant.services import AIService
-    ai = AIService()
-    context = _build_workspace_context(ws, query=section_title, user=user)
-    prompt = (
-        f"Write a complete section titled '{section_title}' based on the workspace context.\n\n"
-        f"Context:\n{context}\n\n"
-        "Write in academic style with proper paragraphs. Use markdown formatting."
-    )
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-def _ai_generate_slides_outline(ws, user) -> str:
-    from ai_assistant.services import AIService
-    ai = AIService()
-    context = _build_workspace_context(ws, query="Generate a presentation outline", user=user)
-    prompt = (
-        f"Create a PowerPoint presentation outline for this workspace.\n\n"
-        f"Context:\n{context[:3000]}\n\n"
-        "Generate a slide-by-slide outline (Title, Agenda, 5-8 Content slides, Conclusion)."
-    )
-    return ai.chat([{'role': 'user', 'content': prompt}])
-
-
-# ─── EXPORT HELPERS (Updated) ────────────────────────────────────────────────
-
-def _safe_filename(name):
-    return re.sub(r'[^\w\s-]', '', name).strip().replace(' ', '_')[:50]
-
-
-def _export_txt(ws, content):
-    header = f"{ws.name}\n{'='*len(ws.name)}\n\n"
-    resp = HttpResponse(header + content, content_type='text/plain; charset=utf-8')
-    resp['Content-Disposition'] = f'attachment; filename="{_safe_filename(ws.name)}.txt"'
-    return resp
-
-
-def _export_pdf(ws, content):
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-
-        buffer = io.BytesIO()
-        pdf = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
-        styles = getSampleStyleSheet()
-        story = [Paragraph(ws.name, styles['Title'])]
-        if ws.subject:
-            story.append(Paragraph(ws.subject, styles['Normal']))
-        story.append(Spacer(1, 0.5*cm))
-
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line:
-                story.append(Spacer(1, 0.2*cm))
-            elif line.startswith('# '):
-                story.append(Paragraph(line[2:], styles['Heading1']))
-            elif line.startswith('## '):
-                story.append(Paragraph(line[3:], styles['Heading2']))
-            elif line.startswith('### '):
-                story.append(Paragraph(line[4:], styles['Heading3']))
-            elif line.startswith('- ') or line.startswith('* '):
-                story.append(Paragraph(f'• {line[2:]}', styles['Normal']))
-            else:
-                line = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
-                story.append(Paragraph(line, styles['Normal']))
-
-        pdf.build(story)
-        buffer.seek(0)
-        resp = HttpResponse(buffer.read(), content_type='application/pdf')
-        resp['Content-Disposition'] = f'attachment; filename="{_safe_filename(ws.name)}.pdf"'
-        return resp
-    except Exception:
-        return _export_txt(ws, content)
-
-
-def _export_docx(ws, content):
-    try:
-        from docx import Document as DocxDoc
-        d = DocxDoc()
-        d.add_heading(ws.name, 0)
-        if ws.subject:
-            d.add_paragraph(ws.subject)
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line: continue
-            if line.startswith('# '): d.add_heading(line[2:], level=1)
-            elif line.startswith('## '): d.add_heading(line[3:], level=2)
-            elif line.startswith('### '): d.add_heading(line[4:], level=3)
-            elif line.startswith('- ') or line.startswith('* '): d.add_paragraph(line[2:], style='List Bullet')
-            else:
-                line = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
-                d.add_paragraph(line)
-        buf = io.BytesIO()
-        d.save(buf)
-        buf.seek(0)
-        resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        resp['Content-Disposition'] = f'attachment; filename="{_safe_filename(ws.name)}.docx"'
-        return resp
-    except Exception:
-        return _export_txt(ws, content)
-
-def _ai_generate_flashcards(ws, block_text: str, user) -> str:
-    from ai_assistant.services import AIService
-    from library.models import Deck, Flashcard
-    import json
-
-    ai = AIService()
-    prompt = (
-        f"Based on the following content from my {ws.name} workspace, generate a set of essential study flashcards.\n\n"
-        f"Content:\n{block_text}\n\n"
-        "Return ONLY a JSON array of objects with 'question' and 'answer' keys. "
-        "Example: [{\"question\": \"...\", \"answer\": \"...\"}, ...]"
-    )
-    
-    response_text = ai.chat([{'role': 'user', 'content': prompt}])
-    
-    try:
-        # Clean response if it contains markdown code blocks
-        clean_json = response_text.replace('```json', '').replace('```', '').strip()
-        cards_data = json.loads(clean_json)
-        
-        # Create a workspace deck if it doesn't exist
-        deck, _ = Deck.objects.get_or_create(
-            owner=user,
-            title=f"Workspace: {ws.name}",
-            defaults={'subject': ws.subject or 'General'}
-        )
-        
-        created_count = 0
-        for card in cards_data:
-            if 'question' in card and 'answer' in card:
-                Flashcard.objects.create(
-                    deck=deck,
-                    owner=user,
-                    question=card['question'],
-                    answer=card['answer'],
-                    subject=ws.subject or 'General',
-                    resource=ws.resources.first() # Link to first workspace resource if any
+        def ai_task():
+            layer = get_channel_layer()
+            try:
+                # 1. Thread safety for database
+                close_old_connections()
+                
+                # 2. Typing Indicator Start
+                async_to_sync(layer.group_send)(
+                    f'workspace_{workspace.id}',
+                    {'type': 'broadcast_typing', 'is_typing': True, 'user': 'FlowAI'}
                 )
-                created_count += 1
-        
-        return f"✨ Success! Generated {created_count} flashcards and added them to your '{deck.title}' deck."
-    except Exception as e:
-        logger.error(f"Flashcard generation failed: {e}")
-        return f"AI returned: {response_text}\n\n(Error parsing cards: {str(e)})"
 
-def _export_pptx(ws, content):
-    # Basic fall-back to text for PPTX for now as it needs structured slide content
-    return _export_txt(ws, content)
+                ai = AIService()
+                
+                # 3. Knowledge Retrieval & Chat
+                ws_library_context = ai.get_workspace_library_context(workspace)
+                
+                system_prompt = (
+                    f"{FLOWAI_SYSTEM_PROMPT}\n\n"
+                    f"WORKSPACE CONTEXT: You are in the '{workspace.name}' collab space. "
+                )
+                
+                if ws_library_context:
+                    system_prompt += (
+                        f"\n\nSHARED KNOWLEDGE BASE:\n{ws_library_context}\n\n"
+                        "Use the above shared library context as your ground truth for this space. "
+                        "When students ask about 'our notes' or 'shared resources', refer to this data."
+                    )
+                
+                # Get history
+                recent = workspace.messages.all().order_by('-created_at')[:10]
+                history = [{'role': 'assistant' if m.is_ai else 'user', 'content': m.content} for m in reversed(recent)]
+                
+                reply = ai.collab_chat([{'role': 'system', 'content': system_prompt}] + history)
+                
+                # 4. Mode Mirroring (Voice Decision)
+                should_vocalize = is_audio_trigger
+                audio_path = None
+                
+                if should_vocalize:
+                    from ai_assistant.podcast import generate_tts_file
+                    import os
+                    voice = "en-US-AndrewNeural"
+                    filename = f"flow_vn_{workspace.id}_{int(timezone.now().timestamp())}.mp3"
+                    rel_path = os.path.join('workspace_audio', filename)
+                    full_path = os.path.join(settings.MEDIA_ROOT, rel_path)
+                    
+                    # Ensure directory exists
+                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                    
+                    tts_text = reply if len(reply) < 300 else reply[:297] + "..."
+                    if generate_tts_file(tts_text, voice, full_path):
+                        audio_path = rel_path
+
+                # 5. Save & Broadcast Real Response
+                ai_msg = WorkspaceMessage.objects.create(
+                    workspace=workspace,
+                    content=reply,
+                    is_ai=True,
+                    audio_file=audio_path,
+                    parent_id=msg.id if msg else None
+                )
+                
+                # Use class method for clean broadcast
+                self._broadcast(workspace.id, ai_msg)
+
+            except Exception as e:
+                logger.error(f"AI Workspace Task failed: {e}")
+            finally:
+                # 6. Housekeeping
+                try:
+                    async_to_sync(layer.group_send)(
+                        f'workspace_{workspace.id}',
+                        {'type': 'broadcast_typing', 'is_typing': False, 'user': 'FlowAI'}
+                    )
+                except: pass
+                close_old_connections()
+
+        try:
+            thread = threading.Thread(target=ai_task)
+            thread.daemon = True
+            thread.start()
+        except Exception as e:
+            logger.error(f"Failed to start AI thread: {e}")

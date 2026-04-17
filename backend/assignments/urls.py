@@ -1,15 +1,13 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import SimpleRouter
 from .views import AssignmentViewSet
-
-# Using DefaultRouter to automatically generate all assignment-related URL patterns,
-# including detail sub-actions like /export/, /solve/, and /refine/.
-router = DefaultRouter()
+# Standard Router
+router = SimpleRouter()
 router.register(r'', AssignmentViewSet, basename='assignment')
 
 urlpatterns = [
-    # Manually defining the export path to ensure it is correctly resolved by the dispatcher,
-    # bypassing any potential prefix/trailing-slash issues with the DefaultRouter.
-    path('<int:pk>/export/', AssignmentViewSet.as_view({'get': 'export'}), name='assignment-manual-export'),
+    # Manual Failsafe for detail actions to bypass router regex collisions
+    path('<int:pk>/download_intelligence/', AssignmentViewSet.as_view({'get': 'download_intelligence'}), name='assignment-download-intelligence'),
+    path('<int:pk>/share/', AssignmentViewSet.as_view({'post': 'share'}), name='assignment-share-manual'),
     path('', include(router.urls)),
 ]

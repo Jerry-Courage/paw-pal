@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { 
   GripVertical, Trash2, Wand2, Plus, Type, FileText, 
   Image as ImageIcon, HelpCircle, Layout, Save, X,
-  ChevronUp, ChevronDown, Copy, Check, Brain, Loader2
+  ChevronUp, ChevronDown, Copy, Check, Brain, Loader2, Zap
 } from 'lucide-react'
 import { workspaceApi } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
@@ -138,10 +138,26 @@ export default function BlockItem({
       className={cn(
         "group relative mb-8 bg-white/[0.03] backdrop-blur-md rounded-[2.5rem] border border-white/5 transition-all duration-500",
         isFocused ? "ring-2 ring-violet-500/30 border-violet-500/30 shadow-[0_0_50px_rgba(139,92,246,0.1)]" : "hover:border-white/10 hover:bg-white/[0.05]",
+        block.is_ghost && "opacity-60 bg-transparent border-dashed border-violet-500/30 shadow-none hover:opacity-100",
         isLocked && "opacity-60 grayscale-[0.5]",
         isDragging && "opacity-50 scale-[0.98] blur-[2px] rotate-1"
       )}
     >
+      {/* Solidify Ghost Button */}
+      {block.is_ghost && !isReadOnly && (
+        <div className="absolute -top-4 right-8 flex items-center gap-2 z-30 animate-in slide-in-from-top-2">
+           <button 
+             onClick={() => onUpdate({ is_ghost: false })}
+             className="px-4 py-1.5 bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-2xl hover:bg-violet-500 transition-all active:scale-95 flex items-center gap-2">
+             <Zap className="w-3 h-3" /> Solidify Specimen
+           </button>
+           <button 
+             onClick={onDelete}
+             className="p-1.5 bg-white/10 text-white/40 hover:text-white rounded-full transition-all">
+             <X className="w-3 h-3" />
+           </button>
+        </div>
+      )}
       {/* Floating Contextual Toolbar */}
       <AnimatePresence>
         {(isHovered || isFocused) && !isReadOnly && !isLocked && (

@@ -20,6 +20,7 @@ class ResourceImageSerializer(serializers.ModelSerializer):
 
 class ResourceSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
+    cover_image_url = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     extracted_images = ResourceImageSerializer(many=True, read_only=True)
 
@@ -27,7 +28,9 @@ class ResourceSerializer(serializers.ModelSerializer):
         model = Resource
         fields = (
             'id', 'title', 'resource_type', 'file_url', 'url', 'subject',
-            'status', 'file_size', 'ai_summary', 'ai_concepts', 'ai_notes_json',
+            'cover_image_url', 'thumbnail_url',
+            'status', 'processing_progress', 'status_text', 'file_size', 
+            'ai_summary', 'ai_concepts', 'ai_notes_json',
             'has_study_kit', 'extracted_images', 'owner_name', 'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'status', 'ai_summary', 'ai_concepts', 'has_study_kit', 'created_at', 'updated_at')
@@ -35,11 +38,20 @@ class ResourceSerializer(serializers.ModelSerializer):
     def get_file_url(self, obj):
         request = self.context.get('request')
         if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
+            # Return our cloaked API endpoint instead of direct media URL
+            from django.urls import reverse
+            return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
         return None
 
     def get_owner_name(self, obj):
         return obj.owner.get_full_name() or obj.owner.username
+
+    def get_cover_image_url(self, obj):
+        if not obj.cover_image: return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.cover_image.url)
+        return obj.cover_image.url
 
 
 class ResourceUploadSerializer(serializers.ModelSerializer):

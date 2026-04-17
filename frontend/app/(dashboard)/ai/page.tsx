@@ -8,11 +8,13 @@ import {
   Sparkles, Send, Plus, Loader2, Image, Paperclip, X,
   ChevronRight, BookOpen, Network, GitBranch, Menu,
   BarChart2, Clock, Wand2, MessageSquare, Eye,
-  Copy, Check, Download, RefreshCw, Zap
+  Copy, Check, Download, RefreshCw, Zap, Brain
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
+import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type Message = {
@@ -20,6 +22,7 @@ type Message = {
   content: string
   image?: string   // base64 preview for user-uploaded images
   diagram?: string // mermaid code
+  is_streaming?: boolean // true while chunking
 }
 
 const DIAGRAM_TYPES = [
@@ -27,11 +30,6 @@ const DIAGRAM_TYPES = [
   { id: 'flowchart', label: 'Flowchart', icon: GitBranch,   desc: 'Processes & workflows' },
   { id: 'mindmap',   label: 'Mind Map',  icon: Network,     desc: 'Concepts & ideas' },
   { id: 'sequence',  label: 'Sequence',  icon: BarChart2,   desc: 'System interactions' },
-  { id: 'class',     label: 'Class',     icon: BookOpen,    desc: 'OOP & system design' },
-  { id: 'er',        label: 'ER',        icon: Eye,         desc: 'Database relationships' },
-  { id: 'state',     label: 'State',     icon: RefreshCw,   desc: 'State machines' },
-  { id: 'timeline',  label: 'Timeline',  icon: Clock,       desc: 'Events over time' },
-  { id: 'gantt',     label: 'Gantt',     icon: Download,    desc: 'Project schedules' },
 ]
 
 const SUGGESTIONS = [
@@ -43,255 +41,132 @@ const SUGGESTIONS = [
 ]
 
 // ─── MERMAID RENDERER ────────────────────────────────────────────────────────
-function MermaidDiagram({ code }: { code: string }) {
-  const [svg, setSvg] = useState('')
-  const [error, setError] = useState(false)
-  const [copied, setCopied] = useState(false)
+function MermaidChart({ chart }: { chart: string }) {
+  const [svg, setSvg] = useState<string>('')
 
   useEffect(() => {
-    let cancelled = false
-    import('mermaid').then(m => {
-      m.default.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose', suppressErrorRendering: true })
-      const id = 'mermaid-' + Math.random().toString(36).slice(2);
-      m.default.render(id, code)
-        .then(({ svg: s }) => { if (!cancelled) setSvg(s) })
-        .catch(() => { 
-          if (!cancelled) setError(true)
-          const errorElement = document.getElementById(id); 
-          if (errorElement) errorElement.remove();
-        })
-    }).catch(() => setError(true))
-    return () => { cancelled = true }
-  }, [code])
+    import('mermaid').then(mermaid => {
+      mermaid.default.initialize({ startOnLoad: true, theme: 'neutral' })
+      mermaid.default.render('mermaid-chart', chart).then(res => setSvg(res.svg))
+    })
+  }, [chart])
 
-  const copy = () => {
-    navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  if (!svg) return <div className="p-8 text-center animate-pulse text-slate-400">Rendering diagram...</div>
+  return <div className="overflow-x-auto p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800" dangerouslySetInnerHTML={{ __html: svg }} />
+}
 
-  if (error) return (
-    <div className="bg-rose-50 dark:bg-rose-900/10 rounded-2xl p-4 border border-rose-100 dark:border-rose-900/30">
-      <div className="flex items-center gap-2 text-rose-500 mb-2">
-        <X className="w-4 h-4" />
-        <p className="text-[10px] font-bold uppercase tracking-widest">Diagram Render Failed</p>
-      </div>
-      <pre className="text-xs text-rose-600/70 dark:text-rose-400/70 overflow-x-auto whitespace-pre-wrap font-mono p-3 bg-white/50 dark:bg-black/20 rounded-xl border border-rose-100/50 dark:border-rose-900/20">{code}</pre>
-    </div>
-  )
+// ─── TYPEWRITER EFFECT ───────────────────────────────────────────────────────
+function Typewriter({ text, speed = 10, onComplete }: { text: string, speed?: number, onComplete?: () => void }) {
+  const [displayedText, setDisplayedText] = useState('')
+  const [index, setIndex] = useState(0)
 
-  if (!svg) return (
-    <div className="flex items-center gap-2 text-xs font-medium text-slate-400 py-4 px-2">
-      <Loader2 className="w-4 h-4 animate-spin text-primary" /> Rendering diagram...
-    </div>
-  )
+  useEffect(() => {
+    if (index < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedText(prev => prev + text[index])
+        setIndex(prev => prev + 1)
+      }, speed)
+      return () => clearTimeout(timeout)
+    } else if (onComplete) {
+      onComplete()
+    }
+  }, [index, text, speed, onComplete])
 
   return (
-    <div className="relative group">
-      <div dangerouslySetInnerHTML={{ __html: svg }} className="max-w-full overflow-x-auto rounded-lg" />
-      <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={copy} className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-md hover:scale-105 active:scale-95 transition-all text-slate-500 hover:text-slate-700 border border-slate-100 dark:border-slate-700">
-          {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-        </button>
-      </div>
+    <div className="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
+      <ReactMarkdown
+        components={{
+          ul: ({ children }) => <ul className="space-y-4 my-4 list-none pl-0">{children}</ul>,
+          li: ({ children }) => (
+            <li className="flex gap-3 items-start group">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
+              <span className="text-slate-700 dark:text-slate-200">{children}</span>
+            </li>
+          ),
+          a: ({ children, href }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary font-black underline decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all">
+              {children}
+            </a>
+          )
+        }}
+      >
+        {displayedText + (index < text.length ? '▊' : '')}
+      </ReactMarkdown>
     </div>
   )
 }
 
-// ─── MESSAGE BUBBLE ──────────────────────────────────────────────────────────
-function MessageBubble({ msg, isLast }: { msg: Message; isLast: boolean }) {
+// ─── MESSAGE COMPONENT ───────────────────────────────────────────────────────
+function MessageBubble({ msg, isLast, isNew }: { msg: Message, isLast: boolean, isNew?: boolean }) {
   const [copied, setCopied] = useState(false)
+  const [typingComplete, setTypingComplete] = useState(!isNew || msg.is_streaming)
   const isUser = msg.role === 'user'
 
-  const copy = () => {
+  const handleCopy = () => {
     navigator.clipboard.writeText(msg.content)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-    toast.success('Message copied')
+    toast.success('Copied to clipboard')
   }
 
   return (
-    <div className={cn(
-      'flex gap-3 sm:gap-4 group w-full animate-fade-in-up',
-      isUser ? 'flex-row-reverse' : 'flex-row'
-    )}>
-      {/* Avatar / Icon */}
-      <div className="flex-shrink-0 mt-1">
-        {isUser ? (
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-sm">
-            <span className="text-xs font-bold text-slate-500 italic">User</span>
+    <div className={cn('flex flex-col gap-3', isUser ? 'items-end' : 'items-start')}>
+      <div className={cn('flex items-center gap-2 mb-1', isUser ? 'flex-row-reverse' : 'flex-row')}>
+        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shadow-sm',
+          isUser ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400')}>
+          {isUser ? 'ME' : 'AI'}
+        </div>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isUser ? 'You' : 'FlowAI'}</span>
+      </div>
+
+      <div className={cn('max-w-[85%] sm:max-w-[75%] rounded-[1.5rem] p-4 sm:p-5 shadow-sm relative group',
+        isUser 
+          ? 'bg-slate-900 text-slate-100 rounded-tr-none' 
+          : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none')}>
+        
+        {msg.image && (
+          <div className="mb-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+            <img src={msg.image} alt="uploaded" className="max-w-full h-auto" />
           </div>
+        )}
+
+        {!isUser && isNew && !typingComplete && !msg.is_streaming ? (
+          <Typewriter text={msg.content} onComplete={() => setTypingComplete(true)} />
         ) : (
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary to-violet-600 rounded-full flex items-center justify-center shadow-lg shadow-primary/20 transform group-hover:scale-110 transition-transform duration-300">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+          <div className="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                ul: ({ children }) => <ul className="space-y-4 my-4 list-none pl-0">{children}</ul>,
+                li: ({ children }) => (
+                  <li className="flex gap-3 items-start group">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
+                    <span className="text-slate-700 dark:text-slate-200 font-medium">{children}</span>
+                  </li>
+                ),
+                a: ({ children, href }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary font-black underline decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all">
+                    {children}
+                  </a>
+                )
+              }}
+            >
+              {msg.content}
+            </ReactMarkdown>
           </div>
         )}
-      </div>
 
-      {/* Message Content Area */}
-      <div className={cn('flex-1 min-w-0 max-w-[85%] sm:max-w-[75%] space-y-2', isUser ? 'text-right' : 'text-left')}>
+        {(typingComplete || isUser) && msg.diagram && (
+          <div className="mt-6">
+            <MermaidChart chart={msg.diagram} />
+          </div>
+        )}
+
         {!isUser && (
-          <div className="flex items-center gap-2 mb-1 px-1">
-            <span className="text-[11px] font-black tracking-widest uppercase text-slate-400 dark:text-slate-500">FlowAI</span>
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-          </div>
-        )}
-
-        <div className="relative group/content">
-          {/* User Preview Image */}
-          {msg.image && (
-            <div className="mb-3 inline-block group/img">
-              <img src={msg.image} alt="uploaded" className="max-w-[200px] sm:max-w-xs rounded-2xl border-2 border-white dark:border-slate-800 shadow-xl ring-1 ring-slate-200 dark:ring-slate-700 transition-transform hover:scale-[1.02] duration-300" />
-            </div>
-          )}
-
-          {/* Text Bubble */}
-          {msg.content && (
-            <div className={cn(
-              'inline-block px-4 sm:px-6 py-3 sm:py-4 transition-all duration-300 shadow-md',
-              isUser
-                ? 'bg-gradient-to-br from-primary to-sky-600 text-white rounded-3xl rounded-tr-sm text-left'
-                : 'glass-card text-slate-800 dark:text-slate-200 rounded-3xl rounded-tl-sm prose prose-slate dark:prose-invert max-w-none prose-ai'
-            )}>
-              {isUser ? (
-                <p className="whitespace-pre-wrap leading-relaxed font-medium text-[15px]">{msg.content}</p>
-              ) : (
-                <ReactMarkdown
-                  components={{
-                    code({ node, inline, className, children, ...props }: any) {
-                      const match = /language-(\w+)/.exec(className || '')
-                      return !inline ? (
-                        <div className="relative my-4 group/code">
-                          <div className="absolute top-3 right-4 flex items-center gap-2 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{match ? match[1] : 'code'}</span>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(String(children).replace(/\n$/, ''))
-                                toast.success('Code copied')
-                              }}
-                              className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md backdrop-blur-sm transition-colors border border-white/10"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-slate-400" />
-                            </button>
-                          </div>
-                          <pre className={cn(className, "p-4 sm:p-5 pt-12 overflow-x-auto scrollbar-hide")} {...props}>
-                            <code className="text-[13.5px] font-mono leading-relaxed">{children}</code>
-                          </pre>
-                        </div>
-                      ) : (
-                        <code className={className} {...props}>{children}</code>
-                      )
-                    }
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
-              )}
-
-              {/* Quick Action Button - Floating */}
-              {!isUser && (
-                <div className="absolute -right-12 top-0 flex flex-col gap-2 opacity-0 group-hover/content:opacity-100 transition-opacity duration-300 translate-x-2 group-hover/content:translate-x-0">
-                  <button onClick={copy} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-90 transition-all text-slate-400 hover:text-primary">
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Diagram Result */}
-        {msg.diagram && (
-          <div className="glass-card rounded-3xl rounded-tl-sm p-5 sm:p-6 shadow-2xl max-w-full overflow-hidden w-full border-t-4 border-t-violet-500 animate-in zoom-in-95 duration-500">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-violet-500">
-                <div className="p-2 bg-violet-100 dark:bg-violet-950/50 rounded-lg"><Network className="w-4 h-4" /></div>
-                System Visualization
-              </div>
-              <div className="flex gap-2">
-                 <button onClick={() => { navigator.clipboard.writeText(msg.diagram!); toast.success('Mermaid code copied') }} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"><Copy className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div className="bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/50">
-              <MermaidDiagram code={msg.diagram} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── DIAGRAM MODAL ───────────────────────────────────────────────────────────
-function DiagramModal({ onClose, onInsert }: { onClose: () => void; onInsert: (code: string) => void }) {
-  const [desc, setDesc] = useState('')
-  const [type, setType] = useState('auto')
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState('')
-
-  const generate = async () => {
-    if (!desc.trim()) return
-    setLoading(true)
-    setResult('')
-    try {
-      const res = await aiApi.generateDiagram(desc, type)
-      setResult(res.data.mermaid)
-    } catch { toast.error('Failed to generate diagram.') }
-    finally { setLoading(false) }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col border border-slate-200/50 dark:border-slate-800/50">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-          <div>
-            <h2 className="font-extrabold text-xl flex items-center gap-2"><Network className="w-6 h-6 text-violet-500" /> Generate Diagram</h2>
-            <p className="text-sm text-slate-500 mt-1">Describe anything — FlowAI picks the best diagram type automatically</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* Type selector */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {DIAGRAM_TYPES.map(dt => (
-              <button key={dt.id} onClick={() => setType(dt.id)}
-                className={cn('flex flex-col items-center gap-2 p-3 rounded-2xl border-2 font-bold transition-all',
-                  type === dt.id
-                    ? 'border-violet-500 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 shadow-sm'
-                    : 'border-slate-100 dark:border-slate-800 text-slate-500 hover:border-violet-200 dark:hover:border-violet-900')}>
-                <dt.icon className="w-5 h-5" />
-                <span className="text-xs">{dt.label}</span>
-              </button>
-            ))}
-          </div>
-          <textarea value={desc} onChange={e => setDesc(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && e.ctrlKey && generate()}
-            placeholder={type === 'auto'
-              ? 'Describe anything — e.g. "System analysis for a library management system" or "How photosynthesis works"'
-              : `Describe your ${type} diagram...`}
-            className="input resize-none w-full text-base min-h-[100px]" />
-          <button onClick={generate} disabled={!desc.trim() || loading}
-            className="btn-primary w-full py-4 text-base">
-            {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating Graph...</> : <><Wand2 className="w-5 h-5" /> Generate Diagram</>}
+          <button onClick={handleCopy} className="absolute -right-10 top-0 p-2 text-slate-400 hover:text-primary transition-opacity opacity-0 group-hover:opacity-100">
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           </button>
-          {result && (
-            <div className="space-y-4 animate-in slide-in-from-bottom-4">
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 overflow-x-auto border border-slate-200 dark:border-slate-800">
-                <MermaidDiagram code={result} />
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={() => { onInsert(result); onClose() }}
-                  className="btn-primary flex-1">
-                  <MessageSquare className="w-4 h-4" /> Insert into Chat
-                </button>
-                <button onClick={generate} disabled={loading}
-                  className="btn-secondary">
-                  <RefreshCw className="w-4 h-4" /> Regenerate
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   )
@@ -300,45 +175,37 @@ function DiagramModal({ onClose, onInsert }: { onClose: () => void; onInsert: (c
 // ─── MAIN CHAT ───────────────────────────────────────────────────────────────
 function AIChat() {
   const searchParams = useSearchParams()
-  const [activeSession, setActiveSession] = useState<any>(null)
-  const [messages, setMessages] = useState<Message[]>([])
+  const queryClient = useQueryClient()
+  
   const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
-  const [contextType, setContextType] = useState<'global' | 'resource'>('global')
-  const [selectedResource, setSelectedResource] = useState<number | null>(null)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<string | null>(null)
+  const [contextType, setContextType] = useState<'global' | 'resource'>('global')
+  const [selectedResource, setSelectedResource] = useState<number | null>(null)
+  const [activeSession, setActiveSession] = useState<any>(null)
+
+  // Tools UI
   const [showDiagram, setShowDiagram] = useState(false)
   const [showImageGen, setShowImageGen] = useState(false)
   
-  // Responsive sidebar state
+  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [isClient, setIsClient] = useState(false)
-
+  
   const bottomRef = useRef<HTMLDivElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const qc = useQueryClient()
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    setIsClient(true)
-    if (window.innerWidth >= 1024) {
-      setSidebarOpen(true)
-    }
-  }, [])
-
-  const { data: sessionsData, refetch: refetchSessions } = useQuery({
-    queryKey: ['ai-sessions'],
-    queryFn: () => aiApi.getSessions().then(r => r.data),
+  // Fetch historic data
+  const { data: sessions = [] } = useQuery({ 
+    queryKey: ['ai-sessions'], 
+    queryFn: () => aiApi.getSessions().then(res => Array.isArray(res.data) ? res.data : (res.data.results || [])) 
   })
-  const { data: resourcesData } = useQuery({
-    queryKey: ['resources'],
-    queryFn: () => libraryApi.getResources().then(r => r.data),
+  const { data: resources = [] } = useQuery({ 
+    queryKey: ['resources-library'], 
+    queryFn: () => libraryApi.getResources().then(res => Array.isArray(res.data) ? res.data : (res.data.results || [])) 
   })
-
-  const sessions: any[] = sessionsData?.results || []
-  const resources: any[] = resourcesData?.results || []
 
   useEffect(() => {
     const q = searchParams.get('q')
@@ -347,130 +214,152 @@ function AIChat() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, sending])
-
-  const loadSession = async (session: any) => {
-    if (window.innerWidth < 1024) setSidebarOpen(false) // auto close on mobile
-    try {
-      const res = await aiApi.getSession(session.id)
-      setActiveSession(res.data)
-      const msgs: Message[] = (res.data.messages || []).map((m: any) => ({
-        role: m.role,
-        content: m.content,
-      }))
-      setMessages(msgs)
-    } catch { toast.error('Failed to load session.') }
-  }
+  }, [messages])
 
   const startNew = () => {
-    if (window.innerWidth < 1024) setSidebarOpen(false)
-    setActiveSession(null)
     setMessages([])
+    setActiveSession(null)
     setInput('')
     setAttachedFile(null)
     setFilePreview(null)
+    toast.info('New chat started')
   }
 
-  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setAttachedFile(file)
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onload = ev => setFilePreview(ev.target?.result as string)
-      reader.readAsDataURL(file)
-    } else {
-      setFilePreview(null)
-    }
-    e.target.value = ''
-  }
-
-  const removeFile = () => { setAttachedFile(null); setFilePreview(null) }
-
-  const handleSend = async () => {
-    if ((!input.trim() && !attachedFile) || sending) return
-    setSending(true)
-    const controller = new AbortController()
-    abortControllerRef.current = controller
-
-    const userContent = input.trim()
-    const file = attachedFile
-    const preview = filePreview
-
-    setInput('')
-    setAttachedFile(null)
-    setFilePreview(null)
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
-
-    const userMsg: Message = {
-      role: 'user',
-      content: userContent || (file ? `Attached: ${file.name}` : ''),
-      image: preview || undefined,
-    }
-    setMessages(m => [...m, userMsg])
-
-    try {
-      let session = activeSession
-      if (!session) {
-        const title = userContent.slice(0, 50) || file?.name || 'New chat'
-        const res = await aiApi.createSession({
-          context_type: contextType,
-          resource: contextType === 'resource' ? selectedResource : null,
-          title,
-        })
-        session = res.data
-        setActiveSession(session)
-        refetchSessions()
-      }
-
-      let res
-      if (file) {
-        res = await aiApi.sendVisionMessage(session.id, userContent, file, { signal: controller.signal })
-      } else {
-        res = await aiApi.sendMessage(session.id, userContent, { signal: controller.signal })
-      }
-
-      setMessages(m => [...m, { role: 'assistant', content: res.data.content }])
-    } catch (err: any) {
-      const msg = err?.response?.status === 429 ? 'Rate limit reached. Please wait a moment.' : 'AI unavailable. Please try again.'
-      toast.error(msg)
-      setMessages(m => m.slice(0, -1))
-      setInput(userContent)
-    } finally {
-      setSending(false)
-      abortControllerRef.current = null
-    }
-  }
-
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      toast.info('Generation stopped.')
-    }
-  }
-
-  const insertDiagram = (code: string) => {
-    setMessages(m => [...m, { role: 'assistant', content: '', diagram: code }])
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  const loadSession = (session: any) => {
+    setMessages(session.messages || [])
+    setActiveSession(session)
+    setSidebarOpen(false)
   }
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
-    // Smooth auto-resize
     e.target.style.height = 'auto'
-    const nextHeight = Math.min(e.target.scrollHeight, 160)
-    e.target.style.height = nextHeight + 'px'
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
   }
 
-  if (!isClient) return null
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setAttachedFile(file)
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = () => setFilePreview(reader.result as string)
+        reader.readAsDataURL(file)
+      } else {
+        setFilePreview(null)
+      }
+    }
+  }
+
+  const removeFile = () => {
+    setAttachedFile(null)
+    setFilePreview(null)
+  }
+
+  const handleSend = async () => {
+    if ((!input.trim() && !attachedFile) || sending) return
+    
+    const userMsg: Message = { role: 'user', content: input }
+    if (filePreview) userMsg.image = filePreview
+    
+    setMessages(prev => [...prev, userMsg])
+    const currentInput = input
+    setInput('')
+    setSending(true)
+    
+    try {
+      let activeId = activeSession?.id;
+
+      // Ensure we have a session for files if one doesn't exist
+      if (attachedFile && !activeId) {
+        const sessRes = await aiApi.createSession({ 
+          title: currentInput.slice(0, 30) || 'Image Analysis',
+          context_type: contextType,
+          resource_id: selectedResource 
+        });
+        activeId = sessRes.data.id;
+        setActiveSession(sessRes.data);
+        queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+      }
+
+      if (attachedFile) {
+        // VISION: Still uses standard blocking API for now
+        const responseRes = await aiApi.sendVisionMessage(activeId || 0, currentInput, attachedFile);
+        const response = responseRes.data;
+        const assistantMsg: Message = { 
+          role: 'assistant', 
+          content: response.reply || response.content || '',
+          diagram: response.diagram_code 
+        };
+        setMessages(prev => [...prev, assistantMsg]);
+      } else {
+        // CHAT: Enhanced Streaming Interface
+        const assistantMsg: Message = { role: 'assistant', content: '', is_streaming: true };
+        setMessages(prev => [...prev, assistantMsg]);
+        
+        let fullContent = '';
+        const stream = aiApi.streamAgentResponse(
+          currentInput,
+          contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+          messages.map(m => ({ role: m.role, content: m.content })),
+          false // tutor mode
+        );
+
+        for await (const chunk of stream) {
+          if (chunk.includes('ACTION_TRIGGERED:')) {
+            const actionStr = chunk.split('ACTION_TRIGGERED:')[1];
+            try {
+              const action = JSON.parse(actionStr);
+              toast.success(`Action: ${action.tool} detected!`);
+              // Note: You can add more complex action feedback here
+            } catch (e) {}
+            continue;
+          }
+          
+          fullContent += chunk;
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === 'assistant') {
+              const updated = [...prev];
+              updated[updated.length - 1] = { ...last, content: fullContent };
+              return updated;
+            }
+            return prev;
+          });
+        }
+        
+        // Finalize streaming state
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated[updated.length - 1]) {
+            updated[updated.length - 1].is_streaming = false;
+          }
+          return updated;
+        });
+      }
+      
+      if (!activeSession) queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+    } catch (err) {
+      console.error('AI Error:', err);
+      toast.error('Intelligence Signal Interrupted');
+    } finally {
+      setSending(false)
+      removeFile()
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
 
   const isEmpty = messages.length === 0
 
   return (
-    <div className="flex h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] -m-4 md:-m-6 bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
+    <div className="flex h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] -m-4 md:-m-6 bg-slate-50 dark:bg-slate-950 relative overflow-hidden text-slate-800 dark:text-slate-200">
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -482,13 +371,15 @@ function AIChat() {
 
       {/* Sidebar */}
       <div className={cn(
-        'flex-shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 ease-out z-50 shadow-2xl lg:shadow-none',
+        'flex-shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 ease-out z-50 shadow-2xl lg:shadow-none overflow-hidden',
         'absolute lg:relative h-full top-0 left-0',
-        sidebarOpen ? 'w-[280px] md:w-[320px] translate-x-0' : 'w-[280px] md:w-[320px] -translate-x-full lg:translate-x-0 lg:w-0 lg:border-r-0'
+        sidebarOpen 
+          ? 'w-[280px] md:w-[320px] translate-x-0 opacity-100' 
+          : 'w-[280px] md:w-[320px] -translate-x-full lg:translate-x-0 lg:w-0 lg:border-r-0 lg:opacity-0 lg:pointer-events-none'
       )}>
         <div className="p-4 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 lg:border-transparent flex-shrink-0">
           <button onClick={startNew}
-            className="flex-1 btn-primary py-3">
+            className="w-full btn-primary py-3 flex-shrink-0 whitespace-nowrap">
             <Plus className="w-4 h-4" /> New Chat
           </button>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 bg-white dark:bg-slate-800 hover:bg-slate-50 active:scale-95 transition-all">
@@ -510,14 +401,44 @@ function AIChat() {
                 </button>
               ))}
             </div>
-            {contextType === 'resource' && (
-              <select value={selectedResource || ''} onChange={e => setSelectedResource(Number(e.target.value) || null)}
-                className="input text-xs mt-3 w-full bg-slate-50 dark:bg-slate-900">
-                <option value="">Select resource...</option>
-                {resources.map((r: any) => <option key={r.id} value={r.id}>{r.title}</option>)}
-              </select>
-            )}
           </div>
+
+          {/* Document Selector (When in Resource Mode) */}
+          {contextType === 'resource' && (
+            <div className="px-4 pb-4 animate-fade-in-down">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-3 px-1 tracking-widest uppercase">Target Document</p>
+              {resources.length === 0 ? (
+                <div className="p-4 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50">
+                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">No documents found</p>
+                   <p className="text-[9px] text-slate-400 mt-1">Upload a PDF to your library first</p>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                  {resources.map((res: any) => (
+                    <button 
+                      key={res.id} 
+                      onClick={() => {
+                        setSelectedResource(res.id);
+                        toast.success(`Context set to: ${res.title}`);
+                      }}
+                      className={cn('w-full text-left p-2.5 rounded-xl transition-all flex items-center gap-3 group',
+                        selectedResource === res.id 
+                          ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' 
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border border-transparent'
+                      )}
+                    >
+                      <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center text-xs shadow-sm shadow-black/5',
+                        selectedResource === res.id ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800'
+                      )}>
+                        {res.resource_type === 'video' ? '📺' : res.resource_type === 'pdf' ? '📄' : '📝'}
+                      </div>
+                      <span className="text-xs font-bold truncate flex-1">{res.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tools */}
           <div className="px-4 pb-4">
@@ -530,10 +451,6 @@ function AIChat() {
               <button onClick={() => setShowImageGen(true)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-pink-500/10 hover:text-pink-600 dark:hover:text-pink-400 transition-colors">
                 <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-500/20 text-pink-500 flex items-center justify-center"><Wand2 className="w-4 h-4" /></div> Generate Image
-              </button>
-              <button onClick={() => fileRef.current?.click()}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:text-sky-600 dark:hover:text-primary transition-colors group/tool">
-                 <div className="w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-500/20 text-primary flex items-center justify-center group-hover/tool:scale-110 transition-transform"><Paperclip className="w-4 h-4" /></div> Analyze File
               </button>
             </div>
           </div>
@@ -568,14 +485,14 @@ function AIChat() {
       <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-slate-50 dark:bg-slate-950">
         
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 glass-panel border-b border-slate-200 dark:border-slate-800 z-10 sticky top-0 flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 glass-panel border-b border-slate-200 dark:border-slate-800 z-[50] sticky top-0 flex-shrink-0 shadow-sm">
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 bg-white transition-colors">
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-primary hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 bg-white transition-all shadow-lg shadow-primary/5 active:scale-95">
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-            <Sparkles className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 bg-gradient-to-br from-primary to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+            <Brain className="w-5 h-5 text-white" />
           </div>
           <div className="hidden sm:block">
             <div className="font-extrabold text-base text-slate-900 dark:text-white">FlowAI Assistant</div>
@@ -589,12 +506,17 @@ function AIChat() {
           </div>
 
           {activeSession && (
-            <div className="ml-auto flex items-center gap-2 max-w-[50%]">
-              <div className="hidden sm:flex text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1.5 rounded-full uppercase tracking-wider truncate">
-                {activeSession.title || 'Active Session'}
+            <div className="ml-auto flex items-center gap-3 max-w-[50%]">
+              <div className="hidden lg:flex text-[10px] font-black bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-700 px-3 py-1.5 rounded-full uppercase tracking-wider truncate shadow-sm">
+                {activeSession?.title || 'Current Thread'}
               </div>
-              <button onClick={startNew} className="p-2.5 rounded-xl text-slate-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ml-1" title="New chat">
-                <Plus className="w-5 h-5" />
+              <button 
+                onClick={startNew} 
+                className="flex items-center gap-2 pl-3 pr-4 py-2 rounded-xl text-primary bg-white dark:bg-slate-900 border border-primary/20 hover:bg-primary/5 dark:hover:bg-primary/10 transition-all font-black text-xs shadow-md shadow-primary/5 active:scale-95" 
+                title="New chat"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Chat</span>
               </button>
             </div>
           )}
@@ -607,7 +529,7 @@ function AIChat() {
               <div className="w-24 h-24 bg-gradient-to-br from-primary to-violet-500 rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl shadow-primary/30 rotate-3 hover:rotate-6 transition-transform">
                 <Sparkles className="w-12 h-12 text-white" />
               </div>
-              <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-3">Hi, I'm FlowAI</h2>
+              <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">Hi, I'm FlowAI</h1>
               <p className="text-slate-500 dark:text-slate-400 text-base max-w-sm mb-10 leading-relaxed font-medium">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
@@ -625,32 +547,22 @@ function AIChat() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-fade-in pb-8">
+            <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
               {messages.map((msg, i) => (
-                <MessageBubble key={i} msg={msg} isLast={i === messages.length - 1} />
+                <MessageBubble 
+                  key={i} 
+                  msg={msg} 
+                  isLast={i === messages.length - 1} 
+                  isNew={!sending && i === messages.length - 1} 
+                />
               ))}
               {sending && (
-                <div className="flex gap-4 justify-start w-full">
-                  <div className="w-10 h-10 bg-gradient-to-br from-primary to-violet-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
-                    <Sparkles className="w-5 h-5 text-white animate-pulse" />
-                  </div>
-                  <div className="glass-card rounded-3xl rounded-tl-sm px-5 py-4 flex items-center gap-3 shadow-md max-w-[200px]">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex gap-1.5 items-center">
-                        {[0,1,2].map(i => (
-                          <div key={i} className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                        ))}
-                      </div>
-                      <button onClick={handleStop}
-                        className="text-[10px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors border border-rose-100 dark:border-rose-900/50">
-                        <X className="w-3 h-3" /> Stop
-                      </button>
-                      {messages[messages.length-1]?.role === 'user' && (messages[messages.length-1].image || messages[messages.length-1].content.includes('[PDF:')) && (
-                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest animate-pulse">Analyzing content...</p>
-                      )}
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Thinking...</span>
                   </div>
-                </div>
               )}
               <div ref={bottomRef} className="h-4" />
             </div>
@@ -691,6 +603,7 @@ function AIChat() {
                     className="p-2 sm:p-2.5 text-slate-500 hover:text-primary transition-colors hover:bg-white dark:hover:bg-slate-700 rounded-xl" title="Upload">
                     <Plus className="w-5 h-5" />
                   </button>
+                  <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
                 </div>
 
                 {/* Textarea */}
@@ -718,134 +631,25 @@ function AIChat() {
             </div>
             
             {/* Footer tags */}
-            <div className="flex items-center justify-center gap-4 mt-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest flex-wrap">
+            <div className="flex items-center justify-center md:justify-center gap-4 mt-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest flex-wrap pr-16 md:pr-0">
               <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> High-Speed Inference</span>
               <span className="hidden sm:flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Context Aware</span>
             </div>
           </div>
         </div>
       </div>
+      
+      {/* Hidden file input for logic */}
+      <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
 
-      <input ref={fileRef} type="file" className="hidden"
-        accept="image/*,.pdf,.txt,.md,.doc,.docx"
-        onChange={handleFileAttach} />
-
-      {showDiagram && <DiagramModal onClose={() => setShowDiagram(false)} onInsert={insertDiagram} />}
-      {showImageGen && <ImageGenModal onClose={() => setShowImageGen(false)} onInsert={(url, prompt) => {
-        setMessages(m => [...m, { role: 'assistant', content: `Here's the generated image for: **${prompt}**`, image: url }])
-      }} />}
     </div>
   )
 }
 
 export default function AIPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-[calc(100vh-100px)]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary to-violet-500 rounded-xl flex items-center justify-center animate-pulse">
-            <Sparkles className="w-6 h-6 text-white" />
-          </div>
-          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Loading Workspace...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
       <AIChat />
     </Suspense>
-  )
-}
-
-// ─── IMAGE GENERATION MODAL ──────────────────────────────────────────────────
-function ImageGenModal({ onClose, onInsert }: { onClose: () => void; onInsert: (url: string, prompt: string) => void }) {
-  const [prompt, setPrompt] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ url: string; prompt: string } | null>(null)
-  const [imgLoaded, setImgLoaded] = useState(false)
-
-  const generate = async () => {
-    if (!prompt.trim()) return
-    setLoading(true)
-    setResult(null)
-    setImgLoaded(false)
-    try {
-      const res = await aiApi.generateImage(prompt)
-      setResult({ url: res.data.url, prompt: res.data.prompt })
-    } catch (err: any) { toast.error(err?.response?.data?.error || 'Failed to generate image.') }
-    finally { setLoading(false) }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col border border-slate-200/50 dark:border-slate-800/50">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-          <div>
-            <h2 className="font-extrabold text-xl flex items-center gap-2">
-              <Wand2 className="w-6 h-6 text-pink-500" /> Image Generation
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">High-quality AI visual creation</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-6 space-y-5 overflow-y-auto flex-1">
-          <textarea value={prompt} onChange={e => setPrompt(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && e.ctrlKey && generate()}
-            placeholder="Describe the image you want... e.g. 'A detailed diagram of the human heart with labeled parts'"
-            className="input resize-none w-full text-base min-h-[100px]" />
-          <button onClick={generate} disabled={!prompt.trim() || loading}
-            className="btn-primary w-full py-4 text-base !bg-pink-500 hover:!bg-pink-600 shadow-pink-500/30">
-            {loading
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating Magic...</>
-              : <><Wand2 className="w-5 h-5" /> Generate Image</>}
-          </button>
-
-          {loading && (
-            <div className="flex flex-col items-center gap-4 py-10 text-slate-500">
-              <div className="w-20 h-20 bg-gradient-to-br from-pink-100 to-violet-100 dark:from-pink-900/30 dark:to-violet-900/30 rounded-3xl flex items-center justify-center shadow-inner">
-                <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
-              </div>
-              <p className="text-sm font-bold uppercase tracking-widest text-pink-500">Creating Masterpiece...</p>
-            </div>
-          )}
-
-          {result && (
-            <div className="space-y-4 animate-in slide-in-from-bottom-4">
-              <div className="relative rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800/50 min-h-[300px] flex items-center justify-center border border-slate-200 dark:border-slate-700 p-2">
-                {!imgLoaded && <Loader2 className="w-8 h-8 text-slate-400 animate-spin absolute" />}
-                <img
-                  src={result.url}
-                  alt={result.prompt}
-                  referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
-                  onLoad={() => setImgLoaded(true)}
-                  onError={() => { setImgLoaded(true); toast.error('Image failed to load due to a server block. Try a different prompt.') }}
-                  className={cn('w-full rounded-xl transition-opacity duration-500 shadow-sm', imgLoaded ? 'opacity-100' : 'opacity-0')}
-                />
-              </div>
-              {result.prompt !== prompt && (
-                <p className="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                  <span className="font-bold text-pink-500">Enhanced Prompt:</span> {result.prompt}
-                </p>
-              )}
-              <div className="flex flex-col md:flex-row gap-3">
-                <button onClick={() => { onInsert(result.url, prompt); onClose() }}
-                  className="btn-primary flex-1 !bg-pink-500 hover:!bg-pink-600 shadow-pink-500/20">
-                  <MessageSquare className="w-4 h-4" /> Insert into Chat
-                </button>
-                <div className="flex gap-3">
-                  <a href={result.url} download target="_blank" rel="noopener noreferrer"
-                    className="btn-secondary flex-1 md:flex-none">
-                    <Download className="w-4 h-4" /> Save
-                  </a>
-                  <button onClick={generate} disabled={loading}
-                    className="btn-secondary flex-1 md:flex-none">
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
   )
 }

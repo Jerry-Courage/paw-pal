@@ -20,6 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -32,38 +33,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [status, router])
 
-  if (status === 'loading') {
+  if (status === 'loading' || status === 'unauthenticated') {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-400">Loading FlowState...</p>
+          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-400">
+            {status === 'loading' ? 'Initializing Neural Link...' : 'Redirecting to Login...'}
+          </p>
         </div>
       </div>
     )
   }
 
+  const isStudio = pathname.startsWith('/workspace/')
+
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
       <AIGuideTour />
       
-      {/* Desktop sidebar — hidden on mobile */}
-      <div className="hidden md:flex">
-        <Sidebar />
+      {/* Desktop sidebar — hidden on mobile, collapsible on desktop */}
+      <div className={cn(
+        "hidden md:flex transition-all duration-300",
+        desktopSidebarOpen ? "w-64" : "w-0 overflow-hidden"
+      )}>
+        <Sidebar onToggle={() => setDesktopSidebarOpen(!desktopSidebarOpen)} isOpen={desktopSidebarOpen} />
       </div>
 
       {/* Mobile sidebar drawer */}
       <MobileSidebar open={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <TopBar onMenuClick={() => setMobileSidebarOpen(true)} />
-        {/* pb-16 on mobile to account for bottom nav */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6 relative">
+        <TopBar 
+          onMenuClick={() => setMobileSidebarOpen(true)} 
+          isSidebarOpen={desktopSidebarOpen}
+          onToggleSidebar={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
+        />
+        <main className={cn(
+          "flex-1 relative overflow-x-hidden",
+          isStudio ? "overflow-hidden" : "overflow-y-auto p-4 md:p-6 pb-20 md:pb-6"
+        )}>
           {children}
         </main>
       </div>
 
-      {/* Mobile bottom nav */}
       <MobileNav />
 
       <GlobalAgentAssistant />

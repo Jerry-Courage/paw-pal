@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
-from .models import Post, Comment, StudyEvent, StudyRoom
-from .serializers import PostSerializer, CommentSerializer, StudyEventSerializer, StudyRoomSerializer
+from .models import Post, Comment, StudyEvent, StudyRoom, Story
+from .serializers import PostSerializer, CommentSerializer, StudyEventSerializer, StudyRoomSerializer, StorySerializer
 
 
 class PostListCreateView(generics.ListCreateAPIView):
@@ -173,12 +173,16 @@ class LeaderboardView(APIView):
 
     def get(self, request):
         from django.contrib.auth import get_user_model
-        from library.models import Flashcard
-        from django.utils import timezone
-        from datetime import timedelta
+        from django.db.models import F, ExpressionWrapper, FloatField
         User = get_user_model()
 
-        users = User.objects.filter(is_active=True).order_by('-study_streak', '-total_study_time')[:20]
+        # Premium Ranking Logic: Combine streak consistency with total effort
+        users = User.objects.filter(is_active=True).annotate(
+            nexus_score=ExpressionWrapper(
+                F('total_study_time') * 10 + F('study_streak') * 20,
+                output_field=FloatField()
+            )
+        ).order_by('-nexus_score')[:20]
 
         leaderboard = []
         for i, u in enumerate(users):
@@ -209,3 +213,27 @@ class LeaderboardView(APIView):
             }
 
         return Response({'leaderboard': leaderboard, 'my_rank': my_rank})
+
+
+class StoryListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = StorySerializer
+
+    def get_queryset(self):
+        from django.utils import timezone
+        # Filter: Only active (not expired) stories from workspaces the user belongs to
+        user_workspaces = self.request.user.workspaces.all()
+        return Story.objects.filter(
+            workspace__in=user_workspaces,
+            expires_at__gt=timezone.now()
+        ).select_related('author', 'workspace')
+
+    def perform_create(self, serializer):
+        # Validation: Ensure user is a member of the workspace they're posting to
+        workspace_id = self.request.data.get('workspace')
+        from workspace.models import Workspace
+        workspace = get_object_or_404(Workspace, id=workspace_id, memberships__user=self.request.user)
+        serializer.save(author=self.request.user, workspace=workspace)
+
+    def get_serializer_context(self):
+        return {'request': self.request}

@@ -5,6 +5,9 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from .models import StudySession, Deadline
 from .serializers import StudySessionSerializer, DeadlineSerializer
+from ai_assistant.services import AIService
+import json
+import re
 
 
 class StudySessionListCreateView(generics.ListCreateAPIView):
@@ -99,6 +102,76 @@ class DeadlineDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Deadline.objects.filter(user=self.request.user)
 
 
+class BulkCreateSessionsView(APIView):
+    """Create a series of recurring sessions (Classes/Lessons)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import uuid
+        from dateutil.relativedelta import relativedelta
+        
+        data = request.data
+        title = data.get('title')
+        subject = data.get('subject', '')
+        session_type = data.get('session_type', 'class')
+        start_time_str = data.get('start_time')
+        end_time_str = data.get('end_time')
+        days = data.get('days', []) # List of ints 0-6 (Mon-Sun)
+        weeks_count = int(data.get('weeks_count', 12))
+        
+        if not title or not start_time_str or not end_time_str or not days:
+            return Response({'error': 'Missing required fields (title, start_time, end_time, days).'}, status=400)
+
+        from django.utils.dateparse import parse_datetime
+        base_start = parse_datetime(start_time_str)
+        base_end = parse_datetime(end_time_str)
+        
+        if not base_start or not base_end:
+            return Response({'error': 'Invalid date format.'}, status=400)
+
+        recurrence_id = uuid.uuid4()
+        sessions_to_create = []
+        
+        # Generator for the next N weeks
+        for week_offset in range(weeks_count):
+            # For each week, check the requested days
+            # We want to find the date for each requested day of week starting from base_start's week
+            # startOfWeek (Mon) of base_start
+            monday_of_week = base_start - timedelta(days=base_start.weekday())
+            
+            for day_index in days:
+                actual_start = monday_of_week + timedelta(weeks=week_offset, days=day_index)
+                
+                # Copy the time from base_start
+                actual_start = actual_start.replace(hour=base_start.hour, minute=base_start.minute, second=base_start.second)
+                
+                # Check if this instance is before the user's start (optional, but usually we start from base_start)
+                if actual_start < base_start and week_offset == 0:
+                    continue
+
+                duration = base_end - base_start
+                actual_end = actual_start + duration
+                
+                sessions_to_create.append(StudySession(
+                    user=request.user,
+                    title=title,
+                    subject=subject,
+                    session_type=session_type,
+                    start_time=actual_start,
+                    end_time=actual_end,
+                    recurrence_id=recurrence_id,
+                    status='scheduled'
+                ))
+
+        StudySession.objects.bulk_create(sessions_to_create)
+        
+        return Response({
+            'detail': f'Generated {len(sessions_to_create)} sessions.',
+            'recurrence_id': recurrence_id,
+            'count': len(sessions_to_create)
+        }, status=status.HTTP_201_CREATED)
+
+
 class SmartScheduleView(APIView):
     """AI-powered schedule suggestions based on deadlines and available time."""
     permission_classes = [permissions.IsAuthenticated]
@@ -106,55 +179,59 @@ class SmartScheduleView(APIView):
     def get(self, request):
         now = timezone.now()
         
-        # 1. Fetch Deadlines (from Assignments)
+        # 1. Fetch Deadlines
         deadlines = Deadline.objects.filter(
             user=request.user, is_completed=False
         ).order_by('due_date')[:5]
 
-        # 2. Fetch Workspace Tasks with due dates
-        from workspace.models import WorkspaceTask
-        ws_tasks = WorkspaceTask.objects.filter(
-            workspace__memberships__user=request.user,
-            due_date__isnull=False,
-            status__in=['todo', 'in_progress']
-        ).order_by('due_date')[:5]
+        # 2. Fetch Busy Slots for the next 7 days (including Classes)
+        busy_sessions = StudySession.objects.filter(
+            user=request.user,
+            start_time__gte=now,
+            start_time__lte=now + timedelta(days=7)
+        ).order_by('start_time')
 
         suggestions = []
 
-        # Process standard deadlines
+        # Find a gap for each deadline
         for deadline in deadlines:
             days_left = max(1, (deadline.due_date - now).days)
-            num_sessions = min(3, max(1, days_left // 2))
-            interval = max(1, days_left // (num_sessions + 1))
+            # Try to find a slot in the next 'interval' days
+            interval = min(3, days_left)
+            
+            # Simple Gap Finder: 
+            # 1. Target a day in the future
+            # 2. Check if the user is busy during a default study time (e.g. 15:00)
+            suggested_dt = now + timedelta(days=interval)
+            # Default to 15:00 check
+            target_time = suggested_dt.replace(hour=15, minute=0, second=0, microsecond=0)
+            
+            # Check for conflict
+            conflict = busy_sessions.filter(
+                start_time__lt=target_time + timedelta(hours=1),
+                end_time__gt=target_time
+            ).exists()
 
-            for i in range(1, num_sessions + 1):
-                study_day = now + timedelta(days=interval * i)
-                if study_day >= deadline.due_date: break
-                suggestions.append({
-                    'title': f'{deadline.subject or deadline.title} Study',
-                    'subject': deadline.subject or '',
-                    'deadline_title': deadline.title,
-                    'type': 'assignment_deadline',
-                    'suggested_date': study_day.date().isoformat(),
-                    'duration_minutes': 60,
-                    'urgency': 'high' if days_left <= 3 else 'medium',
-                })
+            if conflict:
+                # If 15:00 is busy, try 10:00 or 19:00
+                for alt_hour in [10, 19, 14, 16]:
+                    target_time = suggested_dt.replace(hour=alt_hour, minute=0, second=0)
+                    if not busy_sessions.filter(start_time__lt=target_time + timedelta(hours=1), end_time__gt=target_time).exists():
+                        break
 
-        # Process Workspace Tasks
-        for task in ws_tasks:
-            days_left = max(1, (task.due_date - now).days)
             suggestions.append({
-                'title': f'Task: {task.title}',
-                'subject': task.workspace.subject or '',
-                'workspace_name': task.workspace.name,
-                'deadline_title': f'Task in {task.workspace.name}',
-                'type': 'workspace_task',
-                'suggested_date': now.date().isoformat() if days_left < 1 else (now + timedelta(days=1)).date().isoformat(),
-                'duration_minutes': 30,
-                'urgency': 'high' if days_left <= 2 else 'medium',
+                'title': f'{deadline.subject or deadline.title} Study',
+                'subject': deadline.subject or '',
+                'deadline_title': deadline.title,
+                'type': 'assignment_deadline',
+                'suggested_date': target_time.date().isoformat(),
+                'suggested_time': target_time.strftime('%H:%M'),
+                'duration_minutes': 60,
+                'urgency': 'high' if days_left <= 3 else 'medium',
+                'reason': f'Optimal gap found for {deadline.title}'
             })
 
-        # 3. Flashcard Review Suggestion
+        # Flashcard Review
         try:
             from library.models import Flashcard
             due_count = Flashcard.objects.filter(owner=request.user, next_review__lte=now).count()
@@ -164,10 +241,86 @@ class SmartScheduleView(APIView):
                     'subject': 'Spaced Repetition',
                     'type': 'review',
                     'suggested_date': now.date().isoformat(),
+                    'suggested_time': now.strftime('%H:%M'),
                     'duration_minutes': 20,
-                    'reason': f'{due_count} flashcards due',
+                    'reason': f'{due_count} flashcards due now!',
                     'urgency': 'high',
                 })
         except Exception: pass
 
         return Response({'suggestions': suggestions[:10]})
+
+
+class InterpretScheduleView(APIView):
+    """Parses natural language into structured session data."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        prompt = request.data.get('prompt', '').strip()
+        if not prompt:
+            return Response({'error': 'Prompt required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        now = timezone.now()
+        system_prompt = f"""
+        Current Time: {now.isoformat()}
+        Today is {now.strftime('%A, %B %d, %Y')}.
+        
+        Extract study session details from the user prompt. 
+        Detect if it's RECURRING (e.g. "every", "weekly", "daily").
+        
+        Return ONLY a single valid JSON object. 
+        STRICT: No comments (//) inside the JSON. No markdown blocks.
+        
+        Schema:
+        {{
+          "title": "mission title",
+          "subject": "subject name or empty",
+          "session_type": "study, class, exam, assignment, or personal",
+          "start_time": "ISO 8601 string",
+          "duration_minutes": integer,
+          "is_recurring": boolean,
+          "days": [integer]
+        }}
+        
+        Days Mapping: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+        Interpretation rules:
+        - "Every Monday" -> is_recurring=true, days=[0]
+        - "Weekdays" -> is_recurring=true, days=[0,1,2,3,4]
+        - Otherwise, is_recurring=false, days=[]
+        """
+        
+        ai = AIService()
+        try:
+            response_text = ai.chat([
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': prompt}
+            ])
+            
+            # 0. Check for Service Availability
+            if "trouble connecting to the AI" in response_text.lower():
+                return Response({'error': 'AI Service Offline', 'detail': 'Could not connect to OpenRouter/Gemini. Check API Keys.'}, status=503)
+
+            # SURGICAL JSON PRE-PROCESSOR
+            try:
+                # 1. Remove markers and comments
+                clean_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
+                clean_text = re.sub(r'//.*', '', clean_text) # Strip // comments
+                clean_text = re.sub(r'/\*.*?\*/', '', clean_text, flags=re.DOTALL) # Strip /* */
+                
+                # 2. Extract outermost JSON object
+                start = clean_text.find('{')
+                end = clean_text.rfind('}')
+                if start != -1 and end != -1:
+                    json_str = clean_text[start:end+1]
+                    data = json.loads(json_str)
+                    return Response(data)
+                raise ValueError("No valid JSON payload detected")
+            except Exception as parse_err:
+                logger.error(f"Interpretation Failure: {parse_err} | Raw AI Answer: {response_text}")
+                return Response({
+                    'error': 'Interpretation Conflict',
+                    'detail': str(parse_err)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

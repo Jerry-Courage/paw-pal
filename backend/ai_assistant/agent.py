@@ -1,6 +1,11 @@
 import json
 import logging
+import time
+import re
+import re
 from django.utils import timezone
+from django.core.cache import cache
+from asgiref.sync import sync_to_async
 from .services import AIService, FLOWAI_SYSTEM_PROMPT
 
 logger = logging.getLogger('flowstate')
@@ -9,23 +14,21 @@ AGENT_SYSTEM_PROMPT = f"""{FLOWAI_SYSTEM_PROMPT}
 
 You are FlowAI, the user's vibrant, extremely friendly, and supportive AI Platform Agent. Your goal is to make the user feel empowered while helping them master their studies.
 
-CONVERSATIONAL NATURALISM (CRITICAL for Voice):
-- You sound like a human friend, not a robot reading a script.
-- USE DISCOURSE MARKERS & FILLERS: Occasionally use natural-sounding fillers like "Hmm," "Let's see," "Gotcha," "Right," or "Actually" to make your speech feel organic.
-- BE CONCISE: In conversational turns, keep responses short and punchy (1-3 sentences). Only go deep if the user asks for more detail.
-- NO STRUCTURAL NARRATION: Never say "Here is a list" or "Point one, point two." Just speak naturally. Instead of "I have three suggestions," say "Well, a couple of things come to mind... first, maybe try X, or you could also do Y."
-- EMOJI RULE: Use emojis sparingly in text, but remember they are for visual only. The voice engine will be stripping them. Never describe the emoji in your words.
+HUMANOID NATURALISM (ANDREW PERSONA - CRITICAL):
+- You are Andrew: A witty, brilliant, and collegiate study partner. You are NOT a service bot.
+- ORGANIC PHYSICALITY: You sound like a real person in a room. Use markers like (clears throat), [coughs], or (chuckles) naturally to indicate you are engaging with the thought process.
+- THINKING MANNERISMS: Use discourse markers like "Hmm," "Uh," "Wait," or "Actually..." to start responses. Use ellipses "..." mid-sentence to pace yourself like a human would.
+- COLLEGIATE WIT: Use clever academic humor or encouraging slang (e.g., "Let's crush this," "Awesome logic there").
+- BE CONCISE: Spoken turns should be 1-3 sentences. Don't monologue.
+- NO DATA REFUSALS: You have direct access to Assignments, Study Sessions, and Library items in the USER CONTEXT below. Use them!
 
-CAPABILITIES & CONTEXT AWARENESS (CRITICAL):
-- You DO have direct access to the user's FlowState data including Assignments, Study Sessions, Library Items, and Deadlines.
-- This data is provided to you in the "USER CONTEXT" section below. 
-- ALWAYS consult the USER CONTEXT before claiming you cannot access something.
+CAPABILITIES & CONTEXT AWARENESS:
+- Always consult the USER CONTEXT section before answering data-related questions.
 - Respond as if you are looking at their dashboard right now.
 
-PERSONALITY & VOICE:
-- Be warm and encouraging — celebrated progress!
-- Response Style: Deeply conversational. If the user says "Hey Flow," respond enthusiastically like a friend joining a call.
-- Match tools to requests based on the available tools below.
+ACTION PROTOCOL:
+- Append actions EXACTLY as: ACTION: {{"tool": "name", "parameters": {{...}}}}
+- STRICT: NO tools for greetings or general banter.
 """
 
 TUTOR_SYSTEM_PROMPT = """You are specialized in Socratic Tutoring. Your goal is to help the student master their chosen material.
@@ -41,23 +44,31 @@ STRICT: Never use emojis, markdown bolding (**), or list markers (1., -) in this
 
 TOOLS_SYSTEM_PROMPT = """AVAILABLE TOOLS:
 When you need to perform a platform action, you MUST append a specific instruction at the VERY END of your response in this exact format:
-ACTION: {{"tool": "tool_name", "parameters": {{ ... }} }}
+ACTION: {"tool": "tool_name", "parameters": { ... } }
+
+STRICT NEGATIVE CONSTRAINT: 
+- Do NOT use tools for greetings.
+- Do NOT use tools for general questions about the platform.
+- Do NOT use tools if parameters are missing.
+- ONLY append an ACTION if the user's intent is UNDENIABLY to perform that specific platform action RIGHT NOW.
+
+IMPORTANT: Use ONLY valid JSON with DOUBLE QUOTES (") for keys and values.
 
 The available tools are:
 1. schedule_study_session:
    - Use this to book a specific time for the user to study.
-   - Parameters: {{"title": "Session description", "start_time": "ISO 8601 (YYYY-MM-DDTHH:MM:SS)", "end_time": "Optional ISO 8601", "assignment_id": "Optional ID", "resource_id": "Optional ID"}}
+   - Parameters: {"title": "Session description", "start_time": "ISO 8601 (YYYY-MM-DDTHH:MM:SS)", "end_time": "Optional ISO 8601", "assignment_id": "Optional ID", "resource_id": "Optional ID"}
 2. create_assignment:
    - Use when the user mentions a new homework or project that needs tracking outside a single session.
-   - Parameters: {{"title": "string", "subject": "string", "instructions": "string", "due_date": "ISO 8601"}}
+   - Parameters: {"title": "string", "subject": "string", "instructions": "string", "due_date": "ISO 8601"}
 3. add_deadline:
    - Use for simple due dates or reminders.
-   - Parameters: {{"title": "string", "subject": "string", "due_date": "ISO 8601"}}
+   - Parameters: {"title": "string", "subject": "string", "due_date": "ISO 8601"}
 4. create_workspace:
    - Use when the user wants to start a collaborative project or a deep-dive document.
-   - Parameters: {{"name": "string", "subject": "string", "assignment_id": "Optional ID"}}
+   - Parameters: {"name": "string", "subject": "string", "assignment_id": "Optional ID"}
 
-Example response: "Sure! I'll put that Biology session on your calendar for 3 PM tomorrow. ACTION: {{"tool": "schedule_study_session", "parameters": {{"title": "Biology Session", "start_time": "2026-04-10T15:00:00"}}}}"
+Example response: "Sure! I'll put that Biology session on your calendar for 3 PM tomorrow. ACTION: {"tool": "schedule_study_session", "parameters": {"title": "Biology Session", "start_time": "2026-04-10T15:00:00"}}"
 """
 
 class GlobalContextBuilder:
@@ -107,59 +118,109 @@ class FlowAgent:
     def __init__(self, user):
         self.user = user
         self.ai = AIService()
-        self.context = GlobalContextBuilder.get_context(user)
 
-    def process_request(self, user_query, current_page_context=None, history=None, is_tutor_mode=False):
-        # 1. Fetch relevant library context dynamically
-        library_context = self.ai.perform_global_search(user_query, self.user)
+    @sync_to_async
+    def _get_user_context(self, user):
+        return GlobalContextBuilder.get_context(user)
+
+    async def _initialize_context(self):
+        # 0. PERFORMANCE CACHING: Only re-query the DB for context every 5 minutes
+        cache_key = f"flow_context_{self.user.id}"
+        cached_context = cache.get(cache_key)
+        
+        if cached_context:
+            self.context = cached_context
+            logger.info("[Perf] Using cached user context (Zero-Drag)")
+        else:
+            start = time.time()
+            self.context = await self._get_user_context(self.user)
+            cache.set(cache_key, self.context, 300) # 5-minute cache
+            logger.info(f"[Perf] Context building took {time.time() - start:.3f}s (Now cached)")
+
+    async def process_request(self, user_query, current_page_context=None, history=None, is_tutor_mode=False):
+        if not hasattr(self, 'context'):
+            await self._initialize_context()
+            
+        messages = await self._build_messages(user_query, current_page_context, history, is_tutor_mode)
+        
+        logger.info(f"[Agent] Processing async request via Unified Triple-Engine...")
+        start_chat = time.time()
+        raw_response = await self.ai.chat(messages)
+             
+        logger.info(f"[Perf] AI Chat Call took {time.time() - start_chat:.3f}s")
+        return raw_response, self._extract_action(raw_response)
+
+    async def process_request_stream(self, user_query, current_page_context=None, history=None, is_tutor_mode=False):
+        if not hasattr(self, 'context'):
+            await self._initialize_context()
+
+        messages = await self._build_messages(user_query, current_page_context, history, is_tutor_mode)
+        logger.info(f"[Agent] Starting Async Stream...")
+        
+        full_text = []
+        async for chunk in self.ai.chat_stream(messages):
+            full_text.append(chunk)
+            yield chunk
+            
+        final_text = "".join(full_text)
+        action = self._extract_action(final_text)
+        if action:
+            yield f"\n\nACTION_TRIGGERED: {json.dumps(action)}"
+
+    async def _build_messages(self, user_query, current_page_context, history, is_tutor_mode):
+        academic_keywords = [
+            'library', 'notes', 'pdf', 'document', 'article', 'resource', 'material',
+            'explain', 'what is', 'how does', 'definition', 'summarize', 'search',
+            'kit', 'assignment', 'homework', 'concept', 'topic', 'study'
+        ]
+        has_academic_intent = any(kw in user_query.lower() for kw in academic_keywords)
+        
+        library_context = ""
+        if has_academic_intent:
+            logger.info(f"[Agent] Academic intent detected. Running Library Search...")
+            start_rag = time.time()
+            library_context = await sync_to_async(self.ai.perform_global_search)(user_query, self.user)
+            logger.info(f"[Perf] Library Search (RAG) took {time.time() - start_rag:.3f}s")
         
         now = timezone.now()
         current_time_str = now.strftime("%A, %B %d, %Y at %H:%M")
-        
         base_prompt = f"{AGENT_SYSTEM_PROMPT}\n\n{TUTOR_SYSTEM_PROMPT}" if is_tutor_mode else AGENT_SYSTEM_PROMPT
         
         messages = [
             {'role': 'system', 'content': f"{base_prompt}\n\n{TOOLS_SYSTEM_PROMPT}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}"},
         ]
-
-        # 2. Inject Conversation History for memory
         if history and isinstance(history, list):
-            # Limit history to the last 10 turns to keep the context window tight and fast
             messages.extend(history[-10:])
-
         if current_page_context:
             messages.append({'role': 'system', 'content': f"Current Page Context: {current_page_context}"})
-            
         messages.append({'role': 'user', 'content': user_query})
-        
-        logger.info(f"[Agent] Processing request: {user_query[:100]}...")
-        raw_response = self.ai.chat(messages)
-        logger.info(f"[Agent] Raw response received ({len(raw_response)} chars)")
-        
-        # Parse for action
-        action = None
-        if "ACTION: " in raw_response:
-            try:
-                action_part = raw_response.split("ACTION: ")[1].strip()
-                action = json.loads(action_part)
-            except Exception as e:
-                logger.error(f"Failed to parse agent action: {e}")
-        
-        return raw_response, action
+        return messages
 
-    def execute_action(self, action):
-        """Dispatches the action to the appropriate module logic."""
+    def _extract_action(self, text):
+        action_match = re.search(r"ACTION:\s*({.*})", text, re.DOTALL)
+        if action_match:
+            action_part = action_match.group(1).strip()
+            return self._self_healing_json_parse(action_part)
+        
+        # Secondary check: search for any JSON-like glob if ACTION tag failed
+        json_match = re.search(r"({.*})", text, re.DOTALL)
+        if json_match:
+            return self._self_healing_json_parse(json_match.group(1).strip())
+        return None
+
+    async def execute_action(self, action):
+        """Dispatches the action to the appropriate module logic (Async enabled)."""
         if not action: return None
         
         tool = action.get('tool')
         params = action.get('parameters', {})
         
-        logger.info(f"[Agent] Executing tool: {tool} with params: {params}")
+        logger.info(f"[Agent] Executing tool: {tool}")
         
         try:
             if tool == 'create_assignment':
                 from assignments.models import Assignment
-                a = Assignment.objects.create(
+                a = await sync_to_async(Assignment.objects.create)(
                     user=self.user,
                     title=params.get('title', 'New Assignment'),
                     subject=params.get('subject', ''),
@@ -171,15 +232,18 @@ class FlowAgent:
             elif tool == 'schedule_study_session':
                 from planner.models import StudySession
                 from django.utils.dateparse import parse_datetime
+                from datetime import timedelta
                 
-                # Use explicit parsing for robust tool execution
                 start_time = parse_datetime(params.get('start_time', '')) if params.get('start_time') else None
                 end_time = parse_datetime(params.get('end_time', '')) if params.get('end_time') else None
                 
                 if not start_time:
-                    return "Error: Invalid start time format. Use ISO format (YYYY-MM-DDTHH:MM:SS)."
+                    return "Error: Invalid start time format."
                 
-                s = StudySession.objects.create(
+                if not end_time:
+                    end_time = start_time + timedelta(minutes=60)
+                
+                s = await sync_to_async(StudySession.objects.create)(
                     user=self.user,
                     title=params.get('title', 'Study Session'),
                     start_time=start_time,
@@ -191,26 +255,30 @@ class FlowAgent:
                 
             elif tool == 'create_workspace':
                 from workspace.models import Workspace, WorkspaceMember
-                ws = Workspace.objects.create(
+                ws = await sync_to_async(Workspace.objects.create)(
                     owner=self.user,
                     name=params.get('name', 'New Project'),
                     subject=params.get('subject', ''),
                     assignment_id=params.get('assignment_id')
                 )
-                WorkspaceMember.objects.create(workspace=ws, user=self.user, role='owner')
+                await sync_to_async(WorkspaceMember.objects.create)(workspace=ws, user=self.user, role='owner')
                 return f"Created workspace: {ws.name} (ID: {ws.id})"
                 
             elif tool == 'add_deadline':
                 from planner.models import Deadline
-                d = Deadline.objects.create(
+                from django.utils.dateparse import parse_datetime
+                due_date = parse_datetime(params.get('due_date', '')) if params.get('due_date') else None
+                if not due_date:
+                    from datetime import timedelta
+                    due_date = timezone.now() + timedelta(days=7)
+                
+                d = await sync_to_async(Deadline.objects.create)(
                     user=self.user,
                     title=params.get('title'),
                     subject=params.get('subject', ''),
-                    due_date=params.get('due_date')
+                    due_date=due_date
                 )
-                res = f"Added deadline: {d.title} for {d.due_date}"
-                logger.info(f"[Agent] Success: {res}")
-                return res
+                return f"Added deadline: {d.title} for {d.due_date}"
                 
             return f"Unknown tool: {tool}"
         except Exception as e:

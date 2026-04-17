@@ -182,10 +182,26 @@ export default function ResourceShelf({ workspaceId }: ResourceShelfProps) {
                         <div className="text-[9px] text-white/30 font-bold uppercase tracking-tighter">{r.type} LINK</div>
                       </div>
                     </div>
-                    <button onClick={() => unlinkMutation.mutate(r.id)} 
-                      className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-xl">
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2 absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all">
+                      <button 
+                        onClick={() => {
+                          workspaceApi.aiAssist(workspaceId, 'auto_summarize', { resource_id: r.id })
+                          toast.promise(new Promise(resolve => setTimeout(resolve, 2000)), {
+                            loading: 'Synthesizing knowledge...',
+                            success: 'Ghost block suggested!',
+                            error: 'Synthesis failed.'
+                          })
+                        }}
+                        className="p-2 text-violet-400 hover:bg-violet-500/10 rounded-xl"
+                        title="Synthesize into Block"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => unlinkMutation.mutate(r.id)} 
+                        className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-xl">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

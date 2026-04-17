@@ -78,3 +78,32 @@ class StudyEvent(models.Model):
 
     class Meta:
         ordering = ['scheduled_at']
+
+
+class Story(models.Model):
+    MEDIA_TYPES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('text', 'Text Only'),
+    ]
+
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='stories')
+    workspace = models.ForeignKey('workspace.Workspace', on_delete=models.CASCADE, related_name='stories')
+    media_file = models.FileField(upload_to='stories/', null=True, blank=True)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPES, default='text')
+    text_content = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Story by {self.author.username} in {self.workspace.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            from django.utils import timezone
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)

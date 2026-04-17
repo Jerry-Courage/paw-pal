@@ -10,9 +10,9 @@ class StudySessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudySession
         fields = (
-            'id', 'title', 'subject', 'start_time', 'end_time', 'duration_minutes',
-            'location', 'notes', 'status', 'is_ai_suggested',
-            'resource', 'resource_title', 'resource_type',
+            'id', 'title', 'subject', 'session_type', 'start_time', 'end_time', 
+            'duration_minutes', 'location', 'notes', 'status', 'is_ai_suggested',
+            'recurrence_id', 'resource', 'resource_title', 'resource_type',
             'assignment', 'assignment_title',
             'group', 'created_at'
         )

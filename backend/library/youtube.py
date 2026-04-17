@@ -2,7 +2,11 @@
 YouTube resource processor.
 Extracts video metadata and transcript.
 """
+import sys
+import os
 import re
+import tempfile
+import subprocess
 import requests
 from typing import Optional
 
@@ -67,11 +71,22 @@ def get_transcript(video_id: str) -> Optional[str]:
                         # Final resort: Class-level call
                         transcript_metadata = YouTubeTranscriptApi.list_transcripts(video_id)
                 
-                # Find the best transcript
-                transcript = None
+                # High-Fidelity Language Guard: Prioritize English variants
                 try:
-                    transcript = transcript_metadata.find_transcript(['en', 'en-US'])
+                    # Preferred order: Manual English -> Auto-Generated English
+                    transcript = transcript_metadata.find_transcript(['en', 'en-US', 'en-GB'])
                 except Exception:
+                    # If no English variant is found, we checks if the available tracks are reliable
+                    try:
+                        # Grab the list of available languages
+                        available_langs = [t.language_code for t in transcript_metadata]
+                        # If the ONLY available transcript is auto-generated and NOT English, 
+                        # we reject it to force the high-fidelity Whisper fallback.
+                        if 'hi' in available_langs and 'en' not in available_langs:
+                            print(f"[Guard] Rejecting mismatched auto-transcript (hi) for {video_id} to force Whisper.")
+                            return None
+                    except:
+                        pass
                     transcript = next(iter(transcript_metadata), None)
                     
                 if transcript:
@@ -91,18 +106,27 @@ def get_transcript(video_id: str) -> Optional[str]:
         groq_key = os.getenv('GROQ_API_KEY')
         if groq_key:
             url = f"https://www.youtube.com/watch?v={video_id}"
+            import sys
             with tempfile.TemporaryDirectory() as tmpdir:
                 out_tmpl = os.path.join(tmpdir, 'audio.%(ext)s')
                 # Grab a tiny audio stream to stay under APIs 25MB limit and maximize speed
                 cmd = [
-                    "python", "-m", "yt_dlp",
-                    "-f", "worstaudio",
+                    sys.executable, "-m", "yt_dlp",
+                    "-f", "worstaudio[ext=m4a]/worstaudio",
                     "--max-filesize", "24M",
+                    "--no-playlist",
                     "-o", out_tmpl,
                     url
                 ]
-                print(f"Running yt-dlp for {video_id}...")
-                proc = subprocess.run(cmd, capture_output=True, text=True)
+                print(f"Running yt-dlp for {video_id} using {sys.executable}...")
+                result = subprocess.run(
+                    cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    encoding='utf-8', 
+                    errors='ignore',
+                    timeout=120  # 2 minute safety timeout for info extraction
+                )
                 
                 files = os.listdir(tmpdir)
                 if files:

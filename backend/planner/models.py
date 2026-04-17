@@ -5,9 +5,12 @@ from django.conf import settings
 class StudySession(models.Model):
     STATUS_CHOICES = [('scheduled', 'Scheduled'), ('active', 'Active'), ('completed', 'Completed'), ('skipped', 'Skipped')]
 
+    TYPE_CHOICES = [('study', 'Study Session'), ('class', 'Lesson/Class'), ('assignment', 'Assignment Focus'), ('exam', 'Exam/Test'), ('personal', 'Personal')]
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='study_sessions')
     title = models.CharField(max_length=300)
     subject = models.CharField(max_length=200, blank=True)
+    session_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='study')
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     duration_minutes = models.IntegerField(default=60)
@@ -15,6 +18,7 @@ class StudySession(models.Model):
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     is_ai_suggested = models.BooleanField(default=False)
+    recurrence_id = models.UUIDField(null=True, blank=True, help_text="Links recurring instances")
     resource = models.ForeignKey('library.Resource', on_delete=models.SET_NULL, null=True, blank=True, related_name='study_sessions')
     assignment = models.ForeignKey('assignments.Assignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
     group = models.ForeignKey('groups.StudyGroup', on_delete=models.SET_NULL, null=True, blank=True)

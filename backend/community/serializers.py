@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post, Comment, StudyEvent, StudyRoom
+from .models import Post, Comment, StudyEvent, StudyRoom, Story
 from users.serializers import UserSerializer
 
 
@@ -119,3 +119,16 @@ class StudyEventSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.registrations.filter(id=request.user.id).exists()
         return False
+
+
+class StorySerializer(serializers.ModelSerializer):
+    author = UserSerializer(read_only=True)
+    workspace_name = serializers.ReadOnlyField(source='workspace.name')
+
+    class Meta:
+        model = Story
+        fields = (
+            'id', 'author', 'workspace', 'workspace_name', 'media_file', 
+            'media_type', 'text_content', 'created_at', 'expires_at'
+        )
+        read_only_fields = ('id', 'author', 'created_at', 'expires_at')

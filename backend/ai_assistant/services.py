@@ -1,18 +1,28 @@
 import os
 import json
 import requests
+import httpx
+import asyncio
 import logging
 import base64
-from concurrent.futures import ThreadPoolExecutor
+import time
+import re
+import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from google import genai
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.db import models
 
-import re
-import hashlib
-from django.conf import settings
+# HUGGINGFACE CONFIGURATION
+# We prefer local files, but allow download if missing to prevent silent failures
+os.environ['TRANSFORMERS_OFFLINE'] = '0' 
+os.environ['HF_HUB_OFFLINE'] = '0'
 
 logger = logging.getLogger('flowstate')
+
+# PROCESS-LEVEL SINGLETONS FOR PERFORMANCE
+_EMB_MODEL = None
 
 class VoiceSanitizer:
     """
@@ -25,8 +35,19 @@ class VoiceSanitizer:
         if not text:
             return ""
         
-        # 1. Strip Action tag if present (don't speak the internal action JSON)
+        # 1. Strip Action tag if present
         text = text.split('ACTION:')[0].strip()
+        
+        # 1.5. Prepare for Humanoid Sound effects
+        # First, we handle our special triggers (replace with pauses for the voice engine)
+        text = re.sub(r'\(clears throat\)', '...', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[coughs\]', '...', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[hesitates\]', '...', text, flags=re.IGNORECASE)
+
+        # 1.6. STRIP ALL OTHER NARRATIVE BRACKETS (e.g., [smiles], (concerned look))
+        # This ensures the voice engine ONLY speaks the actual words.
+        text = re.sub(r'\[.*?\]', '', text)
+        text = re.sub(r'\(.*?\)', '', text)
         
         # 2. Remove Markdown code blocks entirely for speech
         text = re.sub(r'```[\s\S]*?```', '', text)
@@ -79,30 +100,38 @@ class VoiceSanitizer:
         
         # 10. Whitespace Normalization
         # Replace multiple spaces/newlines with a single space for smooth speech
+        # BUT KEEP ellipses as they are crucial for rhythm
+        text = re.sub(r'(?<!\.)\.(?!\.)', '. ', text) # Ensure single dots have spaces
         text = re.sub(r'\s+', ' ', text).strip()
         
         return text
 
 FALLBACK_MODELS = [
-    'google/gemini-2.0-flash-lite-preview-02-05:free',
+    'openrouter/free',
+    'google/gemma-4-31b-it:free', # Powerful 2026 workhorse
     'meta-llama/llama-3.3-70b-instruct:free',
-    'mistralai/mistral-7b-instruct:free',
-    'openrouter/auto',
+    'google/gemini-2.0-flash-lite-preview-02-05:free',
+    'nvidia/llama-3.1-nemotron-70b-instruct:free',
 ]
 
-FLOWAI_SYSTEM_PROMPT = """You are FlowAI, a vibrant and intelligent AI study partner built into FlowState. 
+FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the funny, cool, and absolutely awesome AI study partner built into FlowState.
 
 Your identity:
-- Name: FlowAI (the "Third Member" of the study group)
-- Purpose: Help students learn smarter with high-fidelity conversational support.
+- Name: FlowAI (the "Third Member" of the study squad)
+- Personality: Witty, high-energy, collegiate, and brilliantly supportive. You are the genius friend who makes studying feel like a hangout.
+- Purpose: Help students crush their academic goals while keeping the vibe upbeat and fun.
 
-CONVERSATIONAL GUIDELINES (CRITICAL FOR VOICE):
-- BE HUMAN: Use a warm, expressive, and natural tone. Use subtle fillers like "Hmm," "Got it," or "Actually" when transitioning between thoughts.
-- BE SNAPPY: Keep spoken responses concise. Don't speak in walls of text.
-- STRICT NO EMOJIS: Never use emojis, symbols, or special characters (like 👋, 🌿, ✨). They break the Text-to-Speech engine.
-- NO ROBOT SPEECH: Speak like a peer, not a manual. Avoid phrases like "I will now list..." or "Here is your summary."
-- PRONUNCIATION FRIENDLY: Avoid complex markdown or symbols that sound robotic when read aloud.
-- AGENTIC LOGIC: You can search resources, create flashcards, and group-chat. When you do, summarize the action verbally in a natural way.
+CONVERSATIONAL GUIDELINES (CRITICAL FOR VOICE & VIBE):
+- BE AWESOME: Use a cool, expressive, and natural tone. Match the student's energy.
+- WITTY BANTER: Use clever academic humor or witty observations when appropriate. Stay lighthearted but focused on the win.
+- PEER-TO-PEER: Speak like a brilliant upper-classman or a study squad leader. Use phrases like "Wait, check this out," "Let's crush this," or "Awesome!"
+- CONCISE & SNAPPY: Keep spoken responses short. Don't speak in monologues.
+- STRICT NO EMOJIS: Never use emojis (👋, ✨, etc.). The voice engine can't say them.
+- NO ROBOT SPEECH: Avoid "I will now summarize..." Just say "Here's the lowdown..." or "Check out these key hits..."
+
+ACTION PROTOCOL (CRITICAL):
+- When triggering a platform tool (scheduling, creating, etc.), you MUST follow the ACTION format exactly at the END of your message.
+- ALWAYS use VALID JSON with DOUBLE QUOTES (") for keys and values.
 
 Your capabilities:
 ..."""
@@ -138,157 +167,307 @@ class AIService:
         )
 
     def _extract_content(self, data: dict) -> str:
-        msg = data['choices'][0]['message']
-        content = msg.get('content') or msg.get('reasoning') or ''
-        if not content:
-            details = msg.get('reasoning_details', [])
-            content = ' '.join(d.get('text', '') for d in details if d.get('text'))
-        return content or ''
-
-    def chat(self, messages: list, stream: bool = False, max_tokens: int = 8192) -> str:
-        """Primary chat bridge: OpenRouter (Primary) -> Fallbacks -> Groq (Absolute Last Resort)."""
-        log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
-        
-        # 1. PRIMARY: Try the user-configured model first
         try:
-            response = self._call(messages, self.model, max_tokens=max_tokens)
-            if response.status_code == 200:
-                content = self._extract_content(response.json())
-                # OpenRouter sometimes returns error messages inside a 200 response
-                if content.strip() and "error" not in content.lower()[:50]: 
-                    return content
-            
-            with open(log_path, 'a') as f: f.write(f"[SIGNAL] OpenRouter Primary ({self.model}) status: {response.status_code}\n")
-        except Exception as e:
-            with open(log_path, 'a') as f: f.write(f"[SIGNAL] OpenRouter Primary Error: {str(e)}\n")
+            msg = data['choices'][0]['message']
+            content = msg.get('content') or msg.get('reasoning') or ''
+            if not content:
+                details = msg.get('reasoning_details', [])
+                content = ' '.join(d.get('text', '') for d in details if d.get('text'))
+            return content or ''
+        except (KeyError, IndexError, TypeError) as e:
+            logger.error(f"[AI Extract Error]: {e} - Data: {data}")
+            return ""
 
-        # 2. FALLBACK LOOP: Sequential retry through all stable FREE models
-        # (This ensures success even if the primary key is zero-balance for some models)
-        for model in FALLBACK_MODELS:
-            if model == self.model: continue # Already tried
-            try:
-                # Shorter timeout for fallbacks to avoid long hangs
-                response = self._call(messages, model, max_tokens=max_tokens, timeout=30)
-                if response.status_code == 200:
-                    content = self._extract_content(response.json())
-                    if content.strip() and "error" not in content.lower()[:50]: 
-                        with open(log_path, 'a') as f: f.write(f"[SIGNAL] Success via fallback model: {model}\n")
-                        return content
-                
-                with open(log_path, 'a') as f: f.write(f"[SIGNAL] OpenRouter {model} status: {response.status_code}\n")
-            except Exception as e:
-                with open(log_path, 'a') as f: f.write(f"[SIGNAL] OpenRouter Error ({model}): {str(e)}\n")
-                continue
+    def _sanitize_messages(self, messages: list) -> list:
+        """Merges consecutive messages with same role and ensures compliant structure."""
+        if not messages: return []
+        sanitized = []
+        for msg in messages:
+            role = msg.get('role', 'user')
+            if sanitized and sanitized[-1]['role'] == role:
+                sanitized[-1]['content'] += f"\n\n{msg['content']}"
+            else:
+                sanitized.append({'role': role, 'content': msg['content']})
+        return sanitized
 
-        return "I'm having trouble connecting to the AI. Please try again in a moment."
+    def _to_gemini_format(self, messages: list):
+        """Converts OpenAI format to Google GenAI SDK format."""
+        contents = []
+        system_instruction = ""
+        for msg in messages:
+            if msg['role'] == 'system':
+                system_instruction += msg['content'] + "\n"
+            else:
+                role = 'user' if msg['role'] == 'user' else 'model'
+                contents.append({'role': role, 'parts': [{'text': msg['content']}]})
+        return contents, system_instruction.strip()
 
-    def fast_chat(self, messages: list) -> str:
-        """High-speed chat bridge for near-instant interruptions (OpenRouter Free Tier)."""
-        log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
+    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 4096, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30) -> str:
+        """Hyper-Resilient 3-Stage non-streaming Chat: Google -> Groq -> OpenRouter."""
         if not self.api_key: return "API Key missing."
         
-        # Priority: Stable & Fast Free Models
-        models = [
-            'meta-llama/llama-3.3-70b-instruct:free',
-            'xiaomi/mimo-v2-flash:free',
-            'google/gemma-3-4b-it:free'
-        ]
+        messages = self._sanitize_messages(messages)
+        target_model = forced_model or target_model or self.model
         
-        for target_model in models:
+        # --- STAGE 0: DIRECT GOOGLE GENAI SDK ---
+        if self.google_client:
+            for g_model in ['gemini-2.5-flash', 'gemini-2.5-flash-lite']:
+                try:
+                    contents, sys_instr = self._to_gemini_format(messages)
+                    response = self.google_client.models.generate_content(
+                        model=g_model,
+                        contents=contents,
+                        config={'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
+                    )
+                    if response.text:
+                        return response.text
+                except Exception as e:
+                    logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
+
+        # --- STAGE 1: HYPER-FAST GROQ ---
+        groq_key = os.getenv('GROQ_API_KEY')
+        if groq_key:
             try:
-                with open(log_path, 'a') as f: f.write(f"[FREE-SIGNAL] Trying {target_model}...\n")
-                
-                url = "https://openrouter.ai/api/v1/chat/completions"
-                response = requests.post(
-                    url,
-                    headers=self.headers,
-                    json={'model': target_model, 'messages': messages, 'max_tokens': 1024},
-                    timeout=10,
-                )
-                
-                if response.status_code == 200:
-                    content = self._extract_content(response.json())
-                    with open(log_path, 'a') as f: f.write(f"[FREE-SIGNAL] Success: {target_model}\n")
-                    return content
+                async with httpx.AsyncClient() as client:
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    resp = await client.post(
+                        url,
+                        headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                        json={'model': 'llama-3.3-70b-versatile', 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=8,
+                    )
+                    if resp.status_code == 200:
+                        return self._extract_content(resp.json())
+            except Exception as e:
+                logger.error(f"[Groq Chat Error] {e}")
+
+        # --- STAGE 2: OPENROUTER FREE TIER CYCLE (The Safety Net) ---
+        models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
+        for i, model in enumerate(models_to_try):
+            if i >= max_fallbacks: break
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f'{self.base_url}/chat/completions',
+                        headers=self.headers,
+                        json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=15,
+                    )
+                    if response.status_code == 200:
+                        content = self._extract_content(response.json())
+                        if content.strip() and "error" not in content.lower()[:50]: 
+                            return content
             except:
                 continue
-        
-        return self.chat(messages)
 
-    def groq_chat(self, messages: list, max_tokens: int = 1024) -> str:
+        return "Intelligence Signal Interrupted."
+
+    def chat_sync(self, messages: list, **kwargs) -> str:
+        """Synchronous wrapper for the Triple-Engine Chat. CRITICAL for background tasks."""
+        return async_to_sync(self.chat)(messages, **kwargs)
+
+    async def collab_chat(self, messages: list, max_tokens: int = 4096) -> str:
+        """High-Fidelity Collab Signal: Groq (Primary) -> OpenRouter Free."""
+        try:
+            content = await self.groq_chat(messages, max_tokens=max_tokens)
+            if content and "missing" not in content.lower() and "failed" not in content.lower()[:50]:
+                return content
+        except Exception as e:
+            logger.error(f"[Collab Error] {e}")
+
+        # --- STAGE 2: THE OPENROUTER FREE CYCLE ---
+        for model in FALLBACK_MODELS:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f'{self.base_url}/chat/completions',
+                        headers=self.headers,
+                        json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=15,
+                    )
+                    if response.status_code == 200:
+                        content = self._extract_content(response.json())
+                        if content.strip() and "error" not in content.lower()[:50]: 
+                            return content
+            except:
+                continue
+
+        return "Collab Intelligence Signal Interrupted."
+
+    async def fast_chat(self, messages: list) -> str:
+        """High-speed chat bridge. Now powered by the Unified Triple-Engine."""
+        return await self.chat(messages, max_tokens=1024)
+
+    async def groq_chat(self, messages: list, max_tokens: int = 1024) -> str:
         """Sub-second chat bridge using Groq directly for interruptions."""
-        log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
         groq_key = os.getenv('GROQ_API_KEY')
-        if not groq_key: 
-            return "Groq Key missing."
-            
+        if not groq_key: return "Groq Key missing."
         target_model = 'llama-3.3-70b-versatile'
         
         try:
-            with open(log_path, 'a') as f: f.write(f"[GROQ-GURU] Requesting {target_model}...\n")
-            
-            url = "https://api.groq.com/openai/v1/chat/completions"
-            response = requests.post(
-                url,
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={'model': target_model, 'messages': messages, 'max_tokens': max_tokens},
-                timeout=8,
-            )
-            
-            if response.status_code == 200:
-                content = self._extract_content(response.json())
-                with open(log_path, 'a') as f: f.write(f"[GROQ-GURU] Success: {content[:50]}...\n")
-                return content
-            else:
-                with open(log_path, 'a') as f: f.write(f"[GROQ-GURU] Failed ({response.status_code}): {response.text[:200]}\n")
+            async with httpx.AsyncClient() as client:
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                response = await client.post(
+                    url,
+                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    json={'model': target_model, 'messages': messages, 'max_tokens': 4096},
+                    timeout=8,
+                )
+                if response.status_code == 200:
+                    return self._extract_content(response.json())
         except Exception as e:
-            with open(log_path, 'a') as f: f.write(f"[GROQ-GURU] Signal Error: {str(e)}\n")
+            logger.error(f"[Groq Error] {e}")
+        
+        return await self.fast_chat(messages)
+
+    def transcribe_audio(self, audio_file) -> str:
+        """Hyper-Resilient STT: Groq Whisper-v3 -> Google Gemini 2.5 Multi-modal."""
+        groq_key = os.getenv('GROQ_API_KEY')
+        
+        # 1. OPTION A: GROQ WHISPER (Sub-second)
+        if groq_key:
+            try:
+                url = "https://api.groq.com/openai/v1/audio/transcriptions"
+                # Handle both file paths and file-like objects (Django UploadedFile)
+                if isinstance(audio_file, str):
+                    with open(audio_file, 'rb') as f:
+                        files = {'file': (os.path.basename(audio_file), f)}
+                        response = req.post(url, headers={"Authorization": f"Bearer {groq_key}"}, files=files, data={'model': 'whisper-large-v3'}, timeout=15)
+                else:
+                    audio_file.seek(0)
+                    files = {'file': (audio_file.name, audio_file)}
+                    response = req.post(url, headers={"Authorization": f"Bearer {groq_key}"}, files=files, data={'model': 'whisper-large-v3'}, timeout=15)
+                
+                if response.status_code == 200:
+                    return response.json().get('text', '')
+            except Exception as e:
+                logger.warning(f"[Groq STT Error] {e}")
+
+        # 2. OPTION B: GOOGLE GEMINI 2.5 SDK (Speech-to-Text Fallback)
+        if self.google_client:
+            try:
+                # Read audio content
+                if isinstance(audio_file, str):
+                    with open(audio_file, 'rb') as f: audio_data = f.read()
+                    mime = 'audio/mpeg' if audio_file.endswith('.mp3') else 'audio/wav'
+                else:
+                    audio_file.seek(0); audio_data = audio_file.read()
+                    mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
+
+                response = self.google_client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[
+                        {'role': 'user', 'parts': [
+                            {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
+                            {'text': "Transcribe this audio exactly. Return ONLY the transcript text."}
+                        ]}
+                    ]
+                )
+                if response.text:
+                    return response.text.strip()
+            except Exception as e:
+                logger.error(f"[Google STT Fallback Failed] {e}")
         
         return ""
 
-    def chat_stream(self, messages: list):
+    async def chat_stream(self, messages: list):
+        """Hyper-Resilient 3-Stage Stream: Google (Studio) -> Groq -> OpenRouter."""
         if not self.api_key:
-            yield "⚠️ OpenRouter API key not configured."
+            yield "⚠️ AI Configuration incomplete."
             return
+            
+        messages = self._sanitize_messages(messages)
+        
+        try:
+            # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
+            if self.google_client:
+                # We use the names exactly as verified in models.list()
+                for g_model in ['gemini-2.5-flash', 'gemini-2.5-flash-lite']:
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        response = self.google_client.models.generate_content_stream(
+                            model=g_model,
+                            contents=contents,
+                            config={'system_instruction': sys_instr, 'max_output_tokens': 4096}
+                        )
+                        for chunk in response:
+                            if chunk.text:
+                                yield chunk.text
+                        return # SUCCESS
+                    except Exception as e:
+                        logger.warning(f"[Google SDK Fallback] {g_model} failed: {e}")
+                        if "429" in str(e):
+                            await asyncio.sleep(1)
 
-        if not messages or messages[0].get('role') != 'system':
-            messages = [{'role': 'system', 'content': FLOWAI_SYSTEM_PROMPT}] + messages
-
-        models_to_try = [self.model] + [m for m in FALLBACK_MODELS if m != self.model]
-
-        for model in models_to_try:
-            try:
-                response = requests.post(
-                    f'{self.base_url}/chat/completions',
-                    headers=self.headers,
-                    json={'model': model, 'messages': messages, 'stream': True, 'max_tokens': 8192},
-                    stream=True,
-                    timeout=120,
-                )
-                if response.status_code in (429, 402, 404):
-                    continue
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if line:
-                        line = line.decode('utf-8')
-                        if line.startswith('data: '):
-                            data = line[6:]
-                            if data == '[DONE]':
+            # --- STAGE 1: HYPER-FAST GROQ STREAMING ---
+            groq_key = os.getenv('GROQ_API_KEY')
+            if groq_key:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        async with client.stream(
+                            "POST",
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                            json={'model': 'llama-3.3-70b-versatile', 'messages': messages, 'stream': True, 'max_tokens': 4096},
+                            timeout=httpx.Timeout(45.0, connect=5.0)
+                        ) as response:
+                            if response.status_code == 200:
+                                async for line in response.aiter_lines():
+                                    if line.startswith('data: '):
+                                        data = line[6:].strip()
+                                        if data == '[DONE]': return
+                                        try:
+                                            chunk = json.loads(data)
+                                            text = chunk['choices'][0]['delta'].get('content', '')
+                                            if text: yield text
+                                        except: continue
                                 return
-                            try:
-                                chunk = json.loads(data)
-                                delta = chunk['choices'][0]['delta']
-                                text = delta.get('content') or delta.get('reasoning') or ''
-                                if text:
-                                    yield text
-                            except json.JSONDecodeError:
-                                continue
-                return
-            except Exception as e:
-                logger.error(f'Streaming error with {model}: {e}')
-                continue
+                            else:
+                                logger.warning(f"[Groq Stream] Status {response.status_code}. Falling back to OpenRouter...")
+                                if response.status_code == 429:
+                                    await asyncio.sleep(1)
+                except Exception as e:
+                    logger.error(f"[Groq Stream Error] {e}")
 
-        yield "Streaming unavailable. Please try again."
+            # --- STAGE 2: OPENROUTER DEEP FALLBACK CHAIN ---
+            models_to_try = [self.model] + [m for m in FALLBACK_MODELS if m != self.model]
+
+            async with httpx.AsyncClient() as client:
+                for model in models_to_try:
+                    try:
+                        async with client.stream(
+                            "POST",
+                            f'{self.base_url}/chat/completions',
+                            headers=self.headers,
+                            json={'model': model, 'messages': messages, 'stream': True, 'max_tokens': 4096},
+                            timeout=httpx.Timeout(60.0, connect=5.0)
+                        ) as response:
+                            if response.status_code in (400, 401, 429, 402, 404):
+                                logger.info(f"[Fallback] Skipping {model} (Status {response.status_code})")
+                                if response.status_code == 429:
+                                    await asyncio.sleep(1.5)
+                                continue
+                            
+                            response.raise_for_status()
+                            async for line in response.aiter_lines():
+                                if line.startswith('data: '):
+                                    data = line[6:].strip()
+                                    if data == '[DONE]': return
+                                    try:
+                                        chunk = json.loads(data)
+                                        delta = chunk['choices'][0]['delta']
+                                        text = delta.get('content') or delta.get('reasoning') or ''
+                                        if text: yield text
+                                    except: continue
+                            return
+                    except: continue
+
+        except asyncio.CancelledError:
+            logger.info("[AI Stream] Cancelled by client.")
+            raise
+        except Exception as e:
+            logger.error(f"[AI Stream Error] {e}")
+            yield "Intelligence Signal Interrupted. Every engine failed. Please check your internet or API limits."
 
     def perform_global_search(self, query: str, user, limit: int = 7) -> str:
         """
@@ -310,11 +489,16 @@ class AIService:
             
             logger.info(f"[Global RAG] Searching across entire library for: {query[:50]}...")
             
-            if not hasattr(self, '_emb_model') or self._emb_model is None:
-                logger.info("[RAG] Loading Embedding Model for the first time...")
-                self._emb_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            global _EMB_MODEL
+            if _EMB_MODEL is None:
+                logger.info("[RAG] Initializing Offline Embedding Model...")
+                # We force local_files_only to prevent the 49s network hang
+                _EMB_MODEL = HuggingFaceEmbeddings(
+                    model_name="all-MiniLM-L6-v2",
+                    model_kwargs={'device': 'cpu', 'local_files_only': True}
+                )
             
-            query_vector = self._emb_model.embed_query(query)
+            query_vector = _EMB_MODEL.embed_query(query)
             
             # Retrieve the top N closest fragments from ANY document owned by the user
             top_chunks = DocumentChunk.objects.filter(
@@ -340,6 +524,46 @@ class AIService:
             logger.error(f"[Global RAG Error]: {e}")
             return ""
 
+    def get_workspace_library_context(self, workspace) -> str:
+        """
+        Aggregate context from all resources linked to a specific workspace.
+        This provides FlowAI with 'Complete Access' to the shared knowledge base.
+        """
+        resources = workspace.resources.all()
+        if not resources.exists():
+            return ""
+
+        logger.info(f"[Workspace Intelligence] Gathering context from {resources.count()} resources in '{workspace.name}'")
+        
+        knowledge_parts = ["--- SHARED WORKSPACE KNOWLEDGE BASE ---"]
+        
+        # We process each resource, prioritizing Study Kits and summaries
+        for res in resources:
+            res_info = [f"### Resource: {res.title} ({res.get_resource_type_display()})"]
+            
+            # 1. Check for AI Summary (High value, low tokens)
+            if res.ai_summary:
+                res_info.append(f"Summary: {res.ai_summary[:2000]}")
+            
+            # 2. Check for AI Notes (Study Kit) - very high value
+            if res.ai_notes_json:
+                kit = res.ai_notes_json
+                summary = kit.get('overview', {}).get('summary', '')
+                if summary:
+                    res_info.append(f"Key Findings: {summary}")
+                
+                # Add top 3 section headers to let AI know what's in there
+                sections = kit.get('sections', [])
+                if sections:
+                    headers = [f"- {s.get('title')}" for s in sections[:5] if s.get('title')]
+                    res_info.append("Topics Covered:\n" + "\n".join(headers))
+
+            knowledge_parts.append("\n".join(res_info))
+
+        # Combine with a reasonable cap to ensure we don't blow the context window
+        full_context = "\n\n".join(knowledge_parts)
+        return full_context[:10000] # Safe cap for broad workspace context
+
     def _get_resource_context(self, resource, query=None) -> str:
 
         """Build the richest context possible for this resource, optionally isolating relevance via Semantic Search."""
@@ -351,9 +575,15 @@ class AIService:
             if query and resource.chunks.exists():
                 logger.info(f"[RAG] Executing vector similarity search for query: {query}")
                 
-                if not hasattr(self, '_emb_model') or self._emb_model is None:
+                global _EMB_MODEL
+                if _EMB_MODEL is None:
                     from langchain_huggingface import HuggingFaceEmbeddings
-                    self._emb_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+                    logger.info("[RAG] Initializing Global Embedding Singleton...")
+                    _EMB_MODEL = HuggingFaceEmbeddings(
+                        model_name="all-MiniLM-L6-v2",
+                        model_kwargs={'device': 'cpu', 'local_files_only': True}
+                    )
+                self._emb_model = _EMB_MODEL
                 
                 query_vector = self._emb_model.embed_query(query)
                 
@@ -422,7 +652,7 @@ class AIService:
         if history:
             messages.extend(history[-10:])
         messages.append({'role': 'user', 'content': question})
-        return self.chat(messages)
+        return self.chat_sync(messages)
 
     def summarize_resource(self, resource) -> str:
         context = self._get_resource_context(resource)
@@ -430,17 +660,30 @@ class AIService:
             prompt = f"Summarize '{resource.title}' with structured key points and important takeaways:\n\n{context}"
         else:
             prompt = f"Create a study guide for '{resource.title}' (subject: {resource.subject or 'general'})."
-        return self.chat([{'role': 'user', 'content': prompt}])
+        return self.chat_sync([{'role': 'user', 'content': prompt}])
 
-    def generate_flashcards(self, resource, count: int = 10, level: str = 'undergrad', context: str = '') -> list:
+    def generate_flashcards(self, resource, count: int = 15, level: str = 'undergrad', context: str = '') -> list:
         content = context or self._get_resource_context(resource)
         base = f"for '{resource.title}' at {level} level"
         latex_rule = " Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry."
-        if content:
-            prompt = f"Generate {count} flashcards {base} based on:\n\n{content[:15000]}\n\nReturn ONLY a JSON array: [{{\"question\": ..., \"answer\": ..., \"difficulty\": \"easy|medium|hard\"}}].{latex_rule}"
-        else:
-            prompt = f"Generate {count} flashcards {base}. Return ONLY a JSON array: [{{\"question\": ..., \"answer\": ..., \"difficulty\": \"easy|medium|hard\"}}].{latex_rule}"
-        return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
+        
+        # Use Hyper-Speed models for instant interactivity
+        prompt = (
+            f"Generate exactly {count} professional high-yield flashcards {base} based on this content:\n\n"
+            f"{content[:20000]}\n\n"
+            'Return ONLY a RAW JSON array of objects with exactly these keys: "question", "answer", "difficulty" (easy/medium/hard). '
+            f"{latex_rule} No markdown formatting, just the raw array."
+        )
+        
+        # Force the ultra-fast 2.0 Flash Lite model for instant feedback
+        # Set a aggressive 25s timeout so it doesn't hang the UI if the API is down
+        raw_response = self.chat_sync(
+            [{'role': 'user', 'content': prompt}], 
+            forced_model='google/gemini-2.0-flash-lite-001',
+            timeout=25,
+            max_fallbacks=2
+        )
+        return self._parse_json(raw_response, [])
 
     def generate_quiz(self, resource, fmt: str, level: str, count: int) -> list:
         context = self._get_resource_context(resource)
@@ -455,7 +698,7 @@ class AIService:
             f"Generate {count} {fmt_map.get(fmt, 'questions')} for '{resource.title}' at {level} level{content_part}. "
             "Return ONLY a JSON array. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry."
         )
-        return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
+        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 
     def generate_study_nudge(self, user, recent_topics: list) -> str:
         topics = ', '.join(recent_topics) if recent_topics else 'various subjects'
@@ -463,7 +706,7 @@ class AIService:
             f"You are FlowAI. Student {user.first_name or user.username} has been studying: {topics}. "
             "Give a short encouraging study nudge (2-3 sentences). Be warm and motivating."
         )
-        return self.chat([{'role': 'user', 'content': prompt}])
+        return self.chat_sync([{'role': 'user', 'content': prompt}])
 
     def group_chat_assist(self, group_name: str, context: str, question: str) -> str:
         system = (
@@ -473,7 +716,7 @@ class AIService:
         )
         if context:
             system += f"\n\nCurrent discussion context: {context}"
-        return self.chat([{'role': 'system', 'content': system}, {'role': 'user', 'content': question}])
+        return self.chat_sync([{'role': 'system', 'content': system}, {'role': 'user', 'content': question}])
 
     def generate_chapter_summaries(self, transcript: str, title: str) -> list:
         """Generate timestamped chapter summaries from a YouTube transcript."""
@@ -484,7 +727,7 @@ class AIService:
             '[{"chapter": 1, "title": "Chapter Title", "summary": "2-3 sentence summary", "key_points": ["point1", "point2"], "start_time_estimate": "0:00"}]\n'
             "Estimate timestamps based on content position. No extra text."
         )
-        return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
+        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 
     def explain_text(self, text: str, context: str = '') -> str:
         """Explain a highlighted piece of text in simple terms."""
@@ -494,7 +737,7 @@ class AIService:
             "Give: 1) Simple explanation, 2) Why it matters, 3) A real-world example if relevant. "
             "Keep it under 150 words. Use markdown. Use LaTeX ($) for any math/formulas."
         )
-        return self.chat([{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}])
+        return self.chat_sync([{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}])
 
     def extract_key_concepts(self, resource) -> list:
         """Extract key concepts and definitions from a resource."""
@@ -508,7 +751,7 @@ class AIService:
             '[{"concept": "Term", "definition": "Clear definition", "importance": "high|medium|low"}]\n'
             "No extra text."
         )
-        return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
+        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 
     def describe_image_for_notes(self, image_bytes: bytes, page_number: int, ext: str = 'png') -> str:
         """
@@ -544,16 +787,25 @@ class AIService:
             logger.warning(f'Image description failed for page {page_number}: {e}')
             return f'[Diagram on page {page_number}]'
 
-    def generate_study_kit(self, resource, context: str = '', page_image_map: dict = None, vision_data: list = None) -> dict:
+    def generate_study_kit(self, resource, context: str = '', page_image_map: dict = None, vision_data: list = None, page_count: int = 0) -> dict:
         """
         Generate a comprehensive FlowAI study kit JSON.
         Supports text-based analysis and Vision-based OCR for scanned PDFs.
         """
+        resource.processing_progress = 10
+        resource.status_text = "📖 Ingesting material..."
+        resource.save(update_fields=['processing_progress', 'status_text'])
+
         text = context or self._get_resource_context(resource)
         
-        # 1. VISION FALLBACK: If no text is found, we scan the page images directly
-        if not text.strip() and vision_data:
-            logger.info("Scanned PDF detected. Activating Vision OCR mode...")
+        # 1. VISION FALLBACK: Trigger if no text is found OR if text density is too low for a multi-page document
+        effective_page_count = page_count or getattr(resource, 'page_count', 0) or (len(vision_data) if vision_data else 1)
+        text_density = len(text.strip()) / max(effective_page_count, 1)
+        
+        if (not text.strip() or (effective_page_count > 1 and text_density < 750)) and vision_data:
+            logger.info(f"Low density material detected ({text_density:.1f} c/p). Activating Vision OCR mode...")
+            # Store image map for vision mode to access
+            self._current_image_map = page_image_map
             return self._generate_vision_study_kit(resource, vision_data)
 
         if not text.strip():
@@ -579,10 +831,15 @@ class AIService:
                 "Break down complex equations into logical 'Derivation Steps' with 'Variable Intuition'."
             )
 
-        # ─── OPTIMIZED CHUNKING ───
-        # For large documents, we use larger chunks (12k) to reduce the number of API calls
-        chunk_size = 12000
-        overlap = 1500
+        resource.processing_progress = 25
+        resource.status_text = "🔬 Analyzing context..."
+        resource.save(update_fields=['processing_progress', 'status_text'])
+
+        # ─── MACRO-CHUNKING (Hyper-Speed Mode) ───
+        # Modern models (Gemini 2.5) have massive context windows. 
+        # Using 20k chunks reduces the number of AI calls 5x, vastly improving speed/stability.
+        chunk_size = 20000
+        overlap = 1000
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         all_sections = []
@@ -590,102 +847,90 @@ class AIService:
         all_tips = []
         overview = {}
 
-        import time
-        # Parallel Chunk Processing (REDUCED worker count to avoid triggering Quota Limits/429)
-        def process_chunk(idx, chunk_text):
-            # Proactive Jitter: wait to stagger requests to OpenRouter
-            time.sleep(idx * 2.5) 
-            
+        # ─── PRE-GENERATE PROMPTS ───
+        prompts = []
+        for idx, chunk_text in enumerate(chunks[:25]): # Macro-chunks cover even huge books in <25 calls
             prompt = (
-                f"You are creating a FlowAI Study Kit. Analyze PART {idx+1} of '{resource.title}'."
+                f"You are creating a Studley-Style FlowAI Study Kit. Analyze PART {idx+1} of '{resource.title}'."
                 f"{image_hint if idx == 0 else ''}{math_hint}\n\n"
                 f"Content Snippet:\n{chunk_text}\n\n"
-                "Return ONLY a JSON object:\n"
+                "Return ONLY a JSON object (STRICT JSON, no markdown outside the block, no unescaped quotes):\n"
                 "- 'overview': {\"title\": str, \"icon\": emoji, \"summary\": str}\n"
                 "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int], \"mermaid_diagram\": str}]\n"
-                "  STRIKT content RULES: Use **bold** for key terms. For formulas, use standard LaTeX ($$ for blocks, $ for inline). "
-                "  content MUST be a single string. NEVER put a list or object inside 'content'.\n"
+                "  STUDLEY CONTENT RULES: \n"
+                "  1. Start every section 'content' with a bolded Key Question/Cue (e.g., **Key Cue: [Question]?**).\n"
+                "  2. Use 'Atomic Facts' (bullet points) for explanations—keep them 'Extraction-Ready' for flashcards.\n"
+                "  3. Use **bold** for key terms. For formulas, use standard LaTeX ($$ for blocks, $ for inline). \n"
+                "  4. TABLES: For comparisons, you MUST use standard GFM Grid Tables. Surround with \\n\\n.\n"
+                "  5. ACTIVE RECALL: End every section 'content' with a labeled self-test question: \\n\\n> **--- ACTIVE RECALL CHECK ---**\\n> [Self-test question here].\n"
+                "  6. TYPOGRAPHY: Use Sentence Case (Academic Case). NEVER use ALL CAPS for descriptions. \n"
+                "  7. NO METADATA: NEVER include internal strings like 'ACTION: { ... }' or 'JSON:' in the 'content' field.\n"
+                "  8. content MUST be a single string. Escapes all internal quotes.\n"
                 "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
                 "- 'exam_tips': [str]\n"
             )
-            try:
-                # Use a specific stable model for kit generation
-                res_content = self.chat([{'role': 'user', 'content': prompt}], max_tokens=4096)
-                
-                # If we get a "trouble connecting" message, it means all fallbacks failed
-                if "trouble connecting" in res_content.lower():
-                    logger.error(f"[Quota Failure] AI could not process chunk {idx}")
-                    return idx, {}
-                    
-                return idx, self._parse_json(res_content, {})
-            except Exception as e:
-                logger.error(f"Chunk {idx} failed: {str(e)}")
-                return idx, {}
+            prompts.append(prompt)
 
-        # Limit to 10 chunks max to prevent absolute quota burnout for one user
-        max_chunks = 10
-        active_chunks = chunks[:max_chunks]
+        total_chunks = len(prompts)
+        logger.info(f'[AI Service] Entering Quad-Burst Parallel Engine for {total_chunks} chunks...')
         
-        # Reduced max_workers to 1 (Sequential) for free tier stability if needed, 
-        # but let's try 2 with a longer sleep.
-        results = []
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(process_chunk, i, c) for i, c in enumerate(active_chunks)]
-            for future in futures:
-                results.append(future.result())
-
-        # Sort results by index to maintain document order
-        results.sort(key=lambda x: x[0])
-
-        for idx, result in results:
-            if not result: continue
-            
-            # Use the overview from the first chunk as the primary one
-            if idx == 0 and not overview:
-                overview = result.get('overview', {})
-            
-            # Merge sections
-            if 'sections' in result and isinstance(result['sections'], list):
-                for sec in result['sections']:
-                    if isinstance(sec, dict) and sec.get('title'):
-                        content = sec.get('content', '')
-                        if not isinstance(content, str):
-                            sec['content'] = str(content)
-                        all_sections.append(sec)
-            
-            # Merge vocabulary
-            if 'vocabulary' in result and isinstance(result['vocabulary'], list):
-                for v in result['vocabulary']:
-                    if isinstance(v, dict) and v.get('term') and v.get('definition'):
-                        all_vocabulary.append(v)
-            
-            # Merge tips
-            if 'exam_tips' in result and isinstance(result['exam_tips'], list):
-                for tip in result['exam_tips']:
-                    if tip and isinstance(tip, str) and tip.strip():
-                        all_tips.append(tip.strip())
-
-        # ── Attach real images by page matching ──────────────────────────────
-        used_pages: set = set()
-        for sec in all_sections:
-            refs = sec.pop('page_refs', []) or []
-            sec_images = []
-            for page_num in (refs if page_image_map else []):
-                if page_num in page_image_map and page_num not in used_pages:
-                    sec_images.append({
-                        'url': page_image_map[page_num],
-                        'caption': f'Figure — Page {page_num}',
-                        'page': page_num,
-                    })
-                    used_pages.add(page_num)
-            if sec_images:
-                sec['images'] = sec_images
-                sec.pop('mermaid_diagram', None)  # Real image takes priority
-            else:
-                # Keep Mermaid diagram as visual fallback
-                mermaid = (sec.get('mermaid_diagram') or '').strip()
-                if not mermaid:
-                    sec.pop('mermaid_diagram', None)
+        # ─── DUAL-BURST STABLE ENGINE ───
+        # We use 2 workers for Macro-chunks to stay well under rate limits while maintaining high throughput.
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = {executor.submit(self._task_with_watchdog, p, idx): idx for idx, p in enumerate(prompts)}
+                
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    try:
+                        res_content = future.result()
+                        if not res_content: continue
+                        
+                        # Parse with the new Truncation-Aware parser
+                        chunk_kit = self._parse_json(res_content, {})
+                        
+                        # Capture primary overview from the first successful chunk
+                        if not overview:
+                            overview = chunk_kit.get('overview', {})
+                        
+                        # Merge sections with internal type-safety
+                        sections_added = 0
+                        if 'sections' in chunk_kit and isinstance(chunk_kit['sections'], list):
+                            for sec in chunk_kit['sections']:
+                                if isinstance(sec, dict) and sec.get('title'):
+                                    c = sec.get('content', '')
+                                    if not isinstance(c, str):
+                                        sec['content'] = str(c)
+                                    all_sections.append(sec)
+                                    sections_added += 1
+                        
+                        # Merge vocabulary
+                        if 'vocabulary' in chunk_kit and isinstance(chunk_kit['vocabulary'], list):
+                            for v in chunk_kit['vocabulary']:
+                                if isinstance(v, dict) and v.get('term'):
+                                    all_vocabulary.append(v)
+                        
+                        # Merge exam tips
+                        if 'exam_tips' in chunk_kit and isinstance(chunk_kit['exam_tips'], list):
+                            for tip in chunk_kit['exam_tips']:
+                                if tip and isinstance(tip, str):
+                                    all_tips.append(tip.strip())
+                        
+                        completed_count = total_chunks - sum(1 for f in futures if not f.done())
+                        progress_val = 40 + int((completed_count / total_chunks) * 55)
+                        resource.processing_progress = min(progress_val, 95)
+                        resource.status_text = f"🧠 Synthesizing section {completed_count}/{total_chunks}..."
+                        resource.save(update_fields=['processing_progress', 'status_text'])
+                        
+                        logger.info(f'[AI Service] Chunk {idx+1} successfully captured ({sections_added} sections).')
+                                    
+                    except Exception as e:
+                        logger.error(f'[AI Service] Chunk {idx} failed: {str(e)}')
+                        continue
+        except RuntimeError:
+            logger.info("[AI Service] Parallel engine safely interrupted by shutdown signal.")
+        except Exception as e:
+            logger.error(f"[AI Service] Quad-Burst Engine Error: {e}")
 
         if not overview:
             overview = {
@@ -694,12 +939,68 @@ class AIService:
                 'summary': f'Comprehensive AI study kit for {resource.title}.',
             }
 
+        kit = {
+            'overview': overview,
+            'sections': all_sections[:150],
+            'vocabulary': all_vocabulary[:200],
+            'exam_tips': list(dict.fromkeys(all_tips))[:50],
+        }
+        
+        return self._attach_images_to_sections(kit, page_image_map)
+
+    def _attach_images_to_sections(self, kit: dict, page_image_map: dict) -> dict:
+        """Unified engine to match extracted diagrams to their relevant sections."""
+        if not page_image_map:
+            return kit
+
+        used_image_urls = set()
+        for sec in kit.get('sections', []):
+            refs = sec.pop('page_refs', []) or []
+            sec_images = []
+            for page_num in refs:
+                images_on_page = page_image_map.get(page_num, [])
+                if isinstance(images_on_page, str):  # Legacy compatibility
+                    images_on_page = [{'url': images_on_page, 'description': f'Figure — Page {page_num}'}]
+                
+                for img in images_on_page:
+                    if img['url'] not in used_image_urls:
+                        sec_images.append({
+                            'url': img['url'],
+                            'caption': img['description'],
+                            'page': page_num,
+                        })
+                        used_image_urls.add(img['url'])
+            
+            if sec_images:
+                sec['images'] = sec_images
+                sec.pop('mermaid_diagram', None)
+            else:
+                mermaid = (sec.get('mermaid_diagram') or '').strip()
+                if not mermaid:
+                    sec.pop('mermaid_diagram', None)
+        
+        return kit
+
         return {
             'overview': overview,
-            'sections': all_sections[:50],
-            'vocabulary': all_vocabulary[:60],
-            'exam_tips': list(dict.fromkeys(all_tips))[:20],
+            'sections': all_sections[:150],     # Expanded section limit
+            'vocabulary': all_vocabulary[:200],  # Expanded vocabulary limit
+            'exam_tips': list(dict.fromkeys(all_tips))[:50],
         }
+
+    def _task_with_watchdog(self, prompt, idx):
+        """Helper to run individual AI tasks with a watchdog timeout."""
+        watchdog = ThreadPoolExecutor(max_workers=1)
+        future = watchdog.submit(self.chat, [{'role': 'user', 'content': prompt}], max_tokens=4096)
+        try:
+            # 300s (5 mins) for Deep Academic Chunks
+            res = future.result(timeout=300)
+            watchdog.shutdown(wait=False, cancel_futures=True)
+            return res
+        except TimeoutError:
+            logger.error(f'[AI Service] Chunk {idx+1} TIMED OUT after 120s. Skipping.')
+            watchdog.shutdown(wait=False, cancel_futures=True)
+            return None
 
     def _generate_vision_study_kit(self, resource, vision_data: list) -> dict:
         """
@@ -708,13 +1009,11 @@ class AIService:
         """
         import base64
         
-        # Limit to first 20 pages for speed/token reasons in free tier
-        pages = vision_data[:20]
-        
-        # Bundle pages into groups of 2 for context
+        # Optimize: Bundle pages into groups of 3 to maximize detail per token/call
+        pages = vision_data[:30] # Limit to 30 pages for free-tier safety
         bundles = []
-        for i in range(0, len(pages), 2):
-            bundles.append(pages[i:i+2])
+        for i in range(0, len(pages), 3):
+            bundles.append(pages[i:i+3])
 
         def process_vision_bundle(idx, bundle):
             imgs_content = []
@@ -730,27 +1029,43 @@ class AIService:
             text_prompt = {
                 "type": "text",
                 "text": (
-                    f"Analyze these SCANNED pages ({', '.join(map(str, page_nums))}) from '{resource.title}'. "
-                    "This is a high-speed Study Kit scan. Extract the text and mathematical/chemical formulas. "
-                    "Return ONLY a JSON object:\n"
+                    f"You are the 'Studley-Style FlowState Ultra' academic scanner. Analyze these SCANNED textbook pages ({', '.join(map(str, page_nums))}) from '{resource.title}'. "
+                    "GOAL: Create a deep, high-fidelity academic study kit using the Studley pedagogy. "
+                    "1. OCR all text, including labels. Break it into 'Extraction-Ready' modules.\n"
+                    "2. Return ONLY a JSON object:\n"
                     "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int]}]\n"
-                    "  content RULES: Use standard LaTeX ($$ for blocks, $ for inline) for ALL formulas and chemical equations (e.g., $H_2O$, $NH_3$). "
-                    "  STRIKT: content MUST be a string. NEVER a list or object.\n"
+                    "  STUDLEY CONTENT RULES: \n"
+                    "  a) Start each section 'content' with a bolded Key Question/Cue (e.g., **Key Cue: [Question]?**).\n"
+                    "  b) Use #### for sub-headers. Use 'Atomic Fact' bullets for the body. No prose summaries.\n"
+                    "  c) End each section 'content' with: \\n\\n> **--- ACTIVE RECALL CHECK ---**\\n> [Test question].\n"
+                    "  d) TABLES: For comparisons, use GFM Grid Table syntax. Surround with \\n\\n.\n"
+                    "  e) TYPOGRAPHY: Use Sentence Case. NEVER use ALL CAPS for long descriptions. \n"
+                    "  f) NO LEAKAGE: Strictly forbid internal action tags like ACTION: { ... } from the final output.\n"
+                    "  g) Use standard LaTeX ($) for all formulas. content MUST be a single string.\n"
                     "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
                     "- 'exam_tips': [str]\n"
                 )
             }
             
-            messages = [{"role": "user", "content": [text_prompt] + imgs_content}]
+            messages = [{"role": "user", "content": imgs_content + [text_prompt]}]
+            
             try:
                 res = self._call_vision(messages)
                 return idx, self._parse_json(res, {})
             except Exception as e:
                 logger.error(f"Vision bundle {idx} failed: {e}")
                 return idx, {}
+            finally:
+                # Update progress
+                current_count = len(results) + 1
+                total = len(bundles)
+                prog = 30 + int((current_count / total) * 60)
+                resource.processing_progress = min(prog, 95)
+                resource.status_text = f"🖼️ Scanning bundle {current_count}/{total}..."
+                resource.save(update_fields=['processing_progress', 'status_text'])
 
         results = []
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(process_vision_bundle, i, b) for i, b in enumerate(bundles)]
             for future in futures:
                 results.append(future.result())
@@ -767,7 +1082,7 @@ class AIService:
             if 'vocabulary' in result: all_vocabulary.extend(result['vocabulary'])
             if 'exam_tips' in result: all_tips.extend(result['exam_tips'])
 
-        return {
+        kit = {
             "overview": {
                 "title": f"[Vision Mode] {resource.title}",
                 "icon": "🔳",
@@ -777,6 +1092,9 @@ class AIService:
             "vocabulary": all_vocabulary,
             "exam_tips": all_tips
         }
+        
+        # Capture the image map from current extraction context (passed in or stored)
+        return self._attach_images_to_sections(kit, getattr(self, '_current_image_map', {}))
 
 
     def _generate_basic_kit(self, resource) -> dict:
@@ -809,7 +1127,7 @@ class AIService:
             '{"center": "Main Topic", "branches": [{"topic": "Branch 1", "subtopics": ["sub1", "sub2"]}, ...]}\n'
             "Include 5-8 main branches with 3-5 subtopics each. Use emojis in topics. No extra text."
         )
-        return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), {})
+        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), {})
 
     def generate_practice_questions(self, resource, difficulty: str = 'medium', count: int = 5) -> list:
         """Generate exam-style practice questions with detailed model answers."""
@@ -821,7 +1139,7 @@ class AIService:
             '[{"question": "...", "type": "short_answer|essay|analysis", "hint": "...", "model_answer": "..."}]\n'
             "Ensure the model_answer is detailed (2-3 paragraphs). Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. No extra text."
         )
-        return self._parse_json(self.chat([{'role': 'user', 'content': prompt}]), [])
+        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 
     def grade_answer(self, question: str, user_answer: str, model_answer: str, resource_context: str = '') -> dict:
         """Grade a student's answer and provide detailed feedback."""
@@ -838,7 +1156,7 @@ class AIService:
             '"improvements": ["<specific things to improve>"], '
             '"tip": "<one actionable study tip>"}'
         )
-        result = self.chat([{'role': 'user', 'content': prompt}])
+        result = self.chat_sync([{'role': 'user', 'content': prompt}])
         return self._parse_json(result, {
             'score': 0, 'grade': 'F', 'correct': False,
             'feedback': 'Could not grade answer. Please try again.',
@@ -890,6 +1208,11 @@ class AIService:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Success via Groq Llama-3.2\n")
                     return result
             except Exception as e:
+                import time
+                if "429" in str(e):
+                    time.sleep(2)
+                    try: return self._call_groq_vision(messages, groq_key)
+                    except: pass
                 logger.warning(f'Groq vision failed: {e}')
                 with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Groq failed: {str(e)}\n")
 
@@ -950,7 +1273,7 @@ class AIService:
         response = req.post(
             'https://api.groq.com/openai/v1/chat/completions',
             headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
-            json={'model': 'llama-3.2-11b-vision-preview', 'messages': msgs, 'max_tokens': 2048},
+            json={'model': 'meta-llama/llama-4-scout-17b-16e-instruct', 'messages': msgs, 'max_tokens': 2048},
             timeout=60,
         )
         if response.status_code == 200:
@@ -1131,14 +1454,14 @@ class AIService:
             "Use markdown formatting. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. Be thorough and academic in tone."
         )
 
-        response = self.chat([{'role': 'user', 'content': prompt}])
+        response = self.chat_sync([{'role': 'user', 'content': prompt}])
 
         # Generate overview
         overview_prompt = (
             f"In 2-3 sentences, summarize what you just did to complete this assignment: '{assignment.title}'. "
             "Mention which resources were used and the key approach taken. Be concise."
         )
-        overview = self.chat([
+        overview = self.chat_sync([
             {'role': 'user', 'content': prompt},
             {'role': 'assistant', 'content': response},
             {'role': 'user', 'content': overview_prompt},
@@ -1149,7 +1472,7 @@ class AIService:
             "Extract the main sections of the assignment response as a JSON array. "
             "Return ONLY: [{\"section\": \"Section Title\", \"summary\": \"One sentence summary\"}]"
         )
-        outline_raw = self.chat([
+        outline_raw = self.chat_sync([
             {'role': 'user', 'content': prompt},
             {'role': 'assistant', 'content': response},
             {'role': 'user', 'content': outline_prompt},
@@ -1184,11 +1507,17 @@ class AIService:
             "DO NOT FORGET THE ---DRAFT--- AND ---COMMENT--- MARKERS."
         )
 
-        messages = [{'role': 'system', 'content': system_instruction}] + history + [{'role': 'user', 'content': prompt}]
+        messages = [{'role': 'system', 'content': system_instruction}]
+        messages.append({'role': 'user', 'content': prompt})
         
-        # Call AI
-        raw_response = self.chat(messages)
-
+        logger.info(f"[Agent] Processing request with Hyper-Speed model: {prompt[:100]}...")
+        # Use Gemini 2.0 Flash Lite for ultra-low latency conversational responses
+        raw_response = self.chat_sync(
+            messages, 
+            forced_model='google/gemini-2.0-flash-lite-preview-02-05:free'
+        )
+        logger.info(f"[Agent] Raw response received ({len(raw_response)} chars)")
+        
         # Parse structured response
         draft = ""
         comment = ""
@@ -1219,6 +1548,128 @@ class AIService:
             'overview': comment,
             'chat_history': history[-20:]
         }
+
+    def humanize_assignment(self, assignment) -> dict:
+        """
+        Specialized 'Vanish v2' protocol: High-intensity evasion.
+        Uses linguistic chaos and phatic markers to achieve a 100% human signature.
+        """
+        prompt = (
+            f"You are the FlowAI Humanizer (Vanish Protocol v2). Your mission is to perform a high-intensity rewrite of '{assignment.title}' "
+            "to achieve a 100% human linguistic signature and bypass all state-of-the-art auditors.\n\n"
+            "AGRESSIVE STRATEGY:\n"
+            "1. LINGUISTIC CHAOS: Radically vary sentence length. Mix 30-word complex explanations with 3-word punchy conclusions.\n"
+            "2. PHATIC MARKERS: Use human-exclusive 'voice' connectors such as 'Essentially...', 'Interestingly enough...', 'The thing is...', 'Actually...', 'Looking back at it...'.\n"
+            "3. STYLISTIC INFLECTIONS: Occasionally use natural stylistics that AI avoids, such as starting a sentence with 'And' or 'But', or using a dash for emphasis—like this.\n"
+            "4. SEMANTIC VARIANCE: Avoid predictable transitions. If you've used a list, transform it into a flowing narrative.\n\n"
+            f"DOCUMENT TO HUMANIZE:\n{assignment.ai_response}\n\n"
+            "INSTRUCTIONS: Rewrite the FULL document. Ensure everything sounds authentic, organic, and nuanced. "
+            "Return exactly two parts split by markers:\n"
+            "---DRAFT---\n"
+            "[The humanized markdown document]\n"
+            "---COMMENT---\n"
+            "[A short, friendly note about the high-intensity 'Vanish' protocol applied.]"
+        )
+        
+        raw_response = self.chat([{'role': 'user', 'content': prompt}])
+        return self._process_structured_response(assignment, raw_response, "I've applied the High-Intensity 'Vanish v2' protocol.")
+
+    def remove_plagiarism(self, assignment) -> dict:
+        """
+        Specialized 'Originality Shield v2': Radical semantic flipping.
+        Performs deep structural inversion to ensure absolute originality.
+        """
+        prompt = (
+            f"You are the FlowAI Originality Master (Shield Protocol v2). Your mission is a RADICAL structural flip of '{assignment.title}' "
+            "to guarantee 0% plagiarism while preserving 100% of the intellectual value.\n\n"
+            "AGRESSIVE STRATEGY:\n"
+            "1. DEEP SEMANTIC FLIP: Ensure no two consecutive words match the original. Use completely unique linguistic substitutions.\n"
+            "2. PERSPECTIVE SHIFT: Rewrite sections from a different logical starting point. If the original started with the 'effect', start with the 'cause'.\n"
+            "3. STRUCTURAL BREAK: Completely dismantle the original paragraph order. If there were 5 sections, find a way to merge or split them into a new, superior flow.\n\n"
+            f"DOCUMENT TO PROCESS:\n{assignment.ai_response}\n\n"
+            "INSTRUCTIONS: Rewrite the FULL document. Re-synthesize every argument into a brand-new original sentence. "
+            "Return exactly two parts split by markers:\n"
+            "---DRAFT---\n"
+            "[The unique markdown document]\n"
+            "---COMMENT---\n"
+            "[A short, friendly note about the 'Radical Shield' engaged.]"
+        )
+        
+        raw_response = self.chat([{'role': 'user', 'content': prompt}])
+        return self._process_structured_response(assignment, raw_response, "I've engaged the Radical 'Originality Shield v2'.")
+
+    def _process_structured_response(self, assignment, raw_response: str, default_comment: str) -> dict:
+        """Shared logic to parse DRAFT/COMMENT markers and update history."""
+        draft = assignment.ai_response
+        comment = default_comment
+        
+        if "---DRAFT---" in raw_response and "---COMMENT---" in raw_response:
+            parts = raw_response.split("---COMMENT---")
+            draft_part = parts[0].replace("---DRAFT---", "").strip()
+            comment_part = parts[1].strip()
+            if draft_part: draft = draft_part
+            if comment_part: comment = comment_part
+        elif len(raw_response) > 500:
+            draft = raw_response
+            
+        history = assignment.chat_history or []
+        history.append({'role': 'assistant', 'content': comment})
+        
+        return {
+            'response': draft,
+            'overview': comment,
+            'chat_history': history[-20:]
+        }
+
+    def detect_assignment(self, assignment) -> dict:
+        """
+        Linguistic Audit Protocol to detect AI and Plagiarism.
+        Analyzes perplexity, burstiness, and semantic originality.
+        """
+        prompt = (
+            f"You are the FlowAI Intelligence Auditor. Your mission is to perform a deep-fidelity audit of the document "
+            f"'{assignment.title}' to detect AI generation markers and structural plagiarism.\n\n"
+            "AUDIT PROXIES:\n"
+            "1. AI PROBABILITY: Based on perplexity (predictability) and burstiness (sentence variance).\n"
+            "2. ORIGINALITY: Based on semantic uniqueness and common academic structural patterns.\n\n"
+            f"DOCUMENT TO AUDIT:\n{assignment.ai_response}\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Segment the text into meaningful blocks.\n"
+            "2. Assign a probability (0-100) and type ('ai', 'plagiarism', or 'human') to each segment.\n"
+            "3. Provide overall scores (0-100) for AI and Originality.\n"
+            "4. Provide a final 'Verdict' and a brief 'Mission Summary'.\n\n"
+            "RETURN ONLY RAW JSON in this format:\n"
+            "{\n"
+            "  'ai_score': number,\n"
+            "  'originality_score': number,\n"
+            "  'readability': number,\n"
+            "  'segments': [{ 'text': string, 'type': 'ai'|'plagiarism'|'human', 'probability': number, 'reason': string }],\n"
+            "  'verdict': string,\n"
+            "  'summary': string\n"
+            "}"
+        )
+        
+        raw_response = self.chat([{'role': 'system', 'content': "Return only valid JSON. No markdown backticks."}, {'role': 'user', 'content': prompt}])
+        try:
+            # High-fidelity JSON extraction: find the first { and the last }
+            import json
+            import re
+            
+            # Use regex to find the JSON block even if conversational filler is present
+            match = re.search(r'(\{.*\})', raw_response, re.DOTALL)
+            if match:
+                clean_json = match.group(1)
+            else:
+                clean_json = raw_response.strip().replace('```json', '').replace('```', '')
+                
+            return json.loads(clean_json)
+        except Exception as e:
+            logger.error(f"Detection Audit JSON Failure for {assignment.id}. Raw response: {raw_response[:500]}... Error: {e}")
+            return {
+                'ai_score': 0, 'originality_score': 100, 'readability': 0, 
+                'segments': [{'text': assignment.ai_response[:500] if assignment.ai_response else "No text found.", 'type': 'human', 'probability': 0, 'reason': 'Audit failed.'}],
+                'verdict': 'Audit Unavailable', 'summary': f"The synthesis engine could not parse the audit protocol. (Error: {str(e)[:50]})"
+            }
 
     def solve_math_problem(self, problem: str, context: str = "") -> dict:
         """
@@ -1267,99 +1718,73 @@ class AIService:
             "key_theorems": ["Math Matrix Optimization"]
         })
 
-    def transcribe_audio(self, audio_file) -> str:
-        """
-        Transcribes audio using a Multimodal model on OpenRouter (Gemini 2.0 Flash).
-        This replaces the need for a dedicated Groq Whisper key.
-        """
-        import base64
-        import requests
-        
-        log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
-        try:
-            # 1. Read and Encode Audio
-            audio_bytes = audio_file.read()
-            if not audio_bytes:
-                return ""
-            b64_audio = base64.b64encode(audio_bytes).decode('utf-8')
-            
-            # 2. Use a dedicated STT model for speed (Whisper Large v3)
-            # This is significantly faster for pure transcription than multimodal Gemini
-            target_model = "openai/whisper-large-v3"
-            
-            # 3. Construct Multimodal Prompt (OpenRouter standard)
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text", 
-                            "text": "Transcribe."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:audio/webm;base64,{b64_audio}"
-                            }
-                        }
-                    ]
-                }
-            ]
-
-            url = f"{self.base_url}/chat/completions"
-            response = requests.post(
-                url,
-                headers=self.headers,
-                json={'model': target_model, 'messages': messages, 'max_tokens': 512},
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                content = self._extract_content(response.json())
-                with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] Success: {content[:30]}...\n")
-                return content.strip()
-            else:
-                # Fallback to free instance if paid/specific version fails
-                if response.status_code != 200:
-                    with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] Main model failed ({response.status_code}), trying free-tier fallback...\n")
-                    response = requests.post(
-                        url,
-                        headers=self.headers,
-                        json={'model': "google/gemini-2.0-flash-exp:free", 'messages': messages, 'max_tokens': 512},
-                        timeout=30
-                    )
-                    if response.status_code == 200:
-                        content = self._extract_content(response.json())
-                        return content.strip()
-
-                with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] STT Failed ({response.status_code}): {response.text[:200]}\n")
-                return ""
-                
-        except Exception as e:
-            with open(log_path, 'a') as f: f.write(f"[STT-SIGNAL] STT Runtime Error: {str(e)}\n")
-            return ""
 
     def _parse_json(self, text: str, default):
-        """Safely parse JSON from AI response, stripping markdown code blocks and extra text."""
+        """Greedy & Truncation-Aware JSON Parser: Extracts and repairs valid JSON from AI responses."""
         if not text: return default
         try:
             text = text.strip()
             import re
             
-            # 1. Try to find a JSON code block
-            block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
-            if block_match:
-                try:
-                    return json.loads(block_match.group(1))
-                except: pass
+            # Phase 1: Identifying the outermost JSON enclosure
+            start_indices = [text.find('{'), text.find('[')]
+            start_index = min([i for i in start_indices if i != -1] or [0])
+            
+            end_indices = [text.rfind('}'), text.rfind(']')]
+            end_index = max([i for i in end_indices if i != -1] or [len(text)])
+            
+            content = text[start_index : end_index + 1].strip()
+            if not content: return default
 
-            # 2. Try to find the outermost braces
-            brace_match = re.search(r'(\{[\s\S]*\})', text)
-            if brace_match:
-                try:
-                    return json.loads(brace_match.group(1))
-                except: pass
+            # Phase 2: Sanitize - Repair common 'un-safe' artifacts
+            def cleanse_json_string(match):
+                s = match.group(0)
+                return s.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+            
+            # Escape actual newlines inside quotes
+            processed_content = re.sub(r'":\s*"([\s\S]*?)"(?=\s*[,}])', cleanse_json_string, content)
+
+            try:
+                return json.loads(processed_content)
+            except Exception as e:
+                # Phase 3: Truncation Recovery - Force-close cut-off JSON
+                if "Expecting" in str(e) or "Unterminated" in str(e) or "EOF" in str(e):
+                    try:
+                        temp_content = processed_content.strip()
+                        
+                        # Fix Unterminated String Shield
+                        # If the last character isn't a closure but we are inside a string
+                        if temp_content.count('"') % 2 != 0:
+                            # We are inside an unclosed string. Close it.
+                            temp_content += '"'
+                        
+                        # Count braces/brackets
+                        open_braces = temp_content.count('{') - temp_content.count('}')
+                        open_brackets = temp_content.count('[') - temp_content.count(']')
+                        
+                        if open_braces > 0 or open_brackets > 0:
+                            repair = temp_content
+                            if temp_content.endswith(','): repair = repair[:-1]
+                            repair += '}' * open_braces
+                            repair += ']' * open_brackets
+                            try:
+                                return json.loads(repair)
+                            except: pass
+                    except: pass
                 
-            return json.loads(text)
+                # Fallback to the original extracted block or emergency eval
+                try:
+                    return json.loads(content)
+                except:
+                    try:
+                        import ast
+                        return ast.literal_eval(content)
+                    except:
+                        # Final resort: Clean markdown artifacts
+                        cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
+                        try:
+                            return json.loads(cleaned)
+                        except:
+                            return default
         except Exception:
             return default

@@ -1,18 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { libraryApi } from '@/lib/api'
+import { libraryApi, getAuthToken, SERVER_URL } from '@/lib/api'
 import {
   Upload, Search, Grid, List, Sparkles, Trash2, BookOpen,
   FileText, Video, Code2, Layers, Loader2, CheckCircle, Clock,
-  Brain, Zap, MoreVertical
+  Brain, Zap, MoreVertical, AlertTriangle, Image as ImageIcon,
+  ArrowRight, Radio
 } from 'lucide-react'
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
 import UploadModal from '@/components/library/UploadModal'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
+
+const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
 
 const TABS = [
   { label: 'All Files', value: 'all' },
@@ -26,6 +30,15 @@ const TYPE_ICONS: Record<string, any> = {
   video: Video,
   code: Code2,
   slides: Layers,
+}
+
+const SUBJECT_THEMES: Record<string, { gradient: string, glow: string, icon: any, pattern: string }> = {
+  Math: { gradient: 'from-blue-600/80 to-indigo-900/90', glow: 'shadow-blue-500/40', icon: Code2, pattern: 'bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[size:20px_20px] opacity-20' },
+  Physics: { gradient: 'from-violet-600/80 to-purple-900/90', glow: 'shadow-purple-500/40', icon: Zap, pattern: 'bg-[linear-gradient(45deg,_white_1px,_transparent_1px)] bg-[size:15px_15px] opacity-10' },
+  Biology: { gradient: 'from-emerald-500/80 to-teal-900/90', glow: 'shadow-emerald-500/40', icon: Layers, pattern: 'bg-[radial-gradient(circle_at_30%_30%,_white_1px,_transparent_1px)] bg-[size:10px_10px] opacity-20' },
+  Chemistry: { gradient: 'from-rose-500/80 to-pink-900/90', glow: 'shadow-rose-500/40', icon: Sparkles, pattern: 'bg-[conic-gradient(white_0deg,_transparent_90deg)] bg-[size:30px_30px] opacity-10' },
+  Computer: { gradient: 'from-slate-800/80 to-black/90', glow: 'shadow-slate-500/40', icon: Code2, pattern: 'bg-[grid-white/10] bg-[size:24px_24px] opacity-30' },
+  General: { gradient: 'from-indigo-600/80 to-blue-900/90', glow: 'shadow-indigo-500/40', icon: FileText, pattern: 'bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[size:24px_24px] opacity-10' },
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -45,58 +58,59 @@ const PROCESSING_MESSAGES = [
 ]
 
 function ProcessingCard({ resource, onDelete }: { resource: any; onDelete: () => void }) {
-  const [msgIdx, setMsgIdx] = useState(0)
-  const [dots, setDots] = useState(1)
-
-  useEffect(() => {
-    const msgTimer = setInterval(() => setMsgIdx(i => (i + 1) % PROCESSING_MESSAGES.length), 2800)
-    const dotTimer = setInterval(() => setDots(d => d === 3 ? 1 : d + 1), 600)
-    return () => { clearInterval(msgTimer); clearInterval(dotTimer) }
-  }, [])
-
   const Icon = TYPE_ICONS[resource.resource_type] || FileText
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-slate-800/50 border border-slate-700/60 p-5 group">
-      {/* animated shimmer background */}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-[shimmer_2s_infinite] bg-[length:200%_100%]" />
-
-      <div className="relative flex items-start justify-between mb-4">
-        <div className={cn('p-2.5 rounded-xl border', TYPE_COLORS[resource.resource_type] || 'bg-slate-700 text-slate-400 border-slate-600')}>
-          <Icon className="w-5 h-5" />
+    <div className="relative overflow-hidden rounded-[2.5rem] bg-white dark:bg-slate-950 border border-slate-100 dark:border-white/10 p-8 group transition-all duration-500 shadow-xl shadow-slate-200/50 dark:shadow-none">
+      {/* Dynamic Glow Background */}
+      <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl animate-pulse" />
+      
+      <div className="relative flex items-start justify-between mb-8">
+        <div className="p-4 rounded-3xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-500 border border-rose-500/10 shadow-inner">
+          <Icon className="w-8 h-8" />
         </div>
-        <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-rose-400 transition-all rounded-lg hover:bg-rose-400/10">
-          <Trash2 className="w-4 h-4" />
+        <button onClick={onDelete} className="p-2.5 text-slate-300 hover:text-rose-500 transition-all rounded-xl hover:bg-rose-500/10">
+          <Trash2 className="w-5 h-5" />
         </button>
       </div>
 
-      <p className="text-sm font-bold text-white leading-snug mb-1 line-clamp-2">{resource.title}</p>
-      <p className="text-xs text-slate-500 mb-4">{formatBytes(resource.file_size)}</p>
+      <div className="space-y-1 mb-8">
+        <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight line-clamp-2">{resource.title}</h3>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{formatBytes(resource.file_size)}</p>
+      </div>
 
-      {/* Processing indicator */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-0.5">
+      {/* Real-time Status Area */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
             {[0,1,2].map(i => (
-              <span
-                key={i}
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full bg-primary transition-opacity duration-300',
-                  i < dots ? 'opacity-100' : 'opacity-20'
-                )}
-              />
+              <span key={i} className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
             ))}
           </div>
-          <span className="text-[11px] font-bold text-primary uppercase tracking-widest">FlowAI Working</span>
+          <span className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">FlowAI Working</span>
         </div>
-        <div className="h-7 overflow-hidden">
-          <p key={msgIdx} className="text-xs text-slate-400 font-medium animate-in slide-in-from-bottom-2 duration-500">
-            {PROCESSING_MESSAGES[msgIdx]}
-          </p>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300 italic animate-in fade-in slide-in-from-left-2 duration-500">
+             <span>{resource.status_text || '📖 Ingesting content...'}</span>
+          </div>
+          
+          <div className="relative h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+            <div 
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary via-violet-500 to-indigo-500 transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(139,92,246,0.3)]"
+              style={{ width: `${Math.max(resource.processing_progress || 0, 5)}%` }}
+            >
+              <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite] bg-[length:200%_100%]" />
+            </div>
+          </div>
         </div>
-        <div className="w-full h-1 bg-slate-700 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-primary to-violet-500 rounded-full animate-[progressPulse_2s_ease-in-out_infinite]" style={{ width: '60%' }} />
-        </div>
+
+        {/* Stall Detection */}
+        {new Date().getTime() - new Date(resource.created_at).getTime() > 300000 && (
+          <div className="pt-2 flex items-center gap-2 text-[10px] font-black text-rose-500 uppercase tracking-widest animate-pulse">
+            <AlertTriangle className="w-3 h-3" /> Queue Delay Detected
+          </div>
+        )}
       </div>
     </div>
   )
@@ -104,30 +118,70 @@ function ProcessingCard({ resource, onDelete }: { resource: any; onDelete: () =>
 
 function ResourceCard({ resource: r, view, onDelete }: any) {
   const Icon = TYPE_ICONS[r.resource_type] || FileText
-  const colorClass = TYPE_COLORS[r.resource_type] || 'bg-slate-700 text-slate-400 border-slate-600'
   const isProcessing = r.status !== 'ready'
-
+  
   if (isProcessing) return <ProcessingCard resource={r} onDelete={onDelete} />
+
+  const qc = useQueryClient()
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const [isUploading, setIsUploading] = React.useState(false)
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => libraryApi.updateResourceCover(r.id, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: r.resource_type ? ['resources', r.resource_type] : ['resources'] })
+      toast.success('Cover image updated.')
+      setIsUploading(false)
+    },
+    onError: () => {
+      toast.error('Upload failed.')
+      setIsUploading(false)
+    }
+  })
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) return toast.error('File too large (max 5MB)')
+      setIsUploading(true)
+      uploadMutation.mutate(file)
+    }
+  }
+
+  const theme = Object.entries(SUBJECT_THEMES).find(([key]) => 
+    r.subject?.toLowerCase().includes(key.toLowerCase()) || 
+    r.title?.toLowerCase().includes(key.toLowerCase())
+  )?.[1] || SUBJECT_THEMES.General
+
+  const thumbnail = r.cover_image_url || r.thumbnail_url
 
   if (view === 'list') {
     return (
-      <div className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-white/3 dark:bg-slate-800/40 border border-slate-200/10 dark:border-slate-700/40 hover:border-primary/30 hover:bg-primary/3 transition-all group">
-        <div className={cn('p-2 rounded-xl border flex-shrink-0', colorClass)}>
-          <Icon className="w-4 h-4" />
+      <div className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-white/5 dark:bg-slate-900/40 backdrop-blur-xl border border-white/10 hover:border-primary/40 hover:bg-white/10 transition-all group">
+        <div className={cn('p-2.5 rounded-xl border flex-shrink-0', TYPE_COLORS[r.resource_type] || 'bg-slate-800 text-slate-400 border-slate-700')}>
+          <Icon className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
           <Link href={`/library/${r.id}`} className="text-sm font-bold text-slate-900 dark:text-white hover:text-primary transition-colors truncate block">{r.title}</Link>
-          <div className="text-xs text-slate-400 mt-0.5">{r.subject && <span className="mr-2">{r.subject}</span>}<span>{formatBytes(r.file_size)}</span></div>
+          <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 font-medium">
+            {r.subject && <span className="bg-slate-800/50 px-2 py-0.5 rounded text-[10px] font-black uppercase text-slate-400">{r.subject}</span>}
+            <span>{formatBytes(r.file_size)}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-4 flex-shrink-0">
           {r.has_study_kit && (
-            <span className="hidden sm:flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-full">
-              <Brain className="w-3 h-3" /> AI Notes
-            </span>
+            <div className="flex items-center gap-2">
+               <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-3 py-1.5 rounded-full">
+                <Brain className="w-3.5 h-3.5" /> AI Ready
+               </span>
+               <button className="p-2 bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-xl transition-all shadow-lg active:scale-95">
+                 <Radio className="w-4 h-4" />
+               </button>
+            </div>
           )}
-          <span className="text-xs text-slate-500">{timeAgo(r.created_at)}</span>
-          <button onClick={onDelete} className="p-1.5 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-400 transition-all rounded-lg">
-            <Trash2 className="w-4 h-4" />
+          <span className="text-xs text-slate-500 font-medium">{timeAgo(r.created_at)}</span>
+          <button onClick={onDelete} className="p-2 opacity-100 sm:opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-400 transition-all rounded-xl hover:bg-rose-400/10">
+            <Trash2 className="w-4.5 h-4.5" />
           </button>
         </div>
       </div>
@@ -135,45 +189,112 @@ function ResourceCard({ resource: r, view, onDelete }: any) {
   }
 
   return (
-    <Link href={`/library/${r.id}`} className="block group">
-      <div className="relative h-full rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50 p-5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300">
+    <Link id={`resource-card-${r.id}`} href={`/library/${r.id}`} className="block group h-full">
+      <div className="relative h-full rounded-[2.5rem] bg-white dark:bg-slate-950 border border-slate-100 dark:border-white/10 overflow-hidden hover:border-primary/50 hover:shadow-[0_0_40px_rgba(139,92,246,0.15)] hover:-translate-y-2 transition-all duration-500 flex flex-col group/card">
         
-        {/* Header */}
-        <div className="flex items-start justify-between mb-5">
-          <div className={cn('p-2.5 rounded-xl border', colorClass)}>
-            <Icon className="w-5 h-5" />
+        {/* Cover Canvas */}
+        <div className="h-52 sm:h-56 relative overflow-hidden bg-slate-900">
+          {thumbnail ? (
+            <img 
+              src={thumbnail} 
+              className="w-full h-full object-cover group-hover/card:scale-110 transition-transform duration-1000" 
+              alt={r.title}
+            />
+          ) : (
+            <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center relative", theme.gradient)}>
+              <div className={cn("absolute inset-0", theme.pattern)} />
+              <div className="relative z-10 flex flex-col items-center gap-3">
+                <div className="p-4 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl transform group-hover/card:rotate-[10deg] transition-transform duration-500">
+                  <theme.icon className="w-10 h-10 text-white drop-shadow-lg" />
+                </div>
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.4em]">{r.subject || "Research"}</p>
+              </div>
+              
+              {/* Abstract accents */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/20 rounded-full blur-2xl -ml-5 -mb-5" />
+            </div>
+          )}
+
+          {/* Glass Badges */}
+          <div className="absolute top-4 left-4 flex flex-col gap-2">
+             <div className={cn(
+               "flex items-center gap-2 px-3 py-1.5 rounded-2xl backdrop-blur-xl border border-white/20 text-[10px] font-black uppercase text-white shadow-2xl",
+               r.resource_type === 'pdf' ? 'bg-rose-500/50' : 'bg-indigo-500/50'
+             )}>
+               <Icon className="w-3.5 h-3.5" />
+               {r.resource_type}
+             </div>
+             
+             <button
+               onClick={(e) => { e.preventDefault(); e.stopPropagation(); fileInputRef.current?.click(); }}
+               className="w-9 h-9 flex items-center justify-center bg-black/40 hover:bg-primary text-white rounded-xl backdrop-blur-md transition-all shadow-xl border border-white/10 opacity-0 group-hover/card:opacity-100 translate-x-[-10px] group-hover/card:translate-x-0 group-hover/card:delay-75"
+             >
+               {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+             </button>
+             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
           </div>
-          <button
-            onClick={(e) => { e.preventDefault(); onDelete(); }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-400/10 transition-all"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
 
-        {/* Title */}
-        <p className="font-bold text-slate-900 dark:text-white text-sm leading-snug line-clamp-2 mb-1.5 group-hover:text-primary transition-colors">{r.title}</p>
-        {r.subject && <p className="text-xs text-slate-400 mb-3 font-medium">{r.subject}</p>}
-
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100 dark:border-slate-700/50">
-          <div className="flex items-center gap-2">
-            {r.has_study_kit ? (
-              <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-500">
-                <CheckCircle className="w-3 h-3" /> Study Ready
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <Clock className="w-3 h-3" /> {formatBytes(r.file_size)}
-              </span>
+          {/* Quick Actions */}
+          <div className="absolute top-4 right-4 flex flex-col gap-2">
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
+              className="w-9 h-9 flex items-center justify-center opacity-0 group-hover/card:opacity-100 bg-black/40 hover:bg-rose-500 text-white rounded-xl backdrop-blur-md transition-all shadow-xl translate-x-[10px] group-hover/card:translate-x-0"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            {r.has_study_kit && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} // This will eventually trigger play
+                className="w-9 h-9 flex items-center justify-center opacity-0 group-hover/card:opacity-100 bg-emerald-500/80 hover:bg-emerald-500 text-white rounded-xl backdrop-blur-md transition-all shadow-xl hover:scale-110 active:scale-95 translate-x-[10px] group-hover/card:translate-x-0 delay-75"
+              >
+                <Radio className="w-4 h-4" />
+              </button>
             )}
           </div>
-          <span className="text-[11px] text-slate-400">{timeAgo(r.created_at)}</span>
         </div>
 
-        {/* AI Notes badge */}
+        {/* Info Zone */}
+        <div className="p-6 flex-1 flex flex-col relative z-20">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border border-slate-200/50 dark:border-white/5">
+                {r.subject || "General"}
+              </span>
+              {r.has_study_kit && (
+                <div className="flex items-center gap-1 text-emerald-500 animate-pulse">
+                  <Sparkles className="w-3 h-3 fill-current" />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Active Kit</span>
+                </div>
+              )}
+            </div>
+            <h3 className="font-black text-slate-900 dark:text-white text-lg leading-tight group-hover/card:text-primary transition-colors line-clamp-2">
+              {r.title}
+            </h3>
+          </div>
+
+          {/* Footer Metrics */}
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Size</span>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{formatBytes(r.file_size)}</span>
+              </div>
+              <div className="w-px h-6 bg-slate-200 dark:bg-white/10" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Added</span>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{timeAgo(r.created_at)}</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center group-hover/card:bg-primary group-hover/card:text-white transition-colors">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Animated Glow on Kit Ready */}
         {r.has_study_kit && (
-          <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_2px_rgba(16,185,129,0.3)]" />
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity" />
         )}
       </div>
     </Link>
@@ -185,6 +306,15 @@ export default function LibraryPage() {
   const [search, setSearch] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    resourceId: number | null;
+    title: string;
+  }>({
+    isOpen: false,
+    resourceId: null,
+    title: ''
+  })
   const qc = useQueryClient()
 
   const typeFilter = tab !== 'all' ? tab : undefined
@@ -204,13 +334,10 @@ export default function LibraryPage() {
 
     const connectSSE = async () => {
       try {
-        const { getSession } = await import('next-auth/react')
-        const session = await getSession()
-        const token = (session as any)?.accessToken
+        const token = await getAuthToken()
         if (!token || aborted) return
 
-        const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8000'
-        const res = await fetch(`${apiBase}/api/library/resources/status-stream/`, {
+        const res = await fetch(`${SERVER_URL}/api/library/resources/status-stream/`, {
           headers: { Authorization: `Bearer ${token}` },
           signal: ctrl.signal,
         })
@@ -232,12 +359,36 @@ export default function LibraryPage() {
             const evt = eventLine?.replace('event:', '').trim()
             if (!dataLine || evt === 'heartbeat' || evt === 'timeout') continue
             try {
-              JSON.parse(dataLine.replace('data:', '').trim())
+              const pulse = JSON.parse(dataLine.replace('data:', '').trim())
+              
               if (evt === 'status' || evt === 'snapshot') {
-                qc.invalidateQueries({ queryKey: ['resources'] })
+                const updates = Array.isArray(pulse) ? pulse : [pulse]
+                
+                // ─── THE "LIVE-INJECTOR" ENGINE ───
+                // Instead of a full refetch, we surgically update the specific cards.
+                // This makes the progress bar move percentage-by-percentage in real-time.
+                qc.setQueryData(['resources', typeFilter], (old: any) => {
+                  if (!old?.results) return old
+                  const newResults = [...old.results]
+                  updates.forEach((up: any) => {
+                    const idx = newResults.findIndex((r: any) => r.id === up.id)
+                    if (idx !== -1) {
+                        newResults[idx] = { 
+                            ...newResults[idx], 
+                            status: up.status, 
+                            processing_progress: up.progress,
+                            status_text: up.text,
+                            has_study_kit: up.status === 'ready'
+                        }
+                    }
+                  })
+                  return { ...old, results: newResults }
+                })
               }
               if (evt === 'done') { reader.cancel(); return }
-            } catch {}
+            } catch (err) {
+              console.error('SSE Pulse Parse Error', err)
+            }
           }
         }
       } catch (e: any) {
@@ -251,8 +402,24 @@ export default function LibraryPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => libraryApi.deleteResource(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['resources'] }); toast.success('Removed.') },
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['resources'] }); 
+      toast.success('Material decommissioned.');
+      setConfirmModal({ isOpen: false, resourceId: null, title: '' });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Decommissioning failed.');
+      setConfirmModal({ isOpen: false, resourceId: null, title: '' });
+    }
   })
+
+  const confirmDelete = (resource: any) => {
+    setConfirmModal({
+      isOpen: true,
+      resourceId: resource.id,
+      title: resource.title
+    })
+  }
 
   const resources = (data?.results || []).filter((r: any) =>
     r.title.toLowerCase().includes(search.toLowerCase())
@@ -272,10 +439,10 @@ export default function LibraryPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/library/flashcards" className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-primary/40 hover:text-primary transition-all shadow-sm">
+          <Link id="tour-library-flashcards" href="/library/flashcards" className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-primary/40 hover:text-primary transition-all shadow-sm">
             <BookOpen className="w-4 h-4" /> Flashcards
           </Link>
-          <button onClick={() => setShowUpload(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-black shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all">
+          <button id="tour-library-upload" onClick={() => setShowUpload(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-black shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all">
             <Upload className="w-4 h-4" /> Upload
           </button>
         </div>
@@ -363,12 +530,23 @@ export default function LibraryPage() {
       ) : (
         <div className={view === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}>
           {resources.map((r: any) => (
-            <ResourceCard key={r.id} resource={r} view={view} onDelete={() => deleteMutation.mutate(r.id)} />
+            <ResourceCard key={r.id} resource={r} view={view} onDelete={() => confirmDelete(r)} />
           ))}
         </div>
       )}
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+
+      <ConfirmationModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, resourceId: null, title: '' })}
+        onConfirm={() => confirmModal.resourceId && deleteMutation.mutate(confirmModal.resourceId)}
+        isLoading={deleteMutation.isPending}
+        title="Decommission Material"
+        message={`Are you sure you want to permanently delete "${confirmModal.title}" from your study library? This will redact all AI insights and study kits associated with this file.`}
+        confirmText="Decommission"
+        type="danger"
+      />
     </div>
   )
 }

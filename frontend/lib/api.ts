@@ -1,5 +1,10 @@
 import axios from 'axios'
-import { getSession } from 'next-auth/react'
+import { getSession, signOut } from 'next-auth/react'
+
+export const getAuthToken = async () => {
+  const session = await getSession()
+  return session?.accessToken || null
+}
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
@@ -16,9 +21,16 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
     if (err.response?.status === 401) {
-      window.location.href = '/login'
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        // Prevent multiple simultaneous redirects/signouts
+        if (!(window as any)._isRedirecting) {
+            (window as any)._isRedirecting = true
+            // signOut handles the session clear and redirect to login
+            await signOut({ callbackUrl: '/login', redirect: true })
+        }
+      }
     }
     return Promise.reject(err)
   }
@@ -49,9 +61,17 @@ export const libraryApi = {
     api.get('/library/resources/', { params: type ? { type } : {} }),
   getResource: (id: number) => api.get(`/library/resources/${id}/`),
   updateResource: (id: number, data: any) => api.patch(`/library/resources/${id}/`, data),
-  uploadResource: (data: FormData) =>
+  updateResourceCover: (id: number, file: File) => {
+    const fd = new FormData()
+    fd.append('cover_image', file)
+    return api.patch(`/library/resources/${id}/`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  uploadResource: (data: FormData, onUploadProgress?: (progressEvent: any) => void) =>
     api.post('/library/resources/', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress
     }),
   deleteResource: (id: number) => api.delete(`/library/resources/${id}/`),
   generateFlashcards: (id: number, count = 10, level = 'undergrad') =>
@@ -72,6 +92,8 @@ export const libraryApi = {
   getQuizzes: () => api.get('/library/quizzes/'),
   solveMath: (id: number, problem: string) =>
     api.post(`/library/resources/${id}/math/solve/`, { problem }),
+  cloneResource: (id: number) =>
+    api.post(`/library/resources/${id}/clone/`),
 }
 
 // AI
@@ -138,6 +160,46 @@ export const aiApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
+  streamAgentResponse: async function* (query: string, context?: string, history: any[] = [], is_tutor_mode: boolean = false) {
+    const token = await getAuthToken()
+    const response = await fetch(`${api.defaults.baseURL}/ai/agent/stream/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ query, context, history, is_tutor_mode })
+    })
+
+    if (!response.ok) throw new Error('Stream request failed')
+    
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    if (!reader) return
+
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const content = line.slice(6).trim()
+          if (content === '[DONE]') return
+          try {
+            const parsed = JSON.parse(content)
+            if (parsed.chunk) yield parsed.chunk
+          } catch (e) {
+            console.error('SSE Parse Error', e)
+          }
+        }
+      }
+    }
+  }
 }
 
 // Podcast
@@ -186,6 +248,7 @@ export const plannerApi = {
   getSessions: (start?: string, end?: string) =>
     api.get('/planner/sessions/', { params: { start, end } }),
   createSession: (data: any) => api.post('/planner/sessions/', data),
+  createRecurring: (data: any) => api.post('/planner/sessions/bulk-create/', data),
   updateSession: (id: number, data: any) =>
     api.patch(`/planner/sessions/${id}/`, data),
   deleteSession: (id: number) => api.delete(`/planner/sessions/${id}/`),
@@ -195,6 +258,7 @@ export const plannerApi = {
   updateDeadline: (id: number, data: any) =>
     api.patch(`/planner/deadlines/${id}/`, data),
   getSmartSchedule: () => api.get('/planner/smart-schedule/'),
+  interpret: (prompt: string) => api.post('/planner/interpret/', { prompt }),
 }
 
 // Assignments
@@ -212,42 +276,33 @@ export const assignmentsApi = {
   scheduleSession: (id: number, start_time: string, end_time: string) =>
     api.post(`/assignments/${id}/schedule/`, { start_time, end_time }),
   export: (id: number, format: string) =>
-    api.get(`/assignments/${id}/export/`, { params: { format }, responseType: 'blob' }),
+    api.get(`/assignments/${id}/download_intelligence/`, { params: { format }, responseType: 'blob' }),
+  humanize: (id: number) => api.post(`/assignments/${id}/humanize/`),
+  originality: (id: number) => api.post(`/assignments/${id}/originality/`),
+  detect: (id: number) => api.post(`/assignments/${id}/detect/`),
   transformToWorkspace: (id: number) => api.post(`/assignments/${id}/transform/`),
+  share: (id: number, workspace_id: number) => api.post(`/assignments/${id}/share/`, { workspace_id }),
 }
 // Workspace
 export const workspaceApi = {
-  getAll: () => api.get('/workspace/'),
-  get: (id: number) => api.get(`/workspace/${id}/`),
-  create: (data: any) => api.post('/workspace/', data),
-  update: (id: number, data: any) => api.patch(`/workspace/${id}/`, data),
-  delete: (id: number) => api.delete(`/workspace/${id}/`),
-  join: (invite_code: string) => api.post('/workspace/join/', { invite_code }),
-  getMembers: (id: number) => api.get(`/workspace/${id}/members/`),
-  getBlocks: (id: number) => api.get(`/workspace/${id}/blocks/`),
-  createBlock: (id: number, data: any) => api.post(`/workspace/${id}/blocks/`, data),
-  updateBlock: (id: number, data: any) => api.patch(`/workspace/${id}/blocks/`, data),
-  deleteBlock: (id: number, blockId: number) => api.delete(`/workspace/${id}/blocks/`, { data: { block_id: blockId } }),
-  reorderBlocks: (id: number, orderList: number[]) => api.patch(`/workspace/${id}/blocks/`, { order_list: orderList }),
-  getVersions: (id: number) => api.get(`/workspace/${id}/versions/`),
-  createVersion: (id: number) => api.post(`/workspace/${id}/versions/`),
-  restoreVersion: (id: number, version_id: number) => api.put(`/workspace/${id}/versions/`, { version_id }),
-  getMessages: (id: number) => api.get(`/workspace/${id}/messages/`),
-  sendMessage: (id: number, content: string) => api.post(`/workspace/${id}/messages/`, { content }),
-  getTasks: (id: number) => api.get(`/workspace/${id}/tasks/`),
-  createTask: (id: number, data: any) => api.post(`/workspace/${id}/tasks/`, data),
-  updateTask: (id: number, taskId: number, data: any) => api.patch(`/workspace/${id}/tasks/${taskId}/`, data),
-  deleteTask: (id: number, taskId: number) => api.delete(`/workspace/${id}/tasks/${taskId}/`),
-  aiAssist: (id: number, action: string, data?: any) => api.post(`/workspace/${id}/ai/`, { action, ...data }),
-  export: (id: number, format: string) => api.get(`/workspace/${id}/export/`, { params: { format }, responseType: 'blob' }),
-  getFiles: (id: number) => api.get(`/workspace/${id}/files/`),
-  uploadFile: (id: number, file: File) => {
-    const fd = new FormData(); fd.append('file', file)
-    return api.post(`/workspace/${id}/files/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  getAll: () => api.get('/workspace/workspaces/'),
+  get: (id: number) => api.get(`/workspace/workspaces/${id}/`),
+  create: (data: any) => api.post('/workspace/workspaces/', data),
+  update: (id: number, data: any) => api.patch(`/workspace/workspaces/${id}/`, data),
+  delete: (id: number) => api.delete(`/workspace/workspaces/${id}/`),
+  join: (invite_code: string) => api.post('/workspace/workspaces/join/', { invite_code }),
+  getMessages: (id: number) => api.get(`/workspace/workspaces/${id}/messages/`),
+  sendMessage: (id: number, content: string | FormData, parent_id?: number) => {
+    if (content instanceof FormData) {
+      if (parent_id) content.append('parent_id', parent_id.toString())
+      return api.post(`/workspace/workspaces/${id}/messages/`, content, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    }
+    return api.post(`/workspace/workspaces/${id}/messages/`, { content, parent_id })
   },
-  linkResource: (id: number, resource_id: number) => api.post(`/workspace/${id}/files/`, { resource_id }),
-  deleteFile: (id: number, file_id: number) => api.delete(`/workspace/${id}/files/?file_id=${file_id}`),
-  unlinkResource: (id: number, resource_id: number) => api.delete(`/workspace/${id}/files/?resource_id=${resource_id}`),
+  shareResource: (id: number, resource_id: number) => api.post(`/workspace/workspaces/${id}/share_resource/`, { resource_id }),
+  leave: (id: number) => api.post(`/workspace/workspaces/${id}/leave/`),
 }
 
 export const spacedRepetitionApi = {
@@ -272,6 +327,7 @@ export const communityApi = {
     api.post(`/community/posts/${postId}/comments/`, { content }),
   likeComment: (id: number) => api.post(`/community/comments/${id}/like/`),
   getAIAnswer: (postId: number) => api.post(`/community/posts/${postId}/ai-answer/`),
+  deletePost: (id: number) => api.delete(`/community/posts/${id}/`),
   getRooms: () => api.get('/community/rooms/'),
   createRoom: (data: any) => api.post('/community/rooms/', data),
   joinRoom: (id: number) => api.post(`/community/rooms/${id}/join/`),
@@ -279,4 +335,8 @@ export const communityApi = {
   createEvent: (data: any) => api.post('/community/events/', data),
   registerEvent: (id: number) => api.post(`/community/events/${id}/register/`),
   getLeaderboard: () => api.get('/community/leaderboard/'),
+  getStories: () => api.get('/community/stories/'),
+  createStory: (formData: FormData) => api.post('/community/stories/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
 }

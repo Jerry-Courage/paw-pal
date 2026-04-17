@@ -95,7 +95,7 @@ import dj_database_url as _dj_db_url
 
 _db_url = os.getenv('DATABASE_URL')
 if _db_url:
-    DATABASES = {'default': _dj_db_url.config(default=_db_url, conn_max_age=600, ssl_require=False)}
+    DATABASES = {'default': _dj_db_url.config(default=_db_url, conn_max_age=0, ssl_require=False)}
 else:
     DATABASES = {
         'default': {
@@ -197,6 +197,7 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
+    'SIGNING_KEY': SECRET_KEY,
 }
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
@@ -214,6 +215,8 @@ else:
         'http://localhost:5002',
         'http://127.0.0.1:5002',
     ]
+    CORS_ALLOW_ALL_ORIGINS = DEBUG
+    CORS_URLS_REGEX = r'^/api/.*$|/media/.*$'
 
 # Allow all *.replit.dev and *.repl.co origins for Replit preview environment
 CORS_ALLOWED_ORIGIN_REGEXES = [
@@ -350,9 +353,9 @@ UNFOLD = {
 Q_CLUSTER = {
     'name': 'flowstate_worker',
     'orm': 'default',   # Use DB instead of Redis for easier local testing
-    'timeout': 180,     # Max time for a RAG vectorization task
-    'retry': 240,
-    'workers': 4,
+    'timeout': 600,     # Max time for a RAG vectorization task (Extended for large PDFs)
+    'retry': 700,
+    'workers': 1,       # Optimized for Windows stability (prevents reincarnated worker loops)
     'recycle': 500,
     'save_limit': 250,
     'label': 'Django Q',

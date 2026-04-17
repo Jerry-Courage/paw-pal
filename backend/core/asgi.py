@@ -7,11 +7,14 @@ from workspace.routing import websocket_urlpatterns
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 
+# ─── ASGI APPLICATION ENTRY ────────────────────────────────────────────────
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
-    "websocket": JWTAuthMiddleware(
-        URLRouter(
-            websocket_urlpatterns
+    "websocket": AuthMiddlewareStack(
+        JWTAuthMiddleware(
+            URLRouter(
+                websocket_urlpatterns
+            )
         )
     ),
 })

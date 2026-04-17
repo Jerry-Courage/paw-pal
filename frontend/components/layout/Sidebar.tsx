@@ -6,17 +6,23 @@ import { signOut, useSession } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Calendar, BookOpen, Users, Sparkles,
-  Settings, LogOut, Zap, FileText, Layers, Phone
+  Settings, LogOut, Zap, FileText, Layers, Phone, LayoutGrid,
+  ChevronLeft, Brain
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { groupsApi } from '@/lib/api'
+
+interface SidebarProps {
+  onToggle?: () => void
+  isOpen?: boolean
+}
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/planner', icon: Calendar, label: 'Planner' },
   { href: '/library', icon: BookOpen, label: 'Library' },
   { href: '/assignments', icon: FileText, label: 'Assignments' },
-  { href: '/workspace', icon: Layers, label: 'Workspace' },
+  { href: '/workspace', icon: LayoutGrid, label: 'Collab Space' },
   { href: '/tutor-call', icon: Phone, label: 'Talk to a Tutor' },
   { href: '/community', icon: Users, label: 'Community' },
   { href: '/ai', icon: Sparkles, label: 'AI Assistant' },
@@ -24,7 +30,7 @@ const navItems = [
 
 const GROUP_COLORS = ['bg-emerald-400', 'bg-sky-400', 'bg-violet-400', 'bg-orange-400', 'bg-pink-400']
 
-export default function Sidebar() {
+export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname()
 
   const { data } = useQuery({
@@ -34,19 +40,43 @@ export default function Sidebar() {
   const groups = data?.results || []
 
   return (
-    <aside className="w-56 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col h-full flex-shrink-0">
-      {/* Logo */}
-      <div className="p-5 border-b border-slate-200/50 dark:border-slate-800/50">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-extrabold text-lg text-slate-900 dark:text-white tracking-tight">FlowState</span>
-        </Link>
-      </div>
+    <aside className="w-64 bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur-3xl border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col h-full flex-shrink-0 relative overflow-hidden transition-all duration-300">
+      {/* Dynamic Toggle Button - Fixed for Focus */}
+      {/* Sidebar Toggle - Only 'Hide' version on Sidebar */}
+      {onToggle && isOpen && (
+        <button 
+          onClick={onToggle}
+          className="absolute -right-3 top-20 w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-primary transition-all z-20 shadow-[0_0_20px_rgba(139,92,246,0.2)] hover:shadow-primary/30 active:scale-90 border-primary/20"
+          title="Hide Sidebar"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+      )}
 
       {/* Nav */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className={cn(
+        "flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar transition-opacity duration-300",
+        !isOpen && "opacity-0"
+      )}>
+        <div className="flex flex-col items-center py-6 mb-8 gap-4 px-2">
+          <Link href="/dashboard" className="group relative">
+            <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-indigo-700 p-[2px] shadow-[0_0_30px_rgba(139,92,246,0.3)] group-hover:scale-110 transition-transform duration-500">
+               <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center overflow-hidden">
+                  <Brain className="w-9 h-9 text-primary group-hover:animate-pulse transition-all" />
+                  {/* Subtle Shimmer for High-Fidelity */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+               </div>
+            </div>
+          </Link>
+          <div className="flex flex-col items-center pointer-events-none">
+            <span className="text-xl font-black tracking-[0.4em] bg-gradient-to-r from-primary via-indigo-400 to-primary bg-[length:200%_auto] bg-clip-text text-transparent animate-shine uppercase">
+              Flow
+            </span>
+            <span className="text-[10px] font-black tracking-[0.6em] text-slate-500 -mt-1 uppercase opacity-80">
+              State
+            </span>
+          </div>
+        </div>
         {navItems.map((item) => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (

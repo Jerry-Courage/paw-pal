@@ -7,7 +7,7 @@ from .views import (
     MindMapView, PracticeQuestionsView, ChapterSummariesView,
     SaveContentView, GradeAnswerView,
     VisionMessageView, GenerateDiagramView, GenerateImageView,
-    AgentView, AgentAudioView,
+    AgentView, AgentStreamView, AgentAudioView,
 )
 
 from .views_podcast import (
@@ -16,6 +16,7 @@ from .views_podcast import (
 
 urlpatterns = [
     path('agent/', AgentView.as_view(), name='platform_agent'),
+    path('agent/stream/', AgentStreamView.as_view(), name='platform_agent_stream'),
     path('agent/audio/', AgentAudioView.as_view(), name='agent_audio'),
     path('sessions/', ChatSessionListCreateView.as_view()),
     path('sessions/<int:pk>/', ChatSessionDetailView.as_view()),

@@ -46,20 +46,23 @@ function LoginForm() {
     <div className="min-h-screen bg-white dark:bg-gray-950 grid lg:grid-cols-2">
       {/* Left — form */}
       <div className="flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">
-        <Link href="/" className="flex items-center gap-2 mb-10">
-          <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center shadow-lg shadow-sky-200 dark:shadow-sky-900">
-            <Zap className="w-4 h-4 text-white" />
+        <Link href="/" className="flex flex-col items-center justify-center mb-12 group">
+          <div className="relative mb-6">
+            <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full group-hover:bg-primary/30 transition-colors" />
+            <img 
+              src="/images/logo-icon.png" 
+              alt="FlowState" 
+              className="h-28 w-auto relative z-10 transition-transform duration-500 group-hover:scale-110 contrast-115 brightness-110 drop-shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+              style={{ imageRendering: '-webkit-optimize-contrast' }} 
+            />
           </div>
-          <span className="font-bold text-lg text-gray-900 dark:text-white">FlowState</span>
+          <div className="text-center">
+            <h1 className="text-5xl font-black tracking-tighter text-slate-900 dark:text-white flex items-center gap-0.5">
+              FLOW<span className="text-primary">STATE</span>
+            </h1>
+            <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-primary/50 to-transparent mt-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </Link>
-
-        <div className="flex gap-2 mb-8">
-          <div className="w-8 h-1.5 bg-sky-500 rounded-full" />
-          <div className="w-4 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full" />
-          <div className="w-4 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full" />
-        </div>
-
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Welcome back</h1>
         <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
           Log in to your workspace or create a new account to start studying with AI.
         </p>

@@ -15,15 +15,23 @@ export default function LandingPage() {
       <div className="fixed bottom-0 left-[30%] w-[40%] h-[30%] bg-emerald-500/5 rounded-full blur-[100px] -z-10 pointer-events-none" />
 
       {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 glass-panel border-b-0 border-r-0 border-l-0 rounded-none">
+      <nav className="fixed top-0 w-full z-50 glass-panel border-b-0 border-r-0 border-l-0 rounded-none font-outfit">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">
-              FlowState
-            </span>
+          <div className="flex items-center">
+            <Link href="/" className="flex items-center gap-4 group">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                <img 
+                  src="/images/logo-icon.png" 
+                  alt="FlowState" 
+                  className="h-14 w-auto relative z-10 transition-transform duration-500 group-hover:scale-110 contrast-110 brightness-110" 
+                  style={{ imageRendering: '-webkit-optimize-contrast' }}
+                />
+              </div>
+              <span className="text-3xl font-black tracking-tighter text-slate-900 dark:text-white uppercase font-outfit">
+                FLOW<span className="text-primary">STATE</span>
+              </span>
+            </Link>
           </div>
           <div className="hidden md:flex items-center gap-8 font-medium text-sm text-slate-600 dark:text-slate-300">
             <Link href="#features" className="hover:text-primary transition-colors">Features</Link>
@@ -399,12 +407,20 @@ export default function LandingPage() {
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 pt-20 pb-10">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-16">
           <div className="col-span-2 lg:col-span-2">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-violet-500 rounded-lg flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
+            <Link href="/" className="flex items-center gap-3 group mb-6">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                <img 
+                  src="/images/logo-icon.png" 
+                  alt="FlowState" 
+                  className="h-12 w-auto relative z-10 transition-transform duration-500 group-hover:scale-110 contrast-110 brightness-110" 
+                  style={{ imageRendering: '-webkit-optimize-contrast' }}
+                />
               </div>
-              <span className="font-extrabold text-xl text-slate-900 dark:text-white">FlowState</span>
-            </div>
+              <span className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white uppercase font-outfit">
+                FLOW<span className="text-primary">STATE</span>
+              </span>
+            </Link>
             <p className="text-slate-500 max-w-xs mb-6 text-sm leading-relaxed">
               The AI study platform built for students who want to learn faster, retain more, and actually enjoy studying.
             </p>

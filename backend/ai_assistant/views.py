@@ -1,14 +1,19 @@
 import json
 import logging
+import asyncio
 import os
 import hashlib
 import re
+import uuid
+import threading
+import time
 from django.conf import settings
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.http import StreamingHttpResponse
+from asgiref.sync import async_to_sync
 
 from .models import ChatSession, ChatMessage
 from .serializers import ChatSessionSerializer, ChatMessageSerializer
@@ -614,7 +619,7 @@ class GenerateImageView(APIView):
 
 
 class AgentView(APIView):
-    """Universal platform agent endpoint."""
+    """Universal platform agent endpoint (Hybrid Sync/Async)."""
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AIRateThrottle]
 
@@ -626,23 +631,24 @@ class AgentView(APIView):
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         agent = FlowAgent(request.user)
-        is_tutor = request.data.get('is_tutor_mode') == True or request.data.get('is_tutor_mode') == 'true'
-        reply, action = agent.process_request(query, context, history=history, is_tutor_mode=is_tutor)
+        is_tutor = request.data.get('is_tutor_mode') in [True, 'true']
+        
+        # Use async_to_sync only for the AI call to keep Authentication safe in its sync context
+        reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
         
         execution_result = None
         if action:
-            execution_result = agent.execute_action(action)
+            execution_result = async_to_sync(agent.execute_action)(action)
 
-        # UI Cleanup: Strip technical ACTION tags from the display text
         display_reply = reply.split('ACTION:')[0].strip()
-
-        # High-Fidelity Voice Synthesis (Podcast Style)
-        audio_url = None
-        speech_text = VoiceSanitizer.clean(reply)
+        speech_text = VoiceSanitizer.clean(display_reply)
         
-        if request.data.get('voice_enabled') and speech_text:
+        voice_enabled = request.data.get('voice_enabled') in [True, 'true']
+        voice_id = request.data.get('voice_id')
+        audio_url = None
+
+        if voice_enabled and speech_text:
             try:
-                # Asset management (Caching)
                 h = hashlib.md5(speech_text.encode('utf-8')).hexdigest()
                 out_dir = os.path.join(settings.MEDIA_ROOT, 'agent_responses')
                 os.makedirs(out_dir, exist_ok=True)
@@ -650,9 +656,8 @@ class AgentView(APIView):
                 f_path = os.path.join(out_dir, f_name)
                 
                 if not os.path.exists(f_path):
-                    # Use the premium Ava/Andrew voice
-                    voice = request.data.get('voice_id', SUPPORTED_VOICES['Andrew'])
-                    generate_tts_file(speech_text, voice, f_path)
+                    v_id = voice_id or SUPPORTED_VOICES['Andrew']
+                    generate_tts_file(speech_text, v_id, f_path)
                 
                 audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
             except Exception as e:
@@ -661,10 +666,46 @@ class AgentView(APIView):
         return Response({
             'reply': display_reply,
             'speech_text': speech_text,
+            'audio_url': audio_url,
             'action': action,
-            'execution_result': execution_result,
-            'audio_url': audio_url
+            'execution_result': execution_result
         })
+
+class AgentStreamView(APIView):
+    """Universal platform agent endpoint (Streaming SSE - Hybrid)."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    def post(self, request):
+        query = request.data.get('query', '').strip()
+        context = request.data.get('context', '')
+        history = request.data.get('history', [])
+        is_tutor = request.data.get('is_tutor_mode') in [True, 'true']
+        
+        if not query:
+            return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = FlowAgent(request.user)
+
+        async def event_stream():
+            try:
+                async for chunk in agent.process_request_stream(query, context, history=history, is_tutor_mode=is_tutor):
+                    if chunk:
+                        yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                yield "data: [DONE]\n\n"
+            except asyncio.CancelledError:
+                # This is normal when a user refreshes or closes the page
+                pass
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        # Django 4.2+ supports async generators in StreamingHttpResponse from sync views
+        response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'
+        return response
 
 class AgentAudioView(APIView):
     """

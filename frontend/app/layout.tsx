@@ -1,8 +1,16 @@
 import type { Metadata } from 'next'
+import { Outfit } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from 'sonner'
 import NextTopLoader from 'nextjs-toploader'
+import { cn } from '@/lib/utils'
+
+const outfit = Outfit({ 
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-outfit',
+})
 
 export const metadata: Metadata = {
   title: 'FlowState — Study Smarter with Your AI Third Member',
@@ -12,7 +20,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning>
+      <body suppressHydrationWarning className={cn(outfit.className, outfit.variable)}>
         <NextTopLoader
           color="#8b5cf6"
           initialPosition={0.08}

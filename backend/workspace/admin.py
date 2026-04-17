@@ -1,27 +1,20 @@
 from django.contrib import admin
-from .models import Workspace, WorkspaceMember, WorkspaceBlock, WorkspaceMessage, WorkspaceTask, WorkspaceFile
-
+from .models import Workspace, WorkspaceMember, WorkspaceMessage
 
 @admin.register(Workspace)
 class WorkspaceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'subject', 'invite_code', 'created_at')
-    search_fields = ('name', 'owner__email')
-    readonly_fields = ('invite_code', 'created_at', 'updated_at')
+    list_display = ('name', 'subject', 'owner', 'invite_code', 'is_active', 'created_at')
+    search_fields = ('name', 'subject', 'invite_code')
+    list_filter = ('is_active', 'created_at')
 
+@admin.register(WorkspaceMember)
+class WorkspaceMemberAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'user', 'role', 'joined_at', 'last_seen')
+    list_filter = ('role', 'joined_at')
+    search_fields = ('workspace__name', 'user__username')
 
-@admin.register(WorkspaceBlock)
-class WorkspaceBlockAdmin(admin.ModelAdmin):
-    list_display = ('block_type', 'workspace', 'order', 'updated_at')
-    list_filter = ('block_type', 'workspace')
-
-
-@admin.register(WorkspaceTask)
-class WorkspaceTaskAdmin(admin.ModelAdmin):
-    list_display = ('title', 'workspace', 'status', 'assigned_to', 'created_at')
-    list_filter = ('status', 'workspace')
-
-
-@admin.register(WorkspaceFile)
-class WorkspaceFileAdmin(admin.ModelAdmin):
-    list_display = ('name', 'workspace', 'uploaded_by', 'file_size', 'created_at')
-    list_filter = ('workspace',)
+@admin.register(WorkspaceMessage)
+class WorkspaceMessageAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'author', 'is_ai', 'created_at')
+    list_filter = ('is_ai', 'created_at')
+    search_fields = ('content',)

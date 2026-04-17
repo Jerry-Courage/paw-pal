@@ -121,7 +121,7 @@ export default function AIAssistantSidebar({ workspaceId, onInsertToCanvas, sock
             )}>
               {m.is_ai ? (
                 <div className="prose prose-invert prose-sm max-w-none prose-p:mb-4 prose-p:last:mb-0 prose-strong:text-violet-400 prose-code:text-sky-400 prose-code:bg-white/5">
-                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                  <ReactMarkdown>{m.is_ai ? m.content.split(/\bACTION\b/i)[0].trim() : m.content}</ReactMarkdown>
                   <button onClick={() => onInsertToCanvas(m.content)}
                     className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] hover:bg-violet-400 hover:text-white transition-all shadow-xl active:scale-95">
                     <Plus className="w-3.5 h-3.5" /> Inject Specimen

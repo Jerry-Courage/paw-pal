@@ -14,6 +14,8 @@ import { format } from 'date-fns'
 import { timeAgo } from '@/lib/utils'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
+import { Share2 } from 'lucide-react'
 
 const STATUS_CONFIG: Record<string, { color: string; dot: string; icon: any; label: string }> = {
   pending:    { color: 'text-slate-500 bg-slate-100',           dot: 'bg-slate-400',    icon: Clock,         label: 'Pending' },
@@ -27,6 +29,7 @@ export default function AssignmentsPage() {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [sharingAssignment, setSharingAssignment] = useState<any>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['assignments'],
@@ -62,7 +65,7 @@ export default function AssignmentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/assignments/new" className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-black shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all">
+          <Link id="tour-assignments-new" href="/assignments/new" className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-black shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all">
             <Plus className="w-4 h-4" /> New Assignment
           </Link>
         </div>
@@ -117,23 +120,33 @@ export default function AssignmentsPage() {
       ) : assignments.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className={view === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'}>
+        <div id="tour-assignments-list" className={view === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'}>
           {assignments.map((a: any) => (
             <AssignmentCard 
               key={a.id} 
               assignment={a} 
               view={view}
               onClick={() => router.push(`/assignments/${a.id}`)}
-              onDelete={() => deleteMutation.mutate(a.id)} 
+              onDelete={() => deleteMutation.mutate(a.id)}
+              onShare={() => setSharingAssignment(a)}
             />
           ))}
         </div>
+      )}
+
+      {sharingAssignment && (
+        <ShareAssignmentModal
+          isOpen={!!sharingAssignment}
+          onClose={() => setSharingAssignment(null)}
+          assignmentId={sharingAssignment.id}
+          assignmentTitle={sharingAssignment.title}
+        />
       )}
     </div>
   )
 }
 
-function AssignmentCard({ assignment: a, view, onClick, onDelete }: any) {
+function AssignmentCard({ assignment: a, view, onClick, onDelete, onShare }: any) {
   const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.pending
   const Icon = cfg.icon
 
@@ -155,12 +168,23 @@ function AssignmentCard({ assignment: a, view, onClick, onDelete }: any) {
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
-          <div className={cn("hidden sm:flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider", cfg.color)}>
+          <div className={cn("hidden lg:flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider", cfg.color)}>
             {cfg.label}
           </div>
-          <button onClick={e => { e.stopPropagation(); onDelete() }} className="p-2 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button 
+              onClick={e => { e.stopPropagation(); onShare() }} 
+              className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={e => { e.stopPropagation(); onDelete() }} 
+              className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -176,9 +200,20 @@ function AssignmentCard({ assignment: a, view, onClick, onDelete }: any) {
           <Icon className={cn('w-3.5 h-3.5', a.status === 'processing' && 'animate-spin')} />
           {cfg.label}
         </div>
-        <button onClick={e => { e.stopPropagation(); onDelete() }} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all">
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+          <button 
+            onClick={e => { e.stopPropagation(); onShare() }} 
+            className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all"
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={e => { e.stopPropagation(); onDelete() }} 
+            className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <h3 className="font-bold text-slate-900 dark:text-white text-base leading-snug line-clamp-2 mb-2 group-hover:text-sky-500 transition-colors">{a.title}</h3>

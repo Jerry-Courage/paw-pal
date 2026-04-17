@@ -4,6 +4,9 @@ import { SessionProvider } from 'next-auth/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { useState } from 'react'
+import { TourProvider } from '@/components/onboarding/TourProvider'
+import { AudioProvider } from '@/context/AudioContext'
+import FloatingMiniPlayer from '@/components/ui/FloatingMiniPlayer'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -25,8 +28,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          {children}
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <AudioProvider>
+            <TourProvider>
+              {children}
+              <FloatingMiniPlayer />
+            </TourProvider>
+          </AudioProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </SessionProvider>
