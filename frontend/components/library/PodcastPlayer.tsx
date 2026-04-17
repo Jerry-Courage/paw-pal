@@ -48,16 +48,21 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
       setVisuals(res.data.extracted_images || [])
     })
     
-    // If a session already exists for this resource in the global state, restore view
+    // Restoration logic: Wait for both sessionId AND a populated script before saying "Ready"
     if (audio.activeResourceId === resourceId && audio.sessionId) {
-      setStatus('ready')
+      if (audio.script && audio.script.length > 0) {
+        setStatus('ready')
+      } else {
+        setStatus('generating')
+      }
+
       podcastApi.getStatus(audio.sessionId).then(res => {
         if (res.data.interjection_urls) {
           setInterjectionUrls(res.data.interjection_urls)
         }
       })
     }
-  }, [resourceId, audio.activeResourceId, audio.sessionId])
+  }, [resourceId, audio.activeResourceId, audio.sessionId, audio.script?.length])
 
   const currentChunk = audio.script && audio.script.length > audio.currentIndex ? audio.script[audio.currentIndex] : null
   const activeVisual = visuals.find(v => {
@@ -71,26 +76,34 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
 
   // Polling for status updates (global script updates)
   useEffect(() => {
-    if (status === 'generating' && audio.sessionId) {
+    // Continue polling if generating OR if we have a session but it's not 'ready' in the backend yet
+    const shouldPoll = status === 'generating' || (status === 'ready' && audio.sessionId && audio.totalChunks === 0)
+    
+    if (shouldPoll && audio.sessionId) {
       const interval = setInterval(async () => {
         try {
           const res = await podcastApi.getStatus(audio.sessionId!)
-          updateScript(res.data.script, res.data.chunks_total)
           
-          if (res.data.status === 'ready') {
-            setStatus('ready')
+          // Always update the script in global state
+          if (res.data.script && res.data.script.length > 0) {
+             updateScript(res.data.script, res.data.chunks_total)
+             // Transition to ready as soon as first chunks arrive
+             if (status !== 'ready') setStatus('ready')
+          }
+          
+          if (res.data.status === 'ready' && res.data.script && res.data.script.length > 0) {
             clearInterval(interval)
           } else if (res.data.status === 'error') {
             setStatus('error')
             clearInterval(interval)
           }
         } catch (e) {
-          console.error(e)
+          console.error("Polling error:", e)
         }
       }, 3000)
       return () => clearInterval(interval)
     }
-  }, [status, audio.sessionId, updateScript])
+  }, [status, audio.sessionId, updateScript, audio.totalChunks])
 
   const handleStartGeneration = async () => {
     try {
