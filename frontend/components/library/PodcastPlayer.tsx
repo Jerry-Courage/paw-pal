@@ -25,7 +25,8 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     resume: globalResume, 
     updateScript, 
     setCurrentIndex,
-    stop: globalStop
+    stop: globalStop,
+    audioRef
   } = useAudio()
   
   const [isInterrupting, setIsInterrupting] = useState(false)
