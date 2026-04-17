@@ -77,17 +77,18 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     Object.values(preloadedBlobs.current).forEach(url => URL.revokeObjectURL(url))
     preloadedBlobs.current = {}
     
+    const safeScript = script || []
     setState(prev => ({
       ...prev,
       activeResourceId: resourceId,
       activeResourceTitle: title,
       sessionId: sessionId,
-      script: script,
-      totalChunks: script.length,
+      script: safeScript,
+      totalChunks: safeScript.length,
       currentIndex: 0,
       isPlaying: true,
       isMiniPlayerVisible: true,
-      playbackProgress: script.length > 0 ? (1 / script.length) * 100 : 0
+      playbackProgress: safeScript.length > 0 ? (1 / safeScript.length) * 100 : 0
     }))
   }
 
