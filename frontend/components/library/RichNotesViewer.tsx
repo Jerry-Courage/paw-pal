@@ -37,6 +37,11 @@ export default function RichNotesViewer({
     setZoomedImage(src)
   }
 
+  const cleanContent = (text: string) => {
+    if (!text) return ''
+    return text.replace(/ACTION:\s*\{.*?\}/gi, '').trim()
+  }
+
   return (
     <div className={cn(
       "relative pb-32",
@@ -69,38 +74,32 @@ export default function RichNotesViewer({
 
       <div className="space-y-16 sm:space-y-24">
         {notes.sections?.map((section: any, idx: number) => (
-    const cleanContent = (text: string) => {
-      if (!text) return ''
-      return text.replace(/ACTION:\s*\{.*?\}/gi, '').trim()
-    }
-
-    return (
-      <div key={idx} className={cn(
-        "group/card transition-all duration-700",
-        isMathMode ? "glass-narrative-card" : "standard-reading-card"
-      )}>
-        {/* Section Header */}
-        <div className="flex items-start gap-6 mb-10">
-          <div className={cn(
-            "w-14 h-14 rounded-3xl flex items-center justify-center font-black text-2xl shadow-xl transition-all duration-500 shrink-0",
-            isMathMode 
-              ? "bg-primary text-white scale-110 shadow-primary/20 group-hover/card:rotate-6" 
-              : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 group-hover/card:bg-primary group-hover/card:text-white group-hover/card:scale-105"
+          <div key={idx} className={cn(
+            "group/card transition-all duration-700",
+            isMathMode ? "glass-narrative-card" : "standard-reading-card"
           )}>
-            {section.icon || (idx + 1)}
-          </div>
-          <div className="pt-1">
-            <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white uppercase leading-none mb-2">
-              {section.title}
-            </h2>
-            <div className={cn(
-              "h-1.5 rounded-full transition-all duration-700",
-              isMathMode 
-                ? "bg-primary w-16 group-hover/card:w-32" 
-                : "bg-slate-200 dark:bg-slate-800 w-8 group-hover/card:bg-primary group-hover/card:w-24"
-            )} />
-          </div>
-        </div>
+            {/* Section Header */}
+            <div className="flex items-start gap-6 mb-10">
+              <div className={cn(
+                "w-14 h-14 rounded-3xl flex items-center justify-center font-black text-2xl shadow-xl transition-all duration-500 shrink-0",
+                isMathMode 
+                  ? "bg-primary text-white scale-110 shadow-primary/20 group-hover/card:rotate-6" 
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 group-hover/card:bg-primary group-hover/card:text-white group-hover/card:scale-105"
+              )}>
+                {section.icon || (idx + 1)}
+              </div>
+              <div className="pt-1">
+                <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white uppercase leading-none mb-2">
+                  {section.title}
+                </h2>
+                <div className={cn(
+                  "h-1.5 rounded-full transition-all duration-700",
+                  isMathMode 
+                    ? "bg-primary w-16 group-hover/card:w-32" 
+                    : "bg-slate-200 dark:bg-slate-800 w-8 group-hover/card:bg-primary group-hover/card:w-24"
+                )} />
+              </div>
+            </div>
 
         {/* Content Rendering Engine */}
         <div className={cn(
