@@ -160,9 +160,20 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
           try {
             setIsAnswering(true)
             const res = await podcastApi.interrupt(audio.sessionId!, audioBlob, audio.currentIndex)
+            
+            // The backend splices answer segments right after currentIndex.
+            // So the answer starts at currentIndex + 1 in the new script.
+            const answerStartIndex = audio.currentIndex + 1
+            
+            // Update the global script first
             updateScript(res.data.script, res.data.new_total)
-            setCurrentIndex(audio.currentIndex + 1)
-            globalResume()
+            
+            // Give React a tick to process the state update, then jump to the answer
+            setTimeout(() => {
+              toast.dismiss('answering-toast')
+              setIsAnswering(false)
+              setCurrentIndex(answerStartIndex)
+            }, 300)
           } catch(e) {
             toast.dismiss('answering-toast')
             setIsAnswering(false)

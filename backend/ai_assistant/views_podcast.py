@@ -461,16 +461,12 @@ class PodcastInterruptView(APIView):
                         f_path = os.path.join(out_dir, f"{h}.mp3")
                         
                         if not os.path.exists(f_path):
-                            # Sequential generation prevents 503 errors
                             generate_tts_file(chunk_text, v_id, f_path)
-                            time.sleep(0.3) # Avoid throttling
                 except Exception as e:
                     with open(log_path, 'a') as f: f.write(f"[PREWARM-FATAL] {str(e)}\n")
 
-            threading.Thread(
-                target=serialized_prewarm, 
-                args=(bridge, session.voice_a, session.voice_b, name_b, session.resource.id, session.id)
-            ).start()
+            # For interruptions, generate TTS SYNCHRONOUSLY so audio is ready before frontend plays
+            serialized_prewarm(bridge, session.voice_a, session.voice_b, name_b, session.resource.id, session.id)
 
         # 4. Splice the bridge into the script immediately after current_index
         if isinstance(bridge, list) and len(bridge) > 0:

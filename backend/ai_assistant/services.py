@@ -310,7 +310,7 @@ class AIService:
                 response = await client.post(
                     url,
                     headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                    json={'model': target_model, 'messages': messages, 'max_tokens': 4096},
+                    json={'model': target_model, 'messages': messages, 'max_tokens': max_tokens},
                     timeout=8,
                 )
                 if response.status_code == 200:
