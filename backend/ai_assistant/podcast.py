@@ -169,21 +169,25 @@ def generate_podcast_script(notes_json, length_pref=15, available_images=None, n
         "NO narration. NO stage directions. Output raw JSON array only."
     )
     
-    prompt = f"""Write a HIGH-FIDELITY, DEEP-DIVE podcast script based on these notes:
-    {sections_text[:5000]}
-    
-    INSTRUCTIONS:
-    {img_context}
-    - SPEAKERS: Use ID "A" for {name_a} and "B" for {name_b}.
-    - STRUCTURE: [{{"speaker": "A", "text": "...", "visual_ref": ID, "visual_prompt": "..."}}]
-    - LENGTH: Provide a detailed, long-form conversation with at least 25 segments.
-    - VISUAL VARIETY (CRITICAL):
-        1. Use "visual_ref" ID if the dialogue directly discusses an existing diagram from the notes.
-        2. Use "visual_prompt": "description" for a new concept illustration NOT in the notes.
-        3. DO NOT repeat the same visual! CHANGE the visual (ref or prompt) every 4 segments.
-    - STYLE: Deeply conversational and human. {name_a} is the expert guide, {name_b} is the inquisitive analyst.
-    - CRITICAL: Output ONLY the raw JSON array. Start immediately with '['. Do not include markdown formatting or talk outside the JSON.
-    """
+    prompt_template = """Write a HIGH-FIDELITY, DEEP-DIVE podcast script based on these notes:
+[MATERIAL]
+
+INSTRUCTIONS:
+[IMAGES]
+- SPEAKERS: Use ID "A" for [NAME_A] and "B" for [NAME_B].
+- STRUCTURE: [{"speaker": "A", "text": "...", "visual_ref": ID, "visual_prompt": "..."}]
+- LENGTH: Provide a detailed, long-form conversation with at least 25 segments.
+- VISUAL VARIETY (CRITICAL):
+    1. Use "visual_ref" ID if the dialogue directly discusses an existing diagram from the notes.
+    2. Use "visual_prompt": "description" for a new concept illustration NOT in the notes.
+    3. DO NOT repeat the same visual! CHANGE the visual (ref or prompt) every 4 segments.
+- STYLE: Deeply conversational and human. [NAME_A] is the expert guide, [NAME_B] is the inquisitive analyst.
+- CRITICAL: Output ONLY the raw JSON array. Start immediately with '['. Do not include markdown formatting or talk outside the JSON.
+"""
+    prompt = prompt_template.replace("[MATERIAL]", sections_text[:5000]) \
+                            .replace("[IMAGES]", img_context) \
+                            .replace("[NAME_A]", name_a) \
+                            .replace("[NAME_B]", name_b)
 
     ai_service = AIService()
     res = call_ai_with_retry(prompt, sys_inst, log_path)
@@ -274,16 +278,21 @@ def handle_interruption(user_query, current_script, current_index, full_material
         for img in available_images[:6]:
             img_context += f"- ID {img['id']} (Page {img['page_number']}): {str(img.get('description') or 'Diagram')[:70]}\n"
 
-    prompt = f"""Provide a host response to: "{user_query}". 
-    Source material: {full_material[:6000]}
-    Recent chat: {recent}
-    {img_context}
-    
-    INSTRUCTIONS:
-    - CONCISE: Give exactly 1-2 rapid dialogue segments in a JSON array.
-    - BE DIRECT: Jump straight into the answer. 
-    - If a specific visual ID explains it, use "visual_ref": ID. 
-    - Output ONLY JSON array [{{"speaker": "A" or "B", "text": "...", "visual_ref": ID, "visual_prompt": "..."}}]."""
+    prompt_template = """Provide a host response to: "[QUERY]". 
+Source material: [MATERIAL]
+Recent chat: [CHAT]
+[IMAGES]
+
+INSTRUCTIONS:
+- CONCISE: Give exactly 1-2 rapid dialogue segments in a JSON array.
+- BE DIRECT: Jump straight into the answer. 
+- If a specific visual ID explains it, use "visual_ref": ID. 
+- Output ONLY JSON array [{"speaker": "A" or "B", "text": "...", "visual_ref": ID, "visual_prompt": "..."}]."""
+
+    prompt = prompt_template.replace("[QUERY]", user_query) \
+                            .replace("[MATERIAL]", full_material[:6000]) \
+                            .replace("[CHAT]", recent) \
+                            .replace("[IMAGES]", img_context)
 
     sys_inst = (
         f"You are {name_a} and {name_b}. Speak ONLY as the host. "
