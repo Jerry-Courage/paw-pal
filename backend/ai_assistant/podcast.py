@@ -6,6 +6,7 @@ import time
 import re
 import requests as req
 from django.conf import settings
+from asgiref.sync import async_to_sync
 from .services import AIService, VoiceSanitizer
 
 # Default voices available for users to pick from
@@ -62,7 +63,7 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
             with open(log_path, 'a') as f:
                 f.write(f"\n[OpenRouter] Requesting batch (Attempt {attempt+1})...\n")
             
-            result = ai_service.chat([
+            result = async_to_sync(ai_service.chat)([
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
             ])
@@ -282,7 +283,7 @@ def handle_interruption(user_query, current_script, current_index, full_material
     - CONCISE: Give exactly 1-2 rapid dialogue segments in a JSON array.
     - BE DIRECT: Jump straight into the answer. 
     - If a specific visual ID explains it, use "visual_ref": ID. 
-    - Output ONLY JSON array [{{'speaker': 'A' or 'B', 'text': '...', 'visual_ref': ID, 'visual_prompt': '...'}}]."""
+    - Output ONLY JSON array [{{"speaker": "A" or "B", "text": "...", "visual_ref": ID, "visual_prompt": "..."}}]."""
 
     sys_inst = (
         f"You are {name_a} and {name_b}. Speak ONLY as the host. "
@@ -317,7 +318,7 @@ def handle_interruption(user_query, current_script, current_index, full_material
         return found
 
     ai_service = AIService()
-    res = ai_service.groq_chat([
+    res = async_to_sync(ai_service.groq_chat)([
         {"role": "system", "content": sys_inst},
         {"role": "user", "content": prompt}
     ], max_tokens=512)
