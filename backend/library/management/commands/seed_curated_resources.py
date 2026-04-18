@@ -314,6 +314,103 @@ This "refilling" is vital during fasting or intense exercise. It is what allows 
                     ]
                 },
                 'ai_concepts': [{'title': r'Thermodynamics', 'explanation': r'The study of energy transfer that determines the forward direction of biochemical pathways.'}]
+            },
+            {
+                'title': r'General Relativity: Space-Time and the Fabric of Gravity',
+                'subject': r'Physics',
+                'resource_type': r'video',
+                'url': r'https://www.youtube.com/watch?v=tzQC3uYL67U',
+                'author_name': r'Science-Phile x FlowAI',
+                'ai_summary': r'An exhaustive 13-chapter masterclass on Albert Einstein\'s greatest achievement. This guide takes you from the Equivalence Principle to the Einstein Field Equations, the geometry of curved space, and the fascinating physics of Black Holes and Gravitational Waves. A definitive guide for the modern student of the cosmos.',
+                'ai_notes_json': {
+                    'overview': {
+                        'title': r'General Relativity: Geometry and Gravitation',
+                        'summary': r'General Relativity is the study of how mass and energy warp the fabric of space and time. This kit explores the mathematical and physical logic of a universe where gravity is not a force, but geometry itself.'
+                    },
+                    'sections': [
+                        {
+                            'title': r'1. Beyond Newton: The Crisis of Gravity',
+                            'content': r'''For over 200 years, Isaac Newton\'s law of universal gravitation reigned supreme. It explained why apples fall and how planets orbit. However, Newton himself was deeply troubled by his own theory: he couldn\'t explain *how* gravity actually worked across a distance. He called it "action at a distance," a concept he found absurd.
+
+Furthermore, Newton\'s gravity didn\'t fit with Einstein\'s Special Relativity (1905), which stated that nothing—including gravity—can travel faster than light. If the Sun vanished, Newton said Earth would fly away instantly; Einstein knew this was impossible. This crisis led Einstein on an 8-year journey to find the true nature of gravity, culminating in the most beautiful theory in science: General Relativity.'''
+                        },
+                        {
+                            'title': r'2. The Principle of Equivalence',
+                            'content': r'''Einstein\'s "happiest thought" was the realization that gravity and acceleration are indistinguishable. He imagined a person in a windowless elevator in deep space. If the elevator accelerated upward at $9.8 \text{ m/s}^2$, the person would feel a "force" pulling them to the floor, exactly like gravity on Earth.
+
+Einstein realized that if you are in a falling elevator, you are "weightless" because gravity is canceled out by your acceleration. This **Equivalence Principle** proved that gravity is not some mysterious magnetic-like pull, but is instead related to the geometry of your environment. This was the fundamental insight that allowed him to move from "Force" to "Curvature."'''
+                        },
+                        {
+                            'title': r'3. Spacetime as a Single Unified Fabric',
+                            'content': r'''In classical physics, Space was a stage and Time was a clock. Einstein merged them into a single, dynamic 4-dimensional fabric called **Spacetime**. This fabric is not empty or rigid; it is elastic and can be stretched, compressed, and warped by the presence of mass and energy.
+
+John Wheeler famously summarized this: "Space-time tells matter how to move; matter tells space-time how to curve." When you see the Earth orbiting the Sun, it isn\'t being pulled by a string; it is simply following the natural "groove" or curvature in the fabric of space created by the Sun's massive weight. Gravity is the geometry of the universe.'''
+                        },
+                        {
+                            'title': r'4. The Geometry of Curvature: Tensors and Manifolds',
+                            'content': r'''To describe a curved universe, Einstein needed a new kind of math called **Differential Geometry**. He used **Tensors**—mathematical objects that can describe properties (like stress, energy, and curvature) that stay the same no matter what coordinate system you use.
+
+In our 3D world, a straight line is the shortest distance. In a curved 4D spacetime, the shortest path is called a **Geodesic**. This is why light—which always takes the shortest path—bends when it passes near a star. The star isn\'t "pulling" the light; the light is just following the "straight" path through the curved space. This curvature defines the entire structure of the cosmos.'''
+                        },
+                        {
+                            'title': r'5. The Einstein Field Equations (EFE)',
+                            'content': r'''In 1915, Einstein revealed the ten equations that define the universe. They are often written in a single, elegant shorthand:
+$$G_{\mu\nu} + \Lambda g_{\mu\nu} = \frac{8\pi G}{c^4} T_{\mu\nu}$$
+On the left side ($G_{\mu\nu}$), we have the **Geometry** (curvature) of space. On the right side ($T_{\mu\nu}$), we have the **Energy and Momentum** (the matter) within that space. This equation is the "Law of the Land" for the universe, dictating everything from the expansion of the cosmos to the orbit of a pebble.'''
+                        },
+                        {
+                            'title': r'6. Time Dilation: Gravity Warps the Clock',
+                            'content': r'''One of the most mind-bending consequences of General Relativity is that gravity slows down time. This is called **Gravitational Time Dilation**. A clock on the surface of a massive planet will tick slower than a clock in deep space.
+
+This isn\'t just theory; it is a vital part of modern technology. **GPS satellites** are further from Earth's gravity, so their internal clocks tick about 45 microseconds *faster* every day than our clocks on the ground. If engineers didn\'t account for Einstein\'s equations, GPS locations would be off by several kilometers in just a few days. General Relativity literally keeps our world on time.'''
+                        },
+                        {
+                            'title': r'7. Gravitational Lensing: Nature\'s Telescope',
+                            'content': r'''If space is curved, it can act like a giant magnifying glass. When a massive cluster of galaxies sits between us and a distant object, it bends the light from that object toward us. This is **Gravitational Lensing**.
+
+We can see multiple images of the same distant star or galaxy, often warped into "Einstein Rings" or "Einstein Crosses." This allows astronomers to see objects that would otherwise be invisible and is our primary tool for measuring **Dark Matter**, which has mass and curves space even though it reflects no light.'''
+                        },
+                        {
+                            'title': r'8. Black Holes: The Ultimate Curvature',
+                            'content': r'''If you squash enough mass into a small enough space, the curvature becomes so extreme that not even light can escape the "hole" in space. This is a **Black Hole**. They were initially thought to be a mathematical error in Einstein\'s equations, but they are very real.
+
+A black hole is not a solid object; it is a region of space where gravity is so strong that the "exit velocity" exceeds the speed of light. Inside a black hole, the laws of physics as we know them begin to merge and break, making them the ultimate laboratory for the future of theoretical physics.'''
+                        },
+                        {
+                            'title': r'9. The Event Horizon & Schwarzschild Radius',
+                            'content': r'''Every black hole is surrounded by a boundary called the **Event Horizon**. This is the "Point of No Return." Once anything—a photon, a star, or a person—crosses this line, it is physically impossible to ever return to the outside universe.
+
+The size of this boundary is defined by the **Schwarzschild Radius** ($R_s$):
+$$R_s = \frac{2GM}{c^2}$$
+If you crushed the Earth down to the size of a marble (about 9 millimeters), it would become a black hole. For the Sun, it would need to be crushed down to about 3 kilometers. The Event Horizon is effectively the "edge" of our observable universe.'''
+                        },
+                        {
+                            'title': r'10. Singularity: Where Math Breaks',
+                            'content': r'''At the very center of a black hole, Einstein\'s equations predict a **Singularity**—a point where the density becomes infinite and the volume becomes zero. Here, the curvature of space is so sharp that the math literally "blows up" (it returns an infinity).
+
+Most physicists believe that singularities don\'t actually exist as "infinite" points. Instead, they signal that General Relativity is incomplete. To understand what happens at the center of a black hole, we need a theory of **Quantum Gravity**—a way to combine the "very large" of Einstein with the "very small" of the subatomic world.'''
+                        },
+                        {
+                            'title': r'11. Gravitational Waves: Ripples in the Fabric',
+                            'content': r'''Just as a vibrating charge creates light waves, a vibrating mass creates **Gravitational Waves**. These are literal ripples in the fabric of spacetime that travel at the speed of light. They were predicted by Einstein in 1916 but were so tiny that he thought we\'d never detect them.
+
+In 2015, the LIGO experiment finally succeeded. They detected the ripple from two massive black holes colliding 1.3 billion years ago. The wave was so faint that it moved the LIGO sensors by only one-thousandth the width of a proton. This discovery opened an entirely new way to "hear" the universe, allowing us to see events that emit no light at all.'''
+                        },
+                        {
+                            'title': r'12. The Expanding Universe and Dark Energy',
+                            'content': r'''Einstein initially thought the universe was static (unchanging). To make his equations work, he added a "Cosmological Constant" ($\Lambda$). Later, Edwin Hubble proved the universe was expanding, and Einstein called $\Lambda$ his "greatest blunder."
+
+However, we now know that the expansion of the universe is actually *accelerating* due to a mysterious force called **Dark Energy**. Remarkably, Einstein\'s "blunder" ($\Lambda$) is now the leading mathematical explanation for Dark Energy. Even when he thought he was wrong, he was actually right about the fundamental structure of cosmic expansion.'''
+                        },
+                        {
+                            'title': r'13. The Quest for Quantum Gravity',
+                            'content': r'''General Relativity works perfectly for stars and galaxies, but fails at the subatomic level. Quantum Mechanics works perfectly for atoms, but ignores gravity. This is the greatest "Holy Grail" in science: the **Unified Field Theory**.
+
+Bridging this gap would explain how the universe began and what happens inside a black hole. Candidates like **String Theory** propose that the fundamental particles are tiny vibrating strings, while **Loop Quantum Gravity** suggests that space itself is made of individual "atoms" of geometry. Solving this will be the crowning achievement of human intelligence.'''
+                        }
+                    ]
+                },
+                'ai_concepts': [{'title': r'Event Horizon', 'explanation': r'The boundary around a black hole beyond which nothing can escape.'}]
             }
         ]
 
