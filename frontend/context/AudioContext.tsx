@@ -222,15 +222,16 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     // Update refs IMMEDIATELY so handleNextChunk sees the new data
     scriptRef.current = newScript
     totalChunksRef.current = newTotal
+
+    // CRITICAL: Clear ALL preloaded blobs when script changes.
+    // After an interruption, indices shift — old cached audio is now at wrong positions.
+    Object.values(preloadedBlobs.current).forEach(u => URL.revokeObjectURL(u))
+    preloadedBlobs.current = {}
+
     setState(prev => ({ ...prev, script: newScript, totalChunks: newTotal }))
   }, [])
 
   const setCurrentIndex = useCallback((index: number) => {
-    // Clear any preloaded blob for this index to force a fresh fetch
-    if (preloadedBlobs.current[index]) {
-      URL.revokeObjectURL(preloadedBlobs.current[index])
-      delete preloadedBlobs.current[index]
-    }
     handleNextChunk(index, true)
   }, [handleNextChunk])
 
