@@ -1,11 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { 
-  Sparkles, Send, BookOpen, HelpCircle, 
-  MessageSquare, Wand2, X, Loader2,
-  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator, Phone
-} from 'lucide-react'
+import { \n  Sparkles, Send, BookOpen, HelpCircle, \n  MessageSquare, Wand2, X, Loader2,\n  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator\n} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { aiApi } from '@/lib/api'
 import { toast } from 'sonner'
@@ -99,23 +95,23 @@ export default function StudyCompanionSidebar({
         onClick={onClick}
         disabled={!!isGenerating}
         className={cn(
-          "group relative overflow-hidden p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 transition-all text-left hover:shadow-2xl hover:shadow-primary/5 hover:border-primary/30 active:scale-95",
+          "group relative overflow-hidden p-3.5 rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-white/5 transition-all text-left hover:shadow-xl hover:border-primary/30 active:scale-[0.97]",
           isGenerating === id ? "ring-2 ring-primary border-transparent" : "",
           isGenerating && isGenerating !== id ? "opacity-40 grayscale" : ""
         )}
       >
-        <div className="flex items-center justify-between mb-2">
-          <div className={cn("p-2 rounded-xl transition-transform group-hover:rotate-6 shadow-sm", color)}>
+        <div className="flex items-center justify-between mb-2.5">
+          <div className={cn("p-2 rounded-xl transition-transform group-hover:rotate-6 group-hover:scale-110 shadow-sm", color)}>
             <Icon className="w-4 h-4" />
           </div>
-          {badge && <span className="text-[7px] font-black uppercase tracking-widest text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded-full">{badge}</span>}
+          {badge && <span className="text-[7px] font-black uppercase tracking-widest text-primary/80 bg-primary/10 px-2 py-0.5 rounded-full border border-primary/10">{badge}</span>}
           {isGenerating === id && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
         </div>
         <div className="font-black text-[11px] text-slate-800 dark:text-slate-100 truncate tracking-tight uppercase">{title}</div>
-        <p className="text-[9px] text-slate-500 mt-1 leading-none opacity-60 truncate font-medium">{desc}</p>
+        <p className="text-[9px] text-slate-500 mt-0.5 leading-none opacity-60 truncate font-medium">{desc}</p>
         
         {/* Background Glow */}
-        <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-primary/5 blur-2xl rounded-full group-hover:bg-primary/10 transition-colors" />
+        <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-primary/5 blur-2xl rounded-full group-hover:bg-primary/15 transition-colors" />
       </button>
     )
   }
@@ -124,14 +120,17 @@ export default function StudyCompanionSidebar({
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-white/5 shadow-[0_0_50px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden relative transition-all duration-700 w-full">
       
       {!hideTools && (
-        <div className="p-4 flex-shrink-0 bg-slate-50/30 dark:bg-slate-900 border-b border-slate-100 dark:border-white/5 transition-all">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-            <ToolCard id="quiz" icon={HelpCircle} title="Quiz" desc="Mastery MCQ" onClick={onOpenQuiz} color="bg-orange-500/10 text-orange-500" badge="ACTIVE" />
+        <div className="p-4 flex-shrink-0 bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-white/5 transition-all">
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/60">Study Toolkit</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <ToolCard id="quiz" icon={HelpCircle} title="Quiz" desc="Mastery MCQ" onClick={onOpenQuiz} color="bg-orange-500/10 text-orange-500" badge="HOT" />
             <ToolCard id="flashcards" icon={BookOpen} title="Flash" desc="Recall Boost" onClick={onOpenFlashcards} color="bg-sky-500/10 text-sky-500" />
             <ToolCard id="mindmap" icon={Sparkles} title="Map" desc="Neural Web" onClick={onOpenMindMap} color="bg-violet-500/10 text-violet-500" />
             <ToolCard id="podcast" icon={Radio} title="Podcast" desc="FlowCast AI" onClick={onOpenPodcast} color="bg-pink-500/10 text-pink-500" badge="AI" />
-            <ToolCard id="tutor" icon={Phone} title="Tutor" desc="Live Call" onClick={() => window.location.href = '/tutor-call'} color="bg-indigo-500/10 text-indigo-500" badge="LIVE" />
-            <ToolCard id="math" icon={Calculator} title="Solver" desc="Step Logic" onClick={onOpenMath} color="bg-indigo-500/10 text-indigo-500" badge="PRO" />
+            <ToolCard id="math" icon={Calculator} title="Solver" desc="Step Logic" onClick={onOpenMath} color="bg-teal-500/10 text-teal-500" badge="PRO" />
             <ToolCard id="practice" icon={Wand2} title="Drill" desc="Mock Exam" onClick={onOpenPractice} color="bg-emerald-500/10 text-emerald-500" />
             <ToolCard id="music" icon={Mic2} title="Focus" desc="Alpha Wave" onClick={onOpenMusic} color="bg-rose-500/10 text-rose-500" badge="Lofi" />
           </div>
