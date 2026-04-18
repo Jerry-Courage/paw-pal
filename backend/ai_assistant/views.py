@@ -107,8 +107,8 @@ class StreamMessageView(APIView):
         full_reply = []
 
         def event_stream():
-            # Pre-flush to break proxy buffering
-            yield ": pulse\n\n"
+            # High-Pressure Clog Breaker (2KB) to force Render proxy flush
+            yield " " * 2048
             
             if session.context_type == 'resource' and session.resource:
                 messages = _build_resource_messages(ai, session.resource, content, history)
@@ -841,8 +841,8 @@ class AgentStreamView(APIView):
 
         async def event_stream():
             full_reply = ""
-            # Pre-flush to break proxy buffering
-            yield ": pulse\n\n"
+            # High-Pressure Clog Breaker (2KB) to force Render proxy flush
+            yield " " * 2048
             
             try:
                 # Yield the message ID and session ID first so frontend can track them

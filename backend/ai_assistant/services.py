@@ -253,7 +253,7 @@ class AIService:
         
         # --- STAGE 0: DIRECT GOOGLE GENAI SDK ---
         if self.google_client:
-            for g_model in ['gemini-2.0-flash', 'gemini-1.5-flash']:
+            for g_model in ['gemini-2.5-flash', 'gemini-1.5-flash']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     response = self.google_client.models.generate_content(
@@ -386,7 +386,7 @@ class AIService:
                     mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
 
                 response = self.google_client.models.generate_content(
-                    model='gemini-2.0-flash',
+                    model='gemini-2.5-flash',
                     contents=[
                         {'role': 'user', 'parts': [
                             {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
@@ -413,7 +413,7 @@ class AIService:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
             if self.google_client:
                 # We use the names exactly as verified in models.list()
-                for g_model in ['gemini-2.0-flash', 'gemini-1.5-flash']:
+                for g_model in ['gemini-2.5-flash', 'gemini-1.5-flash']:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         response = self.google_client.models.generate_content_stream(
@@ -421,6 +421,9 @@ class AIService:
                             contents=contents,
                             config={'system_instruction': sys_instr, 'max_output_tokens': 4096}
                         )
+                        # High-Pressure Clog Breaker (2KB) to force Render proxy flush
+                        yield " " * 2048
+                        
                         for chunk in response:
                             text = ""
                             try:
@@ -431,7 +434,8 @@ class AIService:
                             except: pass
                             
                             if text:
-                                # Pre-flush with space to break proxy buffering if needed
+                                # Aggressive pre-flush to break proxy buffering (1KB of space)
+                                yield " " * 1024
                                 yield text
                         return # SUCCESS
                     except Exception as e:
@@ -443,6 +447,9 @@ class AIService:
             groq_key = os.getenv('GROQ_API_KEY')
             if groq_key:
                 try:
+                    # High-Pressure Clog Breaker (2KB)
+                    yield " " * 2048
+                    
                     async with httpx.AsyncClient() as client:
                         async with client.stream(
                             "POST",
