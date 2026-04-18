@@ -253,7 +253,7 @@ class AIService:
         
         if self.google_client:
             # We prioritize Gemma 3 (14.4k RPD) over Gemini 2.5 (20 RPD) for infinite stability
-            for g_model in ['gemma-3-27b', 'gemma-3-12b', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']:
+            for g_model in ['models/gemma-3-27b-it', 'models/gemma-3-12b-it', 'models/gemini-2.5-flash-lite', 'models/gemini-2.5-flash']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     response = self.google_client.models.generate_content(
@@ -386,7 +386,7 @@ class AIService:
                     mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
 
                 response = self.google_client.models.generate_content(
-                    model='gemini-2.5-flash-tts',
+                    model='models/gemini-3.1-flash-tts-preview',
                     contents=[
                         {'role': 'user', 'parts': [
                             {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
@@ -414,11 +414,11 @@ class AIService:
             if self.google_client:
                 # Infinite 2026 Fleet: Gemma 3 (14k+) -> Gemini 2.5 (High reasoning)
                 for g_model in [
-                    'gemma-3-27b',
-                    'gemma-3-12b',
-                    'gemini-2.5-flash-lite',
-                    'gemini-2.5-flash',
-                    'gemini-1.5-flash'
+                    'models/gemma-3-27b-it',
+                    'models/gemma-3-12b-it',
+                    'models/gemini-2.5-flash-lite',
+                    'models/gemini-2.5-flash',
+                    'models/gemini-1.5-flash'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -1477,7 +1477,7 @@ class AIService:
         
         return "Professional digital art illustration, photorealistic, vibrant colors, detailed, 4k, masterpiece"
 
-    def generate_image(self, prompt: str, model: str = 'imagen-4-ultra') -> str:
+    def generate_image(self, prompt: str, model: str = 'turbo') -> str:
         """
         Generates an image from a text prompt using a resilient multi-tier fallback strategy.
         Tier 1: Pollinations AI (Generative, Free, Fast)
@@ -1494,16 +1494,16 @@ class AIService:
                 with open(log_path, 'a', encoding='utf-8') as f: 
                     f.write(f"[GEN-SIGNAL] Tier 0 (Imagen 4): Attempting for: {prompt[:50]}...\n")
                 
-                # In 2026, Imagen 4 ultra/fast is accessed via the standard models engine
-                response = self.google_client.models.generate_image(
+                # In 2026, Imagen 4 is accessed via generate_images (plural)
+                response = self.google_client.models.generate_images(
                     model=model,
                     prompt=full_enhanced_prompt,
-                    config={'number_of_images': 1, 'include_rai_reasoning': False}
+                    config={'number_of_images': 1}
                 )
                 
-                if response and hasattr(response, 'images') and response.images:
+                if response and hasattr(response, 'generated_images') and response.generated_images:
                     import base64
-                    img_data = response.images[0].image_bytes
+                    img_data = response.generated_images[0].image_bytes
                     encoded = base64.b64encode(img_data).decode('utf-8')
                     with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success (Imagen 4)\n")
                     return f"data:image/png;base64,{encoded}"
