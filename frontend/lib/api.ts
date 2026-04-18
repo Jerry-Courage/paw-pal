@@ -153,8 +153,8 @@ export const aiApi = {
     api.get(`/ai/resources/${resourceId}/chapters/`),
   gradeAnswer: (resourceId: number, question: string, userAnswer: string, modelAnswer: string) =>
     api.post(`/ai/resources/${resourceId}/grade/`, { question, user_answer: userAnswer, model_answer: modelAnswer }),
-  askAgent: (query: string, context?: string, voice_enabled?: boolean, voice_id?: string, history: any[] = [], is_tutor_mode: boolean = false) =>
-    api.post('/ai/agent/', { query, context, voice_enabled, voice_id, history, is_tutor_mode }),
+  askAgent: (query: string, context?: string, voice_enabled?: boolean, voice_id?: string, history: any[] = [], is_tutor_mode: boolean = false, session_id?: number) =>
+    api.post('/ai/agent/', { query, context, voice_enabled, voice_id, history, is_tutor_mode, session_id }),
   askAgentAudio: (audioBlob: Blob, context: string = '', voice_enabled: boolean = false, voice_id?: string, is_tutor_mode: boolean = false) => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'query.webm');

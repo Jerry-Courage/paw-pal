@@ -837,7 +837,7 @@ class AgentView(APIView):
                 'audio_url': audio_url,
                 'action': action,
                 'execution_result': execution_result,
-                'message': ChatMessageSerializer(assistant_msg).data
+                'message': ChatMessageSerializer(assistant_msg, context={'request': request}).data
             })
         except Exception as e:
             logger.error(f"Atomic Agent Error: {e}")

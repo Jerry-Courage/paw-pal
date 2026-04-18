@@ -465,6 +465,8 @@ function AIChat() {
         const data = await aiApi.askAgent(
           currentInput,
           contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+          false, // voice_enabled
+          undefined, // voice_id
           messages.map(m => ({ role: m.role, content: m.content })),
           false, // tutor mode
           activeId // session_id
