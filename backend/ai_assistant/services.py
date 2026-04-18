@@ -253,7 +253,7 @@ class AIService:
         
         # --- STAGE 0: DIRECT GOOGLE GENAI SDK ---
         if self.google_client:
-            for g_model in ['gemini-2.5-flash', 'gemini-2.5-flash-lite']:
+            for g_model in ['gemini-2.0-flash', 'gemini-1.5-flash']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     response = self.google_client.models.generate_content(
@@ -386,7 +386,7 @@ class AIService:
                     mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
 
                 response = self.google_client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-2.0-flash',
                     contents=[
                         {'role': 'user', 'parts': [
                             {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
@@ -413,7 +413,7 @@ class AIService:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
             if self.google_client:
                 # We use the names exactly as verified in models.list()
-                for g_model in ['gemini-2.5-flash', 'gemini-2.5-flash-lite']:
+                for g_model in ['gemini-2.0-flash', 'gemini-1.5-flash']:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         response = self.google_client.models.generate_content_stream(
@@ -422,8 +422,17 @@ class AIService:
                             config={'system_instruction': sys_instr, 'max_output_tokens': 4096}
                         )
                         for chunk in response:
-                            if chunk.text:
-                                yield chunk.text
+                            text = ""
+                            try:
+                                if hasattr(chunk, 'text') and chunk.text:
+                                    text = chunk.text
+                                elif hasattr(chunk, 'candidates') and chunk.candidates:
+                                    text = chunk.candidates[0].content.parts[0].text
+                            except: pass
+                            
+                            if text:
+                                # Pre-flush with space to break proxy buffering if needed
+                                yield text
                         return # SUCCESS
                     except Exception as e:
                         logger.warning(f"[Google SDK Fallback] {g_model} failed: {e}")

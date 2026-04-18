@@ -107,6 +107,9 @@ class StreamMessageView(APIView):
         full_reply = []
 
         def event_stream():
+            # Pre-flush to break proxy buffering
+            yield ": pulse\n\n"
+            
             if session.context_type == 'resource' and session.resource:
                 messages = _build_resource_messages(ai, session.resource, content, history)
             elif session.context_type == 'group' and session.group:
@@ -838,6 +841,9 @@ class AgentStreamView(APIView):
 
         async def event_stream():
             full_reply = ""
+            # Pre-flush to break proxy buffering
+            yield ": pulse\n\n"
+            
             try:
                 # Yield the message ID and session ID first so frontend can track them
                 yield f"data: {json.dumps({'done': False, 'message_id': assistant_msg.id, 'session_id': session.id})}\n\n"
