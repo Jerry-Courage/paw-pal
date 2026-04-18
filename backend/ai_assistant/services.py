@@ -115,6 +115,8 @@ class VoiceSanitizer:
 FALLBACK_MODELS = [
     'google/gemma-3-27b-it:free',
     'google/gemma-3-12b-it:free',
+    'google/gemma-3-4b-it:free',
+    'google/gemma-3-1b-it:free',
     'google/gemini-2.5-flash-lite:free',
     'meta-llama/llama-3.3-70b-instruct:free',
     'nvidia/llama-3.1-nemotron-70b-instruct:free',
@@ -252,8 +254,15 @@ class AIService:
                     break
         
         if self.google_client:
-            # We prioritize Gemma 3 (14.4k RPD) over Gemini 2.5 (20 RPD) for infinite stability
-            for g_model in ['models/gemma-3-27b-it', 'models/gemma-3-12b-it', 'models/gemini-2.5-flash-lite', 'models/gemini-2.5-flash']:
+            # Immortal 2026 Fleet Stack: 27B -> 12B -> 4B -> 1B (Total 57.6k RPD)
+            for g_model in [
+                'models/gemma-3-27b-it', 
+                'models/gemma-3-12b-it', 
+                'models/gemma-3-4b-it', 
+                'models/gemma-3-1b-it',
+                'models/gemini-2.5-flash-lite', 
+                'models/gemini-2.5-flash'
+            ]:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     response = self.google_client.models.generate_content(
@@ -412,10 +421,12 @@ class AIService:
         try:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
             if self.google_client:
-                # Infinite 2026 Fleet: Gemma 3 (14k+) -> Gemini 2.5 (High reasoning)
+                # Immortal 2026 Fleet Stack: Total 57,600 RPD
                 for g_model in [
                     'models/gemma-3-27b-it',
                     'models/gemma-3-12b-it',
+                    'models/gemma-3-4b-it',
+                    'models/gemma-3-1b-it',
                     'models/gemini-2.5-flash-lite',
                     'models/gemini-2.5-flash',
                     'models/gemini-1.5-flash'
