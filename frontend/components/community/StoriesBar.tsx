@@ -23,7 +23,11 @@ export default function StoriesBar() {
   })
 
   // Handle paginated or direct array response
-  const storiesList = Array.isArray(stories) ? stories : (stories as any)?.results || []
+  const storiesList = Array.isArray(stories) 
+    ? stories 
+    : (stories && typeof stories === 'object' && 'results' in (stories as any)) 
+      ? (stories as any).results 
+      : []
 
   // Group stories by author
   const storiesByUser = storiesList.reduce((acc: any, story: any) => {

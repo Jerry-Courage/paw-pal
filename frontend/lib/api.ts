@@ -36,7 +36,7 @@ api.interceptors.response.use(
   }
 )
 
-export const API_BASE = api.defaults.baseURL
+export const API_BASE = api.defaults.baseURL || ''
 export const SERVER_URL = API_BASE.replace(/\/api$/, '')
 
 // Auth
@@ -314,6 +314,16 @@ export const workspaceApi = {
   },
   shareResource: (id: number, resource_id: number) => api.post(`/workspace/workspaces/${id}/share_resource/`, { resource_id }),
   leave: (id: number) => api.post(`/workspace/workspaces/${id}/leave/`),
+  // Missing methods used in ResourceShelf
+  getFiles: (id: number) => api.get(`/workspace/workspaces/${id}/files/`),
+  getVersions: (id: number) => api.get(`/workspace/workspaces/${id}/versions/`),
+  createVersion: (id: number) => api.post(`/workspace/workspaces/${id}/versions/`),
+  restoreVersion: (id: number, versionId: number) => api.post(`/workspace/workspaces/${id}/versions/${versionId}/restore/`),
+  linkResource: (id: number, resource_id: number) => api.post(`/workspace/workspaces/${id}/link_resource/`, { resource_id }),
+  unlinkResource: (id: number, resource_id: number) => api.post(`/workspace/workspaces/${id}/unlink_resource/`, { resource_id }),
+  aiAssist: (id: number, action: string, data: any) => api.post(`/workspace/workspaces/${id}/ai_assist/`, { action, ...data }),
+  deleteBlock: (id: number, blockId: number) => api.delete(`/workspace/workspaces/${id}/blocks/${blockId}/`),
+  reorderBlocks: (id: number, blockIds: number[]) => api.post(`/workspace/workspaces/${id}/blocks/reorder/`, { block_ids: blockIds }),
 }
 
 export const spacedRepetitionApi = {
