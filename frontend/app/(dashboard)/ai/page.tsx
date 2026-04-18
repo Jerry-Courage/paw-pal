@@ -241,31 +241,27 @@ function MessageBubble({ msg, index, isLast, isNew }: { msg: Message, index: num
           </div>
         )}
 
-        {!isUser && isNew && !typingComplete && !msg.is_streaming ? (
-          <Typewriter text={msg.content} onComplete={() => setTypingComplete(true)} />
-        ) : (
-          <div className="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                ul: ({ children }) => <ul className="space-y-4 my-4 list-none pl-0">{children}</ul>,
-                li: ({ children }) => (
-                  <li className="flex gap-3 items-start group">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
-                    <span className="text-slate-700 dark:text-slate-200 font-medium">{children}</span>
-                  </li>
-                ),
-                a: ({ children, href }) => (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary font-black underline decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all">
-                    {children}
-                  </a>
-                )
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
-          </div>
-        )}
+        <div className="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              ul: ({ children }) => <ul className="space-y-4 my-4 list-none pl-0">{children}</ul>,
+              li: ({ children }) => (
+                <li className="flex gap-3 items-start group">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
+                  <span className="text-slate-700 dark:text-slate-200 font-medium">{children}</span>
+                </li>
+              ),
+              a: ({ children, href }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary font-black underline decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all">
+                  {children}
+                </a>
+              )
+            }}
+          >
+            {msg.content + (msg.is_streaming ? '▊' : '')}
+          </ReactMarkdown>
+        </div>
 
         {(typingComplete || isUser) && msg.diagram && (
           <div className="mt-6">

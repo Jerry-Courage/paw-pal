@@ -193,8 +193,10 @@ export const aiApi = {
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const content = line.slice(6).trim()
+        const trimmedLine = line.trim();
+        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+        
+        const content = trimmedLine.slice(6).trim();
           if (content === '[DONE]') return
           try {
             const parsed = JSON.parse(content)

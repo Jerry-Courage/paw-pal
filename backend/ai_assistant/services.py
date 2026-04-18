@@ -421,9 +421,6 @@ class AIService:
                             contents=contents,
                             config={'system_instruction': sys_instr, 'max_output_tokens': 4096}
                         )
-                        # High-Pressure Clog Breaker (2KB) to force Render proxy flush
-                        yield f": {' ' * 2048}\n\n"
-                        
                         for chunk in response:
                             text = ""
                             try:
@@ -434,8 +431,6 @@ class AIService:
                             except: pass
                             
                             if text:
-                                # High-Pressure Clog Breaker (2KB) to force Render proxy flush
-                                yield f": {' ' * 2048}\n\n"
                                 yield text
                         return # SUCCESS
                     except Exception as e:
@@ -447,9 +442,6 @@ class AIService:
             groq_key = os.getenv('GROQ_API_KEY')
             if groq_key:
                 try:
-                    # High-Pressure Clog Breaker (2KB)
-                    yield f": {' ' * 2048}\n\n"
-                    
                     async with httpx.AsyncClient() as client:
                         async with client.stream(
                             "POST",

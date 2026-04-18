@@ -107,7 +107,7 @@ class StreamMessageView(APIView):
         full_reply = []
 
         def event_stream():
-            # High-Pressure Clog Breaker (2KB) to force Render proxy flush
+            # High-Pressure Silent Pulse (2KB) to force Render proxy flush
             yield f": {' ' * 2048}\n\n"
             
             if session.context_type == 'resource' and session.resource:
@@ -841,7 +841,7 @@ class AgentStreamView(APIView):
 
         async def event_stream():
             full_reply = ""
-            # High-Pressure Clog Breaker (2KB) to force Render proxy flush
+            # High-Pressure Silent Pulse (2KB) to force Render proxy flush
             yield f": {' ' * 2048}\n\n"
             
             try:
