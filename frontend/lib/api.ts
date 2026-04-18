@@ -96,7 +96,7 @@ export const libraryApi = {
     api.post(`/library/resources/${resourceId}/refetch-transcript/`),
   getQuizzes: () => api.get('/library/quizzes/'),
   solveMath: (id: number, problem: string) =>
-    api.post(`/library/resources/${id}/math/solve/`),
+    api.post(`/library/resources/${id}/math/solve/`, { problem }),
   cloneResource: (id: number) =>
     api.post(`/library/resources/${id}/clone/`),
 }
@@ -166,7 +166,7 @@ export const aiApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  streamAgentResponse: async function* (query: string, context?: string, history: any[] = [], is_tutor_mode: boolean = false, session_id?: number) {
+  async *streamAgentResponse(query: string, context?: string, history: any[] = [], is_tutor_mode: boolean = false, session_id?: number) {
     const token = await getAuthToken()
     const response = await fetch(`${api.defaults.baseURL}/ai/agent/stream/`, {
       method: 'POST',
@@ -197,22 +197,21 @@ export const aiApi = {
         if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
         
         const content = trimmedLine.slice(6).trim();
-          if (content === '[DONE]') return
-          try {
-            const parsed = JSON.parse(content)
-            if (parsed.chunk) {
-              yield parsed.chunk
-            } else if (parsed.message_id !== undefined) {
-              // Yield the full object so the consumer can extract message_id
-              yield parsed
-            }
-          } catch (e) {
-            console.error('SSE Parse Error', e)
+        if (content === '[DONE]') return
+        try {
+          const parsed = JSON.parse(content)
+          if (parsed.chunk) {
+            yield parsed.chunk
+          } else if (parsed.message_id !== undefined) {
+            yield parsed
           }
+        } catch (e) {
+          console.error('SSE Parse Error', e)
         }
       }
     }
-  },
+  }
+}
 
 // Podcast
 export const podcastApi = {
@@ -352,7 +351,7 @@ export const communityApi = {
     api.post(`/community/posts/${postId}/comments/`, { content }),
   likeComment: (id: number) => api.post(`/community/comments/${id}/like/`),
   getAIAnswer: (postId: number) => api.post(`/community/posts/${postId}/ai-answer/`),
-  deletePost: (id: number) => api.delete(`/community/posts/${id}/`),
+  deletePost: (id: number) => api.delete('/community/posts/${id}/'),
   getRooms: () => api.get('/community/rooms/'),
   createRoom: (data: any) => api.post('/community/rooms/', data),
   joinRoom: (id: number) => api.post(`/community/rooms/${id}/join/`),
