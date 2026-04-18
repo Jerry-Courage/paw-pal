@@ -422,7 +422,7 @@ class AIService:
                             config={'system_instruction': sys_instr, 'max_output_tokens': 4096}
                         )
                         # High-Pressure Clog Breaker (2KB) to force Render proxy flush
-                        yield " " * 2048
+                        yield f": {' ' * 2048}\n\n"
                         
                         for chunk in response:
                             text = ""
@@ -434,8 +434,8 @@ class AIService:
                             except: pass
                             
                             if text:
-                                # Aggressive pre-flush to break proxy buffering (1KB of space)
-                                yield " " * 1024
+                                # High-Pressure Clog Breaker (2KB) to force Render proxy flush
+                                yield f": {' ' * 2048}\n\n"
                                 yield text
                         return # SUCCESS
                     except Exception as e:
@@ -448,7 +448,7 @@ class AIService:
             if groq_key:
                 try:
                     # High-Pressure Clog Breaker (2KB)
-                    yield " " * 2048
+                    yield f": {' ' * 2048}\n\n"
                     
                     async with httpx.AsyncClient() as client:
                         async with client.stream(
