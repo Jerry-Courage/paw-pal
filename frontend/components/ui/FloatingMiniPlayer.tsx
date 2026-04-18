@@ -76,9 +76,9 @@ export default function FloatingMiniPlayer() {
               </button>
               <div className="flex flex-col gap-1">
                 <Link 
-                  href={`/library/${state.activeResourceId}`}
+                  href={`/library/${state.activeResourceId}?podcast=open`}
                   className="p-1.5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors"
-                  title="Open Resource"
+                  title="Open Podcast"
                 >
                   <ArrowUpRight className="w-4 h-4" />
                 </Link>

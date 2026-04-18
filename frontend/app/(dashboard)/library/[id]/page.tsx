@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import {
@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
+import { useSearchParams } from 'next/navigation'
 
 // Components
 import RichNotesViewer from '@/components/library/RichNotesViewer'
@@ -35,7 +36,15 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const [showQuiz, setShowQuiz] = useState(false)
   const [showMindMap, setShowMindMap] = useState(false)
   const [showPractice, setShowPractice] = useState(false)
+  const searchParams = useSearchParams()
   const [showPodcast, setShowPodcast] = useState(false)
+
+  // Auto-open podcast modal when navigating from FloatingMiniPlayer
+  useEffect(() => {
+    if (searchParams.get('podcast') === 'open') {
+      setShowPodcast(true)
+    }
+  }, [searchParams])
   const [currentTheme, setCurrentTheme] = useState('theme-slate')
   const [showMusic, setShowMusic] = useState(false)
   const [showMath, setShowMath] = useState(false)
