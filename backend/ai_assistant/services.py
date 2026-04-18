@@ -1488,6 +1488,28 @@ class AIService:
         style = self._get_style_suffix(prompt)
         full_enhanced_prompt = f"{prompt}. {style}"
 
+        # --- TIER 0: GOOGLE IMAGEN 4 (Premium Generative - reserved/scared) ---
+        if self.google_client:
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f: 
+                    f.write(f"[GEN-SIGNAL] Tier 0 (Imagen 4): Attempting for: {prompt[:50]}...\n")
+                
+                # In 2026, Imagen 4 ultra/fast is accessed via the standard models engine
+                response = self.google_client.models.generate_image(
+                    model=model,
+                    prompt=full_enhanced_prompt,
+                    config={'number_of_images': 1, 'include_rai_reasoning': False}
+                )
+                
+                if response and hasattr(response, 'images') and response.images:
+                    import base64
+                    img_data = response.images[0].image_bytes
+                    encoded = base64.b64encode(img_data).decode('utf-8')
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success (Imagen 4)\n")
+                    return f"data:image/png;base64,{encoded}"
+            except Exception as e:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Imagen 4) Failed: {str(e)}\n")
+
         # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
         models_to_try = [('flux', 25), ('turbo', 15)]
         for poll_model, poll_timeout in models_to_try:
