@@ -81,7 +81,7 @@ export const libraryApi = {
   deleteResource: (id: number) => api.delete(`/library/resources/${id}/`),
   generateFlashcards: (id: number, count = 10, level = 'undergrad') =>
     api.post(`/library/resources/${id}/flashcards/generate/`, { count, level }),
-  getDecks: () => api.get('/library/decks/'),
+  getDecks: () => api.get('/library/flashcards/'),
   createDeck: (title: string, subject?: string) => api.post('/library/decks/', { title, subject }),
   saveFlashcardsToDeck: (deckId: number, resourceId: number | null, flashcards: any[]) =>
     api.post(`/library/decks/${deckId}/save-flashcards/`, { resource_id: resourceId, flashcards }),
@@ -96,7 +96,7 @@ export const libraryApi = {
     api.post(`/library/resources/${resourceId}/refetch-transcript/`),
   getQuizzes: () => api.get('/library/quizzes/'),
   solveMath: (id: number, problem: string) =>
-    api.post(`/library/resources/${id}/math/solve/`, { problem }),
+    api.post(`/library/resources/${id}/math/solve/`),
   cloneResource: (id: number) =>
     api.post(`/library/resources/${id}/clone/`),
 }
@@ -212,8 +212,7 @@ export const aiApi = {
         }
       }
     }
-  }
-}
+  },
 
 // Podcast
 export const podcastApi = {
