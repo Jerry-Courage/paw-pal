@@ -1,7 +1,12 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { \n  Sparkles, Send, BookOpen, HelpCircle, \n  MessageSquare, Wand2, X, Loader2,\n  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator\n} from 'lucide-react'
+import { 
+  Sparkles, Send, BookOpen, HelpCircle, 
+  MessageSquare, Wand2, X, Loader2,
+  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator
+} from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 import { aiApi } from '@/lib/api'
 import { toast } from 'sonner'
