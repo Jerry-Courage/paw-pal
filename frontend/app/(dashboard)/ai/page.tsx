@@ -495,8 +495,7 @@ function AIChat() {
           queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
         }
       }
-      }
-      
+
       if (!activeSession) queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
     } catch (err) {
       console.error('AI Error:', err);
