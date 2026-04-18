@@ -769,21 +769,27 @@ class AgentView(APIView):
         if not query:
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Handle Session Persistence
+        # 1. Handle Session Persistence (Un-Mixed Protocol)
         session = None
-        if session_id:
+        # If it's a general platform question, we use a dedicated 'FlowAI' session
+        is_academic = any(kw in query.lower() for kw in ['pdf', 'note', 'resource', 'material', 'study', 'kit'])
+        
+        if session_id and (is_academic or is_tutor):
             session = get_object_or_404(ChatSession, id=session_id, user=request.user)
         else:
-            title = query[:30] + ('...' if len(query) > 30 else '')
-            session = ChatSession.objects.create(user=request.user, title=title or "New Chat")
+            # Dedicated lane for general platform assistance
+            session, created = ChatSession.objects.get_or_create(
+                user=request.user, 
+                context_type='global', 
+                title='FlowAI Platform Assistant'
+            )
 
-        # 2. Save User Message
-        ChatMessage.objects.create(session=session, role='user', content=query)
-
-        agent = FlowAgent(request.user)
-        
-        # 3. Process with Agent (Synchronous AI call)
+        # 2. Process with Agent (Synchronous AI call)
         try:
+            # Save User Message to the isolated session
+            ChatMessage.objects.create(session=session, role='user', content=query)
+            
+            agent = FlowAgent(request.user)
             reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
             
             execution_result = None
@@ -806,14 +812,14 @@ class AgentView(APIView):
                     f_path = os.path.join(out_dir, f_name)
                     
                     if not os.path.exists(f_path):
-                        v_id = voice_id or SUPPORTED_VOICES['Andrew']
+                        v_id = voice_id or SUPPORTED_VOICES.get('Andrew', 'en-US-AndrewNeural')
                         generate_tts_file(speech_text, v_id, f_path)
                     
                     audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
                 except Exception as e:
                     logger.error(f"Agent Voice Synthesis Error: {e}")
 
-            # 4. Save Assistant Message
+            # 4. Save Assistant Message (Safe Inside Try)
             assistant_msg = ChatMessage.objects.create(
                 session=session, 
                 role='assistant', 
@@ -833,10 +839,13 @@ class AgentView(APIView):
                 'execution_result': execution_result,
                 'message': ChatMessageSerializer(assistant_msg).data
             })
-            
         except Exception as e:
             logger.error(f"Atomic Agent Error: {e}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                'done': True,
+                'reply': "Intelligence Signal Interrupted. I ran into a snag while processing that.",
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AgentStreamView(APIView):
     """Universal platform agent endpoint (Streaming SSE - Hybrid)."""

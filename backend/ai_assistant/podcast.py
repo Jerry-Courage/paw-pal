@@ -100,7 +100,7 @@ def generate_tts_file(text, voice, output_path):
         sys.executable, "-m", "edge_tts", 
         "--voice", voice, 
         "--text", clean_text, 
-        "--rate", rate,
+        f"--rate={rate}",
         "--write-media", output_path
     ]
     
