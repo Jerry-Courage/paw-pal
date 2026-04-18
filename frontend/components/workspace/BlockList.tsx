@@ -44,7 +44,7 @@ export default function BlockList({ workspaceId, socket }: BlockListProps) {
 
   const { data: blocks, isLoading } = useQuery({
     queryKey: ['workspace-blocks', workspaceId],
-    queryFn: () => workspaceApi.getBlocks(workspaceId).then(r => r.data),
+    queryFn: () => workspaceApi.getBlocks(workspaceId).then((r: any) => r.data),
   })
 
   const createMutation = useMutation({

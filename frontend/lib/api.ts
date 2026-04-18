@@ -324,6 +324,9 @@ export const workspaceApi = {
   aiAssist: (id: number, action: string, data: any) => api.post(`/workspace/workspaces/${id}/ai_assist/`, { action, ...data }),
   deleteBlock: (id: number, blockId: number) => api.delete(`/workspace/workspaces/${id}/blocks/${blockId}/`),
   reorderBlocks: (id: number, blockIds: number[]) => api.post(`/workspace/workspaces/${id}/blocks/reorder/`, { block_ids: blockIds }),
+  getBlocks: (id: number) => api.get(`/workspace/workspaces/${id}/blocks/`),
+  createBlock: (id: number, data: any) => api.post(`/workspace/workspaces/${id}/blocks/`, data),
+  updateBlock: (id: number, data: any) => api.patch(`/workspace/workspaces/${id}/blocks/${data.block_id || data.id}/`, data),
 }
 
 export const spacedRepetitionApi = {

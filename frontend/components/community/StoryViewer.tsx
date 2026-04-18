@@ -13,6 +13,7 @@ interface Story {
   media_type: 'image' | 'video' | 'text'
   text_content: string
   created_at: string
+  workspace_name?: string
 }
 
 export default function StoryViewer({ 

@@ -44,7 +44,7 @@ export default function AIAssistantSidebar({ workspaceId, onInsertToCanvas, sock
   const handleAction = async (action: string) => {
     setIsThinking(true)
     try {
-      const res = await workspaceApi.aiAssist(workspaceId, action)
+      const res = await workspaceApi.aiAssist(workspaceId, action, {})
       qc.invalidateQueries({ queryKey: ['workspace-messages', workspaceId] })
       if (['generate_outline', 'write_section', 'review'].includes(action)) {
         onInsertToCanvas(res.data.result)
