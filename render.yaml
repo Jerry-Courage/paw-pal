@@ -20,7 +20,7 @@ services:
       - key: DEBUG
         value: "False"
       - key: PYTHON_VERSION
-        value: "3.11.0"
+        value: "3.12.1"
 
   # ─── FRONTEND WEB SERVICE ───────────────────────────────────────────────────
   - type: web
