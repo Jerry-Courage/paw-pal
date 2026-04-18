@@ -24,4 +24,5 @@ daphne>=4.1.2
 channels>=4.0.0
 channels-redis>=4.1.0
 httpx>=0.27.0
-gunicorn>=23.0.0
+gunicorn>=23.0.0django-storages>=1.14.0
+boto3>=1.34.0
