@@ -7,10 +7,11 @@ export type SpeechState = 'idle' | 'waking' | 'listening' | 'thinking' | 'speaki
 
 interface UseSpeechExchangeProps {
   onCommand: (query: string) => void
+  onWake?: () => void
   isVoiceResponseEnabled: boolean
 }
 
-export const useSpeechExchange = ({ onCommand, isVoiceResponseEnabled }: UseSpeechExchangeProps) => {
+export const useSpeechExchange = ({ onCommand, onWake, isVoiceResponseEnabled }: UseSpeechExchangeProps) => {
   const [state, setState] = useState<SpeechState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [isHearing, setIsHearing] = useState(false)
@@ -104,6 +105,7 @@ export const useSpeechExchange = ({ onCommand, isVoiceResponseEnabled }: UseSpee
         } catch (e) {}
 
         setState('listening')
+        if (onWake) onWake()
       }
     } else {
       // If we ARE awake, we are naturally in the listening state
