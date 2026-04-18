@@ -1,6 +1,7 @@
 import os
 from django.conf import settings
 from django.http import FileResponse, JsonResponse
+from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -223,7 +224,8 @@ class PodcastInitView(APIView):
     def post(self, request, resource_id):
         # Create the podcast session
         try:
-            resource = Resource.objects.get(id=resource_id, owner=request.user)
+            # Fix: Allow public resources for podcasts
+            resource = Resource.objects.get(Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         except Resource.DoesNotExist:
             return Response({'error': 'Resource not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -241,14 +243,49 @@ class PodcastInitView(APIView):
 
         # Kick off background dialogue generator
         notes = resource.ai_notes_json
-        pref_length = request.data.get('length', 15)
         
-        # Log the attempt
-        with open(os.path.join(settings.BASE_DIR, 'podcast_debug.log'), 'a') as f:
-            f.write(f"\n[INIT] Starting podcast for resource {resource_id} with length {pref_length}\n")
+        # [PREMIUM UPGRADE] Instant Curated Podcast
+        # If the resource has a pre-seeded script, initialize the session immediately
+        curated_script = notes.get('curated_podcast_script')
+        if curated_script and isinstance(curated_script, list):
+            with open(os.path.join(settings.BASE_DIR, 'podcast_debug.log'), 'a') as f:
+                f.write(f"\n[INIT] Curated Script detected for {resource_id}. Bypassing AI generation.\n")
+            
+            # Map visual_url if it's relative
+            api_root = getattr(settings, 'API_URL', 'http://localhost:8000').rstrip('/')
+            media_url = settings.MEDIA_URL.strip('/')
+            
+            for chunk in curated_script:
+                v_url = chunk.get('visual_url')
+                if v_url and not v_url.startswith('http'):
+                    chunk['visual_url'] = f"{api_root}/{media_url}/{v_url.lstrip('/')}"
+                
+                # Add audio hash for pre-fetch
+                import hashlib
+                text_content = dialogue_bouncer(chunk.get('text', ''))
+                f_hash = hashlib.md5(text_content.strip().encode('utf-8')).hexdigest()
+                chunk['audio_hash'] = f_hash
 
-        t = threading.Thread(target=bg_generate_script, args=(session.id, notes))
-        t.start()
+            session.script_chunks = curated_script
+            session.status = 'ready'
+            session.save()
+            
+            # Pre-warm audio in background only (since the script is already done)
+            def prewarm_audio():
+                from .views_podcast import generate_segment_audio
+                for chunk in curated_script:
+                    speaker_id = session.voice_a if chunk.get('speaker', 'A') == 'A' else session.voice_b
+                    generate_segment_audio(chunk['text'], speaker_id, session.resource.id, session.id, chunk['audio_hash'])
+            
+            threading.Thread(target=prewarm_audio).start()
+        else:
+            # Fallback to AI generation for user-uploaded resources
+            pref_length = request.data.get('length', 15)
+            with open(os.path.join(settings.BASE_DIR, 'podcast_debug.log'), 'a') as f:
+                f.write(f"\n[INIT] Starting AI podcast for resource {resource_id} with length {pref_length}\n")
+
+            t = threading.Thread(target=bg_generate_script, args=(session.id, notes))
+            t.start()
 
         return Response({'session_id': session.id, 'status': session.status})
 

@@ -1,0 +1,84 @@
+QUANTUM_MECHANICS_KIT = {
+    "mind_map": {
+        "text": "Quantum Foundations",
+        "children": [
+            {
+                "text": "Wave Dynamics",
+                "children": [
+                    {"text": "Wave-Particle Duality"},
+                    {"text": "Schrödinger Equation ($i\hbar \dot{\Psi} = \hat{H}\Psi$)"},
+                    {"text": "Probability Density ($|\Psi|^2$)"}
+                ]
+            },
+            {
+                "text": "The Uncertainty Principle",
+                "children": [
+                    {"text": "Heisenberg Relation ($\Delta x \cdot \Delta p \ge \hbar/2$)"},
+                    {"text": "Zero-Point Energy"},
+                    {"text": "Stability of Atoms"}
+                ]
+            },
+            {
+                "text": "Quantum Phenomona",
+                "children": [
+                    {"text": "Entanglement (Non-locality)"},
+                    {"text": "Quantum Tunneling"},
+                    {"text": "Superposition (Schrödinger's Cat)"}
+                ]
+            },
+            {
+                "text": "Experimental Proofs",
+                "children": [
+                    {"text": "Double Slit Experiment"},
+                    {"text": "Bell's Theorem"},
+                    {"text": "The Photoelectric Effect"}
+                ]
+            }
+        ]
+    },
+    "quizzes": [
+        {
+            "question": "What does the Schrödinger Equation describe in quantum mechanics?",
+            "options": ["The definitive position of a particle", "The evolution of the probability wave over time", "The gravitational pull of subatomic particles", "The temperature of the vacuum"],
+            "correct_answer": "The evolution of the probability wave over time",
+            "explanation": "The Schrödinger equation describes the time-evolution of the wavefunction, which contains all the probabilistic information about a system."
+        },
+        {
+            "question": "What is the physical meaning of the squared magnitude of the wavefunction ($|\Psi|^2$)?",
+            "options": ["Particle Velocity", "Total Energy", "Probability Density", "Quantum Mass"],
+            "correct_answer": "Probability Density",
+            "explanation": "According to the Born Rule, $|\Psi|^2$ gives the probability density of finding a particle in a specific region of space."
+        },
+        {
+            "question": "Which principle states that no two fermions can occupy the same quantum state simultaneously?",
+            "options": ["Heisenberg Uncertainty Principle", "Pauli Exclusion Principle", "Bohr Model", "Planck's Law"],
+            "correct_answer": "Pauli Exclusion Principle",
+            "explanation": "The Pauli Exclusion Principle is why electrons fill shell-like orbitals rather than all collapsing into the lowest energy state."
+        },
+        {
+            "question": "How did Einstein describe quantum entanglement, which he found fundamentally unsettling?",
+            "options": ["Molecular Magic", "Spooky Action at a Distance", "Ghostly Geometry", "Universal Glue"],
+            "correct_answer": "Spooky Action at a Distance",
+            "explanation": "Einstein was troubled by the non-local nature of entanglement, where measuring one particle instantly affects another far away."
+        }
+    ],
+    "flashcards": [
+        {"question": "Superposition", "answer": "The ability of a quantum system to exist in multiple states at once until a measurement is made.", "subject": "Quantum Mechanics"},
+        {"question": "Entanglement", "answer": "A physical phenomenon where two particles are so linked that the state of one instantly determines the state of the other.", "subject": "Quantum Mechanics"},
+        {"question": "Quantum Tunneling", "answer": "The phenomenon where a particle passes through an energy barrier that it classically shouldn't be able to cross.", "subject": "Quantum Mechanics"},
+        {"question": "Heisenberg Uncertainty", "answer": "The law stating you cannot simultaneously know both the exact position and exact momentum of a particle.", "subject": "Quantum Mechanics"}
+    ],
+    "podcast_script": [
+        {"speaker": "A", "text": "Welcome to the Deep Dive. Today we're looking at the weirdest science in existence: Quantum Mechanics. Welcome, Christopher."},
+        {"speaker": "B", "text": "Thanks, Aria. Quantum mechanics is where normal human intuition goes to die. It's beautiful, but absolutely alien."},
+        {"speaker": "A", "text": "So, true or false: everything is a wave?"},
+        {"speaker": "B", "text": "Technically true. At the smallest scale, everything—even solid-seeming electrons—is actually a wave of probability. We call this Wave-Particle Duality."},
+        {"speaker": "A", "text": "Wait, so if I'm not looking at a particle, it doesn't have a definite place? It's just... everywhere?"},
+        {"speaker": "B", "text": "Exactly. Until it's measured, it exists in a 'superposition.' It's potentially in a billion places at once. The act of looking 'collapses' that wave into a particle."},
+        {"speaker": "A", "text": "That sounds like something out of a Matrix movie. And then there's Einstein's 'Spooky Action'?"},
+        {"speaker": "B", "text": "Entanglement. You can have two particles linked. Change one on Earth, and its partner on Mars changes *instantly*. No delay. It breaks our normal ideas of space."},
+        {"speaker": "A", "text": "And the center of all this math is the Schrödinger Equation, right? Like the $F=ma$ of the tiny world?"},
+        {"speaker": "B", "text": "Perfect comparison. It dictates how those probability waves move. Without it, we wouldn't have transistors, lasers, or the computer screens we're using right now."},
+        {"speaker": "A", "text": "So even if it's weird, it's the most successful theory in history. Let's look into how this actually shapes our material reality."}
+    ]
+}

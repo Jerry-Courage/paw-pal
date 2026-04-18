@@ -84,6 +84,7 @@ class Flashcard(models.Model):
     interval_days = models.IntegerField(default=1)     # Days until next review
     repetitions = models.IntegerField(default=0)       # Times reviewed
     next_review = models.DateTimeField(null=True, blank=True)
+    is_public = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -126,6 +127,7 @@ class Quiz(models.Model):
     format = models.CharField(max_length=20, choices=FORMAT_CHOICES, default='mcq')
     questions = models.JSONField(default=list)
     academic_level = models.CharField(max_length=50, default='undergrad')
+    is_public = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -1,0 +1,84 @@
+BIOENERGETICS_KIT = {
+    "mind_map": {
+        "text": "Cellular Respiration Hub",
+        "children": [
+            {
+                "text": "The Krebs Cycle",
+                "children": [
+                    {"text": "Acetyl-CoA Condensation"},
+                    {"text": "Oxidative Decarboxylation (Steps 3 & 4)"},
+                    {"text": "Regeneration of Oxaloacetate"}
+                ]
+            },
+            {
+                "text": "Energy Harvest",
+                "children": [
+                    {"text": "NADH Production (3 per cycle)"},
+                    {"text": "FADH2 Production (1 per cycle)"},
+                    {"text": "GTP/ATP Synthesis"}
+                ]
+            },
+            {
+                "text": "Mitochondrial Anatomy",
+                "children": [
+                    {"text": "Mitochondrial Matrix (TCA location)"},
+                    {"text": "Inner Membrane (ETC location)"},
+                    {"text": "Cristae & Intermembrane Space"}
+                ]
+            },
+            {
+                "text": "Regulation",
+                "children": [
+                    {"text": "ATP/ADP Ratios"},
+                    {"text": "NADH Inhibition"},
+                    {"text": "Calcium Stimulation"}
+                ]
+            }
+        ]
+    },
+    "quizzes": [
+        {
+            "question": "What is the primary location of the Citric Acid Cycle enzymes in a eukaryotic cell?",
+            "options": ["Cytoplasm", "Mitochondrial Matrix", "Intermembrane Space", "Endoplasmic Reticulum"],
+            "correct_answer": "Mitochondrial Matrix",
+            "explanation": "Except for Succinate Dehydrogenase, all Krebs cycle enzymes sit in the fluid matrix of the mitochondria."
+        },
+        {
+            "question": "How many NADH molecules are produced per single turn of the Citric Acid Cycle (per Acetyl-CoA)?",
+            "options": ["1", "2", "3", "4"],
+            "correct_answer": "3",
+            "explanation": "Steps 3, 4, and 8 of the cycle produce one NADH molecule each, totaling 3 per Acetyl-CoA."
+        },
+        {
+            "question": "Which enzyme acts as the 'Gatekeeper' between glycolysis and the Krebs cycle?",
+            "options": ["Hexokinase", "Citrate Synthase", "Pyruvate Dehydrogenase Complex", "Aconitase"],
+            "correct_answer": "Pyruvate Dehydrogenase Complex",
+            "explanation": "The PDC converts cytosolic pyruvate into mitochondrial Acetyl-CoA, committing the carbons to aerobic respiration."
+        },
+        {
+            "question": "What is the net gain of ATP/GTP from one glucose molecule through the Krebs cycle alone (after 2 turns)?",
+            "options": ["1", "2", "4", "32"],
+            "correct_answer": "2",
+            "explanation": "Each turn produces 1 ATP/GTP via substrate-level phosphorylation; since glucose makes 2 pyruvates, the total is 2."
+        }
+    ],
+    "flashcards": [
+        {"question": "Citrate Synthase", "answer": "The first enzyme of the TCA cycle; catalyzes the condensation of Acetyl-CoA and Oxaloacetate.", "subject": "Bioenergetics"},
+        {"question": "Exergonic Reaction", "answer": "A reaction that releases energy ($\Delta G < 0$); drives the cycle forward.", "subject": "Bioenergetics"},
+        {"question": "Oxaloacetate", "answer": "The 4-carbon 'carrier' molecule that must be regenerated for the cycle to continue.", "subject": "Bioenergetics"},
+        {"question": "Succinate Dehydrogenase", "answer": "The only TCA enzyme embedded in the inner mitochondrial membrane; also known as Complex II of the ETC.", "subject": "Bioenergetics"}
+    ],
+    "podcast_script": [
+        {"speaker": "A", "text": "Welcome to BioCast! We are looking at the furnace of the cell: the Krebs Cycle. I'm joined by Christopher."},
+        {"speaker": "B", "text": "Thanks, Aria. It's the most ancient, elegant engine in biology. Every calorie you eat eventually ends up here."},
+        {"speaker": "A", "text": "So, we're in the mitochondria? The 'powerhouse'?"},
+        {"speaker": "B", "text": "Precisely. Specifically the matrix. It's a series of 8 enzymatic steps that systematically strip energy-rich electrons off of carbon chains."},
+        {"speaker": "A", "text": "And we 'exhale' the carbon waste as CO2, right?"},
+        {"speaker": "B", "text": "Exactly. You are literally breathing out the remains of your breakfast. But the real treasure isn't the ATP; it's the NADH."},
+        {"speaker": "A", "text": "NADH... that's like the battery? Or the electron carrier?"},
+        {"speaker": "B", "text": "Think of it as a bucket full of electricity. The Krebs cycle fills the bucket, and then carries it over to the Electron Transport Chain to make the big ATP payoff."},
+        {"speaker": "A", "text": "I love that. It's a harvesting operation. And if we start running or exercising, the cycle speeds up?"},
+        {"speaker": "B", "text": "Yes, Calcium and ADP levels act as 'throttle' signals. They tell the mitochondria: 'Hey, we need more power now!' and the enzymes ramp up."},
+        {"speaker": "A", "text": "It's a perfect supply-and-demand system. Let's trace the path of a single carbon through this magnificent cycle."}
+    ]
+}

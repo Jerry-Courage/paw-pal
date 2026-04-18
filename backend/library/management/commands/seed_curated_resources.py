@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from library.models import Resource
+from library.models import Resource, Quiz, Flashcard
 
 User = get_user_model()
 
@@ -117,6 +117,103 @@ For example, in the sentence "The bank was situated near the river bank," the At
 
 The future of Deep Learning involves moving toward "System 2" thinking—giving AI the ability to reason, plan, and verify its own logic before speaking. We are also seeing the rise of **Multimodal AI**, which can understand text, images, and audio as a single unified concept. These advancements represent the next step on the path toward Artificial General Intelligence (AGI).'''
                         }
+                    ],
+                    'curated_podcast_script': [
+                        {'speaker': 'A', 'text': r"Welcome back to FlowCast. Today we're going behind the scenes of the AI revolution. I'm Aria, and with me is Christopher."},
+                        {'speaker': 'B', 'text': r"Hey Aria. You know, people talk about AI like it's some sort of alien ghost in the machine, but it's actually much more grounded than that."},
+                        {'speaker': 'A', 'text': r"Right, it's basically math. High-speed, high-dimensional math. But it all starts with a single 'neuron,' doesn't it?"},
+                        {'speaker': 'B', 'text': r"Exactly. One single artificial neuron. It takes a bunch of inputs, multiplies them by 'weights,' adds a 'bias,' and then decides whether to fire. It's almost exactly like a tiny, simplified version of the neurons in your own brain."},
+                        {'speaker': 'A', 'text': r"And that's the fundamental unit. But the magic happens when you stack thousands of them into layers. Why do we need so many layers?"},
+                        {'speaker': 'B', 'text': r"Because the world isn't linear! If you want to recognize a face, you can't just look at individual pixels. The first layer might find edges. The next layer finds corners. The next finds eyes. It's a hierarchy of abstraction."},
+                        {'speaker': 'A', 'text': r"It's like building with LEGOs. You start with small blocks to make a wall, then a room, then a castle. But how does it know if the 'castle' it built is actually correct?"},
+                        {'speaker': 'B', 'text': r"That's the 'Cost Function.' It's a mathematical ruler that measures how wrong the AI is. If the AI sees a cat and says 'that's a toaster,' the cost function gives it a huge penalty."},
+                        {'speaker': 'A', 'text': r"And then it has to go back and fix itself. That's Backpropagation?"},
+                        {'speaker': 'B', 'text': r"Yes! It's arguably the most important algorithm in history. It uses the 'Chain Rule' from calculus to crawl backwards through the network and say, 'Hey, neuron #4 million, you were 2% responsible for that toaster mistake. Change your weight!'"},
+                        {'speaker': 'A', 'text': r"I love that. It's a molecular-level audit of its own mistakes. But what about the 'Vanishing Gradient'? That sounds like a sci-fi villain."},
+                        {'speaker': 'B', 'text': r"Haha, it sort of is. In very deep networks, the message to change the weights gets quieter and quieter as it travels back. By the time it reaches the first layer, it's a silent whisper. The layers stop learning."},
+                        {'speaker': 'A', 'text': r"Wait, so how did we fix it? How do we have these massive LLMs today if the signal keeps dying?"},
+                        {'speaker': 'B', 'text': r"Residual connections! It's like a fast-lane on a highway. We give the gradient a shortcut so it can bypass entire layers and keep the signal strong. That's how we went from 10 layers to 1,000 layers."},
+                        {'speaker': 'A', 'text': r"That's incredible. And now we have Transformers. This is the stuff powering ChatGPT, right? What makes 'Attention' so special?"},
+                        {'speaker': 'B', 'text': r"In the old days, AI read one word at a time, left to right. But humans don't do that. When you read the word 'it,' you're instantly looking back at everything you read before to know what 'it' refers to. Transformers do that for every single word at once."},
+                        {'speaker': 'A', 'text': r"So it has global context immediately. It's like being able to read an entire page in a single glance and understanding all the relationships simultaneously."},
+                        {'speaker': 'B', 'text': r"Exactly. That's why they're so much better at language. They don't lose the plot halfway through a sentence."},
+                        {'speaker': 'A', 'text': r"But there's a darker side to this capability, isn't there? We have to keep these things aligned with us."},
+                        {'speaker': 'B', 'text': r"Alignment is the big Boss Battle of AI research right now. We're teaching them values through RLHF—basically giving them treats when they're helpful and a timeout when they're not. But the bigger they get, the harder that is."},
+                        {'speaker': 'A', 'text': r"It's like training a dragon. You want it to be powerful, but you also want it to listen when you say 'sit.' Christopher, this has been an amazing breakdown."},
+                        {'speaker': 'B', 'text': r"Always a pleasure, Aria. AI is a tool, and like any tool, the more you understand how it's built, the better you can use it."},
+                        {'speaker': 'A', 'text': r"Checkmate. Next time, we're diving into the 'Creative Machine'—GANs and diffusion. See you then!"}
+                    ],
+                    'mind_map': {
+                        'center': r'Deep Learning',
+                        'branches': [
+                            {
+                                'topic': r'Neural Foundations',
+                                'subtopics': [r'Artificial Neurons', r'Activation Functions', r'Loss Functions']
+                            },
+                            {
+                                'topic': r'Architectures',
+                                'subtopics': [r'CNNs (Vision)', r'RNNs (Sequential)', r'Transformers']
+                            },
+                            {
+                                'topic': r'Training',
+                                'subtopics': [r'Backpropagation', r'Gradient Descent', r'Regularization']
+                            }
+                        ]
+                    },
+                    'curated_practice_questions': [
+                        {
+                            'question': r'Explain the vanishing gradient problem and why it occurs in deep networks.',
+                            'model_answer': r'The vanishing gradient problem occurs when gradients are multiplied through many layers via the chain rule. If activating derivatives are small (like in sigmoid), the gradient shrinks exponentially, stopping early layers from learning. ReLU mitigates this with a derivative of 1 for positive values.'
+                        },
+                        {
+                            'question': r'What is the operational difference between Batch Gradient Descent and Stochastic Gradient Descent?',
+                            'model_answer': r'Batch GD computes the gradient using the entire dataset before updating weights (stable but slow). SGD updates weights after every single example (noisy but fast and helps escape local minima).'
+                        },
+                        {
+                            'question': r'Describe how Dropout acts as a regularization technique.',
+                            'model_answer': r'Dropout randomly "silences" neurons during training, forcing the network to learn redundant representations and preventing it from relying too heavily on any single feature, which effectively reduces overfitting.'
+                        }
+                    ]
+                },
+                'study_kit': {
+                    'quizzes': [
+                        {
+                            'question': r'What is the primary role of the bias term ($b$) in an artificial neuron?',
+                            'options': [r'To normalize the weights', r'To allow the decision boundary to shift away from the origin', r'To prevent the vanishing gradient', r'To serve as the learning rate'],
+                            'correct_answer': r'To allow the decision boundary to shift away from the origin',
+                            'explanation': r'The bias term allows the activation function to be shifted left or right, which is critical for fitting data that doesn\'t pass through the origin.'
+                        },
+                        {
+                            'question': r'Which activation function is defined as $\max(0, z)$?',
+                            'options': [r'Sigmoid', r'Tanh', r'ReLU', r'Softmax'],
+                            'correct_answer': r'ReLU',
+                            'explanation': r'ReLU (Rectified Linear Unit) returns the input directly if it is positive, otherwise, it returns zero.'
+                        },
+                        {
+                            'question': r'In backpropagation, which mathematical principle is used to calculate the influence of a weight on the total error?',
+                            'options': [r'The Pythagorean Theorem', r'The Chain Rule of Calculus', r'Riemann Sums', r'Taylor Series Expansion'],
+                            'correct_answer': r'The Chain Rule of Calculus',
+                            'explanation': r'Backpropagation uses the chain rule to recursively calculate partial derivatives from the output layer back to the input layers.'
+                        },
+                        {
+                            'question': r'What happens in the "Vanishing Gradient" problem?',
+                            'options': [r'Weights become too large to compute', r'Neural connections are randomly dropped', r'Gradients become extremely small during backpropagation, stopping the early layers from learning', r'The model predicts only zeros'],
+                            'correct_answer': r'Gradients become extremely small during backpropagation, stopping the early layers from learning',
+                            'explanation': r'In very deep networks, repeatedly multiplying small gradients results in a value that effectively vanishes, preventing learning in early layers.'
+                        },
+                        {
+                            'question': r'Which architecture introduced the concept of "Self-Attention"?',
+                            'options': [r'CNN', r'RNN', r'Transformer', r'Perceptron'],
+                            'correct_answer': r'Transformer',
+                            'explanation': r'The Transformer architecture, introduced in "Attention is All You Need", replaced recurrence with self-attention mechanisms.'
+                        }
+                    ],
+                    'flashcards': [
+                        {'question': r'Backpropagation', 'answer': r'An algorithm used to calculate gradients of loss functions with respect to weights via the Chain Rule.', 'subject': r'Deep Learning'},
+                        {'question': r'ReLU', 'answer': r'Rectified Linear Unit; the most common activation function in deep networks.', 'subject': r'Deep Learning'},
+                        {'question': r'Overfitting', 'answer': r'When a model learns training noise instead of the general pattern, leading to poor real-world performance.', 'subject': r'Deep Learning'},
+                        {'question': r'CNN', 'answer': r'Convolutional Neural Network; an architecture used primarily for spatial data like images.', 'subject': r'Deep Learning'},
+                        {'question': r'Transformer', 'answer': r'A model architecture that uses attention mechanisms to process sequences in parallel.', 'subject': r'Deep Learning'}
                     ]
                 },
                 'ai_concepts': [{'title': r'Backpropagation', 'explanation': r'The multivariable calculus engine that allows networks to learn from their errors.'}]
@@ -162,7 +259,7 @@ This was a radical departure from the deterministic universe of Newton, where if
                             'title': r'5. Heisenberg Uncertainty: The Limit of Knowledge',
                             'content': r'''Werner Heisenberg proved that this randomness isn\'t just because our tools are bad—it\'s a fundamental law of nature. The more precisely you know a particle\'s position ($x$), the more uncertain its momentum ($p$) becomes:
 $$\Delta x \cdot \Delta p \ge \frac{\hbar}{2}$$
-This isn\'t just a measurement problem; it\'s a reality problem. If an electron were perfectly still, its uncertainty in position would be infinite. This principle is why atoms are stable; if the electron got too close to the nucleus, its momentum would become so uncertain and large that it would fly away. Uncertainty is quite literally the reason matter exists.'''
+This isn\'t just a measurement problem; it's a reality problem. If an electron were perfectly still, its uncertainty in position would be infinite. This principle is why atoms are stable; if the electron got too close to the nucleus, its momentum would become so uncertain and large that it would fly away. Uncertainty is quite literally the reason matter exists.'''
                         },
                         {
                             'title': r'6. Quantum Tunneling: Walking Through Walls',
@@ -212,6 +309,100 @@ The **Many-Worlds Interpretation** says that there is no collapse. Instead, ever
 
 Candidates for this "Theory of Everything" include **String Theory** and **Loop Quantum Gravity**. Solving this mystery would represent the final chapter in our understanding of the physical laws of the universe. Until then, quantum mechanics remain the most accurate, useful, and absolutely baffling theory we have ever discovered.'''
                         }
+                    ],
+                    'curated_podcast_script': [
+                        {'speaker': 'A', 'text': r"Welcome to the Quantum Deep Dive. I'm Aria, and we're joined by Christopher. Christopher, are you ready to have our brains turned into probability waves?"},
+                        {'speaker': 'B', 'text': r"I think my brain is already in a superposition of excited and terrified, Aria. Quantum mechanics is the only subject where the more you learn, the less you feel you understand."},
+                        {'speaker': 'A', 'text': r"That's so true. Let's start with the basics. We're told the world is 'quantized.' What does that actually mean?"},
+                        {'speaker': 'B', 'text': r"Imagine a ramp versus a flight of stairs. Classical physics is the ramp—you can be at any height. Quantum physics is the stairs. You can't be 'between' steps. Energy comes in discrete, pixelated packets."},
+                        {'speaker': 'A', 'text': r"And Planck found this out because objects weren't glowing with infinite ultraviolet light, right? The 'Ultraviolet Catastrophe'?"},
+                        {'speaker': 'B', 'text': r"Exactly. If light weren't quantized, every time you turned on your oven, it would blast you with infinite X-rays. Not great for cookies. Max Planck saved us with the 'Quantum.'"},
+                        {'speaker': 'A', 'text': r"Okay, so pixels for the universe. But then things get weird with 'Wave-Particle Duality.' How can something be both?"},
+                        {'speaker': 'B', 'text': r"It depends on whether you're looking. It's like a person who acts totally different when they're alone versus when they're on camera. An electron behaves like a wave when you let it be, but as soon as you measure it, it 'collapses' into a single point."},
+                        {'speaker': 'A', 'text': r"Wait, so the act of looking actually creates the reality?"},
+                        {'speaker': 'B', 'text': r"That's the 'Measurement Problem.' It sounds like some hippie-dippie philosophy, but it's cold, hard math. The Schrödinger equation tells the wave how to move, but it doesn't explain the collapse."},
+                        {'speaker': 'A', 'text': r"And Schrödinger himself hated that, right? That's why he made up the cat in the box?"},
+                        {'speaker': 'B', 'text': r"Yes! He meant it as a joke to show how ridiculous it was. He was saying, 'If you really believe this, then the cat is both alive and dead until I look.' Today, everyone thinks it's a serious law, but he was trolling!"},
+                        {'speaker': 'A', 'text': r"Haha, the world's most famous science meme was a troll. I love that. Now, what about Heisenberg? Why can't we just measure everything perfectly if we have better tools?"},
+                        {'speaker': 'B', 'text': r"Because it's not a tool problem—it's a property of waves. A wave doesn't have a single 'position.' If you want to know one thing perfectly, you literally must lose information about the other. It's a cosmic trade-off."},
+                        {'speaker': 'A', 'text': r"It's like trying to take a photo of a moving car. You either get a sharp image of where the car is, but you can't see the motion (the blur)... or you see the blur (the speed), but the car is a streak and you don't know exactly where it is."},
+                        {'speaker': 'B', 'text': r"Brilliant analogy. And that trade-off is why atoms don't collapse. It keeps the electrons from falling into the nucleus. Uncertainty is literally keeping you from disappearing into a dot."},
+                        {'speaker': 'A', 'text': r"Mind... blown. But we have to talk about Entanglement. Einstein's 'Spooky Action.' Is it really faster than light?"},
+                        {'speaker': 'B', 'text': r"It's instantaneous. If you have two entangled electrons, one on Earth and one on Pluto... you flip one, and the other flips *right now.* No delay. Einstein hated this because it seemed to break his speed-of-light rule."},
+                        {'speaker': 'A', 'text': r"Does it? Can we send secret messages to Pluto instantly?"},
+                        {'speaker': 'B', 'text': r"Sadly, no. You can't control the outcome of the flip, so you can't send information. The universe is weird, but it's not a cheater. Spooky action stays spooky, but it doesn't break relativity."},
+                        {'speaker': 'A', 'text': r"Okay, so we're building computers out of this now. Qubits. How is a 'Q' bit different from a normal 1 or 0?"},
+                        {'speaker': 'B', 'text': r"A normal bit is a light switch—on or off. A qubit is a coin spinning on a table. While it's spinning, it's both heads and tails. A quantum computer calculates using the 'spinning' state. It's like doing a billion versions of a math problem at once."},
+                        {'speaker': 'A', 'text': r"And the Many Worlds interpretation... some people say every time that coin lands, the universe splits?"},
+                        {'speaker': 'B', 'text': r"Yes. In that view, there's no 'collapse.' You just branch. There's a universe where you're listening to this podcast, and one where you're a quantum physicist yourself!"},
+                        {'speaker': 'A', 'text': r"I hope that version of me is making more money. Christopher, thank you for this journey into the subatomic. It's been absolutely wild."},
+                        {'speaker': 'B', 'text': r"Stay weird, Aria. The universe certainly does."},
+                        {'speaker': 'A', 'text': r"That's it for today's Quantum Deep Dive. Remember: if it makes sense, you probably haven't been paying attention. See you next time!"}
+                    ],
+                    'mind_map': {
+                        'center': r'Quantum Mechanics',
+                        'branches': [
+                            {
+                                'topic': r'Wave Theory',
+                                'subtopics': [r'Wave-Particle Duality', r'Schrödinger Equation', r'Probability Density']
+                            },
+                            {
+                                'topic': r'Subatomic Reality',
+                                'subtopics': [r'Heisenberg Uncertainty', r'Pauli Exclusion', r'Quantum Tunneling']
+                            },
+                            {
+                                'topic': r'Quantum Paradoxes',
+                                'subtopics': [r'Entanglement', r'Superposition', r"Schrödinger's Cat"]
+                            }
+                        ]
+                    },
+                    'curated_practice_questions': [
+                        {
+                            'question': r'Explain the physical significance of Wave-Particle Duality as shown in the double-slit experiment.',
+                            'model_answer': r'The double-slit experiment shows that subatomic particles exhibit interference patterns (wave-like) when not observed, but behave like discrete particles when measured. This suggests reality exists as a probability wave until an interaction occurs.'
+                        },
+                        {
+                            'question': r'What is the "Born Rule" and why is it fundamental to Quantum Mechanics?',
+                            'model_answer': r'The Born Rule states that the probability of finding a particle is proportional to the squared magnitude of its wavefunction. It provides the essential bridge between the abstract math of the wavefunction and physical observables.'
+                        },
+                        {
+                            'question': r'Describe "Quantum Entanglement" in simple terms.',
+                            'model_answer': r'Entanglement is a phenomenon where two particles become linked such that the state of one instantly determines the state of the other, regardless of distance. Einstein famously called this "spooky action at a distance."'
+                        }
+                    ]
+                },
+                'study_kit': {
+                    'quizzes': [
+                        {
+                            'question': r'What does the Schrödinger Equation describe in quantum mechanics?',
+                            'options': [r'The definitive position of a particle', r'The evolution of the probability wave over time', r'The gravitational pull of subatomic particles', r'The temperature of the vacuum'],
+                            'correct_answer': r'The evolution of the probability wave over time',
+                            'explanation': r'The Schrödinger equation describes the time-evolution of the wavefunction, which contains all the probabilistic information about a system.'
+                        },
+                        {
+                            'question': r'What is the physical meaning of the squared magnitude of the wavefunction ($|\Psi|^2$)?',
+                            'options': [r'Particle Velocity', r'Total Energy', r'Probability Density', r'Quantum Mass'],
+                            'correct_answer': r'Probability Density',
+                            'explanation': r'According to the Born Rule, $|\Psi|^2$ gives the probability density of finding a particle in a specific region of space.'
+                        },
+                        {
+                            'question': r'Which principle states that no two fermions can occupy the same quantum state simultaneously?',
+                            'options': [r'Heisenberg Uncertainty Principle', r'Pauli Exclusion Principle', r'Bohr Model', r'Planck\'s Law'],
+                            'correct_answer': r'Pauli Exclusion Principle',
+                            'explanation': r'The Pauli Exclusion Principle is why electrons fill shell-like orbitals rather than all collapsing into the lowest energy state.'
+                        },
+                        {
+                            'question': r'How did Einstein describe quantum entanglement, which he found fundamentally unsettling?',
+                            'options': [r'Molecular Magic', r'Spooky Action at a Distance', r'Ghostly Geometry', r'Universal Glue'],
+                            'correct_answer': r'Spooky Action at a Distance',
+                            'explanation': r'Einstein was troubled by the non-local nature of entanglement, where measuring one particle instantly affects another far away.'
+                        }
+                    ],
+                    'flashcards': [
+                        {'question': r'Superposition', 'answer': r'The ability of a quantum system to exist in multiple states at once until a measurement is made.', 'subject': r'Quantum Mechanics'},
+                        {'question': r'Entanglement', 'answer': r'A physical phenomenon where two particles are so linked that the state of one instantly determines the state of the other.', 'subject': r'Quantum Mechanics'},
+                        {'question': r'Quantum Tunneling', 'answer': r'The phenomenon where a particle passes through an energy barrier that it classically shouldn\'t be able to cross.', 'subject': r'Quantum Mechanics'},
+                        {'question': r'Heisenberg Uncertainty', 'answer': r'The law stating you cannot simultaneously know both the exact position and exact momentum of a particle.', 'subject': r'Quantum Mechanics'}
                     ]
                 },
                 'ai_concepts': [{'title': r'Wave-Particle Duality', 'explanation': r'The fundamental reality that energy and matter exhibit both wave and particle characteristics.'}]
@@ -251,7 +442,7 @@ The PDC performs a triple-action process: it removes a carbon as $\text{CO}_2$, 
                             'title': r'4. Step 1: Citrate Synthesis and Thermodynamics',
                             'content': r'''The cycle begins with a condensation reaction. The 2-carbon Acetyl-CoA is combined with the 4-carbon **Oxaloacetate** by the enzyme *Citrate Synthase*. The result is the 6-carbon molecule **Citrate**.
 
-This step is highly **Exergonic** ($\Delta G^\circ = -32.2 \text{ kJ/mol}$), meaning it releases a significant amount of energy into the system. This massive release of energy acts like a "power-stroke," pulling the entire cycle forward. This enzyme is a major regulatory checkpoint; it is inhibited by high levels of ATP and NADH, which signal to the cell that "the furnace is hot enough" and we don't need to burn more fuel yet.'''
+This step is highly **Exergonic** ($\Delta G^\circ = -32.2 \text{ kJ/mol}$), meaning it releases a significant amount of energy into the system. This massive release of energy acts like a "power-stroke," pulling the entire cycle forward. This enzyme is a major regulatory checkpoint; it is inhibited by high levels of ATP and NADH, which signal to the cell that "the furnace is hot enough" and we don\'t need to burn more fuel yet.'''
                         },
                         {
                             'title': r'5. Step 2 & 3: Isomerization to Isocitrate',
@@ -311,6 +502,100 @@ Crucially, the cycle is also stimulated by **Calcium ions**. When your muscles c
 
 This "refilling" is vital during fasting or intense exercise. It is what allows the Krebs cycle to be both a furnace for burning fuel and a construction site for building the proteins and fats that make up your body. This dual nature (Amphibolic) makes the cycle the absolute core of all human physiology.'''
                         }
+                    ],
+                    'curated_podcast_script': [
+                        {'speaker': 'A', 'text': r"Welcome back to BioCast. Today we're looking at the ultimate biological engine: The Krebs Cycle. Christopher, I've heard you call this the 'furnace of life.' Why the drama?"},
+                        {'speaker': 'B', 'text': r"Because it literally is, Aria! Every single breath you take, every blink of your eye is powered by the carbon remains of the food you ate, being burned away in this magnificent cycle."},
+                        {'speaker': 'A', 'text': r"Okay, let's step inside the 'furnace.' We're in the mitochondria, right? The powerhouse?"},
+                        {'speaker': 'B', 'text': r"Specifically the matrix—the innermost chamber. It's like a highly organized molecular dance floor where 8 enzymes are passing around a carbon chain, stripping it of every high-energy electron it has."},
+                        {'speaker': 'A', 'text': r"And the cycle starts with a 'portal'—the Pyruvate Dehydrogenase Complex. That sounds like a heavy-duty piece of machinery."},
+                        {'speaker': 'B', 'text': r"It really is. It's the gatekeeper. It takes the leftovers from glycolysis—Pyruvate—and converts it into Acetyl-CoA. This is the point of no return. Once you make Acetyl-CoA, that carbon is committed to being burned for energy."},
+                        {'speaker': 'A', 'text': r"So once you pass the gate, you join the cycle. And the first step is actually the biggest energy release?"},
+                        {'speaker': 'B', 'text': r"Exactly. Acetyl-CoA (2 carbons) meets Oxaloacetate (4 carbons) to make Citrate (6 carbons). This reaction is so exergonic—meaning it releases so much energy—that it physically pulls the rest of the cycle forward like a power-stroke in an engine."},
+                        {'speaker': 'A', 'text': r"I love that. A molecular power-stroke. But then we start losing carbons. We 'exhale' them, right?"},
+                        {'speaker': 'B', 'text': r"Yes! We breathe out CO2. But the real treasure isn't the ATP we make directly—it's the NADH. Think of NADH as a bucket full of high-energy electrons."},
+                        {'speaker': 'A', 'text': r"So the Krebs cycle is more of a harvesting operation than a power plant?"},
+                        {'speaker': 'B', 'text': r"Great way to put it. We fill three buckets of NADH and one of FADH2 for every turn. These buckets are then carried over to the 'big payoff'—the Electron Transport Chain."},
+                        {'speaker': 'A', 'text': r"NADH vs FADH2... what's the difference? Is one better?"},
+                        {'speaker': 'B', 'text': r"NADH is 'premium fuel.' It enters the ETC earlier and yields about 2.5 ATP. FADH2 is 'regular.' It enters a bit later and only gives you 1.5. But the mitochondria is an efficient machine; it doesn't waste anything."},
+                        {'speaker': 'A', 'text': r"And we have a 'molecular turbine' at the end too, right? ATP Synthase?"},
+                        {'speaker': 'B', 'text': r"That's the star of the show. It's a literal rotating motor—the smallest in the known universe. As protons flow through it, it spins at thousands of RPMs to 'click' phosphate onto ADP. It's the reason you're alive."},
+                        {'speaker': 'A', 'text': r"Christopher, what happens if the cycle runs out of its starting material? If we use the 'parts' for other things?"},
+                        {'speaker': 'B', 'text': r"That's anaplerosis—'filling the tank.' The cycle is 'amphibolic,' meaning it's both a furnace for burning fuel AND a construction site where the cell builds parts for proteins and fats. It's the ultimate multitasker."},
+                        {'speaker': 'A', 'text': r"So if you're building a muscle, you're actually taking parts out of your Krebs cycle to make it happen?"},
+                        {'speaker': 'B', 'text': r"Exactly. And then you have to refill the tank with other reactions. It's a perfect balance of supply and demand."},
+                        {'speaker': 'A', 'text': r"And regulation? Does it just spin at the same speed all the time?"},
+                        {'speaker': 'B', 'text': r"No way. It has a throttle. High levels of ATP and NADH act as 'brakes.' They tell the enzymes: 'Hey, the battery is full, slow down!' On the flip side, things like Calcium—which shows up when your muscles are working—act as an 'accelerant.'"},
+                        {'speaker': 'A', 'text': r"So when I start running, my muscle cells release Calcium, which literally stomps on the gas pedal of the Krebs cycle?"},
+                        {'speaker': 'B', 'text': r"Boom. Energy on demand. It's the most elegant control system ever evolved. It's been running in every complex cell on Earth for over two billion years."},
+                        {'speaker': 'A', 'text': r"Two billion years without a recall. That's a pretty good track record. Christopher, thanks for taking us into the matrix today."},
+                        {'speaker': 'B', 'text': r"Anytime, Aria. Just remember: you're not just a person; you're a trillions-strong community of high-speed powerhouses."},
+                        {'speaker': 'A', 'text': r"That's a wrap for BioCast. Go give those powerhouses some fuel—see you next time!"}
+                    ],
+                    'mind_map': {
+                        'center': r'Bioenergetics',
+                        'branches': [
+                            {
+                                'topic': r'The Portal Step',
+                                'subtopics': [r'Pyruvate to Acetyl-CoA', r'Mitochondrial Matrix', r'Enzyme Gatekeepers']
+                            },
+                            {
+                                'topic': r'Cycle Dynamics',
+                                'subtopics': [r'Citrate Synthesis', r'Oxidative Decarboxylation', r'Oxaloacetate Regen']
+                            },
+                            {
+                                'topic': r'Energy Output',
+                                'subtopics': [r'3x NADH', r'1x FADH2', r'1x ATP/GTP']
+                            }
+                        ]
+                    },
+                    'curated_practice_questions': [
+                        {
+                            'question': r'Trace the path of a single carbon molecule from its entry as Acetyl-CoA until its release as CO2.',
+                            'model_answer': r'Acetyl-CoA (2C) combines with Oxaloacetate (4C) to form Citrate (6C). Through oxidative decarboxylation steps (Isocitrate to a-KG, and a-KG to Succinyl-CoA), two carbons are eventually released as CO2 waste.'
+                        },
+                        {
+                            'question': r'What is the functional difference between NADH and FADH2 in cellular respiration?',
+                            'model_answer': r'Both are electron carriers, but NADH enters the ETC at Complex I, yielding about 2.5 ATP, while FADH2 enters at Complex II, yielding about 1.5 ATP because it bypasses the first proton pumping station.'
+                        },
+                        {
+                            'question': r'How is the Citric Acid Cycle regulated by energetic demand?',
+                            'model_answer': r'The cycle is regulated by the ATP/ADP ratio. High ATP inhibits key enzymes like Citrate Synthase and Isocitrate Dehydrogenase, while high ADP and Calcium (from muscle use) stimulate them to ramp up energy production.'
+                        }
+                    ]
+                },
+                'study_kit': {
+                    'quizzes': [
+                        {
+                            'question': r'What is the primary location of the Citric Acid Cycle enzymes in a eukaryotic cell?',
+                            'options': [r'Cytoplasm', r'Mitochondrial Matrix', r'Intermembrane Space', r'Endoplasmic Reticulum'],
+                            'correct_answer': r'Mitochondrial Matrix',
+                            'explanation': r'Except for Succinate Dehydrogenase, all Krebs cycle enzymes sit in the fluid matrix of the mitochondria.'
+                        },
+                        {
+                            'question': r'How many NADH molecules are produced per single turn of the Citric Acid Cycle (per Acetyl-CoA)?',
+                            'options': [r'1', r'2', r'3', r'4'],
+                            'correct_answer': r'3',
+                            'explanation': r'Steps 3, 4, and 8 of the cycle produce one NADH molecule each, totaling 3 per Acetyl-CoA.'
+                        },
+                        {
+                            'question': r'Which enzyme acts as the "Gatekeeper" between glycolysis and the Krebs cycle?',
+                            'options': [r'Hexokinase', r'Citrate Synthase', r'Pyruvate Dehydrogenase Complex', r'Aconitase'],
+                            'correct_answer': r'Pyruvate Dehydrogenase Complex',
+                            'explanation': r'The PDC converts cytosolic pyruvate into mitochondrial Acetyl-CoA, committing the carbons to aerobic respiration.'
+                        },
+                        {
+                            'question': r'What is the net gain of ATP/GTP from one glucose molecule through the Krebs cycle alone (after 2 turns)?',
+                            'options': [r'1', r'2', r'4', r'32'],
+                            'correct_answer': r'2',
+                            'explanation': r'Each turn produces 1 ATP/GTP via substrate-level phosphorylation; since glucose makes 2 pyruvates, the total is 2.'
+                        }
+                    ],
+                    'flashcards': [
+                        {'question': r'Citrate Synthase', 'answer': r'The first enzyme of the TCA cycle; catalyzes the condensation of Acetyl-CoA and Oxaloacetate.', 'subject': r'Bioenergetics'},
+                        {'question': r'Exergonic Reaction', 'answer': r'A reaction that releases energy ($\Delta G < 0$); drives the cycle forward.', 'subject': r'Bioenergetics'},
+                        {'question': r'Oxaloacetate', 'answer': r'The 4-carbon "carrier" molecule that must be regenerated for the cycle to continue.', 'subject': r'Bioenergetics'},
+                        {'question': r'Succinate Dehydrogenase', 'answer': r'The only TCA enzyme embedded in the inner mitochondrial membrane; also known as Complex II of the ETC.', 'subject': r'Bioenergetics'}
                     ]
                 },
                 'ai_concepts': [{'title': r'Thermodynamics', 'explanation': r'The study of energy transfer that determines the forward direction of biochemical pathways.'}]
@@ -408,14 +693,110 @@ However, we now know that the expansion of the universe is actually *acceleratin
 
 Bridging this gap would explain how the universe began and what happens inside a black hole. Candidates like **String Theory** propose that the fundamental particles are tiny vibrating strings, while **Loop Quantum Gravity** suggests that space itself is made of individual "atoms" of geometry. Solving this will be the crowning achievement of human intelligence.'''
                         }
+                    ],
+                    'curated_podcast_script': [
+                        {'speaker': 'A', 'text': r"Welcome back to FlowCast. We are tackling the Absolute Sovereign of the universe today: General Relativity. Christopher, walk me through it—is gravity even real?"},
+                        {'speaker': 'B', 'text': r"Haha, it's real enough if you fall off a ladder, Aria. But in Einstein's eyes, it's not a 'force' like we think. It's actually just geometry. The universe is a warped fabric, and we're all just rolling down the hills."},
+                        {'speaker': 'A', 'text': r"Okay, let's unpack that. Geometry. Hills. Fabric. If I'm sitting on my chair, I'm not being 'pulled' by a magnetic-like force from the Earth's center?"},
+                        {'speaker': 'B', 'text': r"Nope. You're simply trying to move in a straight line through a space that is fundamentally curved by the Earth's mass. Your chair is just in the way of your 'natural' curved path toward the center."},
+                        {'speaker': 'A', 'text': r"And Einstein found this out through an elevator? One of his famous 'thought experiments'?"},
+                        {'speaker': 'B', 'text': r"Yes! The Equivalence Principle. He realized that if you're in a windowless elevator in deep space, and it starts accelerating upward, you'd feel 'gravity' pulling you to the floor. There is physically no way to tell if you're accelerating or if you're just standing on a planet."},
+                        {'speaker': 'A', 'text': r"Wait, so gravity and acceleration are literally the same coin? That is mind-bending."},
+                        {'speaker': 'B', 'text': r"Exactly. And if they're the same, then gravity must also affect light. Light always takes the straightest path, but if space itself is curved, light has to bend with it. We've actually seen this happen during solar eclipses—we can see stars that should be hidden behind the sun!"},
+                        {'speaker': 'A', 'text': r"So the Sun acts like a giant, invisible magnifying glass? We call that Gravitational Lensing, right?"},
+                        {'speaker': 'B', 'text': r"Yes. It's one of the most beautiful proofs of his theory. But space isn't the only thing that curves. Time does too. 'Spacetime' is one single, unified fabric."},
+                        {'speaker': 'A', 'text': r"This is where the 'Interstellar' logic comes in. If I go near a black hole, does time actually slow down for me?"},
+                        {'speaker': 'B', 'text': r"It really does. Not just in movies, but in real life. Your phone uses GPS, right? Those satellites are high above the Earth's strong gravity, so their clocks tick slightly faster than our clocks on the ground. Engineers have to literally 'correct' for Einstein's time dilation every single day or your GPS would be off by miles."},
+                        {'speaker': 'A', 'text': r"So without General Relativity, we'd all be lost on our way to the grocery store. Einstein literally keeps us on the map."},
+                        {'speaker': 'B', 'text': r"Precisely. But let's go to the extreme. Black Holes. They're like infinite sinkholes in spacetime."},
+                        {'speaker': 'A', 'text': r"The 'Singularity' at the center... is it actually a point of infinite density?"},
+                        {'speaker': 'B', 'text': r"According to the math, yes. But that's usually the universe's way of saying 'Your math is broken here.' We don't know what's truly at the center because our equations return 'infinity,' which is basically a divide-by-zero error for reality."},
+                        {'speaker': 'A', 'text': r"What about 'Spacetime Ripples'? I remember hearing about LEGO or LIGO or something like that detecting them?"},
+                        {'speaker': 'B', 'text': r"LIGO! Laser Interferometer Gravitational-Wave Observatory. They detected two black holes colliding over a billion light-years away. It sent a 'shiver' through the actual fabric of the universe. When that ripple hit Earth, it moved our sensors by less than the width of a proton."},
+                        {'speaker': 'A', 'text': r"Wait, so the entire Earth physically grew and shrank by a subatomic amount as that wave passed? That's insane."},
+                        {'speaker': 'B', 'text': r"It really is. We are finally 'hearing' the universe ripple. And it's expanding too. Einstein added a 'Cosmological Constant' to stop his universe from expanding, called it his biggest blunder, and now we realize he was right all along—Dark Energy is driving it!"},
+                        {'speaker': 'A', 'text': r"Even when he thought he was wrong, he was right. Christopher, what's left to solve? Have we 'beaten' gravity?"},
+                        {'speaker': 'B', 'text': r"Not even close. The 'Boss Battle' is Quantum Gravity. Einstein's gravity works for stars, but it breaks for atoms. We need a 'Theory of Everything'—String Theory, Loop Quantum Gravity—something to bridge the gap."},
+                        {'speaker': 'A', 'text': r"Well, I'm ready for that chapter whenever it's written. Christopher, thank you for weaving this fabric together for us."},
+                        {'speaker': 'B', 'text': r"Stay grounded, Aria. Or rather, stay on your geodesic."},
+                        {'speaker': 'A', 'text': r"That's a wrap for FlowCast. Next time: the mystery of the Microverse. See you then!"}
+                    ],
+                    'mind_map': {
+                        'center': r'General Relativity',
+                        'branches': [
+                            {
+                                'topic': r'Foundations',
+                                'subtopics': [r'Equivalence Principle', r'Special Relativity Context', r'Unified Spacetime']
+                            },
+                            {
+                                'topic': r'Physics of Gravity',
+                                'subtopics': [r'Space-Time Curvature', r'Geodesics', r'Field Equations']
+                            },
+                            {
+                                'topic': r'Cosmic Effects',
+                                'subtopics': [r'Time Dilation', r'Gravitational Lensing', r'Black Holes']
+                            }
+                        ]
+                    },
+                    'curated_practice_questions': [
+                        {
+                            'question': r'Explain the "Equivalence Principle" and why it was the key to understanding gravity.',
+                            'model_answer': r'Einstein realized that gravity and acceleration are indistinguishable. A person in a falling elevator feels weightless because acceleration cancels gravity. This proved gravity is property of spacetime geometry, not a pull force.'
+                        },
+                        {
+                            'question': r'Why do GPS satellites need to account for General Relativity?',
+                            'model_answer': r'Because they are in a weaker gravitational field than Earth\'s surface, time moves faster for them (Gravitational Time Dilation). Without relativistic adjustments, GPS locations would drift by kilometers every day.'
+                        },
+                        {
+                            'question': r'What is an "Event Horizon" in the context of a black hole?',
+                            'model_answer': r'The Event Horizon is the mathematical boundary where the escape velocity exactly equals the speed of light. It is the "point of no return" beyond which no information or matter can ever return to the outside universe.'
+                        }
+                    ]
+                },
+                'study_kit': {
+                    'quizzes': [
+                        {
+                            'question': r'What does the Equivalence Principle postulate?',
+                            'options': [r'Gravity is stronger than light', r'Weight and mass are the same', r'Gravity and acceleration are physically indistinguishable', r'Energy is equal to mass times speed of light squared'],
+                            'correct_answer': r'Gravity and acceleration are physically indistinguishable',
+                            'explanation': r'Einstein\'s "happiest thought" was that a person in an accelerating elevator would feel exactly like someone standing in a gravitational field.'
+                        },
+                        {
+                            'question': r'Which constant is often referred to as Einstein\'s "Greatest Blunder", yet explains Dark Energy today?',
+                            'options': [r'Planck Constant', r'Gravitational Constant', r'Cosmological Constant ($\Lambda$)', r'Speed of Light'],
+                            'correct_answer': r'Cosmological Constant ($\Lambda$)',
+                            'explanation': r'Einstein initially added $\Lambda$ to keep the universe static; today it is used to explain the accelerating expansion of space-time.'
+                        },
+                        {
+                            'question': r'What happens to a clock the closer it gets to a massive object like a planet?',
+                            'options': [r'It ticks faster', r'It ticks slower', r'It stops entirely', r'It ticks at the same rate but appears slower'],
+                            'correct_answer': r'It ticks slower',
+                            'explanation': r'Gravitational time dilation dictates that time (the fourth dimension) slows down in regions of higher gravitational potential (curvature).'
+                        },
+                        {
+                            'question': r'What is the Schwarzschild Radius?',
+                            'options': [r'The distance between the sun and the earth', r'The distance to the nearest star', r'The radius at which a mass becomes a black hole (Point of No Return)', r'The speed of a gravitational wave'],
+                            'correct_answer': r'The radius at which a mass becomes a black hole (Point of No Return)',
+                            'explanation': r'If an object\'s radius becomes smaller than its Schwarzschild radius, space-time is so warped that light cannot escape, forming a black hole.'
+                        }
+                    ],
+                    'flashcards': [
+                        {'question': r'Geodesic', 'answer': r'The shortest path between two points in curved spacetime; the path light follows.', 'subject': r'General Relativity'},
+                        {'question': r'Spacetime', 'answer': r'The unified 4-dimensional fabric of the universe composed of 3 space dimensions and 1 time dimension.', 'subject': r'General Relativity'},
+                        {'question': r'Gravitational Lensing', 'answer': r'When a massive object bends the light from a distant source, acting like a cosmic magnifying glass.', 'subject': r'General Relativity'},
+                        {'question': r'Event Horizon', 'answer': r'The mathematical boundary of a black hole where the escape velocity exceeds the speed of light.', 'subject': r'General Relativity'}
                     ]
                 },
                 'ai_concepts': [{'title': r'Event Horizon', 'explanation': r'The boundary around a black hole beyond which nothing can escape.'}]
             }
         ]
 
+        self.stdout.write(self.style.WARNING('Wiping existing curated study tools...'))
+        Quiz.objects.filter(owner__username='flowstate_curator').delete()
+        Flashcard.objects.filter(owner__username='flowstate_curator').delete()
+
         for item in curated_data:
-            Resource.objects.update_or_create(
+            resource, created = Resource.objects.update_or_create(
                 title=item['title'],
                 defaults={
                     'owner': owner,
@@ -431,6 +812,32 @@ Bridging this gap would explain how the universe began and what happens inside a
                     'has_study_kit': True
                 }
             )
+            
+            # 1. Inject Curated Quiz
+            kit = item.get('study_kit', {})
+            if kit.get('quizzes'):
+                Quiz.objects.create(
+                    resource=resource,
+                    owner=owner,
+                    title=f"{resource.title} - Masterclass Quiz",
+                    format='mcq',
+                    questions=kit['quizzes'],
+                    academic_level='undergrad',
+                    is_public=True
+                )
+
+            # 2. Inject Curated Flashcards
+            if kit.get('flashcards'):
+                for fc in kit['flashcards']:
+                    Flashcard.objects.create(
+                        resource=resource,
+                        owner=owner,
+                        question=fc['question'],
+                        answer=fc['answer'],
+                        subject=fc['subject'],
+                        is_public=True
+                    )
+
             self.stdout.write(self.style.SUCCESS(f'Synchronized (Textbook-Depth): {item["title"]}'))
 
         self.stdout.write(self.style.SUCCESS('Massive Seeding Complete.'))

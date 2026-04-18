@@ -1,0 +1,84 @@
+GENERAL_RELATIVITY_KIT = {
+    "mind_map": {
+        "text": "The Fabric of Spacetime",
+        "children": [
+            {
+                "text": "Foundational Principles",
+                "children": [
+                    {"text": "Equivalence Principle (Gravity = Acceleration)"},
+                    {"text": "Special Relativity Context"},
+                    {"text": "Non-Euclidean Geometry"}
+                ]
+            },
+            {
+                "text": "Einstein Field Equations",
+                "children": [
+                    {"text": "Space-Time Curvature ($G_{\mu\nu}$)"},
+                    {"text": "Energy-Momentum Tensor ($T_{\mu\nu}$)"},
+                    {"text": "Cosmological Constant ($\Lambda$)"}
+                ]
+            },
+            {
+                "text": "Observable Effects",
+                "children": [
+                    {"text": "Gravitational Time Dilation"},
+                    {"text": "Light Bending & Lensing"},
+                    {"text": "Gravitational Waves (LIGO)"}
+                ]
+            },
+            {
+                "text": "Extreme Gravity",
+                "children": [
+                    {"text": "Event Horizons"},
+                    {"text": "Schwarzschild Radius"},
+                    {"text": "Singularities & Hawking Radiation"}
+                ]
+            }
+        ]
+    },
+    "quizzes": [
+        {
+            "question": "What does the Equivalence Principle postulate?",
+            "options": ["Gravity is stronger than light", "Wait and mass are the same", "Gravity and acceleration are physically indistinguishable", "Energy is equal to mass times speed of light squared"],
+            "correct_answer": "Gravity and acceleration are physically indistinguishable",
+            "explanation": "Einstein's 'happiest thought' was that a person in an accelerating elevator would feel exactly like someone standing in a gravitational field."
+        },
+        {
+            "question": "Which constant is often referred to as Einstein's 'Greatest Blunder', yet explains Dark Energy today?",
+            "options": ["Planck Constant", "Gravitational Constant", "Cosmological Constant ($\Lambda$)", "Speed of Light"],
+            "correct_answer": "Cosmological Constant ($\Lambda$)",
+            "explanation": "Einstein initially added $\Lambda$ to keep the universe static; today it is used to explain the accelerating expansion of space-time."
+        },
+        {
+            "question": "What happens to a clock the closer it gets to a massive object like a planet?",
+            "options": ["It ticks faster", "It ticks slower", "It stops entirely", "It ticks at the same rate but appears slower"],
+            "correct_answer": "It ticks slower",
+            "explanation": "Gravitational time dilation dictates that time (the fourth dimension) slows down in regions of higher gravitational potential (curvature)."
+        },
+        {
+            "question": "What is the Schwarzschild Radius?",
+            "options": ["The distance between the sun and the earth", "The distance to the nearest star", "The radius at which a mass becomes a black hole (Point of No Return)", "The speed of a gravitational wave"],
+            "correct_answer": "The radius at which a mass becomes a black hole (Point of No Return)",
+            "explanation": "If an object's radius becomes smaller than its Schwarzschild radius, space-time is so warped that light cannot escape, forming a black hole."
+        }
+    ],
+    "flashcards": [
+        {"question": "Geodesic", "answer": "The shortest path between two points in curved spacetime; the path light follows.", "subject": "General Relativity"},
+        {"question": "Spacetime", "answer": "The unified 4-dimensional fabric of the universe composed of 3 space dimensions and 1 time dimension.", "subject": "General Relativity"},
+        {"question": "Gravitational Lensing", "answer": "When a massive object bends the light from a distant source, acting like a cosmic magnifying glass.", "subject": "General Relativity"},
+        {"question": "Event Horizon", "answer": "The mathematical boundary of a black hole where the escape velocity exceeds the speed of light.", "subject": "General Relativity"}
+    ],
+    "podcast_script": [
+        {"speaker": "A", "text": "Welcome to the Cosmos. Today we are looking at the greatest triumph of the human mind: General Relativity. I'm Aria, joined by Christopher."},
+        {"speaker": "B", "text": "Hello Aria. It's been over a hundred years since Einstein revealed his equations, and we're still proving him right every single day."},
+        {"speaker": "A", "text": "So, help me out. Most of us think of gravity as a 'force' like a magnet. But Einstein said no?"},
+        {"speaker": "B", "text": "Exactly. He said gravity isn't a force pulling you down. It's the literal curvature of the floor beneath you. A planet curves the space around it like a bowling ball on a trampoline."},
+        {"speaker": "A", "text": "So when I drop a ball, it's not being 'pulled'; it's just following the natural curve of the space it's in?"},
+        {"speaker": "B", "text": "Bingo. We call those curved paths 'Geodesics.' And the even weirder part? Mass doesn't just curve space; it curves *time* itself."},
+        {"speaker": "A", "text": "Right, Interstellar style. Higher gravity equals slower clocks?"},
+        {"speaker": "B", "text": "Yes. Every GPS satellite in orbit actually has to adjust its clock because it's further from Earth's gravity than we are. If they didn't, your phone's GPS would be off by miles in just a few days."},
+        {"speaker": "A", "text": "That is wild. Einstein literal saves me from getting lost on my way to the grocery store. What about the extreme stuff? Black holes?"},
+        {"speaker": "B", "text": "The ultimate curvature. Where space is so warped it becomes a one-way street. Once you cross the Event Horizon, there is no future that leads back out."},
+        {"speaker": "A", "text": "It's both beautiful and terrifying. Let's look at the ten equations that rewrite the rules of the universe."}
+    ]
+}

@@ -12,6 +12,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from django.http import StreamingHttpResponse
 from asgiref.sync import async_to_sync
 
@@ -170,7 +171,7 @@ class QuickAskView(APIView):
         ai = AIService()
         try:
             if resource_id:
-                resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+                resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
                 answer = ai.ask_about_resource(resource, question)
             else:
                 # Universal Library Intelligence
@@ -191,7 +192,7 @@ class SummarizeResourceView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         ai = AIService()
         try:
             summary = ai.summarize_resource(resource)
@@ -239,13 +240,13 @@ class KeyConceptsView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def get(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         cached = next((c.get('concepts') for c in (resource.ai_concepts or []) if 'concepts' in c), None)
         return Response({'concepts': cached, 'cached': cached is not None})
 
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         ai = AIService()
         concepts = ai.extract_key_concepts(resource)
         return Response({'concepts': concepts})
@@ -256,13 +257,13 @@ class StudyNotesView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def get(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         cached = next((c.get('study_notes') for c in (resource.ai_concepts or []) if 'study_notes' in c), None)
         return Response({'notes': cached, 'cached': cached is not None})
 
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         if resource.status == 'processing':
             return Response(
                 {'error': 'Resource is still being processed. Please wait a few seconds.'},
@@ -278,16 +279,28 @@ class MindMapView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def get(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # [PREMIUM UPGRADE] Check curated data first
+        curated_mm = resource.ai_notes_json.get('mind_map')
+        if curated_mm:
+            return Response(curated_mm)
+            
         cached = next((c.get('mind_map') for c in (resource.ai_concepts or []) if 'mind_map' in c), None)
-        return Response({'mind_map': cached, 'cached': cached is not None})
+        return Response(cached if cached else {})
 
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # Check curated data
+        curated_mm = resource.ai_notes_json.get('mind_map')
+        if curated_mm:
+            return Response(curated_mm)
+            
         ai = AIService()
         mind_map = ai.generate_mind_map(resource)
-        return Response({'mind_map': mind_map})
+        return Response(mind_map)
 
 
 class PracticeQuestionsView(APIView):
@@ -295,13 +308,25 @@ class PracticeQuestionsView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def get(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # [PREMIUM UPGRADE] Check curated data
+        curated_questions = resource.ai_notes_json.get('curated_practice_questions')
+        if curated_questions:
+            return Response({'questions': curated_questions, 'cached': True, 'curated': True})
+            
         cached = next((c.get('practice_questions') for c in (resource.ai_concepts or []) if 'practice_questions' in c), None)
         return Response({'questions': cached, 'cached': cached is not None})
 
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # Check curated data
+        curated_questions = resource.ai_notes_json.get('curated_practice_questions')
+        if curated_questions:
+            return Response({'questions': curated_questions})
+            
         difficulty = request.data.get('difficulty', 'medium')
         count = min(int(request.data.get('count', 5)), 20)  # cap at 20
         ai = AIService()
@@ -315,7 +340,7 @@ class GradeAnswerView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         question = request.data.get('question', '').strip()
         user_answer = request.data.get('user_answer', '').strip()
         model_answer = request.data.get('model_answer', '').strip()
@@ -336,7 +361,7 @@ class SaveContentView(APIView):
     ALLOWED_TYPES = {'concepts', 'study_notes', 'mind_map', 'practice_questions', 'chapters'}
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         content_type = request.data.get('type')
         data = request.data.get('data')
 
@@ -360,13 +385,13 @@ class ChapterSummariesView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def get(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         cached = next((c.get('chapters') for c in (resource.ai_concepts or []) if 'chapters' in c), None)
         return Response({'chapters': cached, 'cached': cached is not None})
 
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         if resource.resource_type != 'video':
             return Response({'error': 'Only available for video resources.'}, status=status.HTTP_400_BAD_REQUEST)
         transcript = ''

@@ -1,0 +1,95 @@
+DEEP_LEARNING_KIT = {
+    "mind_map": {
+        "text": "Deep Learning Architecture",
+        "children": [
+            {
+                "text": "Neural Fundamentals",
+                "children": [
+                    {"text": "Artificial Neurons ($w \cdot x + b$)"},
+                    {"text": "Activation Functions (ReLU, Sigmoid, Softmax)"},
+                    {"text": "Loss Functions (MSE, Cross-Entropy)"}
+                ]
+            },
+            {
+                "text": "Optimization Engines",
+                "children": [
+                    {"text": "Gradient Descent ($\nabla C$)"},
+                    {"text": "The Logic of Backpropagation"},
+                    {"text": "Learning Rates and Schedulers"}
+                ]
+            },
+            {
+                "text": "Deep Architectures",
+                "children": [
+                    {"text": "CNNs (Spatial Invariance, Filtering)"},
+                    {"text": "RNNs & LSTMs (Sequential Memory)"},
+                    {"text": "Transformers (Multi-Head Self-Attention)"}
+                ]
+            },
+            {
+                "text": "Regularization",
+                "children": [
+                    {"text": "Dropout (Co-adaptation mitigation)"},
+                    {"text": "Weight Decay (L2 Norm)"},
+                    {"text": "Batch Normalization"}
+                ]
+            }
+        ]
+    },
+    "quizzes": [
+        {
+            "question": "What is the primary role of the bias term ($b$) in an artificial neuron?",
+            "options": ["To normalize the weights", "To allow the decision boundary to shift away from the origin", "To prevent the vanishing gradient", "To serve as the learning rate"],
+            "correct_answer": "To allow the decision boundary to shift away from the origin",
+            "explanation": "The bias term allows the activation function to be shifted left or right, which is critical for fitting data that doesn't pass through the origin."
+        },
+        {
+            "question": "Which activation function is defined as $\max(0, z)$?",
+            "options": ["Sigmoid", "Tanh", "ReLU", "Softmax"],
+            "correct_answer": "ReLU",
+            "explanation": "ReLU (Rectified Linear Unit) returns the input directly if it is positive, otherwise, it returns zero."
+        },
+        {
+            "question": "In backpropagation, which mathematical principle is used to calculate the influence of a weight on the total error?",
+            "options": ["The Pythagorean Theorem", "The Chain Rule of Calculus", "Riemann Sums", "Taylor Series Expansion"],
+            "correct_answer": "The Chain Rule of Calculus",
+            "explanation": "Backpropagation uses the chain rule to recursively calculate partial derivatives from the output layer back to the input layers."
+        },
+        {
+            "question": "What happens in the 'Vanishing Gradient' problem?",
+            "options": ["Weights become too large to compute", "Neural connections are randomly dropped", "Gradients become extremely small during backpropagation, stopping the early layers from learning", "The model predicts only zeros"],
+            "correct_answer": "Gradients become extremely small during backpropagation, stopping the early layers from learning",
+            "explanation": "In very deep networks, repeatedly multiplying small gradients results in a value that effectively vanishes, preventing learning in early layers."
+        },
+        {
+            "question": "Which architecture introduced the concept of 'Self-Attention'?",
+            "options": ["CNN", "RNN", "Transformer", "Perceptron"],
+            "correct_answer": "Transformer",
+            "explanation": "The Transformer architecture, introduced in 'Attention is All You Need', replaced recurrence with self-attention mechanisms."
+        }
+    ],
+    "flashcards": [
+        {"question": "Backpropagation", "answer": "An algorithm used to calculate gradients of loss functions with respect to weights via the Chain Rule.", "subject": "Deep Learning"},
+        {"question": "ReLU", "answer": "Rectified Linear Unit; the most common activation function in deep networks.", "subject": "Deep Learning"},
+        {"question": "Overfitting", "answer": "When a model learns training noise instead of the general pattern, leading to poor real-world performance.", "subject": "Deep Learning"},
+        {"question": "CNN", "answer": "Convolutional Neural Network; an architecture used primarily for spatial data like images.", "subject": "Deep Learning"},
+        {"question": "Transformer", "answer": "A model architecture that uses attention mechanisms to process sequences in parallel.", "subject": "Deep Learning"}
+    ],
+    "podcast_script": [
+        {"speaker": "A", "text": "Welcome to FlowCast! Today we are cracking open the black box of Deep Learning. I'm joined by Christopher."},
+        {"speaker": "B", "text": "Great to be here, Aria. Deep Learning sounds like magic, but it's really just beautiful calculus in motion."},
+        {"speaker": "A", "text": "Calculus? I thought it was just code! So, where does a neural network actually start?"},
+        {"speaker": "B", "text": "It starts with a single neuron. Imagine a simple math function taking inputs, weighting them, and adding a bias. It's essentially $w \cdot x + b$."},
+        {"speaker": "A", "text": "Wait, like a straight line in algebra? $y = mx + c$?"},
+        {"speaker": "B", "text": "Exactly! But if we only had straight lines, we couldn't learn complex things like faces or voices. That's why we use activation functions like ReLU."},
+        {"speaker": "A", "text": "Right, that adds the 'kink' or the non-linearity to the line, so it can bend and fit complex patterns."},
+        {"speaker": "B", "text": "Exactly. And once you stack thousands of these layers, you get something that can recognize anything from a cat to a tumor in an X-ray."},
+        {"speaker": "A", "text": "But how does it know if it's right or wrong? It needs to learn from its mistakes, right?"},
+        {"speaker": "B", "text": "That's the Cost Function. It's the mathematical measure of how far off the prediction is from the target. We want to minimize that cost."},
+        {"speaker": "A", "text": "And that's where Backpropagation comes in?"},
+        {"speaker": "B", "text": "Yes, it uses the 'Chain Rule' to go backwards and figure out exactly which weight was to blame for the error. It's like a blame-assignment algorithm."},
+        {"speaker": "A", "text": "I love that. 'Blame-assignment.' It's like a molecular audit of every decision the machine made."},
+        {"speaker": "B", "text": "Precisely. And we do this millions of times until the network is optimized. Today, we're even seeing Transformers move from sequential processing to parallel attention."},
+        {"speaker": "A", "text": "Which is why things like GPT-4 are so incredibly fast and capable. Well, that's a perfect intro to the core fundamentals."}
+    ]
+}

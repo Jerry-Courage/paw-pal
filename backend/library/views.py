@@ -122,7 +122,20 @@ class GenerateFlashcardsView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        # Allow public resources
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # [PREMIUM UPGRADE] Instant Curated Flashcards
+        # Check if we have public flashcards pre-seeded for this resource
+        public_cards = Flashcard.objects.filter(resource=resource, is_public=True) if hasattr(Flashcard, 'is_public') else None
+        # Fallback: check if they are owned by a curator
+        if not public_cards:
+            public_cards = Flashcard.objects.filter(resource=resource, owner__username='flowstate_curator')
+            
+        if public_cards.exists():
+            from .serializers import FlashcardSerializer
+            return Response({"preview_cards": FlashcardSerializer(public_cards, many=True).data})
+
         count = int(request.data.get('count', 10))
         level = request.data.get('level', 'undergrad')
 
@@ -176,7 +189,8 @@ class SaveFlashcardsView(APIView):
 
         resource = None
         if resource_id:
-            resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+            # Fix: Allow public resources for saving tools (ownership is checked for the DECK instead)
+            resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
 
         saved_cards = []
         for item in cards_data:
@@ -199,10 +213,17 @@ class GenerateQuizView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        # Allow public resources
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         fmt = request.data.get('format', 'mcq')
         level = request.data.get('level', 'undergrad')
         count = int(request.data.get('count', 10))
+
+        # [PREMIUM UPGRADE] Instant Curated Quiz
+        # If public quiz exists for this resource, return it
+        curated_quiz = Quiz.objects.filter(resource=resource, owner__username='flowstate_curator', format=fmt).first()
+        if curated_quiz:
+            return Response(QuizSerializer(curated_quiz).data)
 
         ai = AIService()
         questions = ai.generate_quiz(resource, fmt, level, count)
@@ -223,7 +244,14 @@ class GenerateMindMapView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        # Allow public resources
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # [PREMIUM UPGRADE] Instant Curated Mind Map
+        curated_mm = resource.ai_notes_json.get('mind_map')
+        if curated_mm:
+            return Response(curated_mm)
+
         ai = AIService()
         mind_map = ai.generate_mind_map(resource)
         return Response(mind_map)
@@ -234,7 +262,8 @@ class GeneratePracticeQuestionsView(APIView):
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        # Allow public resources
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         difficulty = request.data.get('difficulty', 'medium')
         count = int(request.data.get('count', 5))
         ai = AIService()
@@ -264,7 +293,7 @@ class RefetchTranscriptView(APIView):
 
     def post(self, request, resource_id):
         from library.youtube import process_youtube_url
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         if resource.resource_type != 'video' or not resource.url:
             return Response({'error': 'Not a video resource.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -319,7 +348,7 @@ class MathSolverView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, resource_id):
-        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         problem = request.data.get('problem')
         if not problem:
             return Response({'error': 'No problem provided.'}, status=status.HTTP_400_BAD_REQUEST)
