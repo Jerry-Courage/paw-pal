@@ -61,6 +61,9 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
           setInterjectionUrls(res.data.interjection_urls)
         }
       })
+    } else if (!audio.sessionId && status !== 'idle') {
+      // Session was stopped or cleared — reset to setup screen
+      setStatus('idle')
     }
   }, [resourceId, audio.activeResourceId, audio.sessionId, audio.script?.length])
 
