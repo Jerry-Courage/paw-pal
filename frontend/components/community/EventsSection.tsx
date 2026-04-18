@@ -8,7 +8,7 @@ import {
   ChevronRight, Sparkles 
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }> = {
