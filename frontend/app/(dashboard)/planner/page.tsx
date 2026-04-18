@@ -633,7 +633,7 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
   const toggleDay = (day: number) => {
     setForm(f => ({
       ...f,
-      days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day]
+      days: f.days.includes(day) ? f.days.filter((d: number) => d !== day) : [...f.days, day]
     }))
   }
 
