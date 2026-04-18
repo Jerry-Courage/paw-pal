@@ -808,11 +808,13 @@ class AIService:
             self._current_image_map = page_image_map
             return self._generate_vision_study_kit(resource, vision_data)
 
-        if not text.strip():
-            return self._generate_basic_kit(resource)
-
-        # Detect if the material is math-intensive
-        is_math_intensive = any(kw in text.lower() for kw in ['integral', 'derivative', 'equation', 'formula', 'theorem', 'calculus', 'algebra', 'geometry'])
+        if not text.strip() or len(text.strip()) < 100:
+            logger.info(f"Context is scarce for '{resource.title}'. Engaging Topic-Based Synthesis...")
+            text = f"TOPIC: {resource.title}\nSUBJECT: {resource.subject or 'General'}\n\nPlease generate a foundational study kit based on general academic knowledge of this specific topic."
+            is_math_intensive = any(kw in resource.title.lower() for kw in ['math', 'calculus', 'physics', 'equation'])
+        else:
+            # Detect if the material is math-intensive
+            is_math_intensive = any(kw in text.lower() for kw in ['integral', 'derivative', 'equation', 'formula', 'theorem', 'calculus', 'algebra', 'geometry'])
         
         # Tell AI which pages have images so it can return page_refs
         image_hint = ''
@@ -851,9 +853,9 @@ class AIService:
         prompts = []
         for idx, chunk_text in enumerate(chunks[:25]): # Macro-chunks cover even huge books in <25 calls
             prompt = (
-                f"You are creating a Studley-Style FlowAI Study Kit. Analyze PART {idx+1} of '{resource.title}'."
+                f"You are creating a Studley-Style FlowAI Study Kit. Analyze {'PART ' + str(idx+1) + ' of ' if len(chunks) > 1 else 'the topic '} '{resource.title}'."
                 f"{image_hint if idx == 0 else ''}{math_hint}\n\n"
-                f"Content Snippet:\n{chunk_text}\n\n"
+                f"{'Content Snippet:' if len(text.strip()) > 500 else 'Objective:'}\n{chunk_text}\n\n"
                 "Return ONLY a JSON object (STRICT JSON, no markdown outside the block, no unescaped quotes):\n"
                 "- 'overview': {\"title\": str, \"icon\": emoji, \"summary\": str}\n"
                 "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int], \"mermaid_diagram\": str}]\n"

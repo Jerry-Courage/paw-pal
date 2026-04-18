@@ -147,39 +147,70 @@ def process_resource_task(res_id):
         # ─── YOUTUBE EXTRACTION ───
         elif res.resource_type == 'video' and res.url:
             try:
+                # Progress Update: Start Extraction
+                res.status_text = "🔗 Fetching video metadata..."
+                res.processing_progress = 10
+                res.save()
+                
                 from library.youtube import process_youtube_url
                 yt_data = process_youtube_url(res.url)
                 
                 if yt_data.get('success'):
+                    # HIGH-FIDELITY: Persist title and thumbnail IMMEDIATELY
+                    # This allows the library UI to update while AI is still working
                     if not res.title or res.title == 'YouTube Video':
                         res.title = yt_data.get('title', 'YouTube Video')
-                    text = yt_data.get('transcript', '')
+                    
                     if yt_data.get('thumbnail'):
                         res.thumbnail_url = yt_data.get('thumbnail')
+                    
+                    # Save metadata now
+                    res.save()
+                    
+                    res.status_text = "📝 Extracting transcript..."
+                    res.processing_progress = 25
+                    res.save()
+                    
+                    text = yt_data.get('transcript', '')
+                    if not text:
+                        logger.warning(f"[Task Queue] No transcript for {res.id}. Falling back to Topic-Based synthesis.")
+                        res.status_text = "🔍 No transcript found; using topic analysis..."
+                        res.save()
                 else:
                     logger.error(f"[Task Queue] YouTube processing failed for {res.id}")
             except Exception as e:
                 logger.error(f'[Task Queue] YouTube processing failed for {res.id}: {e}')
 
         # ─── VECTORIZATION & AI PROCESSING ───
-        if text:
-            logger.info(f"[Task Queue] Extracted {len(text)} characters for Resource {res.id}")
-            existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
-            res.ai_concepts = existing_concepts + [{'extracted_text': text[:300000]}]
-            res.status_text = "Vectorizing content for RAG..."
-            res.processing_progress = 30
-            res.save()
+        if text or res.resource_type == 'video':
+            logger.info(f"[Task Queue] Processing Study Kit for Resource {res.id} (Context size: {len(text) if text else 'TITLE-ONLY'})")
+            
+            if text:
+                existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
+                res.ai_concepts = existing_concepts + [{'extracted_text': text[:300000]}]
+                res.status_text = "Vectorizing content for RAG..."
+                res.processing_progress = 30
+                res.save()
 
-            # Trigger Vectorization for RAG
-            res.status = 'vectorizing'
-            res.save()
-            create_vector_embeddings(res, text)
+                # Trigger Vectorization for RAG
+                res.status = 'vectorizing'
+                res.save()
+                create_vector_embeddings(res, text)
+                
+                # Save after vectorization
+                res.processing_progress = 40
+                res.status_text = "🧠 Content vectorized. Starting AI synthesis..."
+                res.save()
+            else:
+                # Skip vectorization but still mark progress for topic-based generation
+                res.processing_progress = 40
+                res.status_text = "🧠 Topic analysis complete. Starting AI synthesis..."
+                res.save()
 
             # Generate Study Kit
             res.status = 'generating'
-            res.status_text = "Synthesizing full study kit..."
-            res.processing_progress = 40
             res.save()
+            
             ai = AIService()
             try:
                 kit = ai.generate_study_kit(
