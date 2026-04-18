@@ -158,7 +158,7 @@ export default function PlannerPage() {
                  <div>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Today's Lessons</h4>
                     <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
-                       {sessions.filter(s => isSameDay(new Date(s.start_time), new Date()) && s.session_type === 'class').length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Fixed</span>
+                       {sessions.filter((s: any) => isSameDay(new Date(s.start_time), new Date()) && s.session_type === 'class').length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Fixed</span>
                     </p>
                  </div>
               </div>
@@ -169,7 +169,7 @@ export default function PlannerPage() {
                  <div>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Study Sprints</h4>
                     <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
-                       {sessions.filter(s => isSameDay(new Date(s.start_time), new Date()) && s.session_type === 'study').length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Fluid</span>
+                       {sessions.filter((s: any) => isSameDay(new Date(s.start_time), new Date()) && s.session_type === 'study').length} <span className="text-[10px] uppercase font-black text-slate-400 ml-1">Fluid</span>
                     </p>
                  </div>
               </div>
@@ -191,7 +191,7 @@ export default function PlannerPage() {
                  <div>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Schedule Density</h4>
                     <p className="text-2xl font-black text-slate-900 dark:text-white leading-none mt-1">
-                       {Math.round((sessions.filter(s => isSameDay(new Date(s.start_time), new Date())).length / 8) * 100)}%
+                       {Math.round((sessions.filter((s: any) => isSameDay(new Date(s.start_time), new Date())).length / 8) * 100)}%
                     </p>
                  </div>
               </div>
@@ -608,7 +608,21 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
   const defaultStartTime = session?.start_time ? toLocal(session.start_time) : ''
   const defaultTitle = session?.title || ''
 
-  const [form, setForm] = useState({
+  interface PlannerForm {
+    title: string;
+    subject: string;
+    session_type: string;
+    start_time: string;
+    end_time: string;
+    location: string;
+    notes: string;
+    resource: string;
+    assignment: string;
+    days: number[];
+    weeks_count: number;
+  }
+
+  const [form, setForm] = useState<PlannerForm>({
     title: defaultTitle,
     subject: session?.subject || '',
     session_type: session?.session_type || 'study',
@@ -628,10 +642,10 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
   const resources: any[] = resourcesData?.results || []
   const assignments: any[] = assignmentsData?.results || []
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const set = (k: keyof PlannerForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm((f: PlannerForm) => ({ ...f, [k]: e.target.value }))
   
   const toggleDay = (day: number) => {
-    setForm(f => ({
+    setForm((f: PlannerForm) => ({
       ...f,
       days: f.days.includes(day) ? f.days.filter((d: number) => d !== day) : [...f.days, day]
     }))
@@ -639,10 +653,10 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
 
   const handleAssignmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value
-    setForm(f => ({ ...f, assignment: id }))
+    setForm((f: PlannerForm) => ({ ...f, assignment: id }))
     if (id) {
       const a = assignments.find((a: any) => String(a.id) === id)
-      if (a && !form.subject) setForm(f => ({ ...f, assignment: id, subject: a.subject || f.subject }))
+      if (a && !form.subject) setForm((f: PlannerForm) => ({ ...f, assignment: id, subject: a.subject || f.subject }))
     }
   }
 
