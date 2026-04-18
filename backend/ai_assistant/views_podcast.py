@@ -354,7 +354,7 @@ class PodcastInterruptView(APIView):
                 "https://api.groq.com/openai/v1/audio/transcriptions",
                 headers={"Authorization": f"Bearer {groq_key}"},
                 files={"file": ('interrupt.webm', audio_io)},
-                data={"model": "whisper-large-v3", "response_format": "text"},
+                data={"model": "whisper-large-v3-turbo", "response_format": "text"},
                 timeout=20
             )
             
@@ -465,8 +465,12 @@ class PodcastInterruptView(APIView):
                 except Exception as e:
                     with open(log_path, 'a') as f: f.write(f"[PREWARM-FATAL] {str(e)}\n")
 
-            # For interruptions, generate TTS SYNCHRONOUSLY so audio is ready before frontend plays
-            serialized_prewarm(bridge, session.voice_a, session.voice_b, name_b, session.resource.id, session.id)
+            # Background pre-warm: start generating TTS in parallel.
+            # The chunk endpoint handles on-demand TTS if these aren't ready yet.
+            threading.Thread(
+                target=serialized_prewarm,
+                args=(bridge, session.voice_a, session.voice_b, name_b, session.resource.id, session.id)
+            ).start()
 
         # 4. Splice the bridge into the script immediately after current_index
         if isinstance(bridge, list) and len(bridge) > 0:
