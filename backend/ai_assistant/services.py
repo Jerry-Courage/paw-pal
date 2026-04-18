@@ -113,10 +113,10 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
-    'openrouter/free',
-    'google/gemma-4-31b-it:free', # Powerful 2026 workhorse
+    'google/gemma-3-27b-it:free',
+    'google/gemma-3-12b-it:free',
+    'google/gemini-2.5-flash-lite:free',
     'meta-llama/llama-3.3-70b-instruct:free',
-    'google/gemini-2.0-flash-lite-preview-02-05:free',
     'nvidia/llama-3.1-nemotron-70b-instruct:free',
 ]
 
@@ -251,9 +251,9 @@ class AIService:
                     has_images = True
                     break
         
-        # --- STAGE 0: DIRECT GOOGLE GENAI SDK ---
         if self.google_client:
-            for g_model in ['gemini-2.5-flash', 'gemini-1.5-flash']:
+            # We prioritize Gemma 3 (14.4k RPD) over Gemini 2.5 (20 RPD) for infinite stability
+            for g_model in ['gemma-3-27b', 'gemma-3-12b', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     response = self.google_client.models.generate_content(
@@ -386,7 +386,7 @@ class AIService:
                     mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
 
                 response = self.google_client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-2.5-flash-tts',
                     contents=[
                         {'role': 'user', 'parts': [
                             {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
@@ -412,12 +412,13 @@ class AIService:
         try:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
             if self.google_client:
-                # We use the names exactly as verified in models.list()
+                # Infinite 2026 Fleet: Gemma 3 (14k+) -> Gemini 2.5 (High reasoning)
                 for g_model in [
-                    'gemini-2.5-flash', 
-                    'gemini-1.5-flash', 
-                    'gemini-1.5-flash-latest',
-                    'gemini-1.5-flash-002'
+                    'gemma-3-27b',
+                    'gemma-3-12b',
+                    'gemini-2.5-flash-lite',
+                    'gemini-2.5-flash',
+                    'gemini-1.5-flash'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -1476,7 +1477,7 @@ class AIService:
         
         return "Professional digital art illustration, photorealistic, vibrant colors, detailed, 4k, masterpiece"
 
-    def generate_image(self, prompt: str, model: str = 'black-forest-labs/flux-schnell') -> str:
+    def generate_image(self, prompt: str, model: str = 'imagen-4-ultra') -> str:
         """
         Generates an image from a text prompt using a resilient multi-tier fallback strategy.
         Tier 1: Pollinations AI (Generative, Free, Fast)
