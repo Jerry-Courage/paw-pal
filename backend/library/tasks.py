@@ -172,9 +172,38 @@ def process_resource_task(res_id):
                     res.save()
                     
                     text = yt_data.get('transcript', '')
+
+                    # 📸 NEW: VISUAL ANALYZER (Watching the video)
+                    try:
+                        res.status_text = "👁️ Analyzing video frames for slides..."
+                        res.save()
+                        from library.video_analyzer import VideoAnalyzer
+                        visual_insights = VideoAnalyzer.extract_visual_insights(res.url)
+                        
+                        if visual_insights:
+                            logger.info(f"[Task] Extracted {len(visual_insights)} visual insights for {res.id}")
+                            for idx, insight in enumerate(visual_insights):
+                                from django.core.files.base import ContentFile
+                                from .models import ResourceImage
+                                r_img = ResourceImage(
+                                    resource=res,
+                                    page_number=idx + 1,
+                                    description=insight['label']
+                                )
+                                r_img.image.save(f"frame_{res.id}_{idx}.png", ContentFile(insight['data']), save=True)
+                                
+                                # Add to vision data for AI processing
+                                vision_data.append({
+                                    'data': insight['data'],
+                                    'page': idx + 1,
+                                    'label': insight['label']
+                                })
+                    except Exception as ve:
+                        logger.error(f"[Task] Visual analysis failed for {res.id}: {ve}")
+
                     if not text:
                         logger.warning(f"[Task Queue] No transcript for {res.id}. Falling back to Topic-Based synthesis.")
-                        res.status_text = "🔍 No transcript found; using topic analysis..."
+                        res.status_text = "🔍 No transcript found; using topic/visual analysis..."
                         res.save()
                 else:
                     logger.error(f"[Task Queue] YouTube processing failed for {res.id}")

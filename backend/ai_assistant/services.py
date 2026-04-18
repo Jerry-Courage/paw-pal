@@ -798,15 +798,31 @@ class AIService:
 
         text = context or self._get_resource_context(resource)
         
-        # 1. VISION FALLBACK: Trigger if no text is found OR if text density is too low for a multi-page document
+        # Calculate density for PDF logic
         effective_page_count = page_count or getattr(resource, 'page_count', 0) or (len(vision_data) if vision_data else 1)
         text_density = len(text.strip()) / max(effective_page_count, 1)
+
+        # Initialize image_hint
+        image_hint = ''
+        if page_image_map:
+            pages_with_images = sorted(page_image_map.keys())
+            image_hint = (
+                f'\n\nIMAGES AVAILABLE on pages: {pages_with_images}. '
+                'For each section include a "page_refs" array of the page numbers it covers.'
+            )
+
+        # 1. VISION MULTI-MODAL: Trigger if vision data exists (YouTube frames or Scanned PDFs)
+        is_video = resource.resource_type == 'video'
         
-        if (not text.strip() or (effective_page_count > 1 and text_density < 750)) and vision_data:
-            logger.info(f"Low density material detected ({text_density:.1f} c/p). Activating Vision OCR mode...")
-            # Store image map for vision mode to access
-            self._current_image_map = page_image_map
-            return self._generate_vision_study_kit(resource, vision_data)
+        if vision_data:
+            if not text.strip() or (effective_page_count > 1 and text_density < 750 and not is_video):
+                logger.info(f"Low density/Scanned material detected. Activating PURE Vision OCR mode...")
+                self._current_image_map = page_image_map
+                return self._generate_vision_study_kit(resource, vision_data)
+            elif is_video:
+                logger.info(f"Video with Visual Insights detected. Activating MULTI-MODAL mode...")
+                # We'll continue with the standard generation but pass vision hints
+                image_hint += f"\n\nVISUAL EVIDENCE: {len(vision_data)} frames captured from the video. These have been analyzed for slides, diagrams, and whiteboards."
 
         if not text.strip() or len(text.strip()) < 100:
             logger.info(f"Context is scarce for '{resource.title}'. Engaging Topic-Based Synthesis...")
@@ -816,15 +832,6 @@ class AIService:
             # Detect if the material is math-intensive
             is_math_intensive = any(kw in text.lower() for kw in ['integral', 'derivative', 'equation', 'formula', 'theorem', 'calculus', 'algebra', 'geometry'])
         
-        # Tell AI which pages have images so it can return page_refs
-        image_hint = ''
-        if page_image_map:
-            pages_with_images = sorted(page_image_map.keys())
-            image_hint = (
-                f'\n\nIMAGES AVAILABLE on pages: {pages_with_images}. '
-                'For each section include a "page_refs" array of the page numbers it covers.'
-            )
-
         math_hint = ""
         if is_math_intensive:
             math_hint = (
@@ -1020,6 +1027,7 @@ class AIService:
         def process_vision_bundle(idx, bundle):
             imgs_content = []
             page_nums = [p['page'] for p in bundle]
+            is_video = resource.resource_type == 'video'
             
             for p in bundle:
                 b64 = base64.b64encode(p['data']).decode('utf-8')
@@ -1028,12 +1036,15 @@ class AIService:
                     "image_url": {"url": f"data:image/png;base64,{b64}"}
                 })
             
+            persona = "academic scanner" if not is_video else "visual video analyzer"
+            target_desc = f"SCANNED textbook pages" if not is_video else f"VIDEO INSIGHTS (Slides/Whiteboards)"
+            
             text_prompt = {
                 "type": "text",
                 "text": (
-                    f"You are the 'Studley-Style FlowState Ultra' academic scanner. Analyze these SCANNED textbook pages ({', '.join(map(str, page_nums))}) from '{resource.title}'. "
-                    "GOAL: Create a deep, high-fidelity academic study kit using the Studley pedagogy. "
-                    "1. OCR all text, including labels. Break it into 'Extraction-Ready' modules.\n"
+                    f"You are the 'Studley-Style FlowState Ultra' {persona}. Analyze these {target_desc} from '{resource.title}'. "
+                    f"GOAL: Create a deep, high-fidelity academic study kit using the Studley pedagogy based ON THESE VISUALS. "
+                    "1. OCR all text, labels, and diagrams. Break it into 'Extraction-Ready' modules.\n"
                     "2. Return ONLY a JSON object:\n"
                     "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int]}]\n"
                     "  STUDLEY CONTENT RULES: \n"
