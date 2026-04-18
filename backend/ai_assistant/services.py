@@ -822,11 +822,11 @@ class AIService:
             elif is_video:
                 logger.info(f"Video with Visual Insights detected. Activating MULTI-MODAL mode...")
                 # We'll continue with the standard generation but pass vision hints
-                image_hint += f"\n\nVISUAL EVIDENCE: {len(vision_data)} frames captured from the video. These have been analyzed for slides, diagrams, and whiteboards."
+                image_hint += f"\n\nVISUAL EVIDENCE: {len(vision_data)} frames captured from the video. These have been analyzed for slides, diagrams, and whiteboards. Use the Visual Evidence to SUPPLEMENT the transcript for hyper-accuracy."
 
         if not text.strip() or len(text.strip()) < 100:
             logger.info(f"Context is scarce for '{resource.title}'. Engaging Topic-Based Synthesis...")
-            text = f"TOPIC: {resource.title}\nSUBJECT: {resource.subject or 'General'}\n\nPlease generate a foundational study kit based on general academic knowledge of this specific topic."
+            text = f"TOPIC: {resource.title}\nSUBJECT: {resource.subject or 'General'}\n\nSTRICT REQUIREMENT: Provide a deep, FOUNDATIONAL study kit based on your expert academic knowledge of this topic. Do not return empty sections. Generate at least 5 detailed modules."
             is_math_intensive = any(kw in resource.title.lower() for kw in ['math', 'calculus', 'physics', 'equation'])
         else:
             # Detect if the material is math-intensive
@@ -851,6 +851,14 @@ class AIService:
         overlap = 1000
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
+        # [NEW] Multi-Modal Vision Context
+        chat_vision_bundle = []
+        if is_video and vision_data:
+            import base64
+            for p in vision_data[:5]:
+                b64 = base64.b64encode(p['data']).decode('utf-8')
+                chat_vision_bundle.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}})
+
         all_sections = []
         all_vocabulary = []
         all_tips = []
@@ -858,25 +866,19 @@ class AIService:
 
         # ─── PRE-GENERATE PROMPTS ───
         prompts = []
-        for idx, chunk_text in enumerate(chunks[:25]): # Macro-chunks cover even huge books in <25 calls
+        for idx, chunk_text in enumerate(chunks[:25]):
             prompt = (
-                f"You are creating a Studley-Style FlowAI Study Kit. Analyze {'PART ' + str(idx+1) + ' of ' if len(chunks) > 1 else 'the topic '} '{resource.title}'."
-                f"{image_hint if idx == 0 else ''}{math_hint}\n\n"
-                f"{'Content Snippet:' if len(text.strip()) > 500 else 'Objective:'}\n{chunk_text}\n\n"
-                "Return ONLY a JSON object (STRICT JSON, no markdown outside the block, no unescaped quotes):\n"
+                f"You are the Studley-Style FlowAI Academic Architect. {'GENERATE A FOUNDATIONAL STUDY KIT FOR' if len(text.strip()) < 1000 else 'Analyze'} '{resource.title}'."
+                "\n\nGOAL: Create a deep academic study kit. Return ONLY valid JSON with 'overview', 'sections', 'vocabulary', 'exam_tips'.\n"
+                "- 'sections': Provide at least 5 deep modules. No placeholders.\n"
+                "  STRICT: Start every section 'content' with a bolded Key Question/Cue (e.g., **Key Cue: [Question]?**).\n"
+                f"{image_hint if idx == 0 else ''}\n"
+                f"{math_hint}\n\n"
+                f"SOURCE:\n{chunk_text}\n\n"
                 "- 'overview': {\"title\": str, \"icon\": emoji, \"summary\": str}\n"
-                "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int], \"mermaid_diagram\": str}]\n"
-                "  STUDLEY CONTENT RULES: \n"
-                "  1. Start every section 'content' with a bolded Key Question/Cue (e.g., **Key Cue: [Question]?**).\n"
-                "  2. Use 'Atomic Facts' (bullet points) for explanations—keep them 'Extraction-Ready' for flashcards.\n"
-                "  3. Use **bold** for key terms. For formulas, use standard LaTeX ($$ for blocks, $ for inline). \n"
-                "  4. TABLES: For comparisons, you MUST use standard GFM Grid Tables. Surround with \\n\\n.\n"
-                "  5. ACTIVE RECALL: End every section 'content' with a labeled self-test question: \\n\\n> **--- ACTIVE RECALL CHECK ---**\\n> [Self-test question here].\n"
-                "  6. TYPOGRAPHY: Use Sentence Case (Academic Case). NEVER use ALL CAPS for descriptions. \n"
-                "  7. NO METADATA: NEVER include internal strings like 'ACTION: { ... }' or 'JSON:' in the 'content' field.\n"
-                "  8. content MUST be a single string. Escapes all internal quotes.\n"
                 "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
                 "- 'exam_tips': [str]\n"
+                "Return ONLY valid JSON."
             )
             prompts.append(prompt)
 
@@ -887,7 +889,11 @@ class AIService:
         # We use 2 workers for Macro-chunks to stay well under rate limits while maintaining high throughput.
         try:
             with ThreadPoolExecutor(max_workers=2) as executor:
-                futures = {executor.submit(self._task_with_watchdog, p, idx): idx for idx, p in enumerate(prompts)}
+                # First chunk gets the Visual Evidence for better context
+                futures = {}
+                for idx, p in enumerate(prompts):
+                    imgs = chat_vision_bundle if idx == 0 else []
+                    futures[executor.submit(self._task_with_watchdog, p, idx, imgs)] = idx
                 
                 for future in as_completed(futures):
                     idx = futures[future]
@@ -902,10 +908,12 @@ class AIService:
                         if not overview:
                             overview = chunk_kit.get('overview', {})
                         
-                        # Merge sections with internal type-safety
+                        # Merge sections with internal type-safety (handle case variations)
                         sections_added = 0
-                        if 'sections' in chunk_kit and isinstance(chunk_kit['sections'], list):
-                            for sec in chunk_kit['sections']:
+                        s_key = 'sections' if 'sections' in chunk_kit else 'Sections' if 'Sections' in chunk_kit else None
+                        
+                        if s_key and isinstance(chunk_kit[s_key], list):
+                            for sec in chunk_kit[s_key]:
                                 if isinstance(sec, dict) and sec.get('title'):
                                     c = sec.get('content', '')
                                     if not isinstance(c, str):
@@ -997,17 +1005,22 @@ class AIService:
             'exam_tips': list(dict.fromkeys(all_tips))[:50],
         }
 
-    def _task_with_watchdog(self, prompt, idx):
-        """Helper to run individual AI tasks with a watchdog timeout."""
+    def _task_with_watchdog(self, prompt, idx, images=None):
+        """Helper to run individual AI tasks with a watchdog timeout, supporting Multi-Modal inputs."""
         watchdog = ThreadPoolExecutor(max_workers=1)
-        future = watchdog.submit(self.chat, [{'role': 'user', 'content': prompt}], max_tokens=4096)
+        
+        user_content = [{"type": "text", "text": prompt}]
+        if images:
+            user_content += images # Inject base64 video frames/slides
+            
+        future = watchdog.submit(self.chat, [{'role': 'user', 'content': user_content}], max_tokens=4096)
         try:
-            # 300s (5 mins) for Deep Academic Chunks
+            # 300s timeout for Deep Academic Synthesis
             res = future.result(timeout=300)
             watchdog.shutdown(wait=False, cancel_futures=True)
             return res
         except TimeoutError:
-            logger.error(f'[AI Service] Chunk {idx+1} TIMED OUT after 120s. Skipping.')
+            logger.error(f'[AI Service] Chunk {idx+1} TIMED OUT after 300s. Skipping.')
             watchdog.shutdown(wait=False, cancel_futures=True)
             return None
 
