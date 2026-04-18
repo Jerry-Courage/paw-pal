@@ -25,6 +25,11 @@ const TABS = [
   { label: 'Code', value: 'code' },
 ]
 
+const LIBRARY_MODES = [
+  { label: 'My Library', value: 'my', icon: Layers },
+  { label: 'Discover', value: 'discover', icon: Sparkles },
+]
+
 const TYPE_ICONS: Record<string, any> = {
   pdf: FileText,
   video: Video,
@@ -116,7 +121,7 @@ function ProcessingCard({ resource, onDelete }: { resource: any; onDelete: () =>
   )
 }
 
-function ResourceCard({ resource: r, view, onDelete }: any) {
+function ResourceCard({ resource: r, view, onDelete, curated }: any) {
   const Icon = TYPE_ICONS[r.resource_type] || FileText
   const isProcessing = r.status !== 'ready'
   
@@ -125,6 +130,7 @@ function ResourceCard({ resource: r, view, onDelete }: any) {
   const qc = useQueryClient()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => libraryApi.updateResourceCover(r.id, file),
@@ -136,6 +142,22 @@ function ResourceCard({ resource: r, view, onDelete }: any) {
     onError: () => {
       toast.error('Upload failed.')
       setIsUploading(false)
+    }
+  })
+
+  // ─── CLONE / SAVE FUNCTIONALITY ───
+  const saveMutation = useMutation({
+    mutationFn: () => libraryApi.cloneResource(r.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['resources'] })
+      toast.success('Resource saved to your library!', {
+        description: 'You can now find it in the "My Library" tab.'
+      })
+      setIsSaving(false)
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Saving failed.')
+      setIsSaving(false)
     }
   })
 
@@ -237,12 +259,22 @@ function ResourceCard({ resource: r, view, onDelete }: any) {
 
           {/* Quick Actions */}
           <div className="absolute top-4 right-4 flex flex-col gap-2">
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
-              className="w-9 h-9 flex items-center justify-center opacity-0 group-hover/card:opacity-100 bg-black/40 hover:bg-rose-500 text-white rounded-xl backdrop-blur-md transition-all shadow-xl translate-x-[10px] group-hover/card:translate-x-0"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!curated ? (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
+                className="w-9 h-9 flex items-center justify-center opacity-0 group-hover/card:opacity-100 bg-black/40 hover:bg-rose-500 text-white rounded-xl backdrop-blur-md transition-all shadow-xl translate-x-[10px] group-hover/card:translate-x-0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsSaving(true); saveMutation.mutate(); }}
+                disabled={isSaving}
+                className="w-9 h-9 flex items-center justify-center opacity-0 group-hover/card:opacity-100 bg-primary/90 hover:bg-primary text-white rounded-xl backdrop-blur-md transition-all shadow-xl translate-x-[10px] group-hover/card:translate-x-0"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+              </button>
+            )}
             {r.has_study_kit && (
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} // This will eventually trigger play
@@ -271,6 +303,11 @@ function ResourceCard({ resource: r, view, onDelete }: any) {
             <h3 className="font-black text-slate-900 dark:text-white text-lg leading-tight group-hover/card:text-primary transition-colors line-clamp-2">
               {r.title}
             </h3>
+            {curated && (
+               <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wider italic">
+                 Curated by {r.author_name || 'FlowState Team'}
+               </p>
+            )}
           </div>
 
           {/* Footer Metrics */}
@@ -303,6 +340,7 @@ function ResourceCard({ resource: r, view, onDelete }: any) {
 
 export default function LibraryPage() {
   const [tab, setTab] = useState('all')
+  const [mode, setMode] = useState<'my' | 'discover'>('my')
   const [search, setSearch] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
@@ -319,8 +357,11 @@ export default function LibraryPage() {
 
   const typeFilter = tab !== 'all' ? tab : undefined
   const { data, isLoading } = useQuery({
-    queryKey: ['resources', typeFilter],
-    queryFn: () => libraryApi.getResources(typeFilter).then((r) => r.data),
+    queryKey: ['resources', mode, typeFilter],
+    queryFn: () => (mode === 'my' 
+      ? libraryApi.getResources(typeFilter) 
+      : libraryApi.getCuratedResources(typeFilter)
+    ).then((r) => r.data),
   })
 
   // Real-time processing updates via SSE (replaces polling)
@@ -431,17 +472,44 @@ export default function LibraryPage() {
     <div className="max-w-6xl mx-auto space-y-6">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Study Library</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-            {resources.length} material{resources.length !== 1 ? 's' : ''} · Upload a PDF or video to get started
+          <div className="flex items-center gap-2 mb-2">
+            <span className="bg-primary/10 text-primary text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full border border-primary/20">
+              FlowState Library
+            </span>
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+            {mode === 'my' ? 'Your Knowledge' : 'Global Discovery'}
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 max-w-sm">
+            {mode === 'my' 
+              ? 'Manage your personal research, videos, and generated study kits.'
+              : 'Browse high-end pre-generated notes and save them to your library.'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link id="tour-library-flashcards" href="/library/flashcards" className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-primary/40 hover:text-primary transition-all shadow-sm">
-            <BookOpen className="w-4 h-4" /> Flashcards
-          </Link>
+          {/* Mode Switcher */}
+          <div className="flex items-center p-1.5 bg-slate-100 dark:bg-slate-900/50 rounded-2xl border border-slate-200/50 dark:border-white/5">
+            {LIBRARY_MODES.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => setMode(m.value as any)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all duration-300',
+                  mode === m.value
+                    ? 'bg-white dark:bg-slate-800 text-primary shadow-lg shadow-primary/5 ring-1 ring-black/5 dark:ring-white/10'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                )}
+              >
+                <m.icon className="w-3.5 h-3.5" />
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 dark:bg-white/10 mx-1 hidden md:block" />
+
           <button id="tour-library-upload" onClick={() => setShowUpload(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-black shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all">
             <Upload className="w-4 h-4" /> Upload
           </button>
@@ -530,7 +598,13 @@ export default function LibraryPage() {
       ) : (
         <div className={view === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}>
           {resources.map((r: any) => (
-            <ResourceCard key={r.id} resource={r} view={view} onDelete={() => confirmDelete(r)} />
+            <ResourceCard 
+              key={r.id} 
+              resource={r} 
+              view={view} 
+              onDelete={() => confirmDelete(r)}
+              curated={mode === 'discover'}
+            />
           ))}
         </div>
       )}

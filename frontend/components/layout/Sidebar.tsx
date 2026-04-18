@@ -23,7 +23,6 @@ const navItems = [
   { href: '/library', icon: BookOpen, label: 'Library' },
   { href: '/assignments', icon: FileText, label: 'Assignments' },
   { href: '/workspace', icon: LayoutGrid, label: 'Collab Space' },
-  { href: '/tutor-call', icon: Phone, label: 'Talk to a Tutor' },
   { href: '/community', icon: Users, label: 'Community' },
   { href: '/ai', icon: Sparkles, label: 'AI Assistant' },
 ]

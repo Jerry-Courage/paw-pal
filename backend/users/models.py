@@ -92,3 +92,50 @@ class Notification(models.Model):
 
     def __str__(self):
         return f'{self.user.email} — {self.title}'
+
+
+class PushSubscription(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions')
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Push for {self.user.username} ({self.created_at})"
+
+
+class GlobalConfig(models.Model):
+    """Singleton model for global app settings."""
+    app_name = models.CharField(max_length=100, default='FlowState')
+    tutorial_video_url = models.URLField(
+        blank=True, 
+        help_text="YouTube/Vimeo embed URL (e.g. https://www.youtube.com/embed/XXXX)"
+    )
+    tutorial_video_file = models.FileField(
+        upload_to='system/videos/', 
+        blank=True, 
+        null=True,
+        help_text="Upload a local MP4 video file"
+    )
+    is_tutorial_enabled = models.BooleanField(default=True)
+    maintenance_mode = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Global Configuration"
+        verbose_name_plural = "Global Configuration"
+
+    def __str__(self):
+        return "System Settings"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one instance exists
+        if not self.pk and GlobalConfig.objects.exists():
+            return
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_config(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj

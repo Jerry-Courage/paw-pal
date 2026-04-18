@@ -35,6 +35,12 @@ class VoiceSanitizer:
         if not text:
             return ""
         
+        # Ensure UTF-8 safety for Windows logging/processing
+        try:
+            text = text.encode('utf-8', 'ignore').decode('utf-8')
+        except:
+            pass
+        
         # 1. Strip Action tag if present
         text = text.split('ACTION:')[0].strip()
         
@@ -134,7 +140,14 @@ ACTION PROTOCOL (CRITICAL):
 - ALWAYS use VALID JSON with DOUBLE QUOTES (") for keys and values.
 
 Your capabilities:
-..."""
+- DIAGRAM GEN: You can create Mermaid.js diagrams. If asked for a diagram, use: ACTION: {"tool": "generate_diagram", "parameters": {"description": "...", "type": "..."}}. Use STANDARD and SIMPLE syntax (e.g., flowchart TD, use --> for links, and avoid complex character escaping).
+- IMAGE GEN: You can trigger visualizations. If a student needs to 'see' something (like the heart's valve), use: ACTION: {"tool": "generate_image", "parameters": {"prompt": "..."}}
+- ACADEMIC EXPERT: You know everything from Calculus to 18th-century Literature.
+- PLATFORM AGENT: You can schedule study sessions and create assignments in the user's planner.
+
+When the student uses a Tool (like the Diagram or Image studio), they will send a message starting with 'Generate a diagram for:' or 'Generate an image showing:'. Acknowledge this with your signature high-energy collegiate style and trigger the appropriate ACTION! 
+PRO TIP: If a diagram fails once, use even simpler syntax in the next attempt.
+"""
 
 
 class AIService:
@@ -184,22 +197,43 @@ class AIService:
         sanitized = []
         for msg in messages:
             role = msg.get('role', 'user')
-            if sanitized and sanitized[-1]['role'] == role:
-                sanitized[-1]['content'] += f"\n\n{msg['content']}"
+            content = msg.get('content', '')
+            
+            # Only merge if both are strings; if one is a multi-modal list, skip merging to preserve structure
+            if sanitized and sanitized[-1]['role'] == role and isinstance(content, str) and isinstance(sanitized[-1]['content'], str):
+                sanitized[-1]['content'] += f"\n\n{content}"
             else:
-                sanitized.append({'role': role, 'content': msg['content']})
+                sanitized.append({'role': role, 'content': content})
         return sanitized
 
     def _to_gemini_format(self, messages: list):
-        """Converts OpenAI format to Google GenAI SDK format."""
+        """Converts OpenAI format to Google GenAI SDK format with Multi-Modal support."""
         contents = []
         system_instruction = ""
         for msg in messages:
+            content = msg.get('content', '')
             if msg['role'] == 'system':
-                system_instruction += msg['content'] + "\n"
+                if isinstance(content, list):
+                    content = " ".join([p.get('text', '') for p in content if p.get('type') == 'text'])
+                system_instruction += str(content) + "\n"
             else:
                 role = 'user' if msg['role'] == 'user' else 'model'
-                contents.append({'role': role, 'parts': [{'text': msg['content']}]})
+                parts = []
+                if isinstance(content, str):
+                    parts.append({'text': content})
+                elif isinstance(content, list):
+                    for part in content:
+                        if part.get('type') == 'text':
+                            parts.append({'text': part.get('text', '')})
+                        elif part.get('type') == 'image_url':
+                            url = part.get('image_url', {}).get('url', '')
+                            if 'base64,' in url:
+                                try:
+                                    mime_type = url.split(';')[0].split(':')[1]
+                                    b64_data = url.split('base64,')[1]
+                                    parts.append({'inline_data': {'mime_type': mime_type, 'data': b64_data}})
+                                except: continue
+                contents.append({'role': role, 'parts': parts})
         return contents, system_instruction.strip()
 
     async def chat(self, messages: list, target_model: str = None, max_tokens: int = 4096, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30) -> str:
@@ -208,6 +242,14 @@ class AIService:
         
         messages = self._sanitize_messages(messages)
         target_model = forced_model or target_model or self.model
+        
+        # Detect if this is a Multi-Modal request
+        has_images = False
+        for msg in messages:
+            if isinstance(msg.get('content'), list):
+                if any(p.get('type') == 'image_url' for p in msg['content']):
+                    has_images = True
+                    break
         
         # --- STAGE 0: DIRECT GOOGLE GENAI SDK ---
         if self.google_client:
@@ -224,17 +266,19 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
 
-        # --- STAGE 1: HYPER-FAST GROQ ---
+        # --- STAGE 1: HYPER-FAST GROQ (Text-Only or Direct Vision) ---
         groq_key = os.getenv('GROQ_API_KEY')
         if groq_key:
             try:
+                # If images are present, we MUST use a vision-capable model
+                groq_model = 'llama-3.2-11b-vision-preview' if has_images else 'llama-3.3-70b-versatile'
                 async with httpx.AsyncClient() as client:
                     url = "https://api.groq.com/openai/v1/chat/completions"
                     resp = await client.post(
                         url,
                         headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                        json={'model': 'llama-3.3-70b-versatile', 'messages': messages, 'max_tokens': max_tokens},
-                        timeout=8,
+                        json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=12 if has_images else 8,
                     )
                     if resp.status_code == 200:
                         return self._extract_content(resp.json())
@@ -245,13 +289,19 @@ class AIService:
         models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
         for i, model in enumerate(models_to_try):
             if i >= max_fallbacks: break
+            
+            # Skip text-only models in fallback loop if we have images
+            is_vision_model = 'vision' in model.lower() or 'gemini' in model.lower() or 'claude' in model.lower() or 'gpt-4o' in model.lower()
+            if has_images and not is_vision_model:
+                continue
+
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
                         f'{self.base_url}/chat/completions',
                         headers=self.headers,
                         json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
-                        timeout=15,
+                        timeout=30 if has_images else 15,
                     )
                     if response.status_code == 200:
                         content = self._extract_content(response.json())
@@ -268,31 +318,12 @@ class AIService:
 
     async def collab_chat(self, messages: list, max_tokens: int = 4096) -> str:
         """High-Fidelity Collab Signal: Groq (Primary) -> OpenRouter Free."""
-        try:
-            content = await self.groq_chat(messages, max_tokens=max_tokens)
-            if content and "missing" not in content.lower() and "failed" not in content.lower()[:50]:
-                return content
-        except Exception as e:
-            logger.error(f"[Collab Error] {e}")
+        # ... logic ...
+        return await self.chat(messages, max_tokens=max_tokens) # Reuse resilient chat logic
 
-        # --- STAGE 2: THE OPENROUTER FREE CYCLE ---
-        for model in FALLBACK_MODELS:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f'{self.base_url}/chat/completions',
-                        headers=self.headers,
-                        json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
-                        timeout=15,
-                    )
-                    if response.status_code == 200:
-                        content = self._extract_content(response.json())
-                        if content.strip() and "error" not in content.lower()[:50]: 
-                            return content
-            except:
-                continue
-
-        return "Collab Intelligence Signal Interrupted."
+    def collab_chat_sync(self, messages: list, **kwargs) -> str:
+        """Synchronous bridge for Collab Space threads."""
+        return async_to_sync(self.collab_chat)(messages, **kwargs)
 
     async def fast_chat(self, messages: list) -> str:
         """High-speed chat bridge. Now powered by the Unified Triple-Engine."""
@@ -412,13 +443,37 @@ class AIService:
                             timeout=httpx.Timeout(45.0, connect=5.0)
                         ) as response:
                             if response.status_code == 200:
+                                in_think_block = False
                                 async for line in response.aiter_lines():
                                     if line.startswith('data: '):
                                         data = line[6:].strip()
                                         if data == '[DONE]': return
                                         try:
                                             chunk = json.loads(data)
-                                            text = chunk['choices'][0]['delta'].get('content', '')
+                                            delta = chunk['choices'][0]['delta']
+                                            
+                                            # 1. Skip explicit reasoning fields (Groq/OpenRouter)
+                                            if delta.get('reasoning'):
+                                                continue
+                                                
+                                            text = delta.get('content', '')
+                                            if not text: continue
+
+                                            # 2. State-aware <think> tag filtering
+                                            if '<think>' in text:
+                                                in_think_block = True
+                                                parts = text.split('<think>')
+                                                text = parts[0] # Keep text BEFORE the tag if any
+                                                # If there is text AFTER the tag, it's handled by the in_think_block check next
+                                            
+                                            if in_think_block:
+                                                if '</think>' in text:
+                                                    in_think_block = False
+                                                    parts = text.split('</think>')
+                                                    text = parts[-1] # Keep text AFTER the tag
+                                                else:
+                                                    continue # Skip all tokens inside think block
+                                            
                                             if text: yield text
                                         except: continue
                                 return
@@ -449,6 +504,7 @@ class AIService:
                                 continue
                             
                             response.raise_for_status()
+                            in_think_block = False
                             async for line in response.aiter_lines():
                                 if line.startswith('data: '):
                                     data = line[6:].strip()
@@ -456,7 +512,28 @@ class AIService:
                                     try:
                                         chunk = json.loads(data)
                                         delta = chunk['choices'][0]['delta']
-                                        text = delta.get('content') or delta.get('reasoning') or ''
+                                        
+                                        # 1. Skip explicit reasoning fields
+                                        if delta.get('reasoning'):
+                                            continue
+                                            
+                                        text = delta.get('content') or ''
+                                        if not text: continue
+
+                                        # 2. State-aware <think> tag filtering
+                                        if '<think>' in text:
+                                            in_think_block = True
+                                            parts = text.split('<think>')
+                                            text = parts[0]
+                                        
+                                        if in_think_block:
+                                            if '</think>' in text:
+                                                in_think_block = False
+                                                parts = text.split('</think>')
+                                                text = parts[-1]
+                                            else:
+                                                continue
+                                        
                                         if text: yield text
                                     except: continue
                             return
@@ -867,18 +944,32 @@ class AIService:
         # ─── PRE-GENERATE PROMPTS ───
         prompts = []
         for idx, chunk_text in enumerate(chunks[:25]):
+            # VERSION TAG: 3.1-PREMIUM (Ultra-Readability)
             prompt = (
-                f"You are the Studley-Style FlowAI Academic Architect. {'GENERATE A FOUNDATIONAL STUDY KIT FOR' if len(text.strip()) < 1000 else 'Analyze'} '{resource.title}'."
-                "\n\nGOAL: Create a deep academic study kit. Return ONLY valid JSON with 'overview', 'sections', 'vocabulary', 'exam_tips'.\n"
-                "- 'sections': Provide at least 5 deep modules. No placeholders.\n"
-                "  STRICT: Start every section 'content' with a bolded Key Question/Cue (e.g., **Key Cue: [Question]?**).\n"
+                f"You are the Studley-Style FlowAI Academic Architect [SYTH-V3.1-PREMIUM]. "
+                f"DEEP ANALYSIS REQUESTED FOR: '{resource.title}'.\n\n"
+                "GOAL: Create a hyper-premium academic study kit with MASTER-LEVEL readability.\n"
+                "CRITICAL TYPOGRAPHY RULES:\n"
+                "1. MICRO-PARAGRAPHING: Limit every paragraph to a maximum of 3-4 sentences. NEVER return a wall of text.\n"
+                "2. SEMANTIC BOLDING: **Bold** high-impact keywords and concepts the first time they appear.\n"
+                "3. BULLET POINTS: Use bullet points religiousy for any lists or complex breakdowns.\n"
+                "4. ACADEMIC DEPTH: Provide a MINIMUM of 6 detailed 'sections'. Use your internal knowledge to expand if source is short.\n\n"
+                "STRICT JSON OUTPUT FORMAT:\n"
+                "{\n"
+                "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Deep 3-paragraph summary\"},\n"
+                "  \"sections\": [\n"
+                "    {\"icon\": \"Emoji\", \"title\": \"Module Title\", \"content\": \"300+ words of structured content with Cues and Key Questions...\", \"page_refs\": [], \"mermaid_diagram\": \"graph TD;...\"}\n"
+                "  ],\n"
+                "  \"vocabulary\": [{\"term\": \"...\", \"definition\": \"...\"}],\n"
+                "  \"exam_tips\": [\"...\", \"...\"]\n"
+                "}\n"
+                "\nSTRICT CONTENT RULES:\n"
+                "- EVERY section 'content' MUST start with a bolded **Key Question/Cue**.\n"
+                "- USE LATEX for all math/physics formulas.\n"
                 f"{image_hint if idx == 0 else ''}\n"
                 f"{math_hint}\n\n"
-                f"SOURCE:\n{chunk_text}\n\n"
-                "- 'overview': {\"title\": str, \"icon\": emoji, \"summary\": str}\n"
-                "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
-                "- 'exam_tips': [str]\n"
-                "Return ONLY valid JSON."
+                f"SOURCE MATERIAL:\n{chunk_text}\n\n"
+                "Return ONLY valid JSON. START WITH '{' AND END WITH '}'."
             )
             prompts.append(prompt)
 
@@ -910,16 +1001,18 @@ class AIService:
                         
                         # Merge sections with internal type-safety (handle case variations)
                         sections_added = 0
-                        s_key = 'sections' if 'sections' in chunk_kit else 'Sections' if 'Sections' in chunk_kit else None
+                        # Fuzzy Key Normalization (Handle variations: sections, Sections, modules, Modules, study_modules)
+                        possible_keys = ['sections', 'Sections', 'modules', 'Modules', 'study_modules', 'StudyModules']
+                        s_key = next((k for k in possible_keys if k in chunk_kit and isinstance(chunk_kit[k], list)), None)
                         
-                        if s_key and isinstance(chunk_kit[s_key], list):
+                        if s_key:
                             for sec in chunk_kit[s_key]:
                                 if isinstance(sec, dict) and sec.get('title'):
-                                    c = sec.get('content', '')
-                                    if not isinstance(c, str):
-                                        sec['content'] = str(c)
-                                    all_sections.append(sec)
                                     sections_added += 1
+                                    all_sections.append(sec)
+                        else:
+                            # CRITICAL DEBUG: If total sections are still 0, log what the AI actually said
+                            logger.warning(f"[AI Service] Chunk {idx+1} yielded 0 sections. Key Mismatch? Raw sample: {str(res_content)[:300]}")
                         
                         # Merge vocabulary
                         if 'vocabulary' in chunk_kit and isinstance(chunk_kit['vocabulary'], list):
@@ -1013,11 +1106,16 @@ class AIService:
         if images:
             user_content += images # Inject base64 video frames/slides
             
-        future = watchdog.submit(self.chat, [{'role': 'user', 'content': user_content}], max_tokens=4096)
+        future = watchdog.submit(self.chat_sync, [{'role': 'user', 'content': user_content}], max_tokens=8192)
         try:
             # 300s timeout for Deep Academic Synthesis
             res = future.result(timeout=300)
             watchdog.shutdown(wait=False, cancel_futures=True)
+            
+            # Diagnostic Logging for 0-section bug
+            if not res or (isinstance(res, str) and len(res) < 50):
+                logger.error(f"[AI Service] Chunk {idx+1} returned EMPTY or suspicious response: {res}")
+            
             return res
         except TimeoutError:
             logger.error(f'[AI Service] Chunk {idx+1} TIMED OUT after 300s. Skipping.')
@@ -1376,73 +1474,80 @@ class AIService:
         full_enhanced_prompt = f"{prompt}. {style}"
 
         # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
-        try:
-            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 1: Attempting Pollinations for: {prompt[:50]}...\n")
-            import requests
-            import base64
-            
-            encoded_prompt = requests.utils.quote(full_enhanced_prompt)
-            # Use Flux model via Pollinations
-            poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model=flux"
-            
-            res = requests.get(poll_url, timeout=30)
-            if res.status_code == 200:
-                encoded = base64.b64encode(res.content).decode('utf-8')
-                with open(log_path, 'a', encoding='utf-8') as f: f.write("[OK] Tier 1 Success (Pollinations AI)\n")
-                return f"data:image/jpeg;base64,{encoded}"
-        except Exception as e:
-            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 1 Failed: {str(e)}\n")
+        models_to_try = [('flux', 25), ('turbo', 15)]
+        for poll_model, poll_timeout in models_to_try:
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f: 
+                    f.write(f"[GEN-SIGNAL] Tier 1 ({poll_model}): Attempting for: {prompt[:50]}...\n")
+                
+                import requests
+                import base64
+                
+                # If it's a retry, use a simpler prompt
+                current_prompt = prompt if poll_model == 'flux' else prompt.split(',')[0]
+                encoded_prompt = requests.utils.quote(f"{current_prompt}. {style}")
+                poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}"
+                
+                res = requests.get(poll_url, timeout=poll_timeout)
+                if res.status_code == 200 and len(res.content) > 1000: # Ensure we didn't just get a tiny error image
+                    encoded = base64.b64encode(res.content).decode('utf-8')
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 1 Success ({poll_model})\n")
+                    return f"data:image/jpeg;base64,{encoded}"
+            except Exception as e:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 1 ({poll_model}) Failed: {str(e)}\n")
 
         # --- TIER 2: LEXICA.ART (High Quality Search) ---
-        try:
-            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 2: Attempting Lexica Search for: {prompt[:50]}...\n")
-            # Extract main keywords for better search - remove punctuation
-            import re
-            clean_prompt = re.sub(r'[^\w\s]', '', prompt)
-            keywords = "+".join([w for w in clean_prompt.split() if len(w) > 3][:6])
-            lexica_url = f"https://lexica.art/api/v1/search?q={keywords}"
-            
-            res = requests.get(lexica_url, timeout=15)
-            if res.status_code == 200:
-                images = res.json().get('images', [])
-                if images:
-                    import random
-                    best_match = random.choice(images[:3])
-                    img_url = best_match.get('src')
-                    # Download and convert to base64 to ensure persistent availability
-                    img_res = requests.get(img_url, timeout=15)
-                    if img_res.status_code == 200:
-                        encoded = base64.b64encode(img_res.content).decode('utf-8')
-                        with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 2 Success (Lexica Search: {best_match.get('id')})\n")
-                        return f"data:image/jpeg;base64,{encoded}"
-                else:
-                    with open(log_path, 'a', encoding='utf-8') as f: f.write("[INFO] Tier 2: No Lexica images found for these keywords.\n")
-        except Exception as e:
-            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 Failed: {str(e)}\n")
+        # Try specific search first, then broad search
+        clean_prompt = re.sub(r'[^\w\s]', '', prompt)
+        words = [w for w in clean_prompt.split() if len(w) > 3]
+        
+        search_strategies = [
+            "+".join(words[:6]), # Specific
+            "+".join(words[:3]), # Broad
+            "+".join(words[:1])  # Ultra-broad
+        ]
+
+        for keywords in search_strategies:
+            if not keywords: continue
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 2: Attempting Lexica ({keywords})...\n")
+                lexica_url = f"https://lexica.art/api/v1/search?q={keywords}"
+                
+                res = requests.get(lexica_url, timeout=10)
+                if res.status_code == 200:
+                    images = res.json().get('images', [])
+                    if images:
+                        import random
+                        best_match = random.choice(images[:3])
+                        img_url = best_match.get('src')
+                        img_res = requests.get(img_url, timeout=10)
+                        if img_res.status_code == 200:
+                            encoded = base64.b64encode(img_res.content).decode('utf-8')
+                            with open(log_path, 'a', encoding='utf-8') as f: 
+                                f.write(f"[OK] Tier 2 Success (Lexica: {keywords})\n")
+                            return f"data:image/jpeg;base64,{encoded}"
+            except Exception as e:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 ({keywords}) Failed: {str(e)}\n")
 
         # --- TIER 3: OPENROUTER (Generative, Paid) ---
+        # Already highly capable but often out of credits in this environment
         models_to_try = [model, 'openrouter/auto']
         for current_model in models_to_try:
             try:
-                with open(log_path, 'a', encoding='utf-8') as f: 
-                    f.write(f"[GEN-SIGNAL] Tier 3: Attempting OpenRouter {current_model}...\n")
-                
                 payload = {
                     "model": current_model,
                     "messages": [{"role": "user", "content": [{"type": "text", "text": full_enhanced_prompt}]}],
                     "modalities": ["image"]
                 }
-                
-                response = requests.post(f"{self.base_url}/chat/completions", headers=self.headers, json=payload, timeout=60)
+                response = requests.post(f"{self.base_url}/chat/completions", headers=self.headers, json=payload, timeout=45)
 
                 if response.status_code == 200:
                     data = response.json()
                     images = data.get('choices', [{}])[0].get('message', {}).get('images', [])
                     if images and images[0].get('type') == 'image_url':
-                        with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 3 Success via {current_model}\n")
+                        with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 3 Success ({current_model})\n")
                         return images[0]['image_url']['url']
             except Exception as e:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 3 Failed ({current_model}): {str(e)}\n")
                 continue
 
         return ""
@@ -1621,7 +1726,7 @@ class AIService:
             "[A short, friendly note about the 'Radical Shield' engaged.]"
         )
         
-        raw_response = self.chat([{'role': 'user', 'content': prompt}])
+        raw_response = self.chat_sync([{'role': 'user', 'content': prompt}])
         return self._process_structured_response(assignment, raw_response, "I've engaged the Radical 'Originality Shield v2'.")
 
     def _process_structured_response(self, assignment, raw_response: str, default_comment: str) -> dict:
@@ -1675,9 +1780,8 @@ class AIService:
             "}"
         )
         
-        raw_response = self.chat([{'role': 'system', 'content': "Return only valid JSON. No markdown backticks."}, {'role': 'user', 'content': prompt}])
         try:
-            # High-fidelity JSON extraction: find the first { and the last }
+            raw_response = self.chat_sync([{'role': 'system', 'content': "Return only valid JSON. No markdown backticks."}, {'role': 'user', 'content': prompt}])
             import json
             import re
             
@@ -1733,16 +1837,16 @@ class AIService:
         
         # Use a high-reasoning model for the solver
         try:
-            result = self.chat([{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}], model='google/gemini-2.0-flash-001')
-        except Exception:
-            result = self.chat([{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}])
-
-        return self._parse_json(result, {
-            "problem": problem,
-            "steps": [{"label": "Logical Analysis", "formula": problem, "explanation": "Deriving results from first principles..."}],
-            "final_answer": "Processing complete.",
-            "key_theorems": ["Math Matrix Optimization"]
-        })
+            result = self.chat_sync([{'role': 'system', 'content': AIService.MATH_SYSTEM_PROMPT if hasattr(AIService, 'MATH_SYSTEM_PROMPT') else system}, {'role': 'user', 'content': prompt}])
+            return self._parse_json(result, {
+                "problem": "Mathematical Analysis",
+                "steps": [],
+                "final_answer": "Processing complete.",
+                "key_theorems": []
+            })
+        except Exception as e:
+            logger.error(f"Math solver failure: {e}")
+            return {"feedback": "Processing error."}
 
 
     def _parse_json(self, text: str, default):
@@ -1806,10 +1910,15 @@ class AIService:
                         import ast
                         return ast.literal_eval(content)
                     except:
-                        # Final resort: Clean markdown artifacts
-                        cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
+                        # Final resort: Clean markdown artifacts and find the largest JSON block
                         try:
-                            return json.loads(cleaned)
+                            cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
+                            json_blocks = re.findall(r'\{[\s\S]*\}', cleaned)
+                            if json_blocks:
+                                candidate = max(json_blocks, key=len)
+                                try: return json.loads(candidate)
+                                except: pass
+                            return default
                         except:
                             return default
         except Exception:

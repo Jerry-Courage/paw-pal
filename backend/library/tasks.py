@@ -172,6 +172,7 @@ def process_resource_task(res_id):
                     res.save()
                     
                     text = yt_data.get('transcript', '')
+                    vision_data = [] # [FIX] Initialize for video frames
 
                     # 📸 NEW: VISUAL ANALYZER (Watching the video)
                     try:

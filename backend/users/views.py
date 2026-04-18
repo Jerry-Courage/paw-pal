@@ -162,6 +162,31 @@ class NotificationDetailView(APIView):
             return Response({'error': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
+class PushSubscriptionView(APIView):
+    """Register or update a push subscription for the current user."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .models import PushSubscription
+        endpoint = request.data.get('endpoint')
+        keys = request.data.get('keys', {})
+        p256dh = keys.get('p256dh')
+        auth = keys.get('auth')
+
+        if not endpoint or not p256dh or not auth:
+            return Response({'error': 'Missing subscription details'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sub, created = PushSubscription.objects.update_or_create(
+            endpoint=endpoint,
+            defaults={
+                'user': request.user,
+                'p256dh': p256dh,
+                'auth': auth
+            }
+        )
+        return Response({'status': 'subscribed', 'id': sub.id})
+
+
 from asgiref.sync import sync_to_async
 
 class UpdateOnboardingView(APIView):
@@ -185,3 +210,25 @@ class UpdateOnboardingView(APIView):
 
         new_status = await update_user_status(request.user.id, tour_id)
         return Response({'onboarding_status': new_status})
+
+
+class GlobalConfigView(APIView):
+    """Fetch public app configuration."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import GlobalConfig
+        config = GlobalConfig.get_config()
+        
+        # Determine video source
+        video_url = config.tutorial_video_url
+        if config.tutorial_video_file:
+            # If a local file is uploaded, provide its absolute URL
+            video_url = request.build_absolute_uri(config.tutorial_video_file.url)
+
+        return Response({
+            'app_name': config.app_name,
+            'tutorial_video_url': video_url,
+            'is_tutorial_enabled': config.is_tutorial_enabled,
+            'maintenance_mode': config.maintenance_mode,
+        })

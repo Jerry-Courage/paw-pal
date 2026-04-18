@@ -76,15 +76,32 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         return {'request': self.request}
 
 
+class CuratedLibraryView(generics.ListAPIView):
+    """View to fetch public/curated resources available to everyone."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ResourceSerializer
+
+    def get_queryset(self):
+        qs = Resource.objects.filter(is_public=True).select_related('owner').prefetch_related('extracted_images')
+        resource_type = self.request.query_params.get('type')
+        if resource_type:
+            qs = qs.filter(resource_type=resource_type)
+        return qs
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+
 class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ResourceSerializer
 
     def get_queryset(self):
-        # Allow owner OR workspace member access
+        # Allow owner OR workspace member OR public access
         return Resource.objects.filter(
             Q(owner=self.request.user) | 
-            Q(workspaces__members=self.request.user)
+            Q(workspaces__members=self.request.user) |
+            Q(is_public=True)
         ).distinct()
 
     def destroy(self, request, *args, **kwargs):

@@ -53,12 +53,17 @@ export const authApi = {
   markAllRead: () => api.patch('/auth/notifications/'),
   markRead: (id: number) => api.patch(`/auth/notifications/${id}/`),
   deleteNotification: (id: number) => api.delete(`/auth/notifications/${id}/`),
+  registerPushSubscription: (sub: any) => api.post('/auth/push-notifications/', sub),
 }
+
+export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BKkB2niwQFfIfOdWDSwnu5J03lsnCgNmPoMo9Epx1hpiRMr8jjnNJ5exdYiKZ7Jsis3zectYYeCwh0NHWI0gboM'
 
 // Library
 export const libraryApi = {
   getResources: (type?: string) =>
     api.get('/library/resources/', { params: type ? { type } : {} }),
+  getCuratedResources: (type?: string) =>
+    api.get('/library/resources/curated/', { params: type ? { type } : {} }),
   getResource: (id: number) => api.get(`/library/resources/${id}/`),
   updateResource: (id: number, data: any) => api.patch(`/library/resources/${id}/`, data),
   updateResourceCover: (id: number, file: File) => {
@@ -101,6 +106,7 @@ export const aiApi = {
   getSessions: () => api.get('/ai/sessions/'),
   createSession: (data: any) => api.post('/ai/sessions/', data),
   getSession: (id: number) => api.get(`/ai/sessions/${id}/`),
+  deleteSession: (id: number) => api.delete(`/ai/sessions/${id}/`),
   sendMessage: (sessionId: number, content: string, config?: any) =>
     api.post(`/ai/sessions/${sessionId}/message/`, { content }, config),
   sendVisionMessage: (sessionId: number, content: string, file?: File, config?: any) => {
@@ -112,10 +118,10 @@ export const aiApi = {
       headers: { ...config?.headers, 'Content-Type': 'multipart/form-data' },
     })
   },
-  generateDiagram: (description: string, type: string) =>
-    api.post('/ai/diagram/', { description, type }),
-  generateImage: (prompt: string) =>
-    api.post('/ai/generate-image/', { prompt }),
+  generateDiagram: (description: string, type: string, message_id?: number) =>
+    api.post('/ai/diagram/', { description, type, message_id }),
+  generateImage: (prompt: string, message_id?: number) =>
+    api.post('/ai/generate-image/', { prompt, message_id }),
   quickAsk: (question: string, resourceId?: number) =>
     api.post('/ai/ask/', { question, resource_id: resourceId }),
   summarize: (resourceId: number) =>
@@ -160,7 +166,7 @@ export const aiApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  streamAgentResponse: async function* (query: string, context?: string, history: any[] = [], is_tutor_mode: boolean = false) {
+  streamAgentResponse: async function* (query: string, context?: string, history: any[] = [], is_tutor_mode: boolean = false, session_id?: number) {
     const token = await getAuthToken()
     const response = await fetch(`${api.defaults.baseURL}/ai/agent/stream/`, {
       method: 'POST',
@@ -168,7 +174,7 @@ export const aiApi = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ query, context, history, is_tutor_mode })
+      body: JSON.stringify({ query, context, history, is_tutor_mode, session_id })
     })
 
     if (!response.ok) throw new Error('Stream request failed')
@@ -192,7 +198,12 @@ export const aiApi = {
           if (content === '[DONE]') return
           try {
             const parsed = JSON.parse(content)
-            if (parsed.chunk) yield parsed.chunk
+            if (parsed.chunk) {
+              yield parsed.chunk
+            } else if (parsed.message_id !== undefined) {
+              // Yield the full object so the consumer can extract message_id
+              yield parsed
+            }
           } catch (e) {
             console.error('SSE Parse Error', e)
           }

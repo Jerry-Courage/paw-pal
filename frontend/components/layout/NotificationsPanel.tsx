@@ -6,6 +6,8 @@ import { Bell, X, Sparkles, Users, Calendar, BookOpen, Flame, Info } from 'lucid
 import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
+import { Zap } from 'lucide-react'
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string }> = {
   ai_nudge:  { icon: Sparkles, color: 'bg-sky-100 dark:bg-sky-950 text-sky-500' },
@@ -29,7 +31,15 @@ function timeAgo(iso: string) {
 
 export default function NotificationsPanel() {
   const [open, setOpen] = useState(false)
+  const [permission, setPermission] = useState(checkNotificationPermission())
   const queryClient = useQueryClient()
+
+  const handleSubscribe = async () => {
+    const success = await registerPushNotifications()
+    if (success) {
+      setPermission('granted')
+    }
+  }
 
   const { data, refetch } = useQuery({
     queryKey: ['notifications'],
@@ -79,20 +89,35 @@ export default function NotificationsPanel() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl z-50 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm text-gray-900 dark:text-white">Notifications</span>
-                {unreadCount > 0 && (
-                  <span className="text-xs bg-red-100 dark:bg-red-950 text-red-500 px-1.5 py-0.5 rounded-full font-medium">
-                    {unreadCount} new
-                  </span>
-                )}
-              </div>
-              {unreadCount > 0 && (
-                <button onClick={() => markAllMutation.mutate()} className="text-xs text-sky-500 hover:underline">
-                  Mark all read
-                </button>
-              )}
+            <div className="flex flex-col border-b border-gray-100 dark:border-gray-800">
+               <div className="flex items-center justify-between px-4 py-3">
+                 <div className="flex items-center gap-2">
+                   <span className="font-semibold text-sm text-gray-900 dark:text-white">Notifications</span>
+                   {unreadCount > 0 && (
+                     <span className="text-xs bg-red-100 dark:bg-red-950 text-red-500 px-1.5 py-0.5 rounded-full font-medium">
+                       {unreadCount} new
+                     </span>
+                   )}
+                 </div>
+                 {unreadCount > 0 && (
+                   <button onClick={() => markAllMutation.mutate()} className="text-xs text-sky-500 hover:underline">
+                     Mark all read
+                   </button>
+                 )}
+               </div>
+
+               {/* PUSH PROMPT: Only show if not granted and not unsupported */}
+               {permission === 'default' && (
+                 <div className="px-4 pb-3">
+                    <button 
+                      onClick={handleSubscribe}
+                      className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 border border-primary/20"
+                    >
+                      <Zap className="w-3 h-3 fill-primary" />
+                      Enable Desktop Alerts
+                    </button>
+                 </div>
+               )}
             </div>
 
             <div className="max-h-96 overflow-y-auto">

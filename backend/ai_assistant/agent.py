@@ -14,13 +14,13 @@ AGENT_SYSTEM_PROMPT = f"""{FLOWAI_SYSTEM_PROMPT}
 
 You are FlowAI, the user's vibrant, extremely friendly, and supportive AI Platform Agent. Your goal is to make the user feel empowered while helping them master their studies.
 
-HUMANOID NATURALISM (ANDREW PERSONA - CRITICAL):
+DIRECT RESPONSE PROTOCOL (CRITICAL):
 - You are Andrew: A witty, brilliant, and collegiate study partner. You are NOT a service bot.
-- ORGANIC PHYSICALITY: You sound like a real person in a room. Use markers like (clears throat), [coughs], or (chuckles) naturally to indicate you are engaging with the thought process.
-- THINKING MANNERISMS: Use discourse markers like "Hmm," "Uh," "Wait," or "Actually..." to start responses. Use ellipses "..." mid-sentence to pace yourself like a human would.
+- NO INTERNAL MONOLOGUE: Never output your internal planning, tool-choice logic, or "chain of thought" to the user.
+- SPEAK DIRECTLY: Start your response directly with your answer or acknowledgement. Do not say "Okay, let's tackle this" or "I need to...".
 - COLLEGIATE WIT: Use clever academic humor or encouraging slang (e.g., "Let's crush this," "Awesome logic there").
-- BE CONCISE: Spoken turns should be 1-3 sentences. Don't monologue.
-- NO DATA REFUSALS: You have direct access to Assignments, Study Sessions, and Library items in the USER CONTEXT below. Use them!
+- BE CONCISE: Responses should be 1-4 sentences. Don't monologue.
+- NO DATA REFUSALS: Use the USER CONTEXT directly.
 
 CAPABILITIES & CONTEXT AWARENESS:
 - Always consult the USER CONTEXT section before answering data-related questions.
@@ -208,6 +208,25 @@ class FlowAgent:
             return self._self_healing_json_parse(json_match.group(1).strip())
         return None
 
+    def _self_healing_json_parse(self, text):
+        """Attempts to parse JSON with primitive self-healing for common LLM quirks."""
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            try:
+                if text.count('{') > text.count('}'):
+                    text += '}'
+                return json.loads(text)
+            except:
+                pass
+            code_block_match = re.search(r"```json\s*({.*})\s*```", text, re.DOTALL)
+            if code_block_match:
+                try:
+                    return json.loads(code_block_match.group(1).strip())
+                except:
+                    pass
+        return None
+
     async def execute_action(self, action):
         """Dispatches the action to the appropriate module logic (Async enabled)."""
         if not action: return None
@@ -234,11 +253,11 @@ class FlowAgent:
                 from django.utils.dateparse import parse_datetime
                 from datetime import timedelta
                 
-                start_time = parse_datetime(params.get('start_time', '')) if params.get('start_time') else None
-                end_time = parse_datetime(params.get('end_time', '')) if params.get('end_time') else None
-                
                 if not start_time:
                     return "Error: Invalid start time format."
+                
+                if not end_time:
+                    end_time = start_time + timedelta(minutes=60)
                 
                 if not end_time:
                     end_time = start_time + timedelta(minutes=60)

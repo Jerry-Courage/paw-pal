@@ -401,6 +401,7 @@ class VisionMessageView(APIView):
         display_content = content
         is_vision = False
         ext = ''
+        file_url = None
 
         # Get chat history for context
         history = list(session.messages.order_by('created_at'))
@@ -408,7 +409,18 @@ class VisionMessageView(APIView):
 
         if uploaded_file:
             import os
+            import uuid
+            from django.conf import settings
+            from django.core.files.storage import default_storage
+            from django.core.files.base import ContentFile
+            
             ext = os.path.splitext(uploaded_file.name)[1].lower()
+            
+            # 1. Save file to storage for persistence
+            file_name = f"chat_uploads/{uuid.uuid4()}{ext}"
+            path = default_storage.save(file_name, ContentFile(uploaded_file.read()))
+            uploaded_file.seek(0) # Reset pointer for potential reread
+            file_url = f"{settings.MEDIA_URL}{path}"
 
             if ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
                 import base64
@@ -420,16 +432,8 @@ class VisionMessageView(APIView):
                 messages_to_send = history_msgs + [{
                     'role': 'user',
                     'content': [
-                        {
-                            'type': 'text',
-                            'text': content if content else 'Please analyze this image.'
-                        },
-                        {
-                            'type': 'image_url',
-                            'image_url': {
-                                'url': f'data:{mime};base64,{img_data}'
-                            }
-                        }
+                        { 'type': 'text', 'text': content if content else 'Please analyze this image.' },
+                        { 'type': 'image_url', 'image_url': { 'url': f'data:{mime};base64,{img_data}' } }
                     ]
                 }]
                 display_content = f"[Image: {uploaded_file.name}]{chr(10)}{content}" if content else f"[Image: {uploaded_file.name}]"
@@ -444,18 +448,13 @@ class VisionMessageView(APIView):
                         tmp_path = tmp.name
                     text = extract_pdf_text(tmp_path)
                     os.unlink(tmp_path)
-                    file_content = text[:8000] if text and text.strip() else '[No readable text found in this PDF. It might be an image-based scan or encrypted.]'
+                    file_content = text[:8000] if text and text.strip() else '[No readable text found in this PDF.]'
                 except Exception as e:
                     logger.warning(f'PDF extraction failed: {e}')
-                    file_content = '[Could not read this PDF due to a processing error.]'
+                    file_content = '[Could not read this PDF.]'
                 
-                prompt = (
-                    f"The user uploaded a PDF named '{uploaded_file.name}'.\n\n"
-                    f"PDF Content Snippet:\n{file_content}\n\n"
-                    f"User's request: {content or 'Please summarize this document and highlight the key points.'}"
-                )
-                messages_to_send = history_msgs + [{'role': 'user', 'content': prompt}]
-                display_content = f"[PDF: {uploaded_file.name}]{chr(10)}{content}" if content else f"[PDF: {uploaded_file.name}]"
+                messages_to_send = history_msgs + [{'role': 'user', 'content': f"Context from {uploaded_file.name}:\n{file_content}\n\nUser Question: {content}"}]
+                display_content = f"[File: {uploaded_file.name}]\n{content}"
 
             elif ext in ['.txt', '.md', '.doc', '.docx']:
                 try:
@@ -469,25 +468,104 @@ class VisionMessageView(APIView):
                 messages_to_send = history_msgs + [{'role': 'user', 'content': prompt}]
                 display_content = f"[File: {uploaded_file.name}]{chr(10)}{content}" if content else f"[File: {uploaded_file.name}]"
             else:
-                return Response({'error': 'Unsupported file type. Use images (PNG/JPG/GIF), PDF, or text files.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Unsupported file type.'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             messages_to_send = history_msgs + [{'role': 'user', 'content': content}]
 
         # Save user message
-        ChatMessage.objects.create(session=session, role='user', content=display_content)
+        ChatMessage.objects.create(
+            session=session, 
+            role='user', 
+            content=display_content,
+            image=file_url # This preserves the uploaded image!
+        )
 
         try:
             if is_vision:
-                reply = ai._call_vision(messages_to_send)
+                reply = async_to_sync(ai.chat)(messages_to_send)
             else:
-                reply = ai.chat(messages_to_send)
+                reply = async_to_sync(ai.chat)(messages_to_send)
+            
+            # Extract diagram/actions if any to save them
+            diagram_code = None
+            if "ACTION:" in reply:
+                action_match = re.search(r"ACTION:\s*({.*})", reply, re.DOTALL)
+                if action_match:
+                    try:
+                        action_data = json.loads(action_match.group(1))
+                        if action_data.get('tool') == 'generate_diagram':
+                            # We can't actually 'execute' a prompt here, 
+                            # but we can at least flag that this message HAS an action.
+                            # For now, we'll let the frontend handle the tool execution
+                            # just like the stream.
+                            pass
+                    except: pass
         except Exception as e:
             logger.error(f'Vision message error: {e}')
-            reply = "I had trouble processing that file. Please try again."
+            reply = "I had trouble processing that. Please try again."
 
         assistant_msg = ChatMessage.objects.create(session=session, role='assistant', content=reply)
         session.save()
-        return Response(ChatMessageSerializer(assistant_msg).data)
+        
+        # Include context in serializer for absolute URLs
+        serializer = ChatMessageSerializer(assistant_msg, context={'request': request})
+        return Response(serializer.data)
+
+
+def sanitize_mermaid(code: str) -> str:
+    """Aggressively fix common AI-generated Mermaid syntax errors and clean up reasoning leakage."""
+    import re
+    
+    # 0. CLEANUP REASONING LEAKAGE (Heuristic)
+    # If the response starts with "Okay," or "The user wants" - common planning prefixes
+    # only strip if it looks like a planning block (e.g. multiple lines of planning)
+    planning_patterns = [
+        r"^Okay, the user asked for.*?\.",
+        r"^First, I need to.*?\.",
+        r"^Then, I will.*?\.",
+        r"^After that, I'll.*?\.",
+    ]
+    for pattern in planning_patterns:
+        code = re.sub(pattern, "", code, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Strip smart quotes
+    code = code.replace('\u201c', '"').replace('\u201d', '"').replace('\u2018', "'").replace('\u2019', "'")
+    
+    # Fix |text|> arrows (invalid) -> |text| arrows  
+    code = re.sub(r'\|([^|]+)\|>', r'|\1|', code)
+    
+    # Quote ALL bracket labels that aren't already quoted
+    # Handles chemical formulas well: A[Acetyl-CoA] -> A["Acetyl-CoA"]
+    # We expand the allowed characters to catch + and -> inside labels
+    def quote_label(m):
+        prefix = m.group(1)
+        bracket_type = m.group(2)
+        label = m.group(3)
+        end_bracket = m.group(4)
+        
+        # Don't double quote
+        if label.startswith('"') and label.endswith('"'):
+            return m.group(0)
+            
+        return f'{prefix}{bracket_type}"{label}"{end_bracket}'
+
+    # Catch [], (), {} and also handle the case where they have special chemistry chars
+    code = re.sub(r'(\w+)(\[|\(|\{)([^\]\)\}"\n]+)(\]|\)|\})', quote_label, code)
+    
+    # Fix common chemical syntax issues in transitions: -->|A + B|
+    # Ensure transition labels are always quoted if they have + or ->
+    def quote_transition(m):
+        arrow = m.group(1)
+        label = m.group(2)
+        if '+' in label or '->' in label or '-' in label:
+            return f'{arrow}|"{label}"|'
+        return m.group(0)
+    code = re.sub(r'(-->|==>|-.->)\|([^|]+)\|', quote_transition, code)
+
+    # Remove blank lines
+    code = '\n'.join(line for line in code.split('\n') if line.strip())
+    
+    return code
 
 
 class GenerateDiagramView(APIView):
@@ -497,7 +575,8 @@ class GenerateDiagramView(APIView):
 
     def post(self, request):
         description = request.data.get('description', '').strip()
-        diagram_type = request.data.get('type', 'auto')  # 'auto' = AI decides
+        diagram_type = request.data.get('type', 'auto')
+        message_id = request.data.get('message_id')
 
         if not description:
             return Response({'error': 'Description required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -527,6 +606,9 @@ class GenerateDiagramView(APIView):
                 f"- Do NOT add any explanation before or after\n"
                 f"- Make it detailed and educational\n"
                 f"- Use proper Mermaid syntax\n"
+                f"- ALWAYS quote node labels containing parentheses, brackets, or special chars with double quotes: A[\"Label (info)\"]\n"
+                f"- Use simple arrow syntax: --> or -->|label text| (NEVER use -->|text|>)\n"
+                f"- Keep node IDs simple alphanumeric: A, B, C1, step1, etc.\n"
                 f"- For system analysis/design topics, use classDiagram, erDiagram, or sequenceDiagram as appropriate"
             )
         else:
@@ -552,7 +634,7 @@ class GenerateDiagramView(APIView):
             )
 
         try:
-            mermaid_code = ai.chat([{'role': 'user', 'content': prompt}])
+            mermaid_code = async_to_sync(ai.chat)([{'role': 'user', 'content': prompt}])
             # Strip any accidental markdown wrapping
             mermaid_code = mermaid_code.strip()
             for prefix in ['```mermaid', '```']:
@@ -561,8 +643,23 @@ class GenerateDiagramView(APIView):
             if mermaid_code.endswith('```'):
                 mermaid_code = mermaid_code[:-3]
             mermaid_code = mermaid_code.strip()
+            
+            # Post-processing to fix common AI syntax errors
+            mermaid_code = sanitize_mermaid(mermaid_code)
+            
+            # Link to existing message if provided
+            if message_id:
+                try:
+                    msg = ChatMessage.objects.filter(id=message_id, session__user=request.user).first()
+                    if msg:
+                        msg.diagram_code = mermaid_code
+                        msg.save()
+                except Exception as e:
+                    logger.warning(f"Failed to link diagram to message {message_id}: {e}")
+
             return Response({'mermaid': mermaid_code, 'type': diagram_type})
         except Exception as e:
+            logger.error(f"Diagram Generation Error: {e}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -575,6 +672,7 @@ class GenerateImageView(APIView):
 
     def post(self, request):
         prompt = request.data.get('prompt', '').strip()
+        message_id = request.data.get('message_id')
         if not prompt:
             return Response({'error': 'Prompt required.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -584,7 +682,7 @@ class GenerateImageView(APIView):
         if enhance:
             try:
                 ai = AIService()
-                enhanced = ai.chat([{
+                enhanced = async_to_sync(ai.chat)([{
                     'role': 'user',
                     'content': (
                         f"Rewrite this image generation prompt to be more detailed and visually descriptive "
@@ -602,6 +700,16 @@ class GenerateImageView(APIView):
             image_data_uri = ai.generate_image(final_prompt)
             
             if image_data_uri:
+                # Link to existing message if provided
+                if message_id:
+                    try:
+                        msg = ChatMessage.objects.filter(id=message_id, session__user=request.user).first()
+                        if msg:
+                            msg.image = image_data_uri
+                            msg.save()
+                    except Exception as e:
+                        logger.warning(f"Failed to link image to message {message_id}: {e}")
+
                 return Response({
                     'url': image_data_uri,
                     'prompt': final_prompt,
@@ -680,28 +788,64 @@ class AgentStreamView(APIView):
         query = request.data.get('query', '').strip()
         context = request.data.get('context', '')
         history = request.data.get('history', [])
+        session_id = request.data.get('session_id')
         is_tutor = request.data.get('is_tutor_mode') in [True, 'true']
         
         if not query:
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Ensure we have a session to save to
+        session = None
+        if session_id:
+            session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        else:
+            # Always create a new, dedicated session for a new conversation
+            title = query[:30] + ('...' if len(query) > 30 else '')
+            session = ChatSession.objects.create(user=request.user, title=title or "New Chat")
+
         agent = FlowAgent(request.user)
 
+        # 1. Save User Message immediately
+        ChatMessage.objects.create(session=session, role='user', content=query)
+        
+        # 2. Create placeholder for Assistant Message early to provide ID for visuals
+        assistant_msg = ChatMessage.objects.create(session=session, role='assistant', content="")
+
         async def event_stream():
+            full_reply = ""
             try:
+                # Yield the message ID and session ID first so frontend can track them
+                yield f"data: {json.dumps({'done': False, 'message_id': assistant_msg.id, 'session_id': session.id})}\n\n"
+
                 async for chunk in agent.process_request_stream(query, context, history=history, is_tutor_mode=is_tutor):
                     if chunk:
+                        full_reply += chunk
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                
+                # 3. Update Assistant Message on completion
+                from asgiref.sync import sync_to_async
+                
+                display_reply = full_reply.split('ACTION:')[0].strip()
+                
+                # Update the placeholder with final content
+                def update_msg():
+                    # REFRESH FROM DB: In case a tools (image/diagram) was saved to this msg during the stream
+                    assistant_msg.refresh_from_db()
+                    assistant_msg.content = display_reply
+                    assistant_msg.save()
+                    session.save()
+                
+                await sync_to_async(update_msg)()
+
+                yield f"data: {json.dumps({'done': True, 'message_id': assistant_msg.id})}\n\n"
                 yield "data: [DONE]\n\n"
             except asyncio.CancelledError:
-                # This is normal when a user refreshes or closes the page
                 pass
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        # Django 4.2+ supports async generators in StreamingHttpResponse from sync views
         response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
         response['Cache-Control'] = 'no-cache'
         response['X-Accel-Buffering'] = 'no'

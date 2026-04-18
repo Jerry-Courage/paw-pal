@@ -132,7 +132,7 @@ class WorkspaceMessageView(APIView):
             parent_id=parent_id
         )
 
-        # 2. Neural Transcription (Background Transcription)
+        # 4. Neural Transcription (Background Transcription)
         if audio_file:
             ai = AIService()
             transcript = ai.transcribe_audio(msg.audio_file.path)
@@ -141,11 +141,40 @@ class WorkspaceMessageView(APIView):
                 msg.save()
                 content = transcript # Update local content for AI trigger check
         
-        # 3. Broadcast user message (with transcript if available)
+        # 5. MENTIONS & NOTIFICATIONS
+        from users.notifications import create_notification
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # A. Handle @Mentions
+        mentioned_usernames = re.findall(r'@(\w+)', content)
+        for username in mentioned_usernames:
+            mentioned_user = User.objects.filter(username=username).first()
+            if mentioned_user and mentioned_user != request.user:
+                create_notification(
+                    mentioned_user, 'group',
+                    f"Mentioned in {ws.name}",
+                    f"{request.user.username} mentioned you in the {ws.name} collab space.",
+                    f"/workspace/{ws.id}"
+                )
+        
+        # B. Handle Replies
+        if parent_id:
+            try:
+                parent_msg = WorkspaceMessage.objects.get(id=parent_id)
+                if parent_msg.author and parent_msg.author != request.user:
+                    create_notification(
+                        parent_msg.author, 'group',
+                        f"Reply in {ws.name}",
+                        f"{request.user.username} replied to your message in {ws.name}.",
+                        f"/workspace/{ws.id}"
+                    )
+            except: pass
+
+        # 6. Broadcast user message (with transcript if available)
         self._broadcast(ws.id, msg)
 
-        # 4. AI Name Check & Thread Intelligence
-        # We listen for wake words OR if the user is replying to an AI message
+        # 7. AI Name Check & Thread Intelligence
         is_reply_to_ai = False
         if parent_id:
             try:
@@ -220,7 +249,7 @@ class WorkspaceMessageView(APIView):
                 recent = workspace.messages.all().order_by('-created_at')[:10]
                 history = [{'role': 'assistant' if m.is_ai else 'user', 'content': m.content} for m in reversed(recent)]
                 
-                reply = ai.collab_chat([{'role': 'system', 'content': system_prompt}] + history)
+                reply = ai.collab_chat_sync([{'role': 'system', 'content': system_prompt}] + history)
                 
                 # 4. Mode Mirroring (Voice Decision)
                 should_vocalize = is_audio_trigger

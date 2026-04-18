@@ -33,6 +33,8 @@ class Resource(models.Model):
     has_study_kit = models.BooleanField(default=False)
     cover_image = models.ImageField(upload_to='resources/covers/', null=True, blank=True)
     thumbnail_url = models.URLField(blank=True)
+    is_public = models.BooleanField(default=False, db_index=True)
+    author_name = models.CharField(max_length=200, default='FlowState Curator')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

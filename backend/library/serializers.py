@@ -31,9 +31,10 @@ class ResourceSerializer(serializers.ModelSerializer):
             'cover_image_url', 'thumbnail_url',
             'status', 'processing_progress', 'status_text', 'file_size', 
             'ai_summary', 'ai_concepts', 'ai_notes_json',
-            'has_study_kit', 'extracted_images', 'owner_name', 'created_at', 'updated_at'
+            'has_study_kit', 'extracted_images', 'owner_name', 'author_name', 
+            'is_public', 'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'status', 'ai_summary', 'ai_concepts', 'has_study_kit', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'status', 'ai_summary', 'ai_concepts', 'has_study_kit', 'is_public', 'created_at', 'updated_at')
 
     def get_file_url(self, obj):
         request = self.context.get('request')

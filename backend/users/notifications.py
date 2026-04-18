@@ -3,10 +3,23 @@ from django.contrib.auth import get_user_model
 
 
 def create_notification(user, type: str, title: str, body: str, link: str = ''):
-    """Create a notification for a user. Silently fails if something goes wrong."""
+    """Create a notification and trigger a Push notification if possible."""
     try:
         from .models import Notification
+        from .push_service import PushService
+        import threading
+        
+        # 1. Save to Database
         Notification.objects.create(user=user, type=type, title=title, body=body, link=link)
+        
+        # 2. Trigger Push (Async to avoid blocking)
+        def send_push():
+            PushService.send_notification(user, title, body, link)
+            
+        thread = threading.Thread(target=send_push)
+        thread.daemon = True
+        thread.start()
+        
     except Exception:
         pass
 

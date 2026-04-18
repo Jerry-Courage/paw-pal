@@ -176,7 +176,7 @@ export default function RichNotesViewer({
 
                   {/* Content Rendering Engine */}
                   <div className={cn(
-                    "prose-ai max-w-none relative z-10", 
+                    "prose-ai max-w-3xl mx-auto sm:mx-0 relative z-10", 
                     isEditing ? "hidden" : "block"
                   )}>
                     <ReactMarkdown
@@ -202,19 +202,23 @@ export default function RichNotesViewer({
                         h3: ({ children }) => <h3 className="text-lg sm:text-xl font-black mb-3 text-slate-800 dark:text-slate-100">{children}</h3>,
                         h4: ({ children }) => <h4 className="text-base sm:text-lg font-bold mb-3 text-slate-700 dark:text-slate-200">{children}</h4>,
                         p: ({ children }) => (
-                          <p className="mb-5 leading-[1.9] text-slate-600 dark:text-slate-300 text-[15px] sm:text-base font-medium last:mb-0">
+                          <p className="mb-8 leading-[1.8] text-slate-600 dark:text-slate-300 text-[16px] sm:text-[17px] font-medium last:mb-0 tracking-tight">
                             {children}
                           </p>
                         ),
                         strong: ({ children }) => (
-                          <strong className="font-black text-slate-900 dark:text-white">{children}</strong>
+                          <strong className="font-black text-slate-900 dark:text-white px-1 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-400/10 text-amber-900 dark:text-amber-200 decoration-amber-500/30 decoration-2">
+                            {children}
+                          </strong>
                         ),
                         em: ({ children }) => (
-                          <em className="text-primary font-semibold not-italic">{children}</em>
+                          <em className="text-primary font-bold not-italic px-1 py-0.5 rounded-md bg-primary/5 border-b-2 border-primary/20">
+                            {children}
+                          </em>
                         ),
                         blockquote: ({ children }) => (
-                          <blockquote className="my-6 pl-5 border-l-4 border-primary/30 bg-primary/5 rounded-r-2xl py-4 pr-5">
-                            <div className="text-slate-700 dark:text-slate-300 font-medium italic">{children}</div>
+                          <blockquote className="my-10 pl-6 border-l-4 border-primary/40 bg-slate-50/80 dark:bg-slate-800/40 rounded-r-3xl py-6 pr-6 shadow-sm border border-slate-200/50 dark:border-white/5 backdrop-blur-sm">
+                            <div className="text-slate-700 dark:text-slate-300 font-bold italic text-lg leading-relaxed">{children}</div>
                           </blockquote>
                         ),
                         ul: ({ children }) => <ul className="list-none pl-0 mb-6 space-y-3">{children}</ul>,

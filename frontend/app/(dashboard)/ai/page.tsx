@@ -8,10 +8,10 @@ import {
   Sparkles, Send, Plus, Loader2, Image, Paperclip, X,
   ChevronRight, BookOpen, Network, GitBranch, Menu,
   BarChart2, Clock, Wand2, MessageSquare, Eye,
-  Copy, Check, Download, RefreshCw, Zap, Brain
+  Copy, Check, Download, RefreshCw, Zap, Brain, Trash2
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -43,16 +43,68 @@ const SUGGESTIONS = [
 // ─── MERMAID RENDERER ────────────────────────────────────────────────────────
 function MermaidChart({ chart }: { chart: string }) {
   const [svg, setSvg] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    import('mermaid').then(mermaid => {
-      mermaid.default.initialize({ startOnLoad: true, theme: 'neutral' })
-      mermaid.default.render('mermaid-chart', chart).then(res => setSvg(res.svg))
+    setError(null)
+    setSvg('')
+    
+    // Clean the chart code
+    let cleanChart = chart.replace(/^```mermaid\n?/, '').replace(/\n?```$/, '').trim()
+    if (cleanChart.startsWith('mermaid')) cleanChart = cleanChart.substring(7).trim()
+    
+    // Frontend sanitization as extra defense
+    cleanChart = cleanChart
+      .replace(/\|([^|]+)\|>/g, '|$1|')        // Fix |text|> arrows
+      .replace(/-->\|([^|]+)\|>/g, '-->|$1|')   // Fix -->|text|> arrows
+    
+    if (!cleanChart || cleanChart.length < 5) {
+      setError('Empty or invalid diagram code.')
+      return
+    }
+    
+    import('mermaid').then(async (mermaid) => {
+      try {
+        mermaid.default.initialize({ 
+          startOnLoad: false,
+          theme: 'neutral',
+          securityLevel: 'strict',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          suppressErrorRendering: true
+        })
+        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`
+        const { svg: renderedSvg } = await mermaid.default.render(id, cleanChart)
+        setSvg(renderedSvg)
+      } catch (err: any) {
+        console.error('Mermaid render error:', err)
+        setError('Diagram syntax error. Try asking FlowAI to regenerate it.')
+        // Clean up any error elements mermaid injected into the DOM
+        document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
+        document.querySelectorAll('.mermaid-error').forEach(el => el.remove())
+      }
     })
+    
+    return () => {
+      // Cleanup on unmount
+      document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
+    }
   }, [chart])
 
-  if (!svg) return <div className="p-8 text-center animate-pulse text-slate-400">Rendering diagram...</div>
-  return <div className="overflow-x-auto p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800" dangerouslySetInnerHTML={{ __html: svg }} />
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-2xl flex flex-col items-center gap-3 text-center">
+        <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/20 text-red-500 flex items-center justify-center">
+          <Paperclip className="w-5 h-5" />
+        </div>
+        <div className="text-sm font-bold text-red-600 dark:text-red-400">{error}</div>
+        <div className="text-[10px] font-mono opacity-50 max-w-full overflow-hidden truncate px-4">{chart.substring(0, 50)}...</div>
+      </div>
+    )
+  }
+
+  if (!svg) return <div className="p-8 text-center animate-pulse text-slate-400 font-bold tracking-widest text-xs uppercase">Rendering diagram...</div>
+  return <div ref={containerRef} className="overflow-x-auto p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner" dangerouslySetInnerHTML={{ __html: svg }} />
 }
 
 // ─── TYPEWRITER EFFECT ───────────────────────────────────────────────────────
@@ -97,10 +149,17 @@ function Typewriter({ text, speed = 10, onComplete }: { text: string, speed?: nu
 }
 
 // ─── MESSAGE COMPONENT ───────────────────────────────────────────────────────
-function MessageBubble({ msg, isLast, isNew }: { msg: Message, isLast: boolean, isNew?: boolean }) {
+function MessageBubble({ msg, index, isLast, isNew }: { msg: Message, index: number, isLast: boolean, isNew?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [typingComplete, setTypingComplete] = useState(!isNew || msg.is_streaming)
   const isUser = msg.role === 'user'
+
+  // PREVENT "BLACK BOX" SYNDROME: 
+  // If the message is assistant, empty, and streaming, show nothing here.
+  // The external "Thinking..." indicator handles the initial feedback.
+  if (!isUser && !msg.content && !msg.image && !msg.diagram && msg.is_streaming) {
+    return null;
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content)
@@ -109,8 +168,60 @@ function MessageBubble({ msg, isLast, isNew }: { msg: Message, isLast: boolean, 
     toast.success('Copied to clipboard')
   }
 
+  const handleDownload = async () => {
+    if (msg.image) {
+      try {
+        const downloadAction = async () => {
+          const response = await fetch(msg.image!);
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `flowai-image-${Date.now()}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        };
+
+        toast.promise(downloadAction(), {
+          loading: 'Preparing download...',
+          success: 'Image downloaded!',
+          error: 'Download failed. Try right-clicking the image.'
+        });
+      } catch (err) {
+        // Fallback for base64 or simpler cases
+        const link = document.createElement('a');
+        link.href = msg.image;
+        link.download = `flowai-image-${Date.now()}.png`;
+        link.click();
+      }
+    } else if (msg.diagram) {
+      // Find the specific SVG associated with this message index/content
+      // We look for any SVG inside the current message bubble container
+      const container = document.getElementById(`msg-${index}`);
+      const svg = container?.querySelector('svg');
+      
+      if (svg) {
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `flowai-diagram-${Date.now()}.svg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success('Diagram downloaded as SVG');
+      } else {
+        toast.error('Could not find diagram to download');
+      }
+    }
+  }
+
   return (
-    <div className={cn('flex flex-col gap-3', isUser ? 'items-end' : 'items-start')}>
+    <div id={`msg-${index}`} className={cn('flex flex-col gap-3 group/msg', isUser ? 'items-end' : 'items-start')}>
       <div className={cn('flex items-center gap-2 mb-1', isUser ? 'flex-row-reverse' : 'flex-row')}>
         <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shadow-sm',
           isUser ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400')}>
@@ -163,9 +274,16 @@ function MessageBubble({ msg, isLast, isNew }: { msg: Message, isLast: boolean, 
         )}
 
         {!isUser && (
-          <button onClick={handleCopy} className="absolute -right-10 top-0 p-2 text-slate-400 hover:text-primary transition-opacity opacity-0 group-hover:opacity-100">
-            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          </button>
+          <div className="absolute -right-12 top-0 flex flex-col gap-1 transition-opacity opacity-0 group-hover:opacity-100">
+            <button onClick={handleCopy} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 text-slate-400 hover:text-primary transition-all active:scale-95" title="Copy text">
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+            {(msg.image || msg.diagram) && (
+              <button onClick={handleDownload} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 text-slate-400 hover:text-emerald-500 transition-all active:scale-95" title="Download visual">
+                <Download className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -186,10 +304,6 @@ function AIChat() {
   const [selectedResource, setSelectedResource] = useState<number | null>(null)
   const [activeSession, setActiveSession] = useState<any>(null)
 
-  // Tools UI
-  const [showDiagram, setShowDiagram] = useState(false)
-  const [showImageGen, setShowImageGen] = useState(false)
-  
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false)
   
@@ -226,9 +340,35 @@ function AIChat() {
   }
 
   const loadSession = (session: any) => {
-    setMessages(session.messages || [])
+    // Clear current state first to prevent flash of old content
+    setMessages([])
+    setAttachedFile(null)
+    setFilePreview(null)
+    
+    // Map backend fields (diagram_code, image) to frontend state (diagram, image)
+    const mappedMessages = (session.messages || []).map((m: any) => ({
+      role: m.role,
+      content: m.content || '',
+      diagram: m.diagram_code || m.diagram || undefined,
+      image: m.image || undefined
+    }))
+    setMessages(mappedMessages)
     setActiveSession(session)
     setSidebarOpen(false)
+  }
+
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: number) => {
+    e.stopPropagation() // Prevent loading the session when clicking delete
+    try {
+      await aiApi.deleteSession(sessionId)
+      queryClient.invalidateQueries({ queryKey: ['ai-sessions'] })
+      if (activeSession?.id === sessionId) {
+        startNew()
+      }
+      toast.success('Chat deleted successfully')
+    } catch (err) {
+      toast.error('Failed to delete chat')
+    }
   }
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -286,42 +426,124 @@ function AIChat() {
         // VISION: Still uses standard blocking API for now
         const responseRes = await aiApi.sendVisionMessage(activeId || 0, currentInput, attachedFile);
         const response = responseRes.data;
+        const assistantMsgId = response.id;
+        
         const assistantMsg: Message = { 
           role: 'assistant', 
           content: response.reply || response.content || '',
-          diagram: response.diagram_code 
+          diagram: response.diagram_code,
+          image: response.image
         };
+        
         setMessages(prev => [...prev, assistantMsg]);
+
+        // Check for actions in vision mode too
+        if (assistantMsg.content.includes('ACTION:')) {
+           const parts = assistantMsg.content.split('ACTION:');
+           try {
+             const action = JSON.parse(parts[1].trim());
+             if (action.tool === 'generate_image') {
+               aiApi.generateImage(action.parameters.prompt, assistantMsgId).then(res => {
+                 setMessages(prev => {
+                   const updated = [...prev];
+                   updated[updated.length - 1].image = res.data.url;
+                   return updated;
+                 });
+               });
+             } else if (action.tool === 'generate_diagram') {
+               aiApi.generateDiagram(action.parameters.description || action.parameters.prompt, action.parameters.type || 'auto', assistantMsgId).then(res => {
+                 setMessages(prev => {
+                   const updated = [...prev];
+                   updated[updated.length - 1].diagram = res.data.mermaid;
+                   return updated;
+                 });
+               });
+             }
+           } catch(e) {}
+        }
       } else {
         // CHAT: Enhanced Streaming Interface
         const assistantMsg: Message = { role: 'assistant', content: '', is_streaming: true };
         setMessages(prev => [...prev, assistantMsg]);
         
         let fullContent = '';
+        let actionDetected = false;
+        let assistantMessageId: number | null = null;
+
         const stream = aiApi.streamAgentResponse(
           currentInput,
           contextType === 'resource' ? `resource_id:${selectedResource}` : '',
           messages.map(m => ({ role: m.role, content: m.content })),
-          false // tutor mode
+          false, // tutor mode
+          activeId // pass session_id for backend auto-saving
         );
 
         for await (const chunk of stream) {
-          if (chunk.includes('ACTION_TRIGGERED:')) {
-            const actionStr = chunk.split('ACTION_TRIGGERED:')[1];
-            try {
-              const action = JSON.parse(actionStr);
-              toast.success(`Action: ${action.tool} detected!`);
-              // Note: You can add more complex action feedback here
-            } catch (e) {}
+          if (typeof chunk === 'object' && chunk.message_id) {
+            assistantMessageId = chunk.message_id;
+            // If the backend created a new session, track it on the frontend
+            if (chunk.session_id && !activeSession) {
+              const newSession = { id: chunk.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
+              setActiveSession(newSession);
+              queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+            }
             continue;
           }
           
           fullContent += chunk;
+          
+          // ACTION INTERPRETER
+          if (fullContent.includes('ACTION:') && !actionDetected) {
+            const parts = fullContent.split('ACTION:');
+            const potentialJson = parts[1].trim();
+            
+            if (potentialJson.endsWith('}')) {
+              try {
+                const action = JSON.parse(potentialJson);
+                actionDetected = true;
+                
+                // EXECUTE TOOL with persist link
+                if (action.tool === 'generate_image') {
+                  toast.promise(aiApi.generateImage(action.parameters.prompt, assistantMessageId || undefined), {
+                    loading: 'FlowAI is generating your image...',
+                    success: (res) => {
+                      setMessages(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last) last.image = res.data.url;
+                        return updated;
+                      });
+                      queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+                      return 'Image generated!';
+                    },
+                    error: 'Failed to generate image.'
+                  });
+                } else if (action.tool === 'generate_diagram') {
+                  toast.promise(aiApi.generateDiagram(action.parameters.description || action.parameters.prompt, action.parameters.type || 'auto', assistantMessageId || undefined), {
+                    loading: 'FlowAI is drafting your diagram...',
+                    success: (res) => {
+                      setMessages(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last) last.diagram = res.data.mermaid;
+                        return updated;
+                      });
+                      queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+                      return 'Diagram ready!';
+                    },
+                    error: 'Failed to render diagram.'
+                  });
+                }
+              } catch (e) { }
+            }
+          }
+
           setMessages(prev => {
             const last = prev[prev.length - 1];
             if (last && last.role === 'assistant') {
               const updated = [...prev];
-              updated[updated.length - 1] = { ...last, content: fullContent };
+              const displayContent = fullContent.split('ACTION:')[0].trim();
+              updated[updated.length - 1] = { ...last, content: displayContent };
               return updated;
             }
             return prev;
@@ -440,16 +662,27 @@ function AIChat() {
             </div>
           )}
 
-          {/* Tools */}
           <div className="px-4 pb-4">
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-3 px-1 tracking-widest uppercase">AI Tools</p>
             <div className="space-y-1.5">
-              <button onClick={() => setShowDiagram(true)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
+              <button 
+                onClick={() => {
+                  setInput('Generate a diagram for: ')
+                  setSidebarOpen(false)
+                  setTimeout(() => textareaRef.current?.focus(), 100)
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+              >
                 <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-500/20 text-violet-500 flex items-center justify-center"><Network className="w-4 h-4" /></div> Generate Diagram
               </button>
-              <button onClick={() => setShowImageGen(true)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-pink-500/10 hover:text-pink-600 dark:hover:text-pink-400 transition-colors">
+              <button 
+                onClick={() => {
+                  setInput('Generate an image showing: ')
+                  setSidebarOpen(false)
+                  setTimeout(() => textareaRef.current?.focus(), 100)
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-pink-500/10 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
+              >
                 <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-500/20 text-pink-500 flex items-center justify-center"><Wand2 className="w-4 h-4" /></div> Generate Image
               </button>
             </div>
@@ -464,15 +697,22 @@ function AIChat() {
               <div className="space-y-1">
                 {sessions.slice(0, 20).map((s: any) => (
                   <button key={s.id} onClick={() => loadSession(s)}
-                    className={cn('w-full text-left px-3 py-3 rounded-xl transition-all group flex items-start gap-3',
+                    className={cn('w-full text-left px-3 py-3 rounded-xl transition-all group flex items-start gap-3 relative',
                       activeSession?.id === s.id
                         ? 'bg-primary/10 text-primary shadow-sm'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
                     <MessageSquare className="w-4 h-4 flex-shrink-0 mt-0.5 opacity-50" />
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pr-6">
                       <div className="font-bold text-sm truncate">{s.title || 'Untitled Session'}</div>
                       <div className="text-slate-400 dark:text-slate-500 text-[10px] font-bold mt-1 uppercase tracking-wider">{timeAgo(s.updated_at)}</div>
                     </div>
+                    <button 
+                      onClick={(e) => handleDeleteSession(e, s.id)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Delete chat"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </button>
                 ))}
               </div>
@@ -552,6 +792,7 @@ function AIChat() {
                 <MessageBubble 
                   key={i} 
                   msg={msg} 
+                  index={i}
                   isLast={i === messages.length - 1} 
                   isNew={!sending && i === messages.length - 1} 
                 />
@@ -638,10 +879,6 @@ function AIChat() {
           </div>
         </div>
       </div>
-      
-      {/* Hidden file input for logic */}
-      <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
-
     </div>
   )
 }

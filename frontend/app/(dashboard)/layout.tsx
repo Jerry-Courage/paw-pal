@@ -11,7 +11,7 @@ import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
-const AIGuideTour = dynamic(() => import('@/components/tour/AIGuideTour'), { ssr: false })
+const VideoTutorialModal = dynamic(() => import('@/components/onboarding/VideoTutorialModal'), { ssr: false })
 const GlobalAgentAssistant = dynamic(() => import('@/components/ai/GlobalAgentAssistant'), { ssr: false })
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showTutorial, setShowTutorial] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
 
@@ -29,7 +30,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     if (status === 'authenticated') {
       const onboarded = localStorage.getItem('flowstate_onboarded')
-      if (!onboarded) setShowOnboarding(true)
+      const tutorialSeen = localStorage.getItem('flowstate_tutorial_seen')
+      
+      if (!onboarded) {
+        setShowOnboarding(true)
+      } else if (!tutorialSeen) {
+        setShowTutorial(true)
+      }
     }
   }, [status, router])
 
@@ -50,7 +57,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      <AIGuideTour />
       
       {/* Desktop sidebar — hidden on mobile, collapsible on desktop */}
       <div className={cn(
@@ -82,7 +88,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <GlobalAgentAssistant />
 
       {showOnboarding && (
-        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+        <OnboardingWizard onComplete={() => {
+          setShowOnboarding(false)
+          setShowTutorial(true)
+        }} />
+      )}
+
+      {showTutorial && (
+        <VideoTutorialModal 
+          isOpen={showTutorial} 
+          onClose={() => {
+            localStorage.setItem('flowstate_tutorial_seen', 'true')
+            setShowTutorial(false)
+          }} 
+        />
       )}
     </div>
   )

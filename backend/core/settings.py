@@ -309,6 +309,14 @@ UNFOLD = {
                 'separator': True,
                 'items': [
                     {'title': 'All Users', 'icon': 'people', 'link': '/admin/users/user/'},
+                    {'title': 'Push Subscriptions', 'icon': 'notifications', 'link': '/admin/users/pushsubscription/'},
+                ],
+            },
+            {
+                'title': 'System Settings',
+                'separator': True,
+                'items': [
+                    {'title': 'Global Configuration', 'icon': 'settings', 'link': '/admin/users/globalconfig/'},
                 ],
             },
             {

@@ -3,10 +3,23 @@ from .models import ChatSession, ChatMessage
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = ChatMessage
-        fields = ('id', 'role', 'content', 'created_at')
+        fields = ('id', 'role', 'content', 'image', 'diagram_code', 'created_at')
         read_only_fields = ('id', 'created_at')
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        if obj.image.startswith('http') or obj.image.startswith('data:'):
+            return obj.image
+        # If it's a relative path (local upload), make it absolute
+        request = self.context.get('request')
+        if request is not None:
+            return request.build_absolute_uri(obj.image)
+        return obj.image
 
 
 class ChatSessionSerializer(serializers.ModelSerializer):
