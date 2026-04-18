@@ -44,72 +44,67 @@ def get_video_metadata(video_id: str) -> dict:
 
 
 def get_transcript(video_id: str) -> Optional[str]:
-    """Try to get transcript using youtube-transcript-api with version compatibility check."""
+    """Get transcript using youtube-transcript-api v1.2.4+ (fetch/list API)."""
+    
+    # 1. PRIMARY: youtube-transcript-api
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
         
-        # 1. TRADITIONAL FAST PATH
+        # Try fetching with English language preference first
         try:
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-            # Handle both dict (legacy) and object (2026+) formats
-            return ' '.join([(t['text'] if isinstance(t, dict) else getattr(t, 'text', '')) for t in transcript_list])
-        except Exception:
-            # 2. FALLBACK: METADATA & LANGUAGE DETECTION
-            try:
-                # Handle Bound vs Unbound methods (Static vs Instance)
-                # Some versions (like 2026.2.25) may require an instance if not properly patched
-                api = YouTubeTranscriptApi()
-                
-                # Try modern method names first
+            result = api.fetch(video_id, languages=['en', 'en-US', 'en-GB'])
+            snippets = list(result)
+            if snippets:
+                text = ' '.join([s.text for s in snippets])
+                if text.strip():
+                    print(f"[YouTube] Got transcript via fetch() for {video_id}: {len(text)} chars")
+                    return text
+        except Exception as e:
+            print(f"[YouTube] English fetch failed: {e}")
+        
+        # Try any available language
+        try:
+            result = api.fetch(video_id)
+            snippets = list(result)
+            if snippets:
+                text = ' '.join([s.text for s in snippets])
+                if text.strip():
+                    print(f"[YouTube] Got transcript (any lang) for {video_id}: {len(text)} chars")
+                    return text
+        except Exception as e:
+            print(f"[YouTube] Any-language fetch failed: {e}")
+
+        # Try listing available transcripts
+        try:
+            transcript_list = api.list(video_id)
+            for transcript in transcript_list:
                 try:
-                    transcript_metadata = api.list_transcripts(video_id)
-                except (AttributeError, TypeError):
-                    # Try 'list' attribute (seen in user diagnostic)
-                    try:
-                        transcript_metadata = api.list(video_id)
-                    except (AttributeError, TypeError):
-                        # Final resort: Class-level call
-                        transcript_metadata = YouTubeTranscriptApi.list_transcripts(video_id)
-                
-                # High-Fidelity Language Guard: Prioritize English variants
-                try:
-                    # Preferred order: Manual English -> Auto-Generated English
-                    transcript = transcript_metadata.find_transcript(['en', 'en-US', 'en-GB'])
+                    result = transcript.fetch()
+                    snippets = list(result)
+                    if snippets:
+                        text = ' '.join([s.text for s in snippets])
+                        if text.strip():
+                            print(f"[YouTube] Got transcript via list() for {video_id}: {len(text)} chars")
+                            return text
                 except Exception:
-                    # If no English variant is found, we checks if the available tracks are reliable
-                    try:
-                        # Grab the list of available languages
-                        available_langs = [t.language_code for t in transcript_metadata]
-                        # If the ONLY available transcript is auto-generated and NOT English, 
-                        # we reject it to force the high-fidelity Whisper fallback.
-                        if 'hi' in available_langs and 'en' not in available_langs:
-                            print(f"[Guard] Rejecting mismatched auto-transcript (hi) for {video_id} to force Whisper.")
-                            return None
-                    except:
-                        pass
-                    transcript = next(iter(transcript_metadata), None)
-                    
-                if transcript:
-                    data = transcript.fetch()
-                    # 2026+ versions use objects (FetchedTranscriptSnippet) instead of dicts
-                    return ' '.join([(t['text'] if isinstance(t, dict) else getattr(t, 'text', '')) for t in data])
-            except Exception as e:
-                print(f"YouTube Transcript fallback failed (Hybrid Bridge Error): {e}")
+                    continue
+        except Exception as e:
+            print(f"[YouTube] list() failed: {e}")
                 
+    except ImportError:
+        print("[YouTube] youtube-transcript-api not installed")
     except Exception as e:
-        print(f"YouTube Transcript library error: {e}")
+        print(f"[YouTube] Transcript library error: {e}")
             
-    # 3. ADVANCED FALLBACK: Download Audio + Transcribe with Whisper
-    print("Trying advanced fallback: Audio Transcription via Groq/Whisper")
+    # 2. FALLBACK: Download Audio + Transcribe with Groq Whisper
+    print(f"[YouTube] Trying audio fallback for {video_id}...")
     try:
-        import os, tempfile, subprocess, requests
         groq_key = os.getenv('GROQ_API_KEY')
         if groq_key:
             url = f"https://www.youtube.com/watch?v={video_id}"
-            import sys
             with tempfile.TemporaryDirectory() as tmpdir:
                 out_tmpl = os.path.join(tmpdir, 'audio.%(ext)s')
-                # Grab a tiny audio stream to stay under APIs 25MB limit and maximize speed
                 cmd = [
                     sys.executable, "-m", "yt_dlp",
                     "-f", "worstaudio[ext=m4a]/worstaudio",
@@ -118,20 +113,16 @@ def get_transcript(video_id: str) -> Optional[str]:
                     "-o", out_tmpl,
                     url
                 ]
-                print(f"Running yt-dlp for {video_id} using {sys.executable}...")
+                print(f"[YouTube] Running yt-dlp for {video_id}...")
                 result = subprocess.run(
-                    cmd, 
-                    capture_output=True, 
-                    text=True, 
-                    encoding='utf-8', 
-                    errors='ignore',
-                    timeout=120  # 2 minute safety timeout for info extraction
+                    cmd, capture_output=True, text=True, 
+                    encoding='utf-8', errors='ignore', timeout=120
                 )
                 
                 files = os.listdir(tmpdir)
                 if files:
                     audio_path = os.path.join(tmpdir, files[0])
-                    print(f"Transcribing {audio_path} via Groq Whisper...")
+                    print(f"[YouTube] Transcribing {audio_path} via Groq Whisper...")
                     
                     with open(audio_path, 'rb') as audio_file:
                         res = requests.post(
@@ -140,16 +131,18 @@ def get_transcript(video_id: str) -> Optional[str]:
                             files={"file": (files[0], audio_file)},
                             data={"model": "whisper-large-v3", "response_format": "text"}
                         )
-                    if res.status_code == 200:
+                    if res.status_code == 200 and res.text.strip():
+                        print(f"[YouTube] Whisper transcript: {len(res.text)} chars")
                         return res.text
                     else:
-                        print(f"Whisper failed: {res.text}")
+                        print(f"[YouTube] Whisper failed: {res.status_code} {res.text[:200]}")
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"Audio fallback failed: {e}")
+        print(f"[YouTube] Audio fallback failed: {e}")
         
     return None
+
 
 
 def process_youtube_url(url: str) -> dict:
