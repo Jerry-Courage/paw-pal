@@ -413,7 +413,12 @@ class AIService:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
             if self.google_client:
                 # We use the names exactly as verified in models.list()
-                for g_model in ['gemini-2.5-flash', 'gemini-1.5-flash']:
+                for g_model in [
+                    'gemini-2.5-flash', 
+                    'gemini-1.5-flash', 
+                    'gemini-1.5-flash-latest',
+                    'gemini-1.5-flash-002'
+                ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         response = self.google_client.models.generate_content_stream(
@@ -424,6 +429,7 @@ class AIService:
                         for chunk in response:
                             text = ""
                             try:
+                                # Safe extraction for different SDK response versions
                                 if hasattr(chunk, 'text') and chunk.text:
                                     text = chunk.text
                                 elif hasattr(chunk, 'candidates') and chunk.candidates:

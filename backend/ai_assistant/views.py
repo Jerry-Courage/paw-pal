@@ -818,7 +818,8 @@ class AgentView(APIView):
                 session=session, 
                 role='assistant', 
                 content=display_reply,
-                action_data={'action': action, 'result': execution_result} if action else None
+                image=execution_result if action and action.get('tool') == 'generate_image' else None,
+                diagram_code=execution_result if action and action.get('tool') == 'generate_diagram' else None
             )
 
             return Response({
