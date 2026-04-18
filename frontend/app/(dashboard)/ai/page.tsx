@@ -458,102 +458,43 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT: Enhanced Streaming Interface
-        const assistantMsg: Message = { role: 'assistant', content: '', is_streaming: true };
-        setMessages(prev => [...prev, assistantMsg]);
-        
-        let fullContent = '';
-        let actionDetected = false;
-        let assistantMessageId: number | null = null;
+        // CHAT: Stable Atomic Protocol (Production Standard)
+        const placeholder: Message = { role: 'assistant', content: '', is_streaming: true };
+        setMessages(prev => [...prev, placeholder]);
 
-        const stream = aiApi.streamAgentResponse(
+        const data = await aiApi.askAgent(
           currentInput,
           contextType === 'resource' ? `resource_id:${selectedResource}` : '',
           messages.map(m => ({ role: m.role, content: m.content })),
           false, // tutor mode
-          activeId // pass session_id for backend auto-saving
+          activeId // session_id
         );
 
-        for await (const chunk of stream) {
-          if (typeof chunk === 'object' && chunk.message_id) {
-            assistantMessageId = chunk.message_id;
-            // If the backend created a new session, track it on the frontend
-            if (chunk.session_id && !activeSession) {
-              const newSession = { id: chunk.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
-              setActiveSession(newSession);
-              queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
-            }
-            continue;
-          }
-          
-          fullContent += chunk;
-          
-          // ACTION INTERPRETER
-          if (fullContent.includes('ACTION:') && !actionDetected) {
-            const parts = fullContent.split('ACTION:');
-            const potentialJson = parts[1].trim();
-            
-            if (potentialJson.endsWith('}')) {
-              try {
-                const action = JSON.parse(potentialJson);
-                actionDetected = true;
-                
-                // EXECUTE TOOL with persist link
-                if (action.tool === 'generate_image') {
-                  toast.promise(aiApi.generateImage(action.parameters.prompt, assistantMessageId || undefined), {
-                    loading: 'FlowAI is generating your image...',
-                    success: (res) => {
-                      setMessages(prev => {
-                        const updated = [...prev];
-                        const last = updated[updated.length - 1];
-                        if (last) last.image = res.data.url;
-                        return updated;
-                      });
-                      queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
-                      return 'Image generated!';
-                    },
-                    error: 'Failed to generate image.'
-                  });
-                } else if (action.tool === 'generate_diagram') {
-                  toast.promise(aiApi.generateDiagram(action.parameters.description || action.parameters.prompt, action.parameters.type || 'auto', assistantMessageId || undefined), {
-                    loading: 'FlowAI is drafting your diagram...',
-                    success: (res) => {
-                      setMessages(prev => {
-                        const updated = [...prev];
-                        const last = updated[updated.length - 1];
-                        if (last) last.diagram = res.data.mermaid;
-                        return updated;
-                      });
-                      queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
-                      return 'Diagram ready!';
-                    },
-                    error: 'Failed to render diagram.'
-                  });
-                }
-              } catch (e) { }
-            }
+        if (data.reply) {
+          if (data.session_id && !activeSession) {
+            const newSession = { id: data.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
+            setActiveSession(newSession);
           }
 
           setMessages(prev => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === 'assistant') {
-              const updated = [...prev];
-              const displayContent = fullContent.split('ACTION:')[0].trim();
-              updated[updated.length - 1] = { ...last, content: displayContent };
-              return updated;
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (updated[lastIdx]?.role === 'assistant') {
+              // Replace placeholder with final atomic message
+              updated[lastIdx] = {
+                role: 'assistant',
+                content: data.reply,
+                image: data.message?.image,
+                diagram: data.message?.diagram,
+                is_streaming: false
+              };
             }
-            return prev;
+            return updated;
           });
+
+          queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
         }
-        
-        // Finalize streaming state
-        setMessages(prev => {
-          const updated = [...prev];
-          if (updated[updated.length - 1]) {
-            updated[updated.length - 1].is_streaming = false;
-          }
-          return updated;
-        });
+      }
       }
       
       if (!activeSession) queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });

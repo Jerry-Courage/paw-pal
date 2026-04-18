@@ -763,49 +763,79 @@ class AgentView(APIView):
         query = request.data.get('query', '').strip()
         context = request.data.get('context', '')
         history = request.data.get('history', [])
+        session_id = request.data.get('session_id')
+        is_tutor = request.data.get('is_tutor_mode') in [True, 'true']
+        
         if not query:
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # 1. Handle Session Persistence
+        session = None
+        if session_id:
+            session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        else:
+            title = query[:30] + ('...' if len(query) > 30 else '')
+            session = ChatSession.objects.create(user=request.user, title=title or "New Chat")
+
+        # 2. Save User Message
+        ChatMessage.objects.create(session=session, role='user', content=query)
+
         agent = FlowAgent(request.user)
-        is_tutor = request.data.get('is_tutor_mode') in [True, 'true']
         
-        # Use async_to_sync only for the AI call to keep Authentication safe in its sync context
-        reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
-        
-        execution_result = None
-        if action:
-            execution_result = async_to_sync(agent.execute_action)(action)
+        # 3. Process with Agent (Synchronous AI call)
+        try:
+            reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
+            
+            execution_result = None
+            if action:
+                execution_result = async_to_sync(agent.execute_action)(action)
 
-        display_reply = reply.split('ACTION:')[0].strip()
-        speech_text = VoiceSanitizer.clean(display_reply)
-        
-        voice_enabled = request.data.get('voice_enabled') in [True, 'true']
-        voice_id = request.data.get('voice_id')
-        audio_url = None
+            display_reply = reply.split('ACTION:')[0].strip()
+            speech_text = VoiceSanitizer.clean(display_reply)
+            
+            voice_enabled = request.data.get('voice_enabled') in [True, 'true']
+            voice_id = request.data.get('voice_id')
+            audio_url = None
 
-        if voice_enabled and speech_text:
-            try:
-                h = hashlib.md5(speech_text.encode('utf-8')).hexdigest()
-                out_dir = os.path.join(settings.MEDIA_ROOT, 'agent_responses')
-                os.makedirs(out_dir, exist_ok=True)
-                f_name = f"{h}.mp3"
-                f_path = os.path.join(out_dir, f_name)
-                
-                if not os.path.exists(f_path):
-                    v_id = voice_id or SUPPORTED_VOICES['Andrew']
-                    generate_tts_file(speech_text, v_id, f_path)
-                
-                audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
-            except Exception as e:
-                logger.error(f"Agent Voice Synthesis Error: {e}")
+            if voice_enabled and speech_text:
+                try:
+                    h = hashlib.md5(speech_text.encode('utf-8')).hexdigest()
+                    out_dir = os.path.join(settings.MEDIA_ROOT, 'agent_responses')
+                    os.makedirs(out_dir, exist_ok=True)
+                    f_name = f"{h}.mp3"
+                    f_path = os.path.join(out_dir, f_name)
+                    
+                    if not os.path.exists(f_path):
+                        v_id = voice_id or SUPPORTED_VOICES['Andrew']
+                        generate_tts_file(speech_text, v_id, f_path)
+                    
+                    audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
+                except Exception as e:
+                    logger.error(f"Agent Voice Synthesis Error: {e}")
 
-        return Response({
-            'reply': display_reply,
-            'speech_text': speech_text,
-            'audio_url': audio_url,
-            'action': action,
-            'execution_result': execution_result
-        })
+            # 4. Save Assistant Message
+            assistant_msg = ChatMessage.objects.create(
+                session=session, 
+                role='assistant', 
+                content=display_reply,
+                action_data={'action': action, 'result': execution_result} if action else None
+            )
+
+            return Response({
+                'done': True,
+                'message_id': assistant_msg.id,
+                'session_id': session.id,
+                'reply': display_reply,
+                'speech_text': speech_text,
+                'audio_url': audio_url,
+                'action': action,
+                'execution_result': execution_result,
+                'message': ChatMessageSerializer(assistant_msg).data
+            })
+            
+        except Exception as e:
+            logger.error(f"Atomic Agent Error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AgentStreamView(APIView):
     """Universal platform agent endpoint (Streaming SSE - Hybrid)."""

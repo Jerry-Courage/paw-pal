@@ -4,10 +4,11 @@ from .models import ChatSession, ChatMessage
 
 class ChatMessageSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    diagram = serializers.CharField(source='diagram_code', read_only=True)
 
     class Meta:
         model = ChatMessage
-        fields = ('id', 'role', 'content', 'image', 'diagram_code', 'created_at')
+        fields = ('id', 'role', 'content', 'image', 'diagram', 'diagram_code', 'created_at')
         read_only_fields = ('id', 'created_at')
 
     def get_image(self, obj):
