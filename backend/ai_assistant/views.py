@@ -840,10 +840,11 @@ class AgentView(APIView):
                 'message': ChatMessageSerializer(assistant_msg, context={'request': request}).data
             })
         except Exception as e:
-            logger.error(f"Atomic Agent Error: {e}")
+            err_details = f"Atomic Agent Error: {str(e)}"
+            logger.error(err_details)
             return Response({
                 'done': True,
-                'reply': "Intelligence Signal Interrupted. I ran into a snag while processing that.",
+                'reply': f"Intelligence Signal Interrupted: {str(e)}",
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -490,9 +490,10 @@ function AIChat() {
               queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
             }
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('Agent Error:', err);
-          toast.error('Intelligence Signal Interrupted');
+          const errMsg = err.response?.data?.error || err.response?.data?.reply || err.message || 'Intelligence Signal Interrupted';
+          toast.error(errMsg);
         } finally {
           setIsLoading(false);
         }
