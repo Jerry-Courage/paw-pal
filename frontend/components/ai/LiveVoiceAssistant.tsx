@@ -5,6 +5,7 @@ import { Mic, MicOff, Zap, X, Volume2, Waves } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { SERVER_URL } from '@/lib/api'
 
 interface LiveVoiceAssistantProps {
   onClose: () => void
@@ -34,10 +35,10 @@ export default function LiveVoiceAssistant({ onClose, token }: LiveVoiceAssistan
 
   const connect = () => {
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      // Target our new backend endpoint
-      const wsUrl = `${protocol}//${window.location.host.replace(':3000', ':8000')}/ws/ai/live/`
+      // Derive WS URL from the production SERVER_URL
+      const wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws/ai/live/'
       
+      console.log('[Live] Connecting to:', wsUrl)
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
