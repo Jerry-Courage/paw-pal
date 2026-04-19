@@ -1,7 +1,12 @@
 import os
+import sys
+import io
 import django
 from django.utils import timezone
 from datetime import timedelta
+
+# Fix for emojis in Windows terminal
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
@@ -10,32 +15,25 @@ from library.models import Resource
 from django_q.models import Task, Success, Failure
 
 def run_audit():
-    print(f"--- [Live Audit: {timezone.now()}] ---")
-    
-    # 1. Check for new Resources
-    latest_resources = Resource.objects.all().order_by('-id')[:3]
-    print("\n[LATEST RESOURCES]")
-    if latest_resources:
-        for r in latest_resources:
+    try:
+        print(f"--- [Live Audit: {timezone.now()}] ---")
+        
+        print("\n[LATEST RESOURCES]")
+        resources = Resource.objects.all().order_by('-id')[:5]
+        for r in resources:
             print(f"ID: {r.id} | Title: {r.title} | Status: {r.status} | Progress: {r.status_text}")
-    else:
-        print("No resources found.")
 
-    # 2. Check Task Queue
-    print("\n[QUEUE STATUS]")
-    print(f"Pending Tasks (Task model): {Task.objects.count()}")
+        print("\n[QUEUE STATUS]")
+        print(f"Pending Tasks (Task model): {Task.objects.count()}")
 
-    # 3. Check recent Successes (last 10 mins)
-    recent_s = Success.objects.filter(stopped__gt=timezone.now() - timedelta(minutes=10))
-    print(f"\n[RECENT SUCCESSES (10m)]: {recent_s.count()}")
-    for s in recent_s[:3]:
-        print(f"- {s.name} at {s.stopped}")
+        print("\n[RECENT SUCCESSES (10m)]")
+        print(f"Success Count: {Success.objects.filter(stopped__gte=timezone.now()-timedelta(minutes=10)).count()}")
 
-    # 4. Check recent Failures (last 10 mins)
-    recent_f = Failure.objects.filter(stopped__gt=timezone.now() - timedelta(minutes=10))
-    print(f"\n[RECENT FAILURES (10m)]: {recent_f.count()}")
-    for f in recent_f[:3]:
-        print(f"- {f.name} error: {f.result}")
+        print("\n[RECENT FAILURES (10m)]")
+        print(f"Failure Count: {Failure.objects.filter(stopped__gte=timezone.now()-timedelta(minutes=10)).count()}")
+
+    except Exception as e:
+        print(f"Audit Error: {e}")
 
 if __name__ == "__main__":
     run_audit()

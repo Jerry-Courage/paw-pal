@@ -21,46 +21,26 @@ from core.throttling import UploadRateThrottle, AIRateThrottle
 
 logger = logging.getLogger('flowstate')
 
-def trigger_github_synthesis(resource_id):
+def trigger_internal_forge(resource_id):
     """
-    Sends a repository_dispatch event to GitHub Actions to trigger zero-cost synthesis.
+    Ignites the 'Internal Forge' by running synthesis in a background thread.
+    This is the zero-cost solution for Render Free Tier.
     """
-    import requests
-    import json
+    import threading
+    from django.core.management import call_command
     
-    token = os.getenv('GITHUB_ENGINE_TOKEN')
-    repo_owner = os.getenv('GITHUB_REPO_OWNER', 'Jerry-Courage')
-    repo_name = os.getenv('GITHUB_REPO_NAME', 'paw-pal')
-    
-    if not token:
-        logger.error("[GitHub Engine] Missing GITHUB_ENGINE_TOKEN. Skipping remote trigger.")
-        return False
-        
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/dispatches"
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {token}",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
-    payload = {
-        "event_type": "trigger-synthesis",
-        "client_payload": {
-            "resource_id": resource_id
-        }
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        if response.status_code == 204:
-            logger.info(f"[GitHub Engine] Successfully ignited synthesis for Resource {resource_id}")
-            return True
-        else:
-            logger.error(f"[GitHub Engine] Trigger failed ({response.status_code}): {response.text}")
-            return False
-    except Exception as e:
-        logger.error(f"[GitHub Engine] Critical connection error: {str(e)}")
-        return False
+    def run_synthesis_in_thread(rid):
+        logger.info(f"[Internal Forge] Starting synthesis for Resource {rid}...")
+        try:
+            call_command('run_synthesis', rid)
+            logger.info(f"[Internal Forge] Successfully completed synthesis for Resource {rid}")
+        except Exception as e:
+            logger.error(f"[Internal Forge] Critical synthesis failure for Resource {rid}: {str(e)}")
 
+    thread = threading.Thread(target=run_synthesis_in_thread, args=(resource_id,))
+    thread.daemon = True
+    thread.start()
+    return True
 
 ALLOWED_EXTENSIONS = {
     '.pdf', '.doc', '.docx', '.pptx', '.ppt', '.txt', '.md',
@@ -108,16 +88,10 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource.file_size = resource.file.size if resource.file else 0
         resource.save()
 
-        # ─── IMPERIAL TRIGGER ────────────────────────────────────────────────────────
-        # Try triggering GitHub Actions first for zero-cost high-fidelity synthesis
-        triggered = trigger_github_synthesis(resource.id)
-        
-        if not triggered:
-            # Fallback to local async task (useful for local dev or if GitHub is down)
-            async_task('library.tasks.process_resource_task', resource.id)
-            logger.info(f'Resource {resource.id} fallback to django-q for user {self.request.user.id}')
-        else:
-            logger.info(f'Resource {resource.id} successfully dispatched to GitHub Engine.')
+        # ─── IMPERIAL INTERNAL FORGE ──────────────────────────────────────────────────
+        # Zero-cost internal background processing (Bypasses Storage Wall)
+        trigger_internal_forge(resource.id)
+        logger.info(f'Resource {resource.id} ignited in the Internal Forge for user {self.request.user.id}')
 
     def get_serializer_context(self):
         return {'request': self.request}
