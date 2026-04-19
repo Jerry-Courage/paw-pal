@@ -27,19 +27,20 @@ class Command(BaseCommand):
         # 2. Ensure Imperial Superuser exists
         admin_pass = 'AdminFlow2026!'
         admin, created = User.objects.get_or_create(
-            username='AdminFlow',
+            email='admin@flowstate.ai',
             defaults={
-                'email': 'admin@flowstate.ai',
+                'username': 'AdminFlow',
                 'is_staff': True,
                 'is_superuser': True
             }
         )
+        # Always set the password to ensure consistency
+        admin.set_password(admin_pass)
+        admin.save()
         if created:
-            admin.set_password(admin_pass)
-            admin.save()
-            self.stdout.write(self.style.SUCCESS(f'Created Superuser: AdminFlow | Password: {admin_pass}'))
+            self.stdout.write(self.style.SUCCESS(f'Created Superuser: admin@flowstate.ai | Password: {admin_pass}'))
         else:
-            self.stdout.write(self.style.WARNING('Superuser AdminFlow already exists.'))
+            self.stdout.write(self.style.WARNING('Superuser admin@flowstate.ai updated with fresh credentials.'))
 
         # 3. Load harvested data
         # Data is embedded to ensure portability to Render
