@@ -35,4 +35,5 @@ urlpatterns = [
     path('health/', health_check, name='health'),
     path('', health_check, name='root_health'),
     re_path(r'^media/(?P<path>.*)$', mediacors_serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^agent_responses/(?P<path>.*)$', mediacors_serve, {'document_root': os.path.join(settings.MEDIA_ROOT, 'agent_responses')}),
 ]

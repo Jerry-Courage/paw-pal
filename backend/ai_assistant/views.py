@@ -819,7 +819,7 @@ class AgentView(APIView):
                         v_id = voice_id or SUPPORTED_VOICES.get('Andrew', 'en-US-AndrewNeural')
                         generate_tts_file(speech_text, v_id, f_path)
                     
-                    audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
+                    audio_url = request.build_absolute_uri(f"{settings.MEDIA_URL}agent_responses/{f_name}")
                 except Exception as e:
                     logger.error(f"Agent Voice Synthesis Error: {e}")
 
@@ -993,7 +993,7 @@ class AgentAudioView(APIView):
                     v_id = voice_id or SUPPORTED_VOICES['Andrew']
                     generate_tts_file(speech_text, v_id, f_path)
                 
-                audio_url = f"{settings.MEDIA_URL}agent_responses/{f_name}"
+                audio_url = request.build_absolute_uri(f"{settings.MEDIA_URL}agent_responses/{f_name}")
             except Exception as e:
                 logger.error(f"Agent Voice Synthesis Error: {e}")
 
