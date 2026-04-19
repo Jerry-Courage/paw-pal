@@ -687,29 +687,31 @@ function AIChat() {
             </div>
           </div>
 
-          {activeSession && (
-            <div className="ml-auto flex items-center gap-3 max-w-[50%]">
-              <button 
-                onClick={() => setShowLive(true)} 
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white bg-gradient-to-r from-primary to-violet-600 hover:from-primary/90 hover:to-violet-600/90 transition-all font-black text-xs shadow-lg shadow-primary/20 hover:scale-105 active:scale-95" 
-                title="Go Live (Zero Latency)"
-              >
-                <Zap className="w-4 h-4" />
-                <span className="hidden sm:inline">Go Live</span>
-              </button>
-              <div className="hidden lg:flex text-[10px] font-black bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-700 px-3 py-1.5 rounded-full uppercase tracking-wider truncate shadow-sm">
-                {activeSession?.title || 'Current Thread'}
+          <div className="ml-auto flex items-center gap-3">
+            <button 
+              onClick={() => setShowLive(true)} 
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white bg-gradient-to-r from-primary to-violet-600 hover:from-primary/90 hover:to-violet-600/90 transition-all font-black text-xs shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 whitespace-nowrap" 
+              title="Go Live (Zero Latency)"
+            >
+              <Zap className="w-4 h-4" />
+              <span className="hidden sm:inline">Go Live</span>
+            </button>
+            
+            {activeSession && (
+              <div className="hidden lg:flex text-[10px] font-black bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-700 px-3 py-1.5 rounded-full uppercase tracking-wider truncate max-w-[150px] shadow-sm">
+                {activeSession.title || 'Current Thread'}
               </div>
-              <button 
-                onClick={startNew} 
-                className="flex items-center gap-2 pl-3 pr-4 py-2 rounded-xl text-primary bg-white dark:bg-slate-900 border border-primary/20 hover:bg-primary/5 dark:hover:bg-primary/10 transition-all font-black text-xs shadow-md shadow-primary/5 active:scale-95" 
-                title="New chat"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Chat</span>
-              </button>
-            </div>
-          )}
+            )}
+
+            <button 
+              onClick={startNew} 
+              className="flex items-center gap-2 pl-3 pr-4 py-2 rounded-xl text-primary bg-white dark:bg-slate-900 border border-primary/20 hover:bg-primary/5 dark:hover:bg-primary/10 transition-all font-black text-xs shadow-md shadow-primary/5 active:scale-95 whitespace-nowrap" 
+              title="New chat"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Chat</span>
+            </button>
+          </div>
         </div>
 
         {/* Messages */}

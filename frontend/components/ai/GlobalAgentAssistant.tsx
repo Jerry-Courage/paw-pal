@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import { usePathname } from 'next/navigation'
 import { useSpeechExchange } from '@/hooks/useSpeechExchange'
+import LiveVoiceAssistant from './LiveVoiceAssistant'
 
 interface Message {
   id: string
@@ -30,6 +31,7 @@ export default function GlobalAgentAssistant() {
   const [isLoading, setIsLoading] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [isVoiceResponseEnabled, setIsVoiceResponseEnabled] = useState(true)
+  const [showLive, setShowLive] = useState(false)
   const pathname = usePathname()
   const scrollRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -65,12 +67,8 @@ export default function GlobalAgentAssistant() {
   }, [startListening])
 
   const toggleVoiceRecording = () => {
-    // In hands-free mode, this button toggles the listening state entirely
-    if (speechState !== 'idle' && speechState !== 'error') {
-      stopListening()
-    } else {
-      startListening(true)
-    }
+    // Redirect existing voice button to the high-performance Live API
+    setShowLive(true)
   }
 
   // Sync local loading state with hook thinking state
@@ -191,7 +189,7 @@ export default function GlobalAgentAssistant() {
         dragTransition={{ bounceStiffness: 200, bounceDamping: 20 }}
         onClick={() => {
           if (!isAwake) {
-            forceSession()
+            setShowLive(true)
           } else {
             setIsOpen(true)
           }
@@ -520,6 +518,15 @@ export default function GlobalAgentAssistant() {
               </>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showLive && (
+          <LiveVoiceAssistant 
+            onClose={() => setShowLive(false)} 
+            token={null} 
+          />
         )}
       </AnimatePresence>
     </div>
