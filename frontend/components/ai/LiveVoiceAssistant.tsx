@@ -16,6 +16,7 @@ export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps)
   const [isActive, setIsActive] = useState(false)
   const [isConnecting, setIsConnecting] = useState(true)
   const [isListening, setIsListening] = useState(false)
+  const [volume, setVolume] = useState(0)
   
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -108,6 +109,16 @@ export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps)
         if (!isListening) return
         
         const inputData = e.inputBuffer.getChannelData(0)
+        
+        // Calculate Volume (RMS) for visual feedback
+        let sum = 0
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i]
+        }
+        const rms = Math.sqrt(sum / inputData.length)
+        // Scale to 0-100 range for UI
+        setVolume(Math.min(100, rms * 1000))
+
         // Convert Float32 to Int16 for Gemini
         const int16Data = new Int16Array(inputData.length)
         for (let i = 0; i < inputData.length; i++) {
@@ -194,22 +205,36 @@ export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps)
 
         <div className="p-8 pb-12 flex flex-col items-center text-center">
           <div className="relative mb-8">
-            <div className={cn(
-              "w-24 h-24 rounded-full flex items-center justify-center relative z-10 transition-all duration-500",
-              isListening ? "bg-primary shadow-[0_0_40px_rgba(139,92,246,0.4)]" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
-            )}>
-              {isListening ? <Waves className="w-10 h-10 text-white animate-pulse" /> : <MicOff className="w-10 h-10" />}
-            </div>
+            <motion.div 
+              animate={{ 
+                scale: isListening ? 1 + (volume / 200) : 1,
+                boxShadow: isListening 
+                  ? `0 0 ${20 + (volume / 2)}px rgba(139,92,246,0.5)` 
+                  : 'none'
+              }}
+              className={cn(
+                "w-24 h-24 rounded-full flex items-center justify-center relative z-10 transition-all duration-100",
+                isListening ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+              )}
+            >
+              {isListening ? <Waves className="w-10 h-10 animate-pulse" /> : <MicOff className="w-10 h-10" />}
+            </motion.div>
             
             {isListening && (
               <>
                 <motion.div 
-                  animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.1, 0.3] }}
+                  animate={{ 
+                    scale: [1, 1.5 + (volume / 100), 1], 
+                    opacity: [0.3, 0.1, 0.3] 
+                  }}
                   transition={{ repeat: Infinity, duration: 2 }}
                   className="absolute inset-0 bg-primary rounded-full -z-0"
                 />
                 <motion.div 
-                  animate={{ scale: [1, 2, 1], opacity: [0.2, 0, 0.2] }}
+                  animate={{ 
+                    scale: [1, 2 + (volume / 50), 1], 
+                    opacity: [0.2, 0, 0.2] 
+                  }}
                   transition={{ repeat: Infinity, duration: 3, delay: 0.5 }}
                   className="absolute inset-0 bg-primary rounded-full -z-0"
                 />

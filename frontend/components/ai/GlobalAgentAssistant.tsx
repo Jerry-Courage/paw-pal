@@ -45,14 +45,8 @@ export default function GlobalAgentAssistant() {
     speak, playAudio, error: speechError 
   } = useSpeechExchange({
     isVoiceResponseEnabled,
-    onCommand: (cmd) => {
-      console.log('[Assistant] Voice command received:', cmd)
-      // Auto-open the panel if a command is received while closed
-      setIsOpen(true)
-      handleSend(cmd)
-    },
     onWake: () => {
-      setIsOpen(true)
+      setShowLive(true)
       toast.success('Flow Awakened', { 
         id: 'voice-wake',
         icon: '✨',
