@@ -276,28 +276,28 @@ class AIService:
                     'models/gemini-3.1-flash-lite',
                     'models/gemma-3-27b'
                 ]:
-                try:
-                    contents, sys_instr = self._to_gemini_format(messages)
-                    
-                    # Gemma 3 Fix: Developer instructions must be in the prompt history
-                    if 'gemma' in g_model.lower():
-                        if sys_instr:
-                            if contents and contents[0].get('role') == 'user':
-                                contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        config = {'max_output_tokens': max_tokens}
-                    else:
-                        config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        
+                        # Gemma 3 Fix: Developer instructions must be in the prompt history
+                        if 'gemma' in g_model.lower():
+                            if sys_instr:
+                                if contents and contents[0].get('role') == 'user':
+                                    contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                            config = {'max_output_tokens': max_tokens}
+                        else:
+                            config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                    # Using Async Client to prevent event-loop deadlocks
-                    response = await self.google_client.aio.models.generate_content(
-                        model=g_model,
-                        contents=contents,
-                        config=config
-                    )
-                    if response.text:
-                        return response.text
-                except Exception as e:
-                    logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
+                        # Using Async Client to prevent event-loop deadlocks
+                        response = await self.google_client.aio.models.generate_content(
+                            model=g_model,
+                            contents=contents,
+                            config=config
+                        )
+                        if response.text:
+                            return response.text
+                    except Exception as e:
+                        logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
 
         # --- STAGE 1: HYPER-FAST GROQ (Text-Only or Direct Vision) ---
         groq_key = os.getenv('GROQ_API_KEY')
