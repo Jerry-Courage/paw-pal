@@ -33,5 +33,6 @@ urlpatterns = [
     path('api/community/', include('community.urls')),
     path('api/workspace/', include('workspace.urls')),
     path('health/', health_check, name='health'),
+    path('', health_check, name='root_health'),
     re_path(r'^media/(?P<path>.*)$', mediacors_serve, {'document_root': settings.MEDIA_ROOT}),
 ]

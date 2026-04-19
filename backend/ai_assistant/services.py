@@ -111,14 +111,11 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
-    'models/gemma-4-31b',           # SUPREME: Unlimited Tokens
-    'models/gemma-4-26b',           # STABLE: Unlimited Tokens
-    'models/gemini-2.5-flash',
-    'models/gemini-2.5-flash-lite',
-    'models/gemini-3-flash',
-    'models/gemini-3.1-flash-lite',
-    'models/gemma-3-27b',
-    'openrouter/auto',
+    'models/gemini-1.5-pro',         # SUPREME: 2M Context Reasoning
+    'models/gemini-2.0-flash-exp',   # NEXT-GEN: The Experimental Beast
+    'models/gemini-1.5-flash',       # STABLE: High-Speed Strike
+    'google/gemma-2-27b-it',         # OPEN-WEIGHTS: Pure Gemma Intelligence (OpenRouter)
+    'openrouter/auto',               # AUTO-HEAL: Dynamic routing
 ]
 
 FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the funny, cool, and absolutely awesome AI study partner built into FlowState.
@@ -268,13 +265,10 @@ class AIService:
             if self.google_client_beta:
                 # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
-                    'models/gemma-4-31b', 
-                    'models/gemma-4-26b',
-                    'models/gemini-2.5-flash',
-                    'models/gemini-2.5-flash-lite',
-                    'models/gemini-3-flash',
-                    'models/gemini-3.1-flash-lite',
-                    'models/gemma-3-27b'
+                    'models/gemini-1.5-pro',
+                    'models/gemini-2.0-flash-exp',
+                    'models/gemini-1.5-flash',
+                    'models/gemini-1.5-flash-8b'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -449,13 +443,10 @@ class AIService:
                 # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
                 # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
-                    'models/gemma-4-31b',
-                    'models/gemma-4-26b',
-                    'models/gemini-2.5-flash',
-                    'models/gemini-2.5-flash-lite',
-                    'models/gemini-3-flash',
-                    'models/gemini-3.1-flash-lite',
-                    'models/gemini-2-flash'
+                    'models/gemini-1.5-pro',
+                    'models/gemini-2.0-flash-exp',
+                    'models/gemini-1.5-flash',
+                    'models/gemini-1.5-flash-8b'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
