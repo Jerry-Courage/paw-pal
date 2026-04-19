@@ -65,7 +65,17 @@ class Command(BaseCommand):
                         "overview": {
                             "title": "General Relativity: Geometry and Gravitation",
                             "summary": "General Relativity is the study of how mass and energy warp the fabric of space and time. This kit explores the mathematical and physical logic of a universe where gravity is not a force, but geometry itself."
-                        }
+                        },
+                        "sections": [
+                            {
+                                "title": "1. The Equivalence Principle",
+                                "content": "The fundamental insight that gravity and acceleration are locally indistinguishable. This principle serves as the bedrock for the geometric interpretation of gravity."
+                            },
+                            {
+                                "title": "2. Field Equations",
+                                "content": "Einstein's field equations describe how matter and energy determine the curvature of spacetime, effectively replacing the Newtonian concept of force."
+                            }
+                        ]
                     },
                     "ai_concepts": [{"title": "Event Horizon", "explanation": "The boundary around a black hole beyond which nothing can escape."}],
                     "has_study_kit": True,
@@ -87,7 +97,21 @@ class Command(BaseCommand):
                                 {"topic": "Cycle Dynamics", "subtopics": ["Citrate Synthesis", "Oxidative Decarboxylation", "Oxaloacetate Regen"]},
                                 {"topic": "Energy Output", "subtopics": ["3x NADH", "1x FADH2", "1x ATP/GTP"]}
                             ]
-                        }
+                        },
+                        "overview": {
+                            "title": "Bioenergetics: Cellular Power",
+                            "summary": "A deep dive into the metabolic pathways that drive cellular life."
+                        },
+                        "sections": [
+                            {
+                                "title": "1. The Citric Acid Cycle",
+                                "content": "The central metabolic hub that processes acetyl-CoA to generate high-energy electron carriers."
+                            },
+                            {
+                                "title": "2. Mitochondrial Efficiency",
+                                "content": "How the electron transport chain couples with the Krebs cycle to maximize ATP production."
+                            }
+                        ]
                     },
                     "ai_concepts": [{"title": "Thermodynamics", "explanation": "The study of energy transfer that determines the forward direction of biochemical pathways."}],
                     "has_study_kit": True,
@@ -109,7 +133,21 @@ class Command(BaseCommand):
                                 {"topic": "Subatomic Reality", "subtopics": ["Heisenberg Uncertainty", "Pauli Exclusion", "Quantum Tunneling"]},
                                 {"topic": "Quantum Paradoxes", "subtopics": ["Entanglement", "Superposition", "Schrödinger's Cat"]}
                             ]
-                        }
+                        },
+                        "overview": {
+                            "title": "Quantum Mechanics: The Analytical Blueprint",
+                            "summary": "An advanced journey through quantum mechanics, wave-particle duality, and the statistical foundations of the universe."
+                        },
+                        "sections": [
+                            {
+                                "title": "1. Wave-Particle Duality",
+                                "content": "The core of quantum mechanics lies in the recognition that every particle or quantum entity may be described as either a particle or a wave."
+                            },
+                            {
+                                "title": "2. Theoretical Frameworks",
+                                "content": "Mastering the Schrödinger equation is essential for calculating the evolution of the wave function over time."
+                            }
+                        ]
                     },
                     "ai_concepts": [{"title": "Wave-Particle Duality", "explanation": "The fundamental reality that energy and matter exhibit both wave and particle characteristics."}],
                     "has_study_kit": True,
@@ -131,7 +169,21 @@ class Command(BaseCommand):
                                 {"topic": "Architectures", "subtopics": ["CNNs (Vision)", "RNNs (Sequential)", "Transformers"]},
                                 {"topic": "Training", "subtopics": ["Backpropagation", "Gradient Descent", "Regularization"]}
                             ]
-                        }
+                        },
+                        "overview": {
+                            "title": "Deep Learning: The Analytical Matrix",
+                            "summary": "Mastering Neural Networks, Backpropagation, and the mathematical optimization of modern Artificial Intelligence."
+                        },
+                        "sections": [
+                            {
+                                "title": "1. Neural Network Foundations",
+                                "content": "Neural networks are a series of algorithms that endeavor to recognize underlying relationships in a set of data."
+                            },
+                            {
+                                "title": "2. Training & Convergence",
+                                "content": "Analyze the critical importance of activation functions like ReLU and Sigmoid to ensure model stability."
+                            }
+                        ]
                     },
                     "ai_concepts": [],
                     "has_study_kit": True,
