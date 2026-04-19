@@ -15,11 +15,11 @@ def create_vector_embeddings(resource, text):
             logger.error(f"[RAG Task Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
             return
         
-        from langchain_huggingface import HuggingFaceEmbeddings
         from library.models import DocumentChunk
+        from ai_assistant.services import AIService
         
-        logger.info(f'[RAG] Initializing Embeddings model for {resource.id}...')
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        logger.info(f'[RAG] Initializing Cloud Engine for Resource {resource.id}...')
+        ai = AIService()
         
         logger.info(f'[RAG] Splitting {len(text)} chars for {resource.id}...')
         text_splitter = RecursiveCharacterTextSplitter(
@@ -29,9 +29,14 @@ def create_vector_embeddings(resource, text):
         )
         chunks = text_splitter.split_text(text)
         
-        logger.info(f'[RAG] Generating {len(chunks)} vectors...')
-        vector_data = embeddings.embed_documents(chunks)
+        logger.info(f'[RAG] Generating {len(chunks)} vectors via Cloud Engine...')
+        # Cloud Calculation (Batch): RAM-Zero footprint
+        vector_data = ai.embed_text_cloud(chunks)
         
+        if not vector_data:
+            logger.error(f"[RAG Error] Failed to generate cloud vectors for {resource.id}")
+            return
+
         doc_chunks = []
         for i, chunk_text in enumerate(chunks):
             doc_chunks.append(DocumentChunk(
@@ -41,7 +46,7 @@ def create_vector_embeddings(resource, text):
             ))
             
         DocumentChunk.objects.bulk_create(doc_chunks)
-        logger.info(f'[RAG] Successfully saved {len(doc_chunks)} vectors to Database.')
+        logger.info(f'[RAG] Successfully saved {len(doc_chunks)} cloud vectors to Database.')
     except Exception as e:
         logger.error(f'[RAG Error] Failed to generate vectors for {resource.id}: {str(e)}')
 

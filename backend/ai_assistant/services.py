@@ -14,10 +14,8 @@ from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.db import models
 
-# HUGGINGFACE CONFIGURATION
-# We prefer local files, but allow download if missing to prevent silent failures
-os.environ['TRANSFORMERS_OFFLINE'] = '0' 
-os.environ['HF_HUB_OFFLINE'] = '0'
+# CLOUD-FIRST CONFIGURATION
+# We rely exclusively on Cloud Embeddings to maintain zero local RAM footprint.
 
 logger = logging.getLogger('flowstate')
 
@@ -596,47 +594,54 @@ class AIService:
             logger.error(f"[AI Stream Final Failure]: {err_msg}")
             yield err_msg
 
+    def embed_text_cloud(self, content):
+        """
+        Natively uses Google Cloud to generate high-dimensional embeddings.
+        This uses 0MB of local RAM and is significantly faster on Render.
+        """
+        if not self.google_client:
+            logger.error("[RAG] Google Client not initialized. Cannot generate embeddings.")
+            return None
+        
+        try:
+            # Use state-of-the-art model 'text-embedding-004'
+            # Content can be a single string or a list of strings
+            result = self.google_client.models.embed_content(
+                model='text-embedding-004',
+                content=content
+            )
+            # Response handling for the 2026 SDK
+            if isinstance(content, str):
+                return result.embeddings[0].values
+            else:
+                return [e.values for e in result.embeddings]
+        except Exception as e:
+            logger.error(f"[RAG Cloud Error]: {e}")
+            return None
+
     async def perform_global_search(self, query: str, user, limit: int = 7) -> str:
         """
         Search across the user's entire library for the most relevant context.
-        Returns a formatted context string including source attribution.
+        Uses Cloud Embeddings (RAM-Zero architecture).
         """
-        if not query:
-            return ""
+        if not query: return ""
             
-        # 1. OPTIMIZATION: Warm up the Brain BEFORE starting the search clock
-        global _EMB_MODEL
-        if _EMB_MODEL is None:
-            try:
-                from langchain_huggingface import HuggingFaceEmbeddings
-                logger.info("[RAG] Waking up the Library Brain (HuggingFace)...")
-                _EMB_MODEL = HuggingFaceEmbeddings(
-                    model_name="all-MiniLM-L6-v2",
-                    model_kwargs={'device': 'cpu', 'local_files_only': True}
-                )
-            except Exception as e:
-                logger.error(f"[RAG Brain Failure]: {e}")
-                return ""
-
         async def _run_search():
             try:
-                try:
-                    from langchain_text_splitters import RecursiveCharacterTextSplitter
-                except ImportError:
-                    import sys
-                    logger.error(f"[Global RAG Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
-                    return "The Academic Search engine is missing its splitting module. Please contact support."
-                
                 from library.models import DocumentChunk
                 from django.db import models
                 from pgvector.django import L2Distance
                 
-                logger.info(f"[Global RAG] Searching across entire library for: {query[:50]}...")
+                logger.info(f"[Global RAG] Cloud-Searching across library for: {query[:50]}...")
                 
-                # Heavy calculation: Wrap in to_thread to keep loop alive
-                query_vector = await asyncio.to_thread(_EMB_MODEL.embed_query, query)
+                # Cloud Calculation: 0MB Local RAM footprint
+                query_vector = await asyncio.to_thread(self.embed_text_cloud, query)
                 
-                # Retrieve the top N closest fragments from ANY document owned by the user
+                if not query_vector:
+                    logger.warning("[RAG] Failed to generate cloud vector. Falling back to empty context.")
+                    return ""
+
+                # Query the database (PGVector)
                 from asgiref.sync import sync_to_async
                 
                 def _do_db_query():
@@ -661,14 +666,14 @@ class AIService:
                     
                 return "\n\n".join(context_parts)
             except Exception as e:
-                logger.error(f"[Global RAG Search Error]: {e}")
+                logger.error(f"[Global RAG Cloud Failure]: {e}")
                 return ""
 
         try:
             # High-Precision 20s Circuit Breaker
             return await asyncio.wait_for(_run_search(), timeout=20.0)
         except asyncio.TimeoutError:
-            logger.warning(f"[Global RAG Timeout] Search exceeded 20s for query: {query[:30]}")
+            logger.warning(f"[Global RAG Timeout] Cloud search exceeded 20s.")
             return "--- Library context search timed out. Proceeding with general knowledge. ---"
         except Exception as e:
             logger.error(f"[Global RAG Fatal]: {e}")
@@ -729,17 +734,11 @@ class AIService:
             if query and resource.chunks.exists():
                 logger.info(f"[RAG] Executing vector similarity search for query: {query}")
                 
-                global _EMB_MODEL
-                if _EMB_MODEL is None:
-                    from langchain_huggingface import HuggingFaceEmbeddings
-                    logger.info("[RAG] Initializing Global Embedding Singleton...")
-                    _EMB_MODEL = HuggingFaceEmbeddings(
-                        model_name="all-MiniLM-L6-v2",
-                        model_kwargs={'device': 'cpu', 'local_files_only': True}
-                    )
-                self._emb_model = _EMB_MODEL
-                
-                query_vector = self._emb_model.embed_query(query)
+                # Cloud-First: RAM-Zero footprint
+                query_vector = self.embed_text_cloud(query)
+                if not query_vector:
+                    logger.error("[RAG Error] Could not generate cloud vector for specific resource.")
+                    return
                 
                 # Retrieve the top 5 closest chunks using PGVector L2 distance operator
                 top_chunks = resource.chunks.annotate(
