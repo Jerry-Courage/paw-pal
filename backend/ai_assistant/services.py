@@ -330,7 +330,8 @@ class AIService:
             except:
                 continue
 
-        return "Intelligence Signal Interrupted."
+        logger.error(f"[AI Final Failure]: No engines responded. Check API keys and network. Trace: {errors}")
+        return f"Intelligence Signal Interrupted. All engines failed. Primary Snack: {errors[0] if errors else 'Unknown Error'}"
 
     def chat_sync(self, messages: list, **kwargs) -> str:
         """Synchronous wrapper for the Triple-Engine Chat. CRITICAL for background tasks."""
@@ -591,7 +592,9 @@ class AIService:
             raise
         except Exception as e:
             logger.error(f"[AI Stream Error] {e}")
-            yield "Intelligence Signal Interrupted. Every engine failed. Please check your internet or API limits."
+            err_msg = f"Intelligence Signal Interrupted. Every engine failed. Primary snag: {errors[0] if errors else 'Unknown'}"
+            logger.error(f"[AI Stream Final Failure]: {err_msg}")
+            yield err_msg
 
     def perform_global_search(self, query: str, user, limit: int = 7) -> str:
         """

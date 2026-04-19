@@ -500,15 +500,14 @@ function AIChat() {
       }
 
       if (!activeSession) queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
-    } catch (err) {
-      console.error('AI Error:', err);
-      toast.error('Intelligence Signal Interrupted');
+    } catch (err: any) {
+      console.error('Failed to send:', err);
+      toast.error(err.message || 'Intelligence Signal Interrupted');
     } finally {
       setSending(false)
       removeFile()
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
-  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
