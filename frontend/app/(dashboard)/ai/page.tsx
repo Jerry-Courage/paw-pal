@@ -458,43 +458,56 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT: Stable Atomic Protocol (Production Standard)
-        const placeholder: Message = { role: 'assistant', content: '', is_streaming: true };
+        // CHAT: Immortal Streaming Protocol (Instant Signal Standard)
+        const assistantMsgId = Date.now();
+        const placeholder: Message = { 
+          id: assistantMsgId, 
+          role: 'assistant', 
+          content: '', 
+          is_streaming: true 
+        };
         setMessages(prev => [...prev, placeholder]);
 
-        const data = await aiApi.askAgent(
-          currentInput,
-          contextType === 'resource' ? `resource_id:${selectedResource}` : '',
-          false, // voice_enabled
-          undefined, // voice_id
-          messages.map(m => ({ role: m.role, content: m.content })),
-          false, // tutor mode
-          activeId // session_id
-        );
-
-        if (data.reply) {
-          if (data.session_id && !activeSession) {
-            const newSession = { id: data.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
-            setActiveSession(newSession);
+        try {
+          let fullContent = '';
+          for await (const chunk of aiApi.streamAgentResponse(
+            currentInput,
+            contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+            messages.map(m => ({ role: m.role, content: m.content })),
+            false, // tutor mode
+            activeId // session_id
+          )) {
+            // Handle streaming chunks (strings) or final metadata (objects)
+            if (typeof chunk === 'string') {
+              fullContent += chunk;
+              setMessages(prev => {
+                const updated = [...prev];
+                const targetIdx = updated.findIndex(m => m.id === assistantMsgId || (m.role === 'assistant' && m.is_streaming));
+                if (targetIdx !== -1) {
+                  updated[targetIdx] = { ...updated[targetIdx], content: fullContent };
+                }
+                return updated;
+              });
+            } else if (typeof chunk === 'object' && chunk.session_id && !activeSession) {
+              const newSession = { id: chunk.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
+              setActiveSession(newSession);
+              queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+            }
           }
 
+          // Mark streaming as complete
           setMessages(prev => {
             const updated = [...prev];
-            const lastIdx = updated.length - 1;
-            if (updated[lastIdx]?.role === 'assistant') {
-              // Replace placeholder with final atomic message
-              updated[lastIdx] = {
-                role: 'assistant',
-                content: data.reply,
-                image: data.message?.image,
-                diagram: data.message?.diagram,
-                is_streaming: false
-              };
+            const targetIdx = updated.findIndex(m => m.id === assistantMsgId || (m.role === 'assistant' && m.is_streaming));
+            if (targetIdx !== -1) {
+              updated[targetIdx] = { ...updated[targetIdx], is_streaming: false };
             }
             return updated;
           });
 
-          queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+        } catch (streamErr) {
+          console.error('Streaming Interrupted:', streamErr);
+          toast.error('Intelligence Signal Lost');
         }
       }
 
