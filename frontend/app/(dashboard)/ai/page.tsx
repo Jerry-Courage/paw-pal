@@ -459,56 +459,42 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT: Immortal Streaming Protocol (Instant Signal Standard)
-        const assistantMsgId = Date.now();
-        const placeholder: Message = { 
-          id: assistantMsgId, 
-          role: 'assistant', 
-          content: '', 
-          is_streaming: true 
-        };
-        setMessages(prev => [...prev, placeholder]);
+        // CHAT: Atomic Agent Implementation (Sidebar Verified Standard)
+        setIsLoading(true); // Global loading state ensures user knows it is thinking
 
         try {
-          let fullContent = '';
-          for await (const chunk of aiApi.streamAgentResponse(
+          const response = await aiApi.askAgent(
             currentInput,
             contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+            false, // voice_enabled
+            undefined, // voice_id
             messages.map(m => ({ role: m.role, content: m.content })),
             false, // tutor mode
             activeId // session_id
-          )) {
-            // Handle streaming chunks (strings) or final metadata (objects)
-            if (typeof chunk === 'string') {
-              fullContent += chunk;
-              setMessages(prev => {
-                const updated = [...prev];
-                const targetIdx = updated.findIndex(m => m.id === assistantMsgId);
-                if (targetIdx !== -1) {
-                  updated[targetIdx] = { ...updated[targetIdx], content: fullContent };
-                }
-                return updated;
-              });
-            } else if (typeof chunk === 'object' && chunk.session_id && !activeSession) {
-              const newSession = { id: chunk.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
+          );
+
+          if (response.data && response.data.reply) {
+            const assistantMsg: Message = {
+              id: Date.now(),
+              role: 'assistant',
+              content: response.data.reply,
+              image: response.data.message?.image,
+              diagram: response.data.message?.diagram
+            };
+
+            setMessages(prev => [...prev, assistantMsg]);
+
+            if (response.data.session_id && !activeSession) {
+              const newSession = { id: response.data.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
               setActiveSession(newSession);
               queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
             }
           }
-
-          // Mark streaming as complete
-          setMessages(prev => {
-            const updated = [...prev];
-            const targetIdx = updated.findIndex(m => m.id === assistantMsgId);
-            if (targetIdx !== -1) {
-              updated[targetIdx] = { ...updated[targetIdx], is_streaming: false };
-            }
-            return updated;
-          });
-
-        } catch (streamErr) {
-          console.error('Streaming Interrupted:', streamErr);
-          toast.error('Intelligence Signal Lost');
+        } catch (err) {
+          console.error('Agent Error:', err);
+          toast.error('Intelligence Signal Interrupted');
+        } finally {
+          setIsLoading(false);
         }
       }
 
