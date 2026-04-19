@@ -608,7 +608,9 @@ class AIService:
             try:
                 from langchain_text_splitters import RecursiveCharacterTextSplitter
             except ImportError:
-                from langchain_text_splitters import RecursiveCharacterTextSplitter
+                import sys
+                logger.error(f"[Global RAG Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
+                return "The Academic Search engine is missing its splitting module. Please contact support."
             from langchain_huggingface import HuggingFaceEmbeddings
             from library.models import DocumentChunk
             from django.db import models

@@ -11,7 +11,9 @@ def create_vector_embeddings(resource, text):
         try:
             from langchain_text_splitters import RecursiveCharacterTextSplitter
         except ImportError:
-            from langchain_text_splitters import RecursiveCharacterTextSplitter
+            import sys
+            logger.error(f"[RAG Task Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
+            return
         
         from langchain_huggingface import HuggingFaceEmbeddings
         from library.models import DocumentChunk
