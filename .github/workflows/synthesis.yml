@@ -1,0 +1,41 @@
+name: Imperial Synthesis Engine
+
+on:
+  repository_dispatch:
+    types: [trigger-synthesis]
+
+jobs:
+  synthesis-job:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Imperial Codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.1'
+
+      - name: Install Industrial Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          # Fixed dependency for Render/Ubuntu environment
+          pip install pdf2image pillow
+
+      - name: Restore Model Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Execute High-Fidelity Synthesis
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_STUDIO_API_KEY: ${{ secrets.GOOGLE_STUDIO_API_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          USE_S3: 'False' # GitHub runners use virtual disk, or you can use your S3 here
+        run: |
+          cd backend
+          python manage.py run_synthesis ${{ github.event.client_payload.resource_id }}
