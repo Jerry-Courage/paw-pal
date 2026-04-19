@@ -283,16 +283,11 @@ LOGGING = {
     },
     'handlers': {
         'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'},
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'flowstate.log',
-            'formatter': 'verbose',
-        },
     },
     'root': {'handlers': ['console'], 'level': 'INFO'},
     'loggers': {
         'django': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
-        'flowstate': {'handlers': ['console', 'file'], 'level': 'DEBUG', 'propagate': False},
+        'flowstate': {'handlers': ['console'], 'level': 'DEBUG', 'propagate': False},
     },
 }
 
