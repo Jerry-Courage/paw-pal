@@ -3,6 +3,8 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 
 logger = logging.getLogger('flowstate')
+print("!!! IMPERIAL WORKER LOADED: tasks.py is LIVE !!!")
+logger.error("!!! IMPERIAL WORKER HEARTBEAT: tasks.py initialized !!!")
 
 def create_vector_embeddings(resource, text):
     if not text or len(text.strip()) < 50:
