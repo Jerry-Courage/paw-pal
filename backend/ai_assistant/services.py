@@ -111,13 +111,13 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
-    'models/gemma-4-31b',           # SUPREME: Unlimited Tokens
-    'models/gemma-4-26b',           # STABLE: Unlimited Tokens
+    'models/gemma-4-31b-it',         # SUPREME: Unlimited Tokens
+    'models/gemma-4-26b-a4b-it',     # STABLE: Unlimited Tokens
     'models/gemini-2.5-flash',
     'models/gemini-2.5-flash-lite',
-    'models/gemini-3-flash',
-    'models/gemini-3.1-flash-lite',
-    'models/gemma-3-27b',
+    'models/gemini-3-flash-preview',
+    'models/gemini-3.1-flash-lite-preview',
+    'models/gemma-3-27b-it',
     'openrouter/auto',
 ]
 
@@ -268,13 +268,13 @@ class AIService:
             if self.google_client_beta:
                 # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
-                    'models/gemma-4-31b', 
-                    'models/gemma-4-26b',
+                    'models/gemma-4-31b-it', 
+                    'models/gemma-4-26b-a4b-it',
                     'models/gemini-2.5-flash',
                     'models/gemini-2.5-flash-lite',
-                    'models/gemini-3-flash',
-                    'models/gemini-3.1-flash-lite',
-                    'models/gemma-3-27b'
+                    'models/gemini-3-flash-preview',
+                    'models/gemini-3.1-flash-lite-preview',
+                    'models/gemma-3-27b-it'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -449,10 +449,13 @@ class AIService:
                 # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
                 # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
-                    'models/gemini-1.5-pro',
-                    'models/gemini-2.0-flash-exp',
-                    'models/gemini-1.5-flash',
-                    'models/gemini-1.5-flash-8b'
+                    'models/gemma-4-31b-it', 
+                    'models/gemma-4-26b-a4b-it',
+                    'models/gemini-2.5-flash',
+                    'models/gemini-2.5-flash-lite',
+                    'models/gemini-3-flash-preview',
+                    'models/gemini-3.1-flash-lite-preview',
+                    'models/gemma-3-27b-it'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -619,7 +622,7 @@ class AIService:
         task_type = 'RETRIEVAL_QUERY' if is_query else 'RETRIEVAL_DOCUMENT'
         
         # --- PRIMARY: Gemini Embedding 2 (The Elite Signal) ---
-        for model_id in ['models/gemini-embedding-002', 'models/gemini-embedding-001']:
+        for model_id in ['models/gemini-embedding-2-preview', 'models/gemini-embedding-001']:
             try:
                 result = self.google_client_v1.models.embed_content(
                     model=model_id,
