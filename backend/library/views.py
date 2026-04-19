@@ -21,26 +21,41 @@ from core.throttling import UploadRateThrottle, AIRateThrottle
 
 logger = logging.getLogger('flowstate')
 
-def trigger_internal_forge(resource_id):
+def trigger_github_synthesis(resource_id):
     """
-    Ignites the 'Internal Forge' by running synthesis in a background thread.
-    This is the zero-cost solution for Render Free Tier.
+    Triggers the high-speed GitHub Action Engine via Repository Dispatch.
+    This bypasses Vercel serverless timeouts and Render build limits.
     """
-    import threading
-    from django.core.management import call_command
+    import requests
+    github_token = os.getenv('GITHUB_TOKEN')
+    repo = os.getenv('GITHUB_REPO', 'Jerry-Courage/paw-pal')
     
-    def run_synthesis_in_thread(rid):
-        logger.info(f"[Internal Forge] Starting synthesis for Resource {rid}...")
-        try:
-            call_command('run_synthesis', rid)
-            logger.info(f"[Internal Forge] Successfully completed synthesis for Resource {rid}")
-        except Exception as e:
-            logger.error(f"[Internal Forge] Critical synthesis failure for Resource {rid}: {str(e)}")
+    if not github_token:
+        logger.warning("[GitHub Engine] No GITHUB_TOKEN found. Synthesis will not trigger automatically.")
+        return False
 
-    thread = threading.Thread(target=run_synthesis_in_thread, args=(resource_id,))
-    thread.daemon = True
-    thread.start()
-    return True
+    url = f"https://api.github.com/repos/{repo}/dispatches"
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    payload = {
+        "event_type": "synthesis_triggered",
+        "client_payload": {"resource_id": str(resource_id)}
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=5)
+        if response.status_code == 204:
+            logger.info(f"[GitHub Engine] Signal Sent: Successfully triggered synthesis for Resource {resource_id}")
+            return True
+        else:
+            logger.error(f"[GitHub Engine] Connection Failed: {response.status_code} {response.text}")
+    except Exception as e:
+        logger.error(f"[GitHub Engine] Dispatch error: {str(e)}")
+    
+    return False
 
 ALLOWED_EXTENSIONS = {
     '.pdf', '.doc', '.docx', '.pptx', '.ppt', '.txt', '.md',
@@ -88,10 +103,10 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource.file_size = resource.file.size if resource.file else 0
         resource.save()
 
-        # ─── IMPERIAL INTERNAL FORGE ──────────────────────────────────────────────────
-        # Zero-cost internal background processing (Bypasses Storage Wall)
-        trigger_internal_forge(resource.id)
-        logger.info(f'Resource {resource.id} ignited in the Internal Forge for user {self.request.user.id}')
+        # ─── IMPERIAL HIGH-SPEED ENGINE ─────────────────────────────────────────────
+        # Offloads heavy synthesis to GitHub Actions (Bypasses Vercel Timeouts)
+        trigger_github_synthesis(resource.id)
+        logger.info(f'Resource {resource.id} signaled to GitHub Engine for user {self.request.user.id}')
 
     def get_serializer_context(self):
         return {'request': self.request}
