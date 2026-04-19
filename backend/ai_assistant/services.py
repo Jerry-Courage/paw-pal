@@ -265,10 +265,20 @@ class AIService:
             ]:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
+                    
+                    # Gemma 3 Fix: Developer instructions must be in the prompt history
+                    if 'gemma' in g_model.lower():
+                        if sys_instr:
+                            if contents and contents[0].get('role') == 'user':
+                                contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        config = {'max_output_tokens': max_tokens}
+                    else:
+                        config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
+
                     response = self.google_client.models.generate_content(
                         model=g_model,
                         contents=contents,
-                        config={'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
+                        config=config
                     )
                     if response.text:
                         return response.text
@@ -433,10 +443,21 @@ class AIService:
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
+                        
+                        # Gemma 3 Fix: Developer instructions must be in the prompt history
+                        if 'gemma' in g_model.lower():
+                            if sys_instr:
+                                # Prepend instruction to the first message if it is a user role
+                                if contents and contents[0].get('role') == 'user':
+                                    contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                            config = {'max_output_tokens': 4096}
+                        else:
+                            config = {'system_instruction': sys_instr, 'max_output_tokens': 4096}
+
                         response = self.google_client.models.generate_content_stream(
                             model=g_model,
                             contents=contents,
-                            config={'system_instruction': sys_instr, 'max_output_tokens': 4096}
+                            config=config
                         )
                         for chunk in response:
                             text = ""
@@ -584,7 +605,7 @@ class AIService:
             try:
                 from langchain_text_splitters import RecursiveCharacterTextSplitter
             except ImportError:
-                from langchain.text_splitter import RecursiveCharacterTextSplitter
+                from langchain_text_splitters import RecursiveCharacterTextSplitter
             from langchain_huggingface import HuggingFaceEmbeddings
             from library.models import DocumentChunk
             from django.db import models
