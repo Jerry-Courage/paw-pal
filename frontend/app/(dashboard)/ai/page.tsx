@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import LiveVoiceAssistant from '@/components/ai/LiveVoiceAssistant'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type Message = {
@@ -301,6 +302,7 @@ function AIChat() {
   const [contextType, setContextType] = useState<'global' | 'resource'>('global')
   const [selectedResource, setSelectedResource] = useState<number | null>(null)
   const [activeSession, setActiveSession] = useState<any>(null)
+  const [showLive, setShowLive] = useState(false)
 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -687,6 +689,14 @@ function AIChat() {
 
           {activeSession && (
             <div className="ml-auto flex items-center gap-3 max-w-[50%]">
+              <button 
+                onClick={() => setShowLive(true)} 
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white bg-gradient-to-r from-primary to-violet-600 hover:from-primary/90 hover:to-violet-600/90 transition-all font-black text-xs shadow-lg shadow-primary/20 hover:scale-105 active:scale-95" 
+                title="Go Live (Zero Latency)"
+              >
+                <Zap className="w-4 h-4" />
+                <span className="hidden sm:inline">Go Live</span>
+              </button>
               <div className="hidden lg:flex text-[10px] font-black bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-700 px-3 py-1.5 rounded-full uppercase tracking-wider truncate shadow-sm">
                 {activeSession?.title || 'Current Thread'}
               </div>
@@ -819,6 +829,15 @@ function AIChat() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showLive && (
+          <LiveVoiceAssistant 
+            onClose={() => setShowLive(false)} 
+            token={null} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
