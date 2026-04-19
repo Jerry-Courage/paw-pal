@@ -111,13 +111,14 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
-    'google/gemma-4-31b:free',           # SUPREME: Unlimited Tokens
-    'google/gemma-4-26b:free',           # STABLE: Unlimited Tokens
-    'google/gemma-3-27b-it:free',
-    'google/gemma-3-12b-it:free',
-    'google/gemma-3-4b-it:free',
-    'google/gemini-2.1-flash:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
+    'models/gemma-4-31b',           # SUPREME: Unlimited Tokens
+    'models/gemma-4-26b',           # STABLE: Unlimited Tokens
+    'models/gemini-2.5-flash',
+    'models/gemini-2.5-flash-lite',
+    'models/gemini-3-flash',
+    'models/gemini-3.1-flash-lite',
+    'models/gemma-3-27b',
+    'openrouter/auto',
 ]
 
 FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the funny, cool, and absolutely awesome AI study partner built into FlowState.
@@ -264,17 +265,17 @@ class AIService:
                     has_images = True
                     break
         
-        if self.google_client:
-            # Immortal 2026 Fleet Stack: 27B -> 12B -> 4B -> 1B (Total 57.6k RPD)
-            for g_model in [
-                'models/gemma-4-31b-it', 
-                'models/gemma-4-26b-it',
-                'models/gemma-3-27b-it', 
-                'models/gemma-3-12b-it', 
-                'models/gemma-3-4b-it', 
-                'models/gemini-2.1-flash', 
-                'models/gemini-2.5-flash'
-            ]:
+            if self.google_client_beta:
+                # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
+                for g_model in [
+                    'models/gemma-4-31b', 
+                    'models/gemma-4-26b',
+                    'models/gemini-2.5-flash',
+                    'models/gemini-2.5-flash-lite',
+                    'models/gemini-3-flash',
+                    'models/gemini-3.1-flash-lite',
+                    'models/gemma-3-27b'
+                ]:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     
@@ -446,16 +447,15 @@ class AIService:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Immortal Pantheon Restoration) ---
             if self.google_client_beta:
                 # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
+                # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
-                    'models/gemma-4-31b-it',
-                    'models/gemma-4-26b-it',
-                    'models/gemma-3-27b-it',
-                    'models/gemma-3-12b-it',
-                    'models/gemma-3-4b-it',
-                    'models/gemma-3-1b-it',
+                    'models/gemma-4-31b',
+                    'models/gemma-4-26b',
                     'models/gemini-2.5-flash',
-                    'models/gemini-1.5-pro',
-                    'models/gemini-1.5-flash'
+                    'models/gemini-2.5-flash-lite',
+                    'models/gemini-3-flash',
+                    'models/gemini-3.1-flash-lite',
+                    'models/gemini-2-flash'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -1404,8 +1404,8 @@ class AIService:
         
         # ── 1. Google Gemini (Dedicated Key) ──────────────────────────────────
         if self.google_key:
-            # Standardized Imperial Model Names (Strict models/ prefix for v1beta)
-            for model_attempt in ['models/gemini-1.5-flash', 'models/gemini-1.5-flash-8b', 'models/gemini-2.0-flash-lite']:
+            # ADVANCED VISION SCOUTS: Gemini 2.5 and 3.0 Flash
+            for model_attempt in ['models/gemini-2.5-flash', 'models/gemini-2.5-flash-lite', 'models/gemini-3-flash']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
                     result = self._call_google_studio_vision(messages, model_name=model_attempt)
@@ -1585,9 +1585,9 @@ class AIService:
                 with open(log_path, 'a', encoding='utf-8') as f: 
                     f.write(f"[GEN-SIGNAL] Tier 0 (Imagen 4): Attempting for: {prompt[:50]}...\n")
                 
-                # In 2026, Imagen 4 is accessed via generate_images (plural)
+                # ADVANCED IMAGEN 4 UPGRADE
                 response = self.google_client.models.generate_images(
-                    model=model,
+                    model='models/imagen-4-generate',
                     prompt=full_enhanced_prompt,
                     config={'number_of_images': 1}
                 )
