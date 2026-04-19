@@ -24,7 +24,24 @@ class Command(BaseCommand):
             curator.save()
             self.stdout.write(self.style.SUCCESS('Created curator user.'))
 
-        # 2. Load harvested data
+        # 2. Ensure Imperial Superuser exists
+        admin_pass = 'AdminFlow2026!'
+        admin, created = User.objects.get_or_create(
+            username='AdminFlow',
+            defaults={
+                'email': 'admin@flowstate.ai',
+                'is_staff': True,
+                'is_superuser': True
+            }
+        )
+        if created:
+            admin.set_password(admin_pass)
+            admin.save()
+            self.stdout.write(self.style.SUCCESS(f'Created Superuser: AdminFlow | Password: {admin_pass}'))
+        else:
+            self.stdout.write(self.style.WARNING('Superuser AdminFlow already exists.'))
+
+        # 3. Load harvested data
         # Data is embedded to ensure portability to Render
         harvest_data = {
             "resources": [
