@@ -275,7 +275,8 @@ class AIService:
                     else:
                         config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                    response = self.google_client.models.generate_content(
+                    # Using Async Client to prevent event-loop deadlocks
+                    response = await self.google_client.aio.models.generate_content(
                         model=g_model,
                         contents=contents,
                         config=config
@@ -454,15 +455,14 @@ class AIService:
                         else:
                             config = {'system_instruction': sys_instr, 'max_output_tokens': 4096}
 
-                        response = self.google_client.models.generate_content_stream(
+                        response = await self.google_client.aio.models.generate_content_stream(
                             model=g_model,
                             contents=contents,
                             config=config
                         )
-                        for chunk in response:
+                        async for chunk in response:
                             text = ""
                             try:
-                                # Safe extraction for different SDK response versions
                                 if hasattr(chunk, 'text') and chunk.text:
                                     text = chunk.text
                                 elif hasattr(chunk, 'candidates') and chunk.candidates:
