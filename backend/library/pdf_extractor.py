@@ -63,7 +63,9 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
             
             # 2b. Capture high-resolution full-page image for Vision OCR fallback
             try:
-                pix = page.get_pixmap(matrix=fitz.Matrix(3, 3)) # 3x zoom (300DPI equivalent) for superior OCR
+                # [ADAPTIVE RESOLUTION] Scale down for larger docs to prevent OOM
+                zoom_factor = 3 if total_pages <= 30 else 2
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom_factor, zoom_factor))
                 content['page_images'].append({'page': i + 1, 'data': pix.tobytes('png')})
             except Exception as e:
                 logger.warning(f'Page snapshot failed on {i+1}: {e}')

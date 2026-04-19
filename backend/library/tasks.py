@@ -116,22 +116,29 @@ def process_resource_task(res_id):
                                 'is_large': img_data.get('width', 0) > 250 and img_data.get('height', 0) > 250
                             })
 
-                        def get_desc(item):
+                        def get_desc(idx_item_tuple):
+                            idx, item = idx_item_tuple
                             if item['is_large']:
                                 try:
+                                    # Update Progress inside the loop for UI visibility
+                                    res.status_text = f"👁️ Scanning Diagram {idx+1}/{len(image_objs)}..."
+                                    res.save(update_fields=['status_text'])
+                                    
                                     ai = AIService()
                                     desc = ai.describe_image_for_notes(item['data'], item['page'], item['ext'])
                                     item['img'].description = desc
                                     item['img'].save()
                                     return desc
-                                except:
+                                except Exception as e:
+                                    logger.error(f"Image desc error: {e}")
                                     return ""
                             return ""
 
                         # Parallelize descriptions to save time
                         try:
                             with ThreadPoolExecutor(max_workers=5) as executor:
-                                list(executor.map(get_desc, image_objs))
+                                # Use enumerate to track progress count
+                                list(executor.map(get_desc, enumerate(image_objs)))
                         except RuntimeError:
                             # Catch interpreter shutdown errors during reloads
                             logger.info("[Task Queue] Parallel execution interrupted by shutdown.")

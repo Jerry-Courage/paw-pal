@@ -111,13 +111,13 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
+    'google/gemma-4-31b:free',           # SUPREME: Unlimited Tokens
+    'google/gemma-4-26b:free',           # STABLE: Unlimited Tokens
     'google/gemma-3-27b-it:free',
     'google/gemma-3-12b-it:free',
     'google/gemma-3-4b-it:free',
-    'google/gemma-3-1b-it:free',
-    'google/gemini-2.5-flash-lite:free',
+    'google/gemini-2.1-flash:free',
     'meta-llama/llama-3.3-70b-instruct:free',
-    'nvidia/llama-3.1-nemotron-70b-instruct:free',
 ]
 
 FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the funny, cool, and absolutely awesome AI study partner built into FlowState.
@@ -267,11 +267,12 @@ class AIService:
         if self.google_client:
             # Immortal 2026 Fleet Stack: 27B -> 12B -> 4B -> 1B (Total 57.6k RPD)
             for g_model in [
+                'models/gemma-4-31b-it', 
+                'models/gemma-4-26b-it',
                 'models/gemma-3-27b-it', 
                 'models/gemma-3-12b-it', 
                 'models/gemma-3-4b-it', 
-                'models/gemma-3-1b-it',
-                'models/gemini-2.5-flash-lite', 
+                'models/gemini-2.1-flash', 
                 'models/gemini-2.5-flash'
             ]:
                 try:
@@ -999,7 +1000,7 @@ class AIService:
 
         if not text.strip() or len(text.strip()) < 100:
             logger.info(f"Context is scarce for '{resource.title}'. Engaging Topic-Based Synthesis...")
-            text = f"TOPIC: {resource.title}\nSUBJECT: {resource.subject or 'General'}\n\nSTRICT REQUIREMENT: Provide a deep, FOUNDATIONAL study kit based on your expert academic knowledge of this topic. Do not return empty sections. Generate at least 5 detailed modules."
+            text = f"TOPIC: {resource.title}\nSUBJECT: {resource.subject or 'General'}\n\nSTRICT REQUIREMENT: Provide a deep, FOUNDATIONAL study kit based on your expert academic knowledge of this topic. Do not return empty sections. Generate at least 20 detailed modules."
             is_math_intensive = any(kw in resource.title.lower() for kw in ['math', 'calculus', 'physics', 'equation'])
         else:
             # Detect if the material is math-intensive
@@ -1049,7 +1050,7 @@ class AIService:
                 "1. MICRO-PARAGRAPHING: Limit every paragraph to a maximum of 3-4 sentences. NEVER return a wall of text.\n"
                 "2. SEMANTIC BOLDING: **Bold** high-impact keywords and concepts the first time they appear.\n"
                 "3. BULLET POINTS: Use bullet points religiousy for any lists or complex breakdowns.\n"
-                "4. ACADEMIC DEPTH: Provide a MINIMUM of 6 detailed 'sections'. Use your internal knowledge to expand if source is short.\n\n"
+                "4. ACADEMIC DEPTH: Provide a MINIMUM of 20 detailed 'sections' for a full Masterclass. Expansion is REQUIREMENT. \n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
                 "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Deep 3-paragraph summary\"},\n"
@@ -1204,8 +1205,8 @@ class AIService:
             
         future = watchdog.submit(self.chat_sync, [{'role': 'user', 'content': user_content}], max_tokens=8192)
         try:
-            # 300s timeout for Deep Academic Synthesis
-            res = future.result(timeout=300)
+            # [IMPERIAL SCALE] Upgraded timeout to 500s for 20-section depth
+            res = future.result(timeout=500)
             watchdog.shutdown(wait=False, cancel_futures=True)
             
             # Diagnostic Logging for 0-section bug
@@ -1251,7 +1252,7 @@ class AIService:
                 "text": (
                     f"You are the 'Studley-Style FlowState Ultra' {persona}. Analyze these {target_desc} from '{resource.title}'. "
                     f"GOAL: Create a deep, high-fidelity academic study kit using the Studley pedagogy based ON THESE VISUALS. "
-                    "1. OCR all text, labels, and diagrams. Break it into 'Extraction-Ready' modules.\n"
+                    "1. OCR all text, labels, and diagrams. Break it into 'Extraction-Ready' modules. Target 20+ detailed sections.\n"
                     "2. Return ONLY a JSON object:\n"
                     "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int]}]\n"
                     "  STUDLEY CONTENT RULES: \n"
