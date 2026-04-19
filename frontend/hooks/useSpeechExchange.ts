@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 export type SpeechState = 'idle' | 'waking' | 'listening' | 'thinking' | 'speaking' | 'error'
 
 interface UseSpeechExchangeProps {
-  onCommand: (query: string) => void
+  onCommand?: (query: string) => void
   onWake?: () => void
   isVoiceResponseEnabled: boolean
 }
@@ -134,7 +134,7 @@ export const useSpeechExchange = ({ onCommand, onWake, isVoiceResponseEnabled }:
                 }
               }, 10000)
 
-              commandHandlerRef.current(commandText)
+              commandHandlerRef.current?.(commandText)
             } else {
               // No command yet, but stay awake for the session
               setState('idle')
