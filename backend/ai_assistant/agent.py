@@ -179,7 +179,8 @@ class FlowAgent:
         if has_academic_intent:
             logger.info(f"[Agent] Academic intent detected. Running Library Search...")
             start_rag = time.time()
-            library_context = await sync_to_async(self.ai.perform_global_search)(user_query, self.user)
+            # NATIVE ASYNC: No more sync_to_async overhead
+            library_context = await self.ai.perform_global_search(user_query, self.user)
             logger.info(f"[Perf] Library Search (RAG) took {time.time() - start_rag:.3f}s")
         
         now = timezone.now()

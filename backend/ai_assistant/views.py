@@ -759,7 +759,7 @@ class AgentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AIRateThrottle]
 
-    def post(self, request):
+    async def post(self, request):
         query = request.data.get('query', '').strip()
         context = request.data.get('context', '')
         history = request.data.get('history', [])
@@ -769,32 +769,33 @@ class AgentView(APIView):
         if not query:
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Handle Session Persistence (Un-Mixed Protocol)
+        # 1. Handle Session Persistence (Async Database Ops)
+        from django.shortcuts import aget_object_or_404
         session = None
-        # If it's a general platform question, we use a dedicated 'FlowAI' session
         is_academic = any(kw in query.lower() for kw in ['pdf', 'note', 'resource', 'material', 'study', 'kit'])
         
         if session_id and (is_academic or is_tutor):
-            session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+            session = await aget_object_or_404(ChatSession, id=session_id, user=request.user)
         else:
             # Dedicated lane for general platform assistance
-            session, created = ChatSession.objects.get_or_create(
+            session, created = await ChatSession.objects.aget_or_create(
                 user=request.user, 
                 context_type='global', 
                 title='FlowAI Platform Assistant'
             )
 
-        # 2. Process with Agent (Synchronous AI call)
+        # 2. Process with Agent (Native Async AI Pipeline)
         try:
-            # Save User Message to the isolated session
-            ChatMessage.objects.create(session=session, role='user', content=query)
+            # Save User Message (Non-blocking)
+            await ChatMessage.objects.acreate(session=session, role='user', content=query)
             
             agent = FlowAgent(request.user)
-            reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
+            # NATIVE CALL: No more async_to_sync
+            reply, action = await agent.process_request(query, context, history=history, is_tutor_mode=is_tutor)
             
             execution_result = None
             if action:
-                execution_result = async_to_sync(agent.execute_action)(action)
+                execution_result = await agent.execute_action(action)
 
             display_reply = reply.split('ACTION:')[0].strip()
             speech_text = VoiceSanitizer.clean(display_reply)
@@ -819,8 +820,8 @@ class AgentView(APIView):
                 except Exception as e:
                     logger.error(f"Agent Voice Synthesis Error: {e}")
 
-            # 4. Save Assistant Message (Safe Inside Try)
-            assistant_msg = ChatMessage.objects.create(
+            # 4. Save Assistant Message (Non-blocking)
+            assistant_msg = await ChatMessage.objects.acreate(
                 session=session, 
                 role='assistant', 
                 content=display_reply,

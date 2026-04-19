@@ -596,7 +596,7 @@ class AIService:
             logger.error(f"[AI Stream Final Failure]: {err_msg}")
             yield err_msg
 
-    def perform_global_search(self, query: str, user, limit: int = 7) -> str:
+    async def perform_global_search(self, query: str, user, limit: int = 7) -> str:
         """
         Search across the user's entire library for the most relevant context.
         Returns a formatted context string including source attribution.
@@ -604,50 +604,71 @@ class AIService:
         if not query:
             return ""
             
-        try:
+        async def _run_search():
             try:
-                from langchain_text_splitters import RecursiveCharacterTextSplitter
-            except ImportError:
-                import sys
-                logger.error(f"[Global RAG Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
-                return "The Academic Search engine is missing its splitting module. Please contact support."
-            from langchain_huggingface import HuggingFaceEmbeddings
-            from library.models import DocumentChunk
-            from django.db import models
-            from pgvector.django import L2Distance
-            
-            logger.info(f"[Global RAG] Searching across entire library for: {query[:50]}...")
-            
-            global _EMB_MODEL
-            if _EMB_MODEL is None:
-                logger.info("[RAG] Initializing Offline Embedding Model...")
-                # We force local_files_only to prevent the 49s network hang
-                _EMB_MODEL = HuggingFaceEmbeddings(
-                    model_name="all-MiniLM-L6-v2",
-                    model_kwargs={'device': 'cpu', 'local_files_only': True}
-                )
-            
-            query_vector = _EMB_MODEL.embed_query(query)
-            
-            # Retrieve the top N closest fragments from ANY document owned by the user
-            top_chunks = DocumentChunk.objects.filter(
-                resource__owner=user
-            ).annotate(
-                distance=L2Distance('embedding', query_vector)
-            ).order_by('distance').select_related('resource')[:limit]
-            
-            if not top_chunks:
+                try:
+                    from langchain_text_splitters import RecursiveCharacterTextSplitter
+                except ImportError:
+                    import sys
+                    logger.error(f"[Global RAG Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
+                    return "The Academic Search engine is missing its splitting module. Please contact support."
+                from langchain_huggingface import HuggingFaceEmbeddings
+                from library.models import DocumentChunk
+                from django.db import models
+                from pgvector.django import L2Distance
+                
+                logger.info(f"[Global RAG] Searching across entire library for: {query[:50]}...")
+                
+                global _EMB_MODEL
+                if _EMB_MODEL is None:
+                    logger.info("[RAG] Initializing Offline Embedding Model...")
+                    # We force local_files_only to prevent the 49s network hang
+                    _EMB_MODEL = HuggingFaceEmbeddings(
+                        model_name="all-MiniLM-L6-v2",
+                        model_kwargs={'device': 'cpu', 'local_files_only': True}
+                    )
+                
+                # Heavy calculation: Wrap in to_thread to keep loop alive
+                query_vector = await asyncio.to_thread(_EMB_MODEL.embed_query, query)
+                
+                # Retrieve the top N closest fragments from ANY document owned by the user
+                # We use sync_to_async or native aget where possible in next step
+                from asgiref.sync import sync_to_async
+                
+                def _do_db_query():
+                    return list(DocumentChunk.objects.filter(
+                        resource__owner=user
+                    ).annotate(
+                        distance=L2Distance('embedding', query_vector)
+                    ).order_by('distance').select_related('resource')[:limit])
+                
+                top_chunks = await asyncio.to_thread(_do_db_query)
+                
+                if not top_chunks:
+                    return ""
+                
+                context_parts = ["--- RELEVANT CONTEXT FROM YOUR ENTIRE LIBRARY ---"]
+                for chunk in top_chunks:
+                    source_label = f"From '{chunk.resource.title}'"
+                    if chunk.page_number:
+                        source_label += f" (p. {chunk.page_number})"
+                    
+                    context_parts.append(f"{source_label}:\n{chunk.text_content.strip()}")
+                    
+                return "\n\n".join(context_parts)
+            except Exception as e:
+                logger.error(f"[Global RAG Search Error]: {e}")
                 return ""
-            
-            context_parts = ["--- RELEVANT CONTEXT FROM YOUR ENTIRE LIBRARY ---"]
-            for chunk in top_chunks:
-                source_label = f"From '{chunk.resource.title}'"
-                if chunk.page_number:
-                    source_label += f" (p. {chunk.page_number})"
-                
-                context_parts.append(f"{source_label}:\n{chunk.text_content.strip()}")
-                
-            return "\n\n".join(context_parts)
+
+        try:
+            # 15s Circuit Breaker
+            return await asyncio.wait_for(_run_search(), timeout=15.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"[Global RAG Timeout] Search exceeded 15s for query: {query[:30]}")
+            return "--- Library context search timed out. Proceeding with general knowledge. ---"
+        except Exception as e:
+            logger.error(f"[Global RAG Fatal]: {e}")
+            return ""
             
         except Exception as e:
             logger.error(f"[Global RAG Error]: {e}")
