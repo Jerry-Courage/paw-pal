@@ -2,6 +2,7 @@ import json
 import asyncio
 import logging
 import base64
+import traceback
 from channels.generic.websocket import AsyncWebsocketConsumer
 from google import genai
 from django.conf import settings
@@ -47,15 +48,14 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
         # Exact Technical ID for Gemini 3 Flash Live as verified in model scan
         model_id = "models/gemini-3.1-flash-live-preview"
         
-        # Configure the Session (Pulse context, system instruction, etc.)
-        config = {
-            "system_instruction": "You are FlowAI, a helpful and witty study partner. Speak naturally and concisely. You are in a real-time voice session.",
-            "generation_config": {
-                "candidate_count": 1,
-            }
-        }
-
         try:
+            # Minimal config for initial stability probe
+            config = {
+                'generation_config': {
+                    'response_modalities': ['AUDIO']
+                }
+            }
+            
             async with self.client.aio.live.connect(model=model_id, config=config) as session:
                 self.gemini_session = session
                 logger.info(f"[LiveAgent] Session established with {model_id}")
@@ -69,8 +69,8 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"[LiveAgent] Session Error: {e}")
-            await self.send(text_data=json.dumps({"error": "Live session interrupted."}))
+            error_trace = traceback.format_exc()
+            logger.error(f"[LiveAgent] Session Error: {e}\n{error_trace}")
             await self.close()
 
     async def receive_from_gemini(self):
