@@ -161,15 +161,28 @@ class AIService:
             'HTTP-Referer': 'https://flowstate.app',
             'X-Title': 'FlowState',
         }
-        # Initialize Google GenAI for Vision tasks
+        # --- DUAL-ENGINE ARCHITECTURE (2026 RECOVERY) ---
+        # Both engines are now synchronized to v1beta for total endpoint compatibility.
         self.google_key = getattr(settings, 'GOOGLE_STUDIO_API_KEY', '')
         if self.google_key:
-            self.google_client = genai.Client(api_key=self.google_key)
+            from google.genai.types import HttpOptions
+            # We use v1beta for both as it is the only signal responding to both Gemma 4 and Embeddings
+            self.google_client_beta = genai.Client(
+                api_key=self.google_key,
+                http_options=HttpOptions(api_version="v1beta")
+            )
+            # Aliases for logic routing
+            self.google_client_v1 = self.google_client_beta 
+            self.google_client = self.google_client_beta
         else:
+            self.google_client_v1 = None
+            self.google_client_beta = None
             self.google_client = None
-        
-        # Singleton Embedding Model to prevent lag
-        self._emb = None
+        local_llm_path = getattr(settings, 'LOCAL_LLM_PATH', None)
+        if local_llm_path:
+            self.tokenizer = None
+            self.model = None
+            logger.info(f"Local LLM initialization skipped in Cloud-First mode.")
 
     def _call(self, messages: list, model: str, max_tokens: int = 8192, timeout: int = 120):
         return requests.post(
@@ -393,8 +406,8 @@ class AIService:
             except Exception as e:
                 logger.warning(f"[Groq STT Error] {e}")
 
-        # 2. OPTION B: GOOGLE GEMINI 2.5 SDK (Speech-to-Text Fallback)
-        if self.google_client:
+        # 2. OPTION B: GOOGLE GEMINI 2.5 SDK (Speech-to-Text Fallback - beta signal)
+        if self.google_client_beta:
             try:
                 # Read audio content
                 if isinstance(audio_file, str):
@@ -404,8 +417,8 @@ class AIService:
                     audio_file.seek(0); audio_data = audio_file.read()
                     mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
 
-                response = self.google_client.models.generate_content(
-                    model='models/gemini-3.1-flash-tts-preview',
+                response = self.google_client_beta.models.generate_content(
+                    model='models/gemini-2.5-flash',
                     contents=[
                         {'role': 'user', 'parts': [
                             {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
@@ -429,37 +442,39 @@ class AIService:
         messages = self._sanitize_messages(messages)
         
         try:
-            # --- STAGE 0: DIRECT GOOGLE GENAI SDK (2026 Verified Models) ---
-            if self.google_client:
-                # Immortal 2026 Fleet Stack: Total 57,600 RPD
+            # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Immortal Pantheon Restoration) ---
+            if self.google_client_beta:
+                # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
                 for g_model in [
+                    'models/gemma-4-31b-it',
+                    'models/gemma-4-26b-it',
                     'models/gemma-3-27b-it',
                     'models/gemma-3-12b-it',
                     'models/gemma-3-4b-it',
                     'models/gemma-3-1b-it',
-                    'models/gemini-2.5-flash-lite',
                     'models/gemini-2.5-flash',
+                    'models/gemini-1.5-pro',
                     'models/gemini-1.5-flash'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         
-                        # Gemma 3 Fix: Developer instructions must be in the prompt history
+                        # Intelligence Routing: Gemma vs Gemini protocol
                         if 'gemma' in g_model.lower():
                             if sys_instr:
-                                # Prepend instruction to the first message if it is a user role
+                                # Prepend instruction to first user message for Gemma
                                 if contents and contents[0].get('role') == 'user':
                                     contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
                             config = {'max_output_tokens': 4096}
                         else:
+                            # Standard native system instructions for Gemini
                             config = {'system_instruction': sys_instr, 'max_output_tokens': 4096}
 
-                        response = await self.google_client.aio.models.generate_content_stream(
+                        async for chunk in await self.google_client_beta.aio.models.generate_content_stream(
                             model=g_model,
                             contents=contents,
                             config=config
-                        )
-                        async for chunk in response:
+                        ):
                             text = ""
                             try:
                                 if hasattr(chunk, 'text') and chunk.text:
@@ -609,8 +624,9 @@ class AIService:
             # 'RETRIEVAL_DOCUMENT' is for background indexing (tasks.py)
             task_type = 'RETRIEVAL_QUERY' if is_query else 'RETRIEVAL_DOCUMENT'
             
-            result = self.google_client.models.embed_content(
-                model='text-embedding-004',
+            # Using the VERIFIED gemini-embedding-001 model
+            result = self.google_client_v1.models.embed_content(
+                model='models/gemini-embedding-001',
                 contents=content,
                 config={'task_type': task_type}
             )

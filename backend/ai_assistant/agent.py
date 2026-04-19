@@ -278,8 +278,7 @@ class FlowAgent:
                 ws = await sync_to_async(Workspace.objects.create)(
                     owner=self.user,
                     name=params.get('name', 'New Project'),
-                    subject=params.get('subject', ''),
-                    assignment_id=params.get('assignment_id')
+                    subject=params.get('subject', '')
                 )
                 await sync_to_async(WorkspaceMember.objects.create)(workspace=ws, user=self.user, role='owner')
                 return f"Created workspace: {ws.name} (ID: {ws.id})"
