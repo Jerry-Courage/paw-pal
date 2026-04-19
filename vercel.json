@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "rewrites": [
-    { "source": "/api/identity-engine/(.*)", "destination": "backend/core/wsgi.py" },
-    { "source": "/api/((?!auth).*)", "destination": "backend/core/wsgi.py" },
-    { "source": "/admin/(.*)", "destination": "backend/core/wsgi.py" }
-  ]
-}
