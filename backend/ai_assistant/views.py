@@ -216,10 +216,18 @@ class StudyNudgeView(APIView):
             .exclude(subject='').distinct()[:5]
         )
         ai = AIService()
+        
+        # Enforce strict 5s timeout to prevent Daphne process kills
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+        nudge = "Keep up the great work! Consistency is key to mastering any subject."
+        
         try:
-            nudge = ai.generate_study_nudge(request.user, recent)
-        except Exception:
-            nudge = "Keep up the great work! Consistency is key to mastering any subject."
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(ai.generate_study_nudge, request.user, recent)
+                nudge = future.result(timeout=5.0)
+        except (TimeoutError, Exception) as e:
+            logger.warning(f"[StudyNudge] Timeout or Error: {e}. Using fallback.")
+            
         return Response({'nudge': nudge})
 
 
