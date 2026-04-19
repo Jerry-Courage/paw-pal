@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "backend/core/wsgi.py": {
-      "runtime": "@vercel/python"
-    }
-  },
   "rewrites": [
     { "source": "/api/identity-engine/(.*)", "destination": "backend/core/wsgi.py" },
     { "source": "/api/((?!auth).*)", "destination": "backend/core/wsgi.py" },
