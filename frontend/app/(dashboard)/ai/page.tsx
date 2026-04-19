@@ -508,6 +508,7 @@ function AIChat() {
       removeFile()
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
