@@ -18,6 +18,7 @@ import remarkGfm from 'remark-gfm'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type Message = {
+  id?: string | number
   role: 'user' | 'assistant'
   content: string
   image?: string   // base64 preview for user-uploaded images
@@ -482,7 +483,7 @@ function AIChat() {
               fullContent += chunk;
               setMessages(prev => {
                 const updated = [...prev];
-                const targetIdx = updated.findIndex(m => m.id === assistantMsgId || (m.role === 'assistant' && m.is_streaming));
+                const targetIdx = updated.findIndex(m => m.id === assistantMsgId);
                 if (targetIdx !== -1) {
                   updated[targetIdx] = { ...updated[targetIdx], content: fullContent };
                 }
@@ -498,7 +499,7 @@ function AIChat() {
           // Mark streaming as complete
           setMessages(prev => {
             const updated = [...prev];
-            const targetIdx = updated.findIndex(m => m.id === assistantMsgId || (m.role === 'assistant' && m.is_streaming));
+            const targetIdx = updated.findIndex(m => m.id === assistantMsgId);
             if (targetIdx !== -1) {
               updated[targetIdx] = { ...updated[targetIdx], is_streaming: false };
             }
