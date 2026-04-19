@@ -25,6 +25,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/assignments/', include('assignments.urls')),
     path('api/identity-engine/', include('users.urls')),
+    path('api/auth/', include('users.urls')),
     path('api/library/', include('library.urls')),
     path('api/ai/', include('ai_assistant.urls')),
     path('api/groups/', include('groups.urls')),
