@@ -1073,13 +1073,15 @@ class AIService:
         total_chunks = len(prompts)
         logger.info(f'[AI Service] Entering Quad-Burst Parallel Engine for {total_chunks} chunks...')
         
-        # ─── DUAL-BURST STABLE ENGINE ───
-        # We use 2 workers for Macro-chunks to stay well under rate limits while maintaining high throughput.
+        # Use single worker and sleep delay for Free Tier safety
         try:
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            with ThreadPoolExecutor(max_workers=1) as executor:
                 # First chunk gets the Visual Evidence for better context
                 futures = {}
                 for idx, p in enumerate(prompts):
+                    if idx > 0:
+                        import time
+                        time.sleep(2)
                     imgs = chat_vision_bundle if idx == 0 else []
                     futures[executor.submit(self._task_with_watchdog, p, idx, imgs)] = idx
                 
@@ -1286,8 +1288,15 @@ class AIService:
                 resource.save(update_fields=['processing_progress', 'status_text'])
 
         results = []
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(process_vision_bundle, i, b) for i, b in enumerate(bundles)]
+        # Use single worker and sleep delay for vision scanning to avoid 429 Exhausted errors
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            futures = []
+            for i, b in enumerate(bundles):
+                if i > 0:
+                    import time
+                    time.sleep(3) # Heavy vision requests need longer buffers
+                futures.append(executor.submit(process_vision_bundle, i, b))
+            
             for future in futures:
                 results.append(future.result())
 
@@ -1395,8 +1404,8 @@ class AIService:
         
         # ── 1. Google Gemini (Dedicated Key) ──────────────────────────────────
         if self.google_key:
-            # Try 1.5 versions first for balance of reliability and performance
-            for model_attempt in ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b']:
+            # Standardized Imperial Model Names (Strict models/ prefix for v1beta)
+            for model_attempt in ['models/gemini-1.5-flash', 'models/gemini-1.5-flash-8b', 'models/gemini-2.0-flash-lite']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
                     result = self._call_google_studio_vision(messages, model_name=model_attempt)
