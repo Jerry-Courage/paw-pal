@@ -604,6 +604,20 @@ class AIService:
         if not query:
             return ""
             
+        # 1. OPTIMIZATION: Warm up the Brain BEFORE starting the search clock
+        global _EMB_MODEL
+        if _EMB_MODEL is None:
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+                logger.info("[RAG] Waking up the Library Brain (HuggingFace)...")
+                _EMB_MODEL = HuggingFaceEmbeddings(
+                    model_name="all-MiniLM-L6-v2",
+                    model_kwargs={'device': 'cpu', 'local_files_only': True}
+                )
+            except Exception as e:
+                logger.error(f"[RAG Brain Failure]: {e}")
+                return ""
+
         async def _run_search():
             try:
                 try:
@@ -612,27 +626,17 @@ class AIService:
                     import sys
                     logger.error(f"[Global RAG Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
                     return "The Academic Search engine is missing its splitting module. Please contact support."
-                from langchain_huggingface import HuggingFaceEmbeddings
+                
                 from library.models import DocumentChunk
                 from django.db import models
                 from pgvector.django import L2Distance
                 
                 logger.info(f"[Global RAG] Searching across entire library for: {query[:50]}...")
                 
-                global _EMB_MODEL
-                if _EMB_MODEL is None:
-                    logger.info("[RAG] Initializing Offline Embedding Model...")
-                    # We force local_files_only to prevent the 49s network hang
-                    _EMB_MODEL = HuggingFaceEmbeddings(
-                        model_name="all-MiniLM-L6-v2",
-                        model_kwargs={'device': 'cpu', 'local_files_only': True}
-                    )
-                
                 # Heavy calculation: Wrap in to_thread to keep loop alive
                 query_vector = await asyncio.to_thread(_EMB_MODEL.embed_query, query)
                 
                 # Retrieve the top N closest fragments from ANY document owned by the user
-                # We use sync_to_async or native aget where possible in next step
                 from asgiref.sync import sync_to_async
                 
                 def _do_db_query():
@@ -661,10 +665,10 @@ class AIService:
                 return ""
 
         try:
-            # 15s Circuit Breaker
-            return await asyncio.wait_for(_run_search(), timeout=15.0)
+            # High-Precision 20s Circuit Breaker
+            return await asyncio.wait_for(_run_search(), timeout=20.0)
         except asyncio.TimeoutError:
-            logger.warning(f"[Global RAG Timeout] Search exceeded 15s for query: {query[:30]}")
+            logger.warning(f"[Global RAG Timeout] Search exceeded 20s for query: {query[:30]}")
             return "--- Library context search timed out. Proceeding with general knowledge. ---"
         except Exception as e:
             logger.error(f"[Global RAG Fatal]: {e}")
