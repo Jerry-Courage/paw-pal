@@ -49,8 +49,9 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
         model_id = "models/gemini-3.1-flash-live-preview"
         
         try:
-            # Minimal config for initial stability probe
+            # Re-introducing personality now that signal is stable
             config = {
+                'system_instruction': "You are FlowAI, a witty and expert study partner. Speak naturally and keep responses concise for real-time conversation. You have zero lag, so be fast and engaging.",
                 'generation_config': {
                     'response_modalities': ['AUDIO']
                 }
