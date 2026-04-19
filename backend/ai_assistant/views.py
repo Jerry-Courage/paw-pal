@@ -759,7 +759,7 @@ class AgentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [AIRateThrottle]
 
-    async def post(self, request):
+    def post(self, request):
         query = request.data.get('query', '').strip()
         context = request.data.get('context', '')
         history = request.data.get('history', [])
@@ -769,33 +769,36 @@ class AgentView(APIView):
         if not query:
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Handle Session Persistence (Async Database Ops)
-        from django.shortcuts import aget_object_or_404
+        # 1. Handle Session Persistence (Sync Protocol for DRF Auth compatibility)
         session = None
         is_academic = any(kw in query.lower() for kw in ['pdf', 'note', 'resource', 'material', 'study', 'kit'])
         
         if session_id and (is_academic or is_tutor):
-            session = await aget_object_or_404(ChatSession, id=session_id, user=request.user)
+            session = get_object_or_404(ChatSession, id=session_id, user=request.user)
         else:
             # Dedicated lane for general platform assistance
-            session, created = await ChatSession.objects.aget_or_create(
+            session, created = ChatSession.objects.get_or_create(
                 user=request.user, 
                 context_type='global', 
                 title='FlowAI Platform Assistant'
             )
 
-        # 2. Process with Agent (Native Async AI Pipeline)
+        # 2. Process with Agent (High-Performance Async Bridge)
         try:
-            # Save User Message (Non-blocking)
-            await ChatMessage.objects.acreate(session=session, role='user', content=query)
+            # Save User Message
+            ChatMessage.objects.create(session=session, role='user', content=query)
             
-            agent = FlowAgent(request.user)
-            # NATIVE CALL: No more async_to_sync
-            reply, action = await agent.process_request(query, context, history=history, is_tutor_mode=is_tutor)
+            # Explicitly access request.user to ensure authentication is finalized in sync context
+            current_user = request.user
+            
+            agent = FlowAgent(current_user)
+            # THE BRIDGE: async_to_sync used once for high-level orchestration
+            from asgiref.sync import async_to_sync
+            reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
             
             execution_result = None
             if action:
-                execution_result = await agent.execute_action(action)
+                execution_result = async_to_sync(agent.execute_action)(action)
 
             display_reply = reply.split('ACTION:')[0].strip()
             speech_text = VoiceSanitizer.clean(display_reply)
@@ -820,8 +823,8 @@ class AgentView(APIView):
                 except Exception as e:
                     logger.error(f"Agent Voice Synthesis Error: {e}")
 
-            # 4. Save Assistant Message (Non-blocking)
-            assistant_msg = await ChatMessage.objects.acreate(
+            # 4. Save Assistant Message
+            assistant_msg = ChatMessage.objects.create(
                 session=session, 
                 role='assistant', 
                 content=display_reply,
