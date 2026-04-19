@@ -836,7 +836,6 @@ function AIChat() {
         {showLive && (
           <LiveVoiceAssistant 
             onClose={() => setShowLive(false)} 
-            token={null} 
           />
         )}
       </AnimatePresence>

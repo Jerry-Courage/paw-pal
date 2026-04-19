@@ -5,14 +5,14 @@ import { Mic, MicOff, Zap, X, Volume2, Waves } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { SERVER_URL } from '@/lib/api'
+import { SERVER_URL, getAuthToken } from '@/lib/api'
 
 interface LiveVoiceAssistantProps {
   onClose: () => void
-  token: string | null
+  token?: string | null
 }
 
-export default function LiveVoiceAssistant({ onClose, token }: LiveVoiceAssistantProps) {
+export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps) {
   const [isActive, setIsActive] = useState(false)
   const [isConnecting, setIsConnecting] = useState(true)
   const [isListening, setIsListening] = useState(false)
@@ -33,12 +33,18 @@ export default function LiveVoiceAssistant({ onClose, token }: LiveVoiceAssistan
     }
   }, [])
 
-  const connect = () => {
+  const connect = async () => {
     try {
-      // Derive WS URL from the production SERVER_URL
-      const wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws/ai/live/'
+      // Automatically grab the active session token for the security handshake
+      const authToken = await getAuthToken()
       
-      console.log('[Live] Connecting to:', wsUrl)
+      // Derive WS URL from the production SERVER_URL
+      let wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws/ai/live/'
+      if (authToken) {
+        wsUrl += `?token=${authToken}`
+      }
+      
+      console.log('[Live] Establishing secure signal...')
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 

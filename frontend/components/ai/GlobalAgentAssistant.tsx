@@ -525,7 +525,6 @@ export default function GlobalAgentAssistant() {
         {showLive && (
           <LiveVoiceAssistant 
             onClose={() => setShowLive(false)} 
-            token={null} 
           />
         )}
       </AnimatePresence>
