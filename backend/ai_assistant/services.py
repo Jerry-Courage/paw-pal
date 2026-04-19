@@ -594,7 +594,7 @@ class AIService:
             logger.error(f"[AI Stream Final Failure]: {err_msg}")
             yield err_msg
 
-    def embed_text_cloud(self, content):
+    def embed_text_cloud(self, content, is_query=True):
         """
         Natively uses Google Cloud to generate high-dimensional embeddings.
         This uses 0MB of local RAM and is significantly faster on Render.
@@ -604,11 +604,15 @@ class AIService:
             return None
         
         try:
-            # Use state-of-the-art model 'text-embedding-004'
-            # Content can be a single string or a list of strings
+            # OPTIMIZATION: Use specific task types for higher precision
+            # 'RETRIEVAL_QUERY' is for user questions
+            # 'RETRIEVAL_DOCUMENT' is for background indexing (tasks.py)
+            task_type = 'RETRIEVAL_QUERY' if is_query else 'RETRIEVAL_DOCUMENT'
+            
             result = self.google_client.models.embed_content(
                 model='text-embedding-004',
-                content=content
+                contents=content,
+                config={'task_type': task_type}
             )
             # Response handling for the 2026 SDK
             if isinstance(content, str):
