@@ -56,6 +56,13 @@ def process_resource_task(res_id):
     Background worker task to extract content and trigger AI study kit generation.
     Supports PDF, DOCX, TXT, and YouTube videos.
     """
+    from library.models import Resource
+    res_init = Resource.objects.get(id=res_id)
+    res_init.status_text = "🧬 Imperial Engine Initializing..."
+    res_init.status = 'processing'
+    res_init.save(update_fields=['status_text', 'status'])
+    print(f"--- [TASK START] Resource {res_id} entered the Imperial processing line ---")
+    
     try:
         from library.models import Resource, ResourceImage
         from library.text_extractor import extract_text_from_bytes
