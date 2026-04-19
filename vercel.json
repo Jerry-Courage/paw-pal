@@ -12,12 +12,9 @@
     }
   ],
   "routes": [
-    { 
-      "src": "/api/auth/(login|signup|me|logout|refresh|verify|register|profile|status)(.*)", 
-      "dest": "backend/core/wsgi.py" 
-    },
     { "src": "/api/auth/(.*)", "dest": "/api/auth/$1" },
-    { "src": "/api/(?!auth)(.*)", "dest": "backend/core/wsgi.py" },
+    { "src": "/api/identity-engine/(.*)", "dest": "backend/core/wsgi.py" },
+    { "src": "/api/(.*)", "dest": "backend/core/wsgi.py" },
     { "src": "/admin/(.*)", "dest": "backend/core/wsgi.py" },
     { "src": "/(.*)", "dest": "frontend/$1" }
   ]

@@ -15,12 +15,12 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
         try {
-          const res = await axios.post(`${API_URL}/auth/login/`, {
+          const res = await axios.post(`${API_URL}/identity-engine/login/`, {
             email: credentials.email,
             password: credentials.password,
           })
           const { access, refresh } = res.data
-          const userRes = await axios.get(`${API_URL}/auth/me/`, {
+          const userRes = await axios.get(`${API_URL}/identity-engine/me/`, {
             headers: { Authorization: `Bearer ${access}` },
           })
           return {
