@@ -1,16 +1,10 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "backend/core/wsgi.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb", "runtime": "python3.12" }
-    },
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/next"
+  "functions": {
+    "backend/core/wsgi.py": {
+      "runtime": "@vercel/python"
     }
-  ],
+  },
   "rewrites": [
     { "source": "/api/identity-engine/(.*)", "destination": "backend/core/wsgi.py" },
     { "source": "/api/((?!auth).*)", "destination": "backend/core/wsgi.py" },
