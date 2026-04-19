@@ -609,33 +609,33 @@ class AIService:
 
     def embed_text_cloud(self, content, is_query=True):
         """
-        Natively uses Google Cloud to generate high-dimensional embeddings.
-        This uses 0MB of local RAM and is significantly faster on Render.
+        Hyper-Resilient Cloud Embeddings: Gemini Embedding 2 (Primary) -> Embedding 1 (Fallback).
+        Maintains a strong combined quota while maximizing retrieval precision.
         """
         if not self.google_client:
-            logger.error("[RAG] Google Client not initialized. Cannot generate embeddings.")
+            logger.error("[RAG] Google Client not initialized.")
             return None
         
-        try:
-            # OPTIMIZATION: Use specific task types for higher precision
-            # 'RETRIEVAL_QUERY' is for user questions
-            # 'RETRIEVAL_DOCUMENT' is for background indexing (tasks.py)
-            task_type = 'RETRIEVAL_QUERY' if is_query else 'RETRIEVAL_DOCUMENT'
-            
-            # Using the VERIFIED gemini-embedding-001 model
-            result = self.google_client_v1.models.embed_content(
-                model='models/gemini-embedding-001',
-                contents=content,
-                config={'task_type': task_type}
-            )
-            # Response handling for the 2026 SDK
-            if isinstance(content, str):
-                return result.embeddings[0].values
-            else:
-                return [e.values for e in result.embeddings]
-        except Exception as e:
-            logger.error(f"[RAG Cloud Error]: {e}")
-            return None
+        task_type = 'RETRIEVAL_QUERY' if is_query else 'RETRIEVAL_DOCUMENT'
+        
+        # --- PRIMARY: Gemini Embedding 2 (The Elite Signal) ---
+        for model_id in ['models/gemini-embedding-002', 'models/gemini-embedding-001']:
+            try:
+                result = self.google_client_v1.models.embed_content(
+                    model=model_id,
+                    contents=content,
+                    config={'task_type': task_type}
+                )
+                if isinstance(content, str):
+                    return result.embeddings[0].values
+                else:
+                    return [e.values for e in result.embeddings]
+            except Exception as e:
+                logger.warning(f"[RAG Cloud] {model_id} failed: {e}. Falling back...")
+                continue
+                
+        logger.error("[RAG Cloud Fatal] All embedding engines failed.")
+        return None
 
     async def perform_global_search(self, query: str, user, limit: int = 7) -> str:
         """
