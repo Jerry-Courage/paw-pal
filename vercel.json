@@ -3,19 +3,16 @@
   "builds": [
     {
       "src": "backend/core/wsgi.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb", "runtime": "python3.12" }
+      "use": "@vercel/python"
     },
     {
       "src": "frontend/package.json",
       "use": "@vercel/next"
     }
   ],
-  "routes": [
-    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1" },
-    { "src": "/api/identity-engine/(.*)", "dest": "backend/core/wsgi.py" },
-    { "src": "/api/(.*)", "dest": "backend/core/wsgi.py" },
-    { "src": "/admin/(.*)", "dest": "backend/core/wsgi.py" },
-    { "src": "/(.*)", "dest": "frontend/$1" }
+  "rewrites": [
+    { "source": "/api/identity-engine/(.*)", "destination": "/backend/core/wsgi.py" },
+    { "source": "/api/(?!auth)(.*)", "destination": "/backend/core/wsgi.py" },
+    { "source": "/admin/(.*)", "destination": "/backend/core/wsgi.py" }
   ]
 }
