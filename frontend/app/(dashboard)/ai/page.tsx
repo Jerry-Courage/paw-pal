@@ -295,6 +295,7 @@ function AIChat() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [contextType, setContextType] = useState<'global' | 'resource'>('global')
