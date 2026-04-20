@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Native Browser Bridge for Gemini Multimodal Live API
- * Provides zero-latency voice interaction by connecting directly to Google.
+ * useGeminiLive: Fluid Voice Bridge for Gemini Multimodal Live API
+ * Provides zero-latency, zero-pop audible speech via a scheduled sequential queue.
  */
 export function useGeminiLive() {
   const [isActive, setIsActive] = useState(false)
@@ -13,6 +13,7 @@ export function useGeminiLive() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const nextStartTimeRef = useRef<number>(0)
   
   const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_STUDIO_API_KEY
   const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${API_KEY}`
@@ -21,6 +22,7 @@ export function useGeminiLive() {
     console.log('[GeminiDirect] Closing session...')
     setIsActive(false)
     setIsConnecting(false)
+    nextStartTimeRef.current = 0
     
     if (wsRef.current) {
       wsRef.current.close()
@@ -44,7 +46,7 @@ export function useGeminiLive() {
 
   const startSession = useCallback(async () => {
     if (!API_KEY) {
-      setError("Gemini Key missing. Add NEXT_PUBLIC_GOOGLE_STUDIO_API_KEY to your env.")
+      setError("Gemini Key missing. Check your frontend environment.")
       return
     }
 
@@ -52,14 +54,13 @@ export function useGeminiLive() {
     setError(null)
     
     try {
-      console.log('[GeminiDirect] Initiating direct link...')
+      console.log('[GeminiDirect] Initiating Fluid Link...')
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
       
       ws.onopen = async () => {
         console.log('[GeminiDirect] Secure handshake established.')
         
-        // Protocol: Setup message must be the absolute first packet
         const setupMessage = {
           setup: {
             model: "models/gemini-2.5-flash-native-audio-latest",
@@ -72,7 +73,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, an elite, real-time study partner named Andrew. Speak naturally and concisely." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and immediately." }]
             }
           }
         }
@@ -84,47 +85,37 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // Handle binary audio (Andrew speaking)
+        // 1. Handle Binary Audio Stream (Andrew Speaking)
         if (event.data instanceof Blob) {
-          // console.log('[GeminiDirect] Receiving Binary Audio Stream...')
           const arrayBuffer = await event.data.arrayBuffer()
-          playRawPCM(arrayBuffer)
+          playRawPCMInQueue(arrayBuffer)
           return
         }
 
-        // Handle JSON metadata
+        // 2. Handle Handshake/Metadata
         try {
           const response = JSON.parse(event.data)
-          
           if (response.serverContent?.modelTurn?.parts) {
             const parts = response.serverContent.modelTurn.parts
             for (const part of parts) {
               if (part.inlineData) {
-                // Legacy fallback if server sends JSON-encoded audio
-                playRawPCM(base64ToArrayBuffer(part.inlineData.data))
+                playRawPCMInQueue(base64ToArrayBuffer(part.inlineData.data))
               }
             }
           }
-          
           if (response.serverContent?.turnComplete) {
-              console.log('[GeminiDirect] Speaker Turn Complete.')
+              console.log('[GeminiDirect] Speaker Turn Finished.')
           }
         } catch (err) {
-          console.error('[GeminiDirect] Metadata Parse Fail:', err)
+          // console.error('[GeminiDirect] JSON Skip:', err)
         }
       }
 
-      ws.onerror = (e) => {
-        console.error('[GeminiDirect] Signal Error:', e)
-        setError("Brain Link Error: Connection refused by Gemini.")
-      }
-
       ws.onclose = (e) => {
-        console.log('[GeminiDirect] Link terminated. Code:', e.code, 'Reason:', e.reason || 'None')
-        setIsActive(false)
-        setIsConnecting(false)
+        console.log('[GeminiDirect] Link terminated. Code:', e.code)
+        stopSession()
         if (e.code !== 1000 && e.code !== 1001) {
-            setError(`Signal Terminated: Code ${e.code}. Check your API Key and Region.`)
+            setError(`Signal Terminated (Code ${e.code}).`)
         }
       }
 
@@ -133,15 +124,15 @@ export function useGeminiLive() {
       setError(err.message || "Failed to ignite Gemini session.")
       setIsConnecting(false)
     }
-  }, [API_KEY, WS_URL])
+  }, [API_KEY, WS_URL, stopSession])
 
   const initAudio = async () => {
+    // 24000Hz is the high-fidelity native rate for Gemini output
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 16000
+      sampleRate: 24000
     })
     audioContextRef.current = audioContext
     
-    // Ensure Context is running
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
     }
@@ -157,15 +148,22 @@ export function useGeminiLive() {
     mediaStreamRef.current = stream
     
     const source = audioContext.createMediaStreamSource(stream)
-    const processor = audioContext.createScriptProcessor(2048, 1, 1)
+    // Using 4096 to reduce JSON-chat overhead while maintaining responsiveness
+    const processor = audioContext.createScriptProcessor(4096, 1, 1)
     processorRef.current = processor
     
     processor.onaudioprocess = (e) => {
       if (wsRef.current?.readyState === WebSocket.OPEN && isActive) {
         const inputData = e.inputBuffer.getChannelData(0)
-        const int16Data = new Int16Array(inputData.length)
-        for (let i = 0; i < inputData.length; i++) {
-          int16Data[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF
+        
+        // Simple downsample from 24k to 16k for the Gemini brain
+        const factor = 24000 / 16000 // 1.5
+        const resampledLength = Math.floor(inputData.length / factor)
+        const int16Data = new Int16Array(resampledLength)
+        
+        for (let i = 0; i < resampledLength; i++) {
+          const index = Math.floor(i * factor)
+          int16Data[i] = Math.max(-1, Math.min(1, inputData[index])) * 0x7FFF
         }
         
         wsRef.current.send(JSON.stringify({
@@ -183,24 +181,30 @@ export function useGeminiLive() {
     processor.connect(audioContext.destination)
   }
 
-  const playRawPCM = (arrayBuffer: ArrayBuffer) => {
+  const playRawPCMInQueue = (arrayBuffer: ArrayBuffer) => {
     if (!audioContextRef.current) return
     
     const int16Data = new Int16Array(arrayBuffer)
     const float32Data = new Float32Array(int16Data.length)
-    
-    // Convert Int16 to Float32 for the AudioContext
     for (let i = 0; i < int16Data.length; i++) {
         float32Data[i] = int16Data[i] / 0x7FFF
     }
     
-    const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 16000)
+    const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
     buffer.getChannelData(0).set(float32Data)
     
     const source = audioContextRef.current.createBufferSource()
     source.buffer = buffer
     source.connect(audioContextRef.current.destination)
-    source.start()
+    
+    const currentTime = audioContextRef.current.currentTime
+    // If the queue has gone cold, start slightly ahead of current time for smoothness
+    if (nextStartTimeRef.current < currentTime) {
+        nextStartTimeRef.current = currentTime + 0.05
+    }
+    
+    source.start(nextStartTimeRef.current)
+    nextStartTimeRef.current += buffer.duration
   }
 
   function arrayBufferToBase64(buffer: ArrayBuffer) {
