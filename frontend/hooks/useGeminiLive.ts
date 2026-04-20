@@ -88,23 +88,22 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        if (event.data instanceof Blob) {
-          const arrayBuffer = await event.data.arrayBuffer()
-          playRawPCMInQueue(arrayBuffer)
-          return
-        }
-
+        // SURGERY: Deleting raw Blob playout (the Packaging Noise) ⚔️
+        // We strictly use the extracted Inline Data lane for Clean Voice.
         try {
           const response = JSON.parse(event.data)
           if (response.serverContent?.modelTurn?.parts) {
             const parts = response.serverContent.modelTurn.parts
             for (const part of parts) {
               if (part.inlineData) {
+                // Verified Extraction: Pure Humanoid Voice
                 playRawPCMInQueue(base64ToArrayBuffer(part.inlineData.data))
               }
             }
           }
-        } catch (err) {}
+        } catch (err) {
+          // Internal JSON handle for system messages
+        }
       }
 
       ws.onclose = (e) => {
@@ -125,7 +124,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: ALPHA-OMEGA (Protocol-Unmasked)')
+    console.log('[GeminiDirect] ENGINE: PROTOCOL-LOCKED (Sure-Fix)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
