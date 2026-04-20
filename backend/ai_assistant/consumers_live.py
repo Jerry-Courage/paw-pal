@@ -43,7 +43,7 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
 
     async def run_live_session(self):
         """
-        Main loop to bridge the and Google's Live signaling.
+        Main loop to bridge the client and Google's Live signaling.
         """
         # Exact Technical ID for Gemini 3 Flash Live as verified in model scan
         model_id = "models/gemini-3.1-flash-live-preview"
@@ -53,7 +53,8 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
             config = {
                 'system_instruction': "You are FlowAI, a witty and expert study partner. Speak naturally and keep responses concise for real-time conversation. You have zero lag, so be fast and engaging.",
                 'generation_config': {
-                    'response_modalities': ['AUDIO']
+                    'response_modalities': ['AUDIO'],
+                    'candidate_count': 1
                 }
             }
             
@@ -61,11 +62,21 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
                 self.gemini_session = session
                 logger.info(f"[LiveAgent] Session established with {model_id}")
 
-                # Start the receiver task (Gemini -> Client)
-                receiver_task = asyncio.create_task(self.receive_from_gemini())
-                
-                # The 'send' part of the bridge is handled by 'receive' from client (Client -> Gemini)
-                await asyncio.gather(receiver_task)
+                async for message in session.receive():
+                    response = {}
+                    if message.text:
+                        response["text"] = message.text
+                    
+                    if message.server_content and message.server_content.model_turn:
+                        parts = message.server_content.model_turn.parts
+                        for part in parts:
+                            if part.inline_data:
+                                # High-fidelity 24kHz audio from Gemini
+                                audio_data = base64.b64encode(part.inline_data.data).decode('utf-8')
+                                response["audio"] = audio_data
+
+                    if response:
+                        await self.send(text_data=json.dumps(response))
 
         except asyncio.CancelledError:
             pass
@@ -74,45 +85,25 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
             logger.error(f"[LiveAgent] Session Error: {e}\n{error_trace}")
             await self.close()
 
-    async def receive_from_gemini(self):
-        """Pipes response chunks from Gemini back to the client."""
-        async for message in self.gemini_session.receive():
-            # Multimodal messages can contain text or audio frames
-            response = {}
-            if message.text:
-                response["text"] = message.text
-            
-            if message.server_content and message.server_content.model_turn:
-                parts = message.server_content.model_turn.parts
-                for part in parts:
-                    if part.inline_data:
-                        # Audio data is already in bytes, we base64 it for the WS
-                        audio_data = base64.b64encode(part.inline_data.data).decode('utf-8')
-                        response["audio"] = audio_data
-
-            if response:
-                await self.send(text_data=json.dumps(response))
-
     async def receive(self, text_data=None, bytes_data=None):
         """
         Receives data from the client and forwards it to Gemini.
-        Supported formats:
-        - JSON for text/config
-        - Binary for audio chunks
         """
         if not hasattr(self, 'gemini_session'):
             return
 
-        if text_data:
-            try:
+        try:
+            if text_data:
                 data = json.loads(text_data)
                 # Client sending text
                 if "text" in data:
                     await self.gemini_session.send(input=data["text"], end_of_turn=True)
-            except:
-                pass
 
-        if bytes_data:
-            # Client sending raw audio chunks (PCM 16k usually)
-            # Gemini Live expects binary frames
-            await self.gemini_session.send(input={"data": bytes_data, "mime_type": "audio/pcm;rate=16000"})
+            if bytes_data:
+                # Pipe raw PCM 16kHz audio directly to the live session
+                await self.gemini_session.send(input={
+                    "data": bytes_data, 
+                    "mime_type": "audio/pcm;rate=16000"
+                })
+        except Exception as e:
+            logger.error(f"[LiveAgent] Send Error: {e}")
