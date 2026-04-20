@@ -101,12 +101,19 @@ class ResourceListCreateView(generics.ListCreateAPIView):
 
         resource = serializer.save(owner=self.request.user)
         resource.file_size = resource.file.size if resource.file else 0
+        resource.status_text = "🧬 Synthesis Engine Initializing..."
         resource.save()
 
-        # ─── IMPERIAL HIGH-SPEED ENGINE ─────────────────────────────────────────────
-        # Offloads heavy synthesis to GitHub Actions (Bypasses Vercel Timeouts)
-        trigger_github_synthesis(resource.id)
-        logger.info(f'Resource {resource.id} signaled to GitHub Engine for user {self.request.user.id}')
+        # ─── IMPERIAL HYBRID ENGINE ─────────────────────────────────────────────────
+        # Primary: Offload heavy synthesis to GitHub Actions (Bypasses Timeouts)
+        signal_sent = trigger_github_synthesis(resource.id)
+        
+        # Fallback: If GitHub link is missing or fails, process locally via Django-Q
+        if not signal_sent:
+            logger.info(f'[Hybrid Failover] Engaging local Imperial Task Queue for Resource {resource.id}')
+            async_task('library.tasks.process_resource_task', resource.id)
+        else:
+            logger.info(f'Resource {resource.id} signaled to GitHub Engine for user {self.request.user.id}')
 
     def get_serializer_context(self):
         return {'request': self.request}
