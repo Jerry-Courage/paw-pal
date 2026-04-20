@@ -65,10 +65,10 @@ export function useGeminiLive() {
       ws.onopen = async () => {
         console.log('[GeminiDirect] Secure handshake established.')
         
-        // SETUP: Gemini 2.5 Native Audio Dialog
+        // SETUP: Gemini 2.0 Flash-Exp (The Conversational Standard)
         const setupMessage = {
           setup: {
-            model: "models/gemini-2.5-flash-native-audio-latest",
+            model: "models/gemini-2.0-flash-exp",
             generation_config: {
               response_modalities: ["AUDIO"],
               speech_config: {
@@ -78,7 +78,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the DASHBOARD-ACCURATE build. Your pulse is clear." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the CONVERSATIONAL-MODE build. Your pulse is clear." }]
             }
           }
         }
@@ -106,17 +106,9 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // BINARY LANE: Detecting and filtering out the alpha-protocol static
-        if (event.data instanceof ArrayBuffer) {
-           // SKIP HEADERS: Move past the initial meta-noise
-           if (event.data.byteLength > 100) {
-             const audioSlice = event.data.slice(100)
-             playRawPCMInQueue(audioSlice)
-           }
-           return
-        }
+        // CONVERSATIONAL MODE: Andrew's voice flows through the crystal-clear JSON lane.
+        if (typeof event.data !== 'string') return
 
-        // JSON LANE: Omni-Parser
         try {
           const response = JSON.parse(event.data)
           const parts = response.serverContent?.modelTurn?.parts
@@ -149,7 +141,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: DASHBOARD-ACCURATE (Success)')
+    console.log('[GeminiDirect] ENGINE: CONVERSATIONAL-MODE (Victory)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -242,10 +234,6 @@ export function useGeminiLive() {
           float32Data[i] = f32Value
       }
       
-      // AMPLITUDE SHIELD: Discard "Constant-Static" pulses (Typical of proto-headers)
-      // Natural speech peaks vary between 0.1 and 0.9. Constant 0.957 is the static shield trigger.
-      if (speakerPeak > 0.99 || speakerPeak < 0.001) return
-      
       console.log(`[GeminiDirect] Speaker Pulse: [${speakerPeak.toFixed(3)}]`)
       
       const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
@@ -257,7 +245,8 @@ export function useGeminiLive() {
       
       const currentTime = audioContextRef.current.currentTime
       if (nextStartTimeRef.current < currentTime) {
-          nextStartTimeRef.current = currentTime + 0.05
+          // CONVERSATIONAL MODE: 20ms Latency Offset for "Instant" feel ⚡
+          nextStartTimeRef.current = currentTime + 0.02
       }
       
       source.start(nextStartTimeRef.current)
