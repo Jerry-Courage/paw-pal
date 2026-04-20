@@ -302,10 +302,18 @@ def process_resource_task(res_id):
         logger.info(f'[Task Queue] Resource {res.id} marked as ready.')
 
     except Exception as e:
-        logger.error(f'[Task Queue] Critical abort processing resource {res_id}: {e}')
+        error_msg = str(e)
+        logger.error(f'[Task Queue] Critical abort processing resource {res_id}: {error_msg}')
         try:
             res = Resource.objects.get(id=res_id)
-            res.status = 'ready' # Reset to ready so user can at least see the file
+            res.status = 'failed'
+            # Check for common storage errors to provide a helpful hint
+            if "AWS_ACCESS_KEY_ID" in error_msg or "SignatureDoesNotMatch" in error_msg:
+                res.status_text = "❌ Failed: Storage Key Mismatch (Check GitHub Secrets)"
+            elif "ConnectionError" in error_msg or "Timeout" in error_msg:
+                res.status_text = "❌ Failed: Connection to Cloudflare Denied"
+            else:
+                res.status_text = f"❌ Failed: {error_msg[:100]}"
             res.save()
         except:
             pass

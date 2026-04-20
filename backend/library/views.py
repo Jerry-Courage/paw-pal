@@ -461,3 +461,27 @@ class ResourceFileView(APIView):
             'file_name': resource.file.name,
             'size': len(file_data)
         })
+
+class ReprocessResourceView(APIView):
+    """
+    Force a manual local synthesis triggered by the user.
+    Useful as a failover if the GitHub Engine meets a 'Wall'.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, resource_id):
+        from django_q.tasks import async_task
+        resource = get_object_or_404(Resource, id=resource_id, owner=request.user)
+        
+        # Reset study kit state
+        resource.has_study_kit = False
+        resource.ai_notes_json = {}
+        resource.status = 'processing'
+        resource.status_text = "🧬 Force-Sync: Local Imperial Engine Engaged..."
+        resource.save()
+        
+        # Trigger local background task
+        async_task('library.tasks.process_resource_task', resource.id)
+        
+        logger.info(f'[Manual Failover] User {request.user.id} forced local synthesis for Resource {resource.id}')
+        return Response({'success': True, 'message': 'Imperial Forge ignited locally. Check status in a few minutes.'})
