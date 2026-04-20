@@ -125,7 +125,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: ALPHA-GOLD (The Awakening)')
+    console.log('[GeminiDirect] ENGINE: ALPHA-OMEGA (Protocol-Unmasked)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -210,8 +210,8 @@ export function useGeminiLive() {
       
       let speakerPeak = 0
       for (let i = 0; i < sampleCount; i++) {
-          // Read Int16 (Big-endian: false)
-          const int16Value = dataView.getInt16(i * 2, false)
+          // Reset to Little-endian (true) as the static was protocol meta-noise
+          const int16Value = dataView.getInt16(i * 2, true)
           const f32Value = int16Value / 0x7FFF
           if (Math.abs(f32Value) > speakerPeak) speakerPeak = Math.abs(f32Value)
           float32Data[i] = f32Value
