@@ -203,28 +203,38 @@ export function useGeminiLive() {
   }
 
   const playRawPCMInQueue = (arrayBuffer: ArrayBuffer) => {
-    if (!audioContextRef.current) return
+    if (!audioContextRef.current || arrayBuffer.byteLength < 4) return
     
-    const int16Data = new Int16Array(arrayBuffer)
-    const float32Data = new Float32Array(int16Data.length)
-    for (let i = 0; i < int16Data.length; i++) {
-        float32Data[i] = int16Data[i] / 0x7FFF
+    try {
+      // Ensure even byte length for Int16Array (2 bytes per sample)
+      const safeBuffer = arrayBuffer.byteLength % 2 === 0 
+        ? arrayBuffer 
+        : arrayBuffer.slice(0, arrayBuffer.byteLength - 1)
+        
+      const int16Data = new Int16Array(safeBuffer)
+      const float32Data = new Float32Array(int16Data.length)
+      for (let i = 0; i < int16Data.length; i++) {
+          float32Data[i] = int16Data[i] / 0x7FFF
+      }
+      
+      const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
+      buffer.getChannelData(0).set(float32Data)
+      
+      const source = audioContextRef.current.createBufferSource()
+      source.buffer = buffer
+      source.connect(audioContextRef.current.destination)
+      
+      const currentTime = audioContextRef.current.currentTime
+      if (nextStartTimeRef.current < currentTime) {
+          nextStartTimeRef.current = currentTime + 0.05
+      }
+      
+      // Zero-gap playout
+      source.start(nextStartTimeRef.current)
+      nextStartTimeRef.current += buffer.duration
+    } catch (err) {
+      console.error('[GeminiDirect] Audio Clip Alignment Dropped:', err)
     }
-    
-    const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
-    buffer.getChannelData(0).set(float32Data)
-    
-    const source = audioContextRef.current.createBufferSource()
-    source.buffer = buffer
-    source.connect(audioContextRef.current.destination)
-    
-    const currentTime = audioContextRef.current.currentTime
-    if (nextStartTimeRef.current < currentTime) {
-        nextStartTimeRef.current = currentTime + 0.05
-    }
-    
-    source.start(nextStartTimeRef.current)
-    nextStartTimeRef.current += buffer.duration
   }
 
   function arrayBufferToBase64(buffer: ArrayBuffer) {
