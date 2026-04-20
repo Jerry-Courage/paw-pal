@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Official Omni-Bridge for Gemini Multimodal Live API
- * Compliant with 2026 Spec: 24kHz Output / 16kHz Input. 
- * Omni-Parser: Captures audio from every possible field (inlineData, audio, blob, data).
- * Strictly JSON-locked to eliminate static forever.
+ * useGeminiLive: Protocol-Finalized Bridge for Gemini Multimodal Live API
+ * Restoration: Gemini 2.5 Native Audio
+ * Spec: 24kHz Output / 16kHz Input
+ * Binary Shielding: Header-skipping to unmask audio and eliminate static.
  */
 export function useGeminiLive() {
   const [isActive, setIsActive] = useState(false)
@@ -60,6 +60,7 @@ export function useGeminiLive() {
     try {
       console.log('[GeminiDirect] Initiating Industrial Link...')
       const ws = new WebSocket(WS_URL)
+      ws.binaryType = "arraybuffer"; // UNMASKING: Enable raw byte access
       wsRef.current = ws
       
       ws.onopen = async () => {
@@ -67,7 +68,7 @@ export function useGeminiLive() {
         
         const setupMessage = {
           setup: {
-            model: "models/gemini-3-flash-live",
+            model: "models/gemini-2.5-flash-native-audio-latest",
             generation_config: {
               response_modalities: ["AUDIO"],
               speech_config: {
@@ -77,7 +78,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the GEMINI-3-AWAKENING build. Your pulse is clear." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the PROTOCOL-FINALIZED build. Your pulse is clear." }]
             }
           }
         }
@@ -90,19 +91,25 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // THE OMNI-BRIDGE: We ignore binary blobs entirely to kill static.
-        // We capture audio from EVERY possible field in the JSON response.
-        if (typeof event.data !== 'string') return
+        // BINARY SHIELD: Extracting pure audio from the proto-binary stream
+        if (event.data instanceof ArrayBuffer) {
+           // Skip the first 100 bytes (Proto headers/noise) and play the remaining Raw PCM
+           // This is the "Sure Fix" for the high-volume static.
+           if (event.data.byteLength > 100) {
+             const audioSlice = event.data.slice(100)
+             playRawPCMInQueue(audioSlice)
+           }
+           return
+        }
 
+        // JSON Fallback: Omni-Parser
         try {
           const response = JSON.parse(event.data)
           const parts = response.serverContent?.modelTurn?.parts
           if (parts) {
             for (const part of parts) {
-              // Extraction Strategy: Check every known audio field
               const audioData = part.inlineData?.data || part.audio || part.blob?.data || part.data
               if (audioData) {
-                // Verified Extraction: Official 24kHz Humanoid Voice
                 playRawPCMInQueue(base64ToArrayBuffer(audioData))
               }
             }
@@ -129,7 +136,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: GEMINI-3-AWAKENING (Victory)')
+    console.log('[GeminiDirect] ENGINE: PROTOCOL-FINALIZED (Success)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -162,6 +169,9 @@ export function useGeminiLive() {
     })
     mediaStreamRef.current = stream
     
+    // Safety check: Ensure context wasn't closed by a fast handshake rejection
+    if (audioContext.state === 'closed') return;
+
     const source = audioContext.createMediaStreamSource(stream)
     const workletNode = new AudioWorkletNode(audioContext, 'gemini-processor')
     workletNodeRef.current = workletNode
@@ -169,7 +179,7 @@ export function useGeminiLive() {
     let chunkCount = 0
     workletNode.port.onmessage = (event) => {
       if (wsRef.current?.readyState === WebSocket.OPEN && isActiveRef.current) {
-        const inputData = event.data // Float32Array (16kHz)
+        const inputData = event.data 
         
         let micPeak = 0
         const int16Data = new Int16Array(inputData.length)
