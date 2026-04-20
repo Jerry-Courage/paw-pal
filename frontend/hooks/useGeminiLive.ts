@@ -73,7 +73,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and immediately." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: Greet the user immediately with a witty remark as soon as the connection is established." }]
             }
           }
         }
@@ -86,6 +86,7 @@ export function useGeminiLive() {
 
       ws.onmessage = async (event) => {
         if (event.data instanceof Blob) {
+          // console.log('[GeminiDirect] Receiving voice frame...')
           const arrayBuffer = await event.data.arrayBuffer()
           playRawPCMInQueue(arrayBuffer)
           return
@@ -110,7 +111,7 @@ export function useGeminiLive() {
       }
 
     } catch (err: any) {
-      console.error('[GeminiDirect] Error:', err)
+      console.error('[GeminiDirect] System Abort:', err)
       setError(err.message || "Failed to ignite Gemini session.")
       setIsConnecting(false)
     }
@@ -122,6 +123,10 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+    }
+
     // 1. Create the Worklet Processor Blob
     const workletCode = `
       class GeminiProcessor extends AudioWorkletProcessor {
@@ -154,9 +159,17 @@ export function useGeminiLive() {
     const workletNode = new AudioWorkletNode(audioContext, 'gemini-processor')
     workletNodeRef.current = workletNode
     
+    let chunkCount = 0
     workletNode.port.onmessage = (event) => {
       if (wsRef.current?.readyState === WebSocket.OPEN && isActive) {
         const inputData = event.data // Float32Array from the background thread
+        
+        // Telemetry: Log every 100th chunk (~1.5 seconds) to avoid spam but confirm life
+        chunkCount++
+        if (chunkCount % 100 === 0) {
+            console.log('[GeminiDirect] Signal Active: Sending chunks...')
+            chunkCount = 0
+        }
         
         // Simple downsample from 24k to 16k
         const factor = 1.5
@@ -179,8 +192,13 @@ export function useGeminiLive() {
       }
     }
     
+    // Activation Patch: Silent output prevents browser "Sleeping" the thread
+    const silentGain = audioContext.createGain()
+    silentGain.gain.value = 0
+    
     source.connect(workletNode)
-    // We don't connect workletNode to destination because we don't want to hear the mic loopback
+    workletNode.connect(silentGain)
+    silentGain.connect(audioContext.destination)
   }
 
   const playRawPCMInQueue = (arrayBuffer: ArrayBuffer) => {
