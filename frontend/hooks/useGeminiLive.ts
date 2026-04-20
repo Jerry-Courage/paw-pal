@@ -127,6 +127,8 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
+    console.log('[GeminiDirect] ENGINE: ALPHA-X (DataView-Secure)')
+    
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
     }
@@ -203,18 +205,17 @@ export function useGeminiLive() {
   }
 
   const playRawPCMInQueue = (arrayBuffer: ArrayBuffer) => {
-    if (!audioContextRef.current || arrayBuffer.byteLength < 4) return
+    if (!audioContextRef.current || arrayBuffer.byteLength < 2) return
     
     try {
-      // Ensure even byte length for Int16Array (2 bytes per sample)
-      const safeBuffer = arrayBuffer.byteLength % 2 === 0 
-        ? arrayBuffer 
-        : arrayBuffer.slice(0, arrayBuffer.byteLength - 1)
-        
-      const int16Data = new Int16Array(safeBuffer)
-      const float32Data = new Float32Array(int16Data.length)
-      for (let i = 0; i < int16Data.length; i++) {
-          float32Data[i] = int16Data[i] / 0x7FFF
+      const dataView = new DataView(arrayBuffer)
+      const sampleCount = Math.floor(arrayBuffer.byteLength / 2)
+      const float32Data = new Float32Array(sampleCount)
+      
+      for (let i = 0; i < sampleCount; i++) {
+          // Read Int16 (little-endian: true)
+          const int16Value = dataView.getInt16(i * 2, true)
+          float32Data[i] = int16Value / 0x7FFF
       }
       
       const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
@@ -229,11 +230,10 @@ export function useGeminiLive() {
           nextStartTimeRef.current = currentTime + 0.05
       }
       
-      // Zero-gap playout
       source.start(nextStartTimeRef.current)
       nextStartTimeRef.current += buffer.duration
     } catch (err) {
-      console.error('[GeminiDirect] Audio Clip Alignment Dropped:', err)
+      console.error('[GeminiDirect] Audio Engine Fail-Safe Triggered:', err)
     }
   }
 
