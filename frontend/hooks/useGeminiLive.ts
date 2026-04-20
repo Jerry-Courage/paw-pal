@@ -125,7 +125,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: ALPHA-Z (Signal-Analysis)')
+    console.log('[GeminiDirect] ENGINE: ALPHA-GOLD (The Awakening)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -210,7 +210,8 @@ export function useGeminiLive() {
       
       let speakerPeak = 0
       for (let i = 0; i < sampleCount; i++) {
-          const int16Value = dataView.getInt16(i * 2, true)
+          // Read Int16 (Big-endian: false)
+          const int16Value = dataView.getInt16(i * 2, false)
           const f32Value = int16Value / 0x7FFF
           if (Math.abs(f32Value) > speakerPeak) speakerPeak = Math.abs(f32Value)
           float32Data[i] = f32Value
