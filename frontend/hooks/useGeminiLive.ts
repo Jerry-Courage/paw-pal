@@ -67,7 +67,7 @@ export function useGeminiLive() {
         
         const setupMessage = {
           setup: {
-            model: "models/gemini-2.5-flash-native-audio-latest",
+            model: "models/gemini-2.0-flash-exp",
             generation_config: {
               response_modalities: ["AUDIO"],
               speech_config: {
@@ -77,7 +77,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the TOTAL-AWAKENING build. Your pulse is clear." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the MAINSTREAM-AWAKENING build. Your pulse is clear." }]
             }
           }
         }
@@ -129,7 +129,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: TOTAL-AWAKENING (Definitive-Victory)')
+    console.log('[GeminiDirect] ENGINE: MAINSTREAM-AWAKENING (Victory)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
