@@ -134,6 +134,7 @@ export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps)
         }
         
         if (wsRef.current?.readyState === WebSocket.OPEN) {
+          // console.log('[Live Trace] Sending PCM chunk:', int16Data.buffer.byteLength, 'bytes')
           wsRef.current.send(int16Data.buffer)
         }
       }

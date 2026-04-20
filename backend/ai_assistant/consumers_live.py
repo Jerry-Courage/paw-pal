@@ -7,7 +7,41 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from google import genai
 from google.genai import types
 from django.conf import settings
-# ... lines 9-43 unchanged ...
+
+logger = logging.getLogger('flowstate')
+
+class GeminiLiveConsumer(AsyncWebsocketConsumer):
+    """
+    Multimodal Live API Consumer.
+    Provides a low-latency bidirectional bridge between the browser
+    and Google's Gemini 2.x/3.x Live signaling servers.
+    """
+    async def connect(self):
+        self.user = self.scope.get('user')
+        if not self.user or self.user.is_anonymous:
+            await self.close()
+            return
+
+        await self.accept()
+        
+        # Initialize the GenAI Client
+        api_key = getattr(settings, 'GOOGLE_STUDIO_API_KEY', None)
+        if not api_key:
+            logger.error("[LiveAgent] GOOGLE_STUDIO_API_KEY not found.")
+            await self.send(text_data=json.dumps({"error": "AI Infrastructure misconfigured. Key missing."}))
+            await self.close()
+            return
+
+        self.client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
+        
+        # Start the background task to handle Gemini Live Session
+        self.live_task = asyncio.create_task(self.run_live_session())
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'live_task'):
+            self.live_task.cancel()
+        logger.info(f"[LiveAgent] Connection closed for user {self.user.id}")
+
     async def run_live_session(self):
         """
         Main loop to bridge the client and Google's Live signaling.
