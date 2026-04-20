@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Awakened Bridge for Gemini Multimodal Live API
- * Uses Reactive Refs to bypass stale closures and ensure immediate mic activation.
+ * useGeminiLive: Calibrated Bridge for Gemini Multimodal Live API
+ * Uses a unified 16kHz Pulse to ensure natural-speed, scratch-free speech.
  */
 export function useGeminiLive() {
   const [isActive, setIsActive] = useState(false)
@@ -14,8 +14,6 @@ export function useGeminiLive() {
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const nextStartTimeRef = useRef<number>(0)
-  
-  // Reactive Ref to fix stale closures in the background thread
   const isActiveRef = useRef(false)
   
   const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_STUDIO_API_KEY
@@ -85,7 +83,7 @@ export function useGeminiLive() {
         
         await initAudio()
         setIsActive(true)
-        isActiveRef.current = true // UN-BLOCK THE SIGNAL
+        isActiveRef.current = true
         setIsConnecting(false)
       }
 
@@ -122,12 +120,13 @@ export function useGeminiLive() {
   }, [API_KEY, WS_URL, stopSession])
 
   const initAudio = async () => {
+    // 16000Hz is the NATIVE output rate for Gemini Multimodal Live
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 24000
+      sampleRate: 16000
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: ALPHA-X (DataView-Secure)')
+    console.log('[GeminiDirect] ENGINE: ALPHA-Y (16kHz-Sync)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -166,23 +165,19 @@ export function useGeminiLive() {
     
     let chunkCount = 0
     workletNode.port.onmessage = (event) => {
-      // FIX: Use isActiveRef.current to avoid stale closure silence!
       if (wsRef.current?.readyState === WebSocket.OPEN && isActiveRef.current) {
-        const inputData = event.data
+        const inputData = event.data // Float32Array
         
         chunkCount++
         if (chunkCount % 50 === 0) {
-            console.log('[GeminiDirect] Signal Awakening: Transmitting...')
+            console.log('[GeminiDirect] Signal Pulse Active: Transmitting...')
             chunkCount = 0
         }
 
-        const factor = 1.5
-        const resampledLength = Math.floor(inputData.length / factor)
-        const int16Data = new Int16Array(resampledLength)
-        
-        for (let i = 0; i < resampledLength; i++) {
-          const index = Math.floor(i * factor)
-          int16Data[i] = Math.max(-1, Math.min(1, inputData[index])) * 0x7FFF
+        // Unified 16kHz pipeline: No resampling needed
+        const int16Data = new Int16Array(inputData.length)
+        for (let i = 0; i < inputData.length; i++) {
+          int16Data[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF
         }
         
         wsRef.current.send(JSON.stringify({
@@ -213,12 +208,12 @@ export function useGeminiLive() {
       const float32Data = new Float32Array(sampleCount)
       
       for (let i = 0; i < sampleCount; i++) {
-          // Read Int16 (little-endian: true)
           const int16Value = dataView.getInt16(i * 2, true)
           float32Data[i] = int16Value / 0x7FFF
       }
       
-      const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
+      // Playout at native 16000Hz
+      const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 16000)
       buffer.getChannelData(0).set(float32Data)
       
       const source = audioContextRef.current.createBufferSource()
@@ -233,7 +228,7 @@ export function useGeminiLive() {
       source.start(nextStartTimeRef.current)
       nextStartTimeRef.current += buffer.duration
     } catch (err) {
-      console.error('[GeminiDirect] Audio Engine Fail-Safe Triggered:', err)
+      console.error('[GeminiDirect] Audio Sync Failed:', err)
     }
   }
 
