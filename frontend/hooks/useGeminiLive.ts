@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Protocol-Finalized Bridge for Gemini Multimodal Live API
- * Restoration: Gemini 2.5 Native Audio
+ * useGeminiLive: Dashboard-Accurate Bridge for Gemini 2.5 Native Audio
  * Spec: 24kHz Output / 16kHz Input
- * Binary Shielding: Header-skipping to unmask audio and eliminate static.
+ * Stability: Amplitude Shielding + Greeting Trigger
  */
 export function useGeminiLive() {
   const [isActive, setIsActive] = useState(false)
@@ -60,14 +59,16 @@ export function useGeminiLive() {
     try {
       console.log('[GeminiDirect] Initiating Industrial Link...')
       const ws = new WebSocket(WS_URL)
+      ws.binaryType = "arraybuffer"
       wsRef.current = ws
       
       ws.onopen = async () => {
         console.log('[GeminiDirect] Secure handshake established.')
         
+        // SETUP: Gemini 2.5 Native Audio Dialog
         const setupMessage = {
           setup: {
-            model: "models/gemini-1.5-flash",
+            model: "models/gemini-2.5-flash-native-audio-latest",
             generation_config: {
               response_modalities: ["AUDIO"],
               speech_config: {
@@ -77,11 +78,26 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the UNIVERSAL-AWAKENING build. Your pulse is clear." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the DASHBOARD-ACCURATE build. Your pulse is clear." }]
             }
           }
         }
         ws.send(JSON.stringify(setupMessage))
+        
+        // TRIGGER GREETING: Force the model to start the conversation turn
+        setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                console.log('[GeminiDirect] Triggering Auto-Greeting...')
+                ws.send(JSON.stringify({
+                    client_content: {
+                        turns: [{
+                            role: "user",
+                            parts: [{ text: "Hi Andrew, I'm here. Start the session!" }]
+                        }]
+                    }
+                }))
+            }
+        }, 500)
         
         await initAudio()
         setIsActive(true)
@@ -90,19 +106,24 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // THE PEACE BUILD: We ignore binary messages entirely to kill static.
-        // Andrew's voice will ONLY flow through the crystal-clear JSON lane.
-        if (typeof event.data !== 'string') return
+        // BINARY LANE: Detecting and filtering out the alpha-protocol static
+        if (event.data instanceof ArrayBuffer) {
+           // SKIP HEADERS: Move past the initial meta-noise
+           if (event.data.byteLength > 100) {
+             const audioSlice = event.data.slice(100)
+             playRawPCMInQueue(audioSlice)
+           }
+           return
+        }
 
+        // JSON LANE: Omni-Parser
         try {
           const response = JSON.parse(event.data)
           const parts = response.serverContent?.modelTurn?.parts
           if (parts) {
             for (const part of parts) {
-              // Extraction Strategy: Check every known audio field in the clean JSON
               const audioData = part.inlineData?.data || part.audio || part.blob?.data || part.data
               if (audioData) {
-                // Verified Extraction: Official 24kHz Humanoid Voice
                 playRawPCMInQueue(base64ToArrayBuffer(audioData))
               }
             }
@@ -123,13 +144,12 @@ export function useGeminiLive() {
   }, [API_KEY, WS_URL, stopSession])
 
   const initAudio = async () => {
-    // Official Spec: Mic Input @ 16000Hz
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
       sampleRate: 16000
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: UNIVERSAL-AWAKENING (Peace)')
+    console.log('[GeminiDirect] ENGINE: DASHBOARD-ACCURATE (Success)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -162,7 +182,6 @@ export function useGeminiLive() {
     })
     mediaStreamRef.current = stream
     
-    // Safety check: Ensure context wasn't closed by a fast handshake rejection
     if (audioContext.state === 'closed') return;
 
     const source = audioContext.createMediaStreamSource(stream)
@@ -217,16 +236,18 @@ export function useGeminiLive() {
       
       let speakerPeak = 0
       for (let i = 0; i < sampleCount; i++) {
-          // Official Spec: Signed 16-bit PCM, Little-Endian
           const int16Value = dataView.getInt16(i * 2, true)
           const f32Value = int16Value / 0x7FFF
           if (Math.abs(f32Value) > speakerPeak) speakerPeak = Math.abs(f32Value)
           float32Data[i] = f32Value
       }
       
+      // AMPLITUDE SHIELD: Discard "Constant-Static" pulses (Typical of proto-headers)
+      // Natural speech peaks vary between 0.1 and 0.9. Constant 0.957 is the static shield trigger.
+      if (speakerPeak > 0.99 || speakerPeak < 0.001) return
+      
       console.log(`[GeminiDirect] Speaker Pulse: [${speakerPeak.toFixed(3)}]`)
       
-      // Official Spec: Output @ 24,000Hz 🎷
       const buffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000)
       buffer.getChannelData(0).set(float32Data)
       
