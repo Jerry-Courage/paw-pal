@@ -1,293 +1,138 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Mic, MicOff, Zap, X, Volume2, Waves } from 'lucide-react'
+import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-import { SERVER_URL, getAuthToken } from '@/lib/api'
+import { X, Volume2, ShieldCheck, Zap } from 'lucide-react'
+import { useGeminiLive } from '@/hooks/useGeminiLive'
 
 interface LiveVoiceAssistantProps {
   onClose: () => void
-  token?: string | null
 }
 
-export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps) {
-  const [isActive, setIsActive] = useState(false)
-  const [isConnecting, setIsConnecting] = useState(true)
-  const [isListening, setIsListening] = useState(false)
-  const [volume, setVolume] = useState(0)
-  
-  const wsRef = useRef<WebSocket | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
-  const micStreamRef = useRef<MediaStream | null>(null)
-  
-  // Playout Buffer
-  const audioQueue: Int16Array[] = []
-  const isPlayingRef = useRef(false)
+export default function LiveVoiceAssistant({ 
+  onClose 
+}: LiveVoiceAssistantProps) {
+  const { 
+    isActive, 
+    isConnecting, 
+    error, 
+    startSession, 
+    stopSession 
+  } = useGeminiLive()
 
-  useEffect(() => {
-    connect()
+  // Auto-ignite session on mount
+  React.useEffect(() => {
+    startSession()
     return () => {
-      stopService()
+      stopSession()
     }
-  }, [])
+  }, [startSession, stopSession])
 
-  const connect = async () => {
-    try {
-      // Automatically grab the active session token for the security handshake
-      const authToken = await getAuthToken()
-      
-      // Derive WS URL from the production SERVER_URL
-      let wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws/ai/live/'
-      if (authToken) {
-        wsUrl += `?token=${authToken}`
-      }
-      
-      console.log('[Live] Establishing secure signal...')
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        setIsConnecting(false)
-        setIsActive(true)
-        toast.success('Live Intelligence Signal Established')
-        startMic()
-      }
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        
-        if (data.audio) {
-          // Playback the AI audio chunk
-          queueAudio(data.audio)
-        }
-        
-        if (data.text) {
-          // You could display the text live if needed
-          console.log('[Live] AI:', data.text)
-        }
-        
-        if (data.error) {
-          toast.error(data.error)
-          onClose()
-        }
-      }
-
-      ws.onclose = () => {
-        setIsActive(false)
-        setIsConnecting(false)
-        toast.info('Live Session Ended')
-      }
-
-      ws.onerror = (err) => {
-        console.error('WS Error:', err)
-        toast.error('Signal Connection Failed')
-        onClose()
-      }
-    } catch (err) {
-      console.error('Connection Exception:', err)
-      onClose()
-    }
-  }
-
-  const startMic = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
-          channelCount: 1
-        } 
-      })
-      micStreamRef.current = stream
-      
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 })
-      audioContextRef.current = audioCtx
-      
-      const source = audioCtx.createMediaStreamSource(stream)
-      // Capture 4096 samples at a time
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1)
-      processorRef.current = processor
-
-      processor.onaudioprocess = (e) => {
-        if (!isListening) return
-        
-        const inputData = e.inputBuffer.getChannelData(0)
-        
-        // Calculate Volume (RMS) for visual feedback
-        let sum = 0
-        for (let i = 0; i < inputData.length; i++) {
-          sum += inputData[i] * inputData[i]
-        }
-        const rms = Math.sqrt(sum / inputData.length)
-        // Scale to 0-100 range for UI
-        setVolume(Math.min(100, rms * 1000))
-
-        // Convert Float32 to Int16 for Gemini
-        const int16Data = new Int16Array(inputData.length)
-        for (let i = 0; i < inputData.length; i++) {
-          int16Data[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF
-        }
-        
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          // console.log('[Live Trace] Sending PCM chunk:', int16Data.buffer.byteLength, 'bytes')
-          wsRef.current.send(int16Data.buffer)
-        }
-      }
-
-      source.connect(processor)
-      processor.connect(audioCtx.destination)
-      setIsListening(true)
-    } catch (err) {
-      console.error('Mic Error:', err)
-      toast.error('Microphone Access Denied')
-      setIsListening(false)
-    }
-  }
-
-  const queueAudio = (base64Data: string) => {
-    const binary = atob(base64Data)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    const int16 = new Int16Array(bytes.buffer)
-    audioQueue.push(int16)
-    
-    if (!isPlayingRef.current) {
-      playNext()
-    }
-  }
-
-  const playNext = async () => {
-    if (audioQueue.length === 0 || !audioContextRef.current) {
-      isPlayingRef.current = false
-      return
-    }
-
-    isPlayingRef.current = true
-    const chunk = audioQueue.shift()!
-    
-    const audioCtx = audioContextRef.current
-    const buffer = audioCtx.createBuffer(1, chunk.length, 16000)
-    const channelData = buffer.getChannelData(0)
-    
-    for (let i = 0; i < chunk.length; i++) {
-      channelData[i] = chunk[i] / 0x7FFF
-    }
-
-    const source = audioCtx.createBufferSource()
-    source.buffer = buffer
-    source.connect(audioCtx.destination)
-    source.onended = () => playNext()
-    source.start()
-  }
-
-  const stopService = () => {
-    setIsListening(false)
-    setIsActive(false)
-    
-    if (wsRef.current) wsRef.current.close()
-    if (processorRef.current) processorRef.current.disconnect()
-    if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop())
-    if (audioContextRef.current) audioContextRef.current.close()
+  const handleClose = () => {
+    stopSession()
+    onClose()
   }
 
   return (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl"
     >
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors z-20"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="relative w-full max-w-sm overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] shadow-2xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">Gemini 2 Flash Live</h2>
+          </div>
+          <button 
+            onClick={handleClose}
+            className="p-2 transition-colors rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+          >
+            <X size={20} />
+          </button>
+        </div>
 
-        <div className="p-8 pb-12 flex flex-col items-center text-center">
-          <div className="relative mb-8">
-            <motion.div 
-              animate={{ 
-                scale: isListening ? 1 + (volume / 200) : 1,
-                boxShadow: isListening 
-                  ? `0 0 ${20 + (volume / 2)}px rgba(139,92,246,0.5)` 
-                  : 'none'
+        {/* Core Content */}
+        <div className="flex flex-col items-center justify-center p-8 space-y-8 text-center">
+          {/* Pulsing Visualizer - Central Orb */}
+          <div className="relative">
+            <motion.div
+              animate={{
+                scale: isActive ? [1, 1.2, 1] : 1,
+                opacity: isActive ? [0.3, 0.6, 0.3] : 0.2
               }}
-              className={cn(
-                "w-24 h-24 rounded-full flex items-center justify-center relative z-10 transition-all duration-100",
-                isListening ? "bg-primary text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
-              )}
-            >
-              {isListening ? <Waves className="w-10 h-10 animate-pulse" /> : <MicOff className="w-10 h-10" />}
-            </motion.div>
-            
-            {isListening && (
-              <>
-                <motion.div 
-                  animate={{ 
-                    scale: [1, 1.5 + (volume / 100), 1], 
-                    opacity: [0.3, 0.1, 0.3] 
-                  }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                  className="absolute inset-0 bg-primary rounded-full -z-0"
-                />
-                <motion.div 
-                  animate={{ 
-                    scale: [1, 2 + (volume / 50), 1], 
-                    opacity: [0.2, 0, 0.2] 
-                  }}
-                  transition={{ repeat: Infinity, duration: 3, delay: 0.5 }}
-                  className="absolute inset-0 bg-primary rounded-full -z-0"
-                />
-              </>
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="absolute inset-0 bg-blue-500 rounded-full blur-3xl opacity-20"
+            />
+            <div className="relative flex items-center justify-center w-32 h-32 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full shadow-lg shadow-blue-500/20">
+              <Volume2 className={`text-white transition-all duration-300 ${isActive ? 'scale-110 opacity-100' : 'scale-90 opacity-50'}`} size={48} />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white">
+              {isConnecting ? 'Establishing Link...' : 'Signal Active'}
+            </h3>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 max-w-[240px] mx-auto">
+              {isConnecting 
+                ? 'Syncing with the Imperial neural net...' 
+                : isActive 
+                  ? 'Andrew is listening. Speak naturally—no lag, just flow.' 
+                  : 'Waiting for signal...'}
+            </p>
+            {error && (
+              <p className="text-xs font-bold text-rose-500 bg-rose-500/10 px-4 py-2 rounded-2xl border border-rose-500/20">
+                {error}
+              </p>
             )}
           </div>
 
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
-            {isConnecting ? 'Connecting Signal...' : 'Gemini 3 Flash Live'}
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-10 max-w-[240px]">
-            {isListening 
-              ? 'Signal is active. You can speak naturally now—no lag, just flow.' 
-              : 'Initializing low-latency multimodal bridge...'}
-          </p>
-
-          <div className="grid grid-cols-2 gap-3 w-full">
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Latency</div>
-              <div className="text-lg font-black text-emerald-500 tracking-tight">~120ms</div>
+          {/* Status Metrics */}
+          <div className="grid grid-cols-2 gap-4 w-full">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-1">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Latency</span>
+              <div className="flex items-center gap-1 text-emerald-500 font-black">
+                <Zap size={12} />
+                <span className="text-sm">~2ms</span>
+              </div>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Quota</div>
-              <div className="text-lg font-black text-primary tracking-tight">Unlimited</div>
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-1">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Protocol</span>
+              <div className="flex items-center gap-1 text-blue-500 font-black">
+                <ShieldCheck size={12} />
+                <span className="text-sm uppercase">Direct</span>
+              </div>
             </div>
           </div>
 
-          <button 
-            onClick={stopService}
-            className="mt-8 w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl"
+          <button
+            onClick={handleClose}
+            className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl transition-all shadow-xl active:scale-[0.98] hover:shadow-black/5"
           >
             Stop Live Session
           </button>
         </div>
 
-        {/* Status Bar */}
-        <div className="bg-slate-50 dark:bg-slate-800/30 px-6 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Real-time Connected</span>
+        {/* Footer Detail */}
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/20 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+            <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            Secure Native Bridge
           </div>
-          <Zap className="w-4 h-4 text-primary animate-bounce" />
+          <Zap size={14} className="text-blue-500 animate-pulse" />
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   )
 }
