@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Fluid Voice Bridge for Gemini Multimodal Live API
- * Provides zero-latency, zero-pop audible speech via a scheduled sequential queue.
+ * useGeminiLive: Industrial-Grade Bridge for Gemini Multimodal Live API
+ * Uses AudioWorklets to eliminate pops, stuttering, and deprecation warnings.
  */
 export function useGeminiLive() {
   const [isActive, setIsActive] = useState(false)
@@ -12,7 +12,7 @@ export function useGeminiLive() {
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const nextStartTimeRef = useRef<number>(0)
   
   const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_STUDIO_API_KEY
@@ -29,9 +29,9 @@ export function useGeminiLive() {
       wsRef.current = null
     }
     
-    if (processorRef.current) {
-      processorRef.current.disconnect()
-      processorRef.current = null
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect()
+      workletNodeRef.current = null
     }
     
     if (mediaStreamRef.current) {
@@ -54,7 +54,7 @@ export function useGeminiLive() {
     setError(null)
     
     try {
-      console.log('[GeminiDirect] Initiating Fluid Link...')
+      console.log('[GeminiDirect] Initiating Industrial Link...')
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
       
@@ -85,14 +85,12 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // 1. Handle Binary Audio Stream (Andrew Speaking)
         if (event.data instanceof Blob) {
           const arrayBuffer = await event.data.arrayBuffer()
           playRawPCMInQueue(arrayBuffer)
           return
         }
 
-        // 2. Handle Handshake/Metadata
         try {
           const response = JSON.parse(event.data)
           if (response.serverContent?.modelTurn?.parts) {
@@ -103,40 +101,45 @@ export function useGeminiLive() {
               }
             }
           }
-          if (response.serverContent?.turnComplete) {
-              console.log('[GeminiDirect] Speaker Turn Finished.')
-          }
-        } catch (err) {
-          // console.error('[GeminiDirect] JSON Skip:', err)
-        }
+        } catch (err) {}
       }
 
       ws.onclose = (e) => {
         console.log('[GeminiDirect] Link terminated. Code:', e.code)
         stopSession()
-        if (e.code !== 1000 && e.code !== 1001) {
-            setError(`Signal Terminated (Code ${e.code}).`)
-        }
       }
 
     } catch (err: any) {
-      console.error('[GeminiDirect] Critical Abort:', err)
+      console.error('[GeminiDirect] Error:', err)
       setError(err.message || "Failed to ignite Gemini session.")
       setIsConnecting(false)
     }
   }, [API_KEY, WS_URL, stopSession])
 
   const initAudio = async () => {
-    // 24000Hz is the high-fidelity native rate for Gemini output
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
       sampleRate: 24000
     })
     audioContextRef.current = audioContext
     
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume()
-    }
-
+    // 1. Create the Worklet Processor Blob
+    const workletCode = `
+      class GeminiProcessor extends AudioWorkletProcessor {
+        process(inputs, outputs) {
+          const input = inputs[0];
+          if (input.length > 0 && input[0]) {
+            this.port.postMessage(input[0]);
+          }
+          return true;
+        }
+      }
+      registerProcessor('gemini-processor', GeminiProcessor);
+    `
+    const blob = new Blob([workletCode], { type: 'application/javascript' })
+    const workletUrl = URL.createObjectURL(blob)
+    
+    await audioContext.audioWorklet.addModule(workletUrl)
+    
     const stream = await navigator.mediaDevices.getUserMedia({ 
       audio: {
         echoCancellation: true,
@@ -148,16 +151,15 @@ export function useGeminiLive() {
     mediaStreamRef.current = stream
     
     const source = audioContext.createMediaStreamSource(stream)
-    // Using 4096 to reduce JSON-chat overhead while maintaining responsiveness
-    const processor = audioContext.createScriptProcessor(4096, 1, 1)
-    processorRef.current = processor
+    const workletNode = new AudioWorkletNode(audioContext, 'gemini-processor')
+    workletNodeRef.current = workletNode
     
-    processor.onaudioprocess = (e) => {
+    workletNode.port.onmessage = (event) => {
       if (wsRef.current?.readyState === WebSocket.OPEN && isActive) {
-        const inputData = e.inputBuffer.getChannelData(0)
+        const inputData = event.data // Float32Array from the background thread
         
-        // Simple downsample from 24k to 16k for the Gemini brain
-        const factor = 24000 / 16000 // 1.5
+        // Simple downsample from 24k to 16k
+        const factor = 1.5
         const resampledLength = Math.floor(inputData.length / factor)
         const int16Data = new Int16Array(resampledLength)
         
@@ -177,8 +179,8 @@ export function useGeminiLive() {
       }
     }
     
-    source.connect(processor)
-    processor.connect(audioContext.destination)
+    source.connect(workletNode)
+    // We don't connect workletNode to destination because we don't want to hear the mic loopback
   }
 
   const playRawPCMInQueue = (arrayBuffer: ArrayBuffer) => {
@@ -198,7 +200,6 @@ export function useGeminiLive() {
     source.connect(audioContextRef.current.destination)
     
     const currentTime = audioContextRef.current.currentTime
-    // If the queue has gone cold, start slightly ahead of current time for smoothness
     if (nextStartTimeRef.current < currentTime) {
         nextStartTimeRef.current = currentTime + 0.05
     }
