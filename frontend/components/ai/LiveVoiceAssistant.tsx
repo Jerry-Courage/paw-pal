@@ -94,7 +94,15 @@ export default function LiveVoiceAssistant({ onClose }: LiveVoiceAssistantProps)
 
   const startMic = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+          channelCount: 1
+        } 
+      })
       micStreamRef.current = stream
       
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 })
