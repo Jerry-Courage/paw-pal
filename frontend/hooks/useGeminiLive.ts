@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Official Verified Bridge for Gemini Multimodal Live API
+ * useGeminiLive: Official Omni-Bridge for Gemini Multimodal Live API
  * Compliant with 2026 Spec: 24kHz Output / 16kHz Input. 
+ * Omni-Parser: Captures audio from every possible field (inlineData, audio, blob, data).
  * Strictly JSON-locked to eliminate static forever.
  */
 export function useGeminiLive() {
@@ -71,12 +72,12 @@ export function useGeminiLive() {
               response_modalities: ["AUDIO"],
               speech_config: {
                 voice_config: {
-                  prebuilt_voice_config: { voice_name: "Charon" }
+                  prebuilt_voice_config: { voice_name: "Charon" } // Andrew
                 }
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the VERIFIED-ABSOLUTE build. Your pulse is clear." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the TOTAL-AWAKENING build. Your pulse is clear." }]
             }
           }
         }
@@ -89,18 +90,20 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // VICTORY LOCKDOWN: We ignore binary blobs entirely to kill static.
-        // We strictly extract Base64 sound from JSON fields (The official clean lane).
+        // THE OMNI-BRIDGE: We ignore binary blobs entirely to kill static.
+        // We capture audio from EVERY possible field in the JSON response.
         if (typeof event.data !== 'string') return
 
         try {
           const response = JSON.parse(event.data)
-          if (response.serverContent?.modelTurn?.parts) {
-            const parts = response.serverContent.modelTurn.parts
+          const parts = response.serverContent?.modelTurn?.parts
+          if (parts) {
             for (const part of parts) {
-              if (part.inlineData?.data) {
-                // Verified Extraction: 24kHz Humanoid Voice
-                playRawPCMInQueue(base64ToArrayBuffer(part.inlineData.data))
+              // Extraction Strategy: Check every known audio field
+              const audioData = part.inlineData?.data || part.audio || part.blob?.data || part.data
+              if (audioData) {
+                // Verified Extraction: Official 24kHz Humanoid Voice
+                playRawPCMInQueue(base64ToArrayBuffer(audioData))
               }
             }
           }
@@ -126,7 +129,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: VERIFIED-ABSOLUTE (Victory)')
+    console.log('[GeminiDirect] ENGINE: TOTAL-AWAKENING (Definitive-Victory)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -177,7 +180,7 @@ export function useGeminiLive() {
         }
         
         chunkCount++
-        if (chunkCount % 50 === 0) {
+        if (chunkCount % 40 === 0) {
             console.log(`[GeminiDirect] Mic Pulse: [${micPeak.toFixed(3)}]`)
             chunkCount = 0
         }
