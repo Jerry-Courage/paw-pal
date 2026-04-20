@@ -84,21 +84,33 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        const response = JSON.parse(event.data)
-        
-        // Handle server audio (Andrew speaking)
-        if (response.serverContent?.modelTurn?.parts) {
-          const parts = response.serverContent.modelTurn.parts
-          for (const part of parts) {
-            if (part.inlineData) {
-              console.log('[GeminiDirect] Receiving Andrew Audio...')
-              playRawPCM(part.inlineData.data)
+        // Handle binary audio (Andrew speaking)
+        if (event.data instanceof Blob) {
+          // console.log('[GeminiDirect] Receiving Binary Audio Stream...')
+          const arrayBuffer = await event.data.arrayBuffer()
+          playRawPCM(arrayBuffer)
+          return
+        }
+
+        // Handle JSON metadata
+        try {
+          const response = JSON.parse(event.data)
+          
+          if (response.serverContent?.modelTurn?.parts) {
+            const parts = response.serverContent.modelTurn.parts
+            for (const part of parts) {
+              if (part.inlineData) {
+                // Legacy fallback if server sends JSON-encoded audio
+                playRawPCM(base64ToArrayBuffer(part.inlineData.data))
+              }
             }
           }
-        }
-        
-        if (response.serverContent?.turnComplete) {
-            console.log('[GeminiDirect] Turn complete.')
+          
+          if (response.serverContent?.turnComplete) {
+              console.log('[GeminiDirect] Speaker Turn Complete.')
+          }
+        } catch (err) {
+          console.error('[GeminiDirect] Metadata Parse Fail:', err)
         }
       }
 
@@ -171,10 +183,9 @@ export function useGeminiLive() {
     processor.connect(audioContext.destination)
   }
 
-  const playRawPCM = (base64Data: string) => {
+  const playRawPCM = (arrayBuffer: ArrayBuffer) => {
     if (!audioContextRef.current) return
     
-    const arrayBuffer = base64ToArrayBuffer(base64Data)
     const int16Data = new Int16Array(arrayBuffer)
     const float32Data = new Float32Array(int16Data.length)
     
