@@ -60,7 +60,6 @@ export function useGeminiLive() {
     try {
       console.log('[GeminiDirect] Initiating Industrial Link...')
       const ws = new WebSocket(WS_URL)
-      ws.binaryType = "arraybuffer"; // UNMASKING: Enable raw byte access
       wsRef.current = ws
       
       ws.onopen = async () => {
@@ -68,7 +67,7 @@ export function useGeminiLive() {
         
         const setupMessage = {
           setup: {
-            model: "models/gemini-2.5-flash-native-audio-latest",
+            model: "models/gemini-1.5-flash",
             generation_config: {
               response_modalities: ["AUDIO"],
               speech_config: {
@@ -78,7 +77,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the PROTOCOL-FINALIZED build. Your pulse is clear." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark. You are running on the UNIVERSAL-AWAKENING build. Your pulse is clear." }]
             }
           }
         }
@@ -91,25 +90,19 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        // BINARY SHIELD: Extracting pure audio from the proto-binary stream
-        if (event.data instanceof ArrayBuffer) {
-           // Skip the first 100 bytes (Proto headers/noise) and play the remaining Raw PCM
-           // This is the "Sure Fix" for the high-volume static.
-           if (event.data.byteLength > 100) {
-             const audioSlice = event.data.slice(100)
-             playRawPCMInQueue(audioSlice)
-           }
-           return
-        }
+        // THE PEACE BUILD: We ignore binary messages entirely to kill static.
+        // Andrew's voice will ONLY flow through the crystal-clear JSON lane.
+        if (typeof event.data !== 'string') return
 
-        // JSON Fallback: Omni-Parser
         try {
           const response = JSON.parse(event.data)
           const parts = response.serverContent?.modelTurn?.parts
           if (parts) {
             for (const part of parts) {
+              // Extraction Strategy: Check every known audio field in the clean JSON
               const audioData = part.inlineData?.data || part.audio || part.blob?.data || part.data
               if (audioData) {
+                // Verified Extraction: Official 24kHz Humanoid Voice
                 playRawPCMInQueue(base64ToArrayBuffer(audioData))
               }
             }
@@ -136,7 +129,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: PROTOCOL-FINALIZED (Success)')
+    console.log('[GeminiDirect] ENGINE: UNIVERSAL-AWAKENING (Peace)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
