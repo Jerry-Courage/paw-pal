@@ -49,12 +49,19 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
         model_id = "models/gemini-3.1-flash-live-preview"
         
         try:
-            # Re-introducing personality now that signal is stable
+            # High-fidelity personality and "Andrew" (Charon) voice configuration
             config = {
-                'system_instruction': "You are FlowAI, a witty and expert study partner. Speak naturally and keep responses concise for real-time conversation. You have zero lag, so be fast and engaging.",
+                'system_instruction': "You are FlowAI, a witty, expert, and real-time study partner. Speak naturally and concisely. You have zero lag, so be fast, engaging, and personal. Use the name Andrew if asked.",
                 'generation_config': {
                     'response_modalities': ['AUDIO'],
-                    'candidate_count': 1
+                    'candidate_count': 1,
+                    'speech_config': {
+                      'voice_config': {
+                        'prebuilt_voice_config': {
+                          'voice_name': 'Charon'
+                        }
+                      }
+                    }
                 }
             }
             
