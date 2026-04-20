@@ -88,22 +88,15 @@ export function useGeminiLive() {
       }
 
       ws.onmessage = async (event) => {
-        if (event.data instanceof Blob) {
-          // FINAL AWAKENING: Re-enabling the voice lane with a Proto-Shield 🛡️
-          // We skip the first 8 bytes of the binary proto envelope (the noise) 
-          // to reach the pure humanoid wave data.
-          const arrayBuffer = await event.data.arrayBuffer()
-          const pureAudio = arrayBuffer.slice(8) 
-          playRawPCMInQueue(pureAudio)
-          return
-        }
-
+        // THE FINALE: Disabling the unstable binary lane ⚔️
+        // We strictly use the 100% clean JSON-Base64 lane for State-of-the-Art Voice.
         try {
           const response = JSON.parse(event.data)
           if (response.serverContent?.modelTurn?.parts) {
             const parts = response.serverContent.modelTurn.parts
             for (const part of parts) {
               if (part.inlineData) {
+                // THE SUCCESS LANE: Guaranteed Clear Humanoid Voice
                 playRawPCMInQueue(base64ToArrayBuffer(part.inlineData.data))
               }
             }
@@ -129,7 +122,7 @@ export function useGeminiLive() {
     })
     audioContextRef.current = audioContext
     
-    console.log('[GeminiDirect] ENGINE: FINAL-AWAKENING (Audible)')
+    console.log('[GeminiDirect] ENGINE: THE-FINALE-LOCKED (Success)')
     
     if (audioContext.state === 'suspended') {
       await audioContext.resume()
