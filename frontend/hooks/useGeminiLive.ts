@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * useGeminiLive: Industrial-Grade Bridge for Gemini Multimodal Live API
- * Uses AudioWorklets to eliminate pops, stuttering, and deprecation warnings.
+ * useGeminiLive: Awakened Bridge for Gemini Multimodal Live API
+ * Uses Reactive Refs to bypass stale closures and ensure immediate mic activation.
  */
 export function useGeminiLive() {
   const [isActive, setIsActive] = useState(false)
@@ -15,12 +15,16 @@ export function useGeminiLive() {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const nextStartTimeRef = useRef<number>(0)
   
+  // Reactive Ref to fix stale closures in the background thread
+  const isActiveRef = useRef(false)
+  
   const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_STUDIO_API_KEY
   const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${API_KEY}`
 
   const stopSession = useCallback(() => {
     console.log('[GeminiDirect] Closing session...')
     setIsActive(false)
+    isActiveRef.current = false
     setIsConnecting(false)
     nextStartTimeRef.current = 0
     
@@ -73,7 +77,7 @@ export function useGeminiLive() {
               }
             },
             system_instruction: {
-              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: Greet the user immediately with a witty remark as soon as the connection is established." }]
+              parts: [{ text: "You are FlowAI, a real-time study partner named Andrew. Speak naturally, concisely, and effectively. IMPORTANT: GREET THE USER IMMEDIATELY with a witty remark the split second the connection starts. Do not wait for them to speak first." }]
             }
           }
         }
@@ -81,12 +85,12 @@ export function useGeminiLive() {
         
         await initAudio()
         setIsActive(true)
+        isActiveRef.current = true // UN-BLOCK THE SIGNAL
         setIsConnecting(false)
       }
 
       ws.onmessage = async (event) => {
         if (event.data instanceof Blob) {
-          // console.log('[GeminiDirect] Receiving voice frame...')
           const arrayBuffer = await event.data.arrayBuffer()
           playRawPCMInQueue(arrayBuffer)
           return
@@ -127,7 +131,6 @@ export function useGeminiLive() {
       await audioContext.resume()
     }
 
-    // 1. Create the Worklet Processor Blob
     const workletCode = `
       class GeminiProcessor extends AudioWorkletProcessor {
         process(inputs, outputs) {
@@ -161,17 +164,16 @@ export function useGeminiLive() {
     
     let chunkCount = 0
     workletNode.port.onmessage = (event) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN && isActive) {
-        const inputData = event.data // Float32Array from the background thread
+      // FIX: Use isActiveRef.current to avoid stale closure silence!
+      if (wsRef.current?.readyState === WebSocket.OPEN && isActiveRef.current) {
+        const inputData = event.data
         
-        // Telemetry: Log every 100th chunk (~1.5 seconds) to avoid spam but confirm life
         chunkCount++
-        if (chunkCount % 100 === 0) {
-            console.log('[GeminiDirect] Signal Active: Sending chunks...')
+        if (chunkCount % 50 === 0) {
+            console.log('[GeminiDirect] Signal Awakening: Transmitting...')
             chunkCount = 0
         }
-        
-        // Simple downsample from 24k to 16k
+
         const factor = 1.5
         const resampledLength = Math.floor(inputData.length / factor)
         const int16Data = new Int16Array(resampledLength)
@@ -192,7 +194,6 @@ export function useGeminiLive() {
       }
     }
     
-    // Activation Patch: Silent output prevents browser "Sleeping" the thread
     const silentGain = audioContext.createGain()
     silentGain.gain.value = 0
     
