@@ -112,12 +112,13 @@ class GeminiLiveConsumer(AsyncWebsocketConsumer):
                     await self.gemini_session.send(input=data["text"], end_of_turn=True)
 
             if bytes_data:
-                # Pipe raw PCM 16kHz audio directly to the live session
+                # Pipe raw PCM 16kHz audio directly to the live session using the elite realtime protocol
                 # logger.info(f"[LiveTrace] Client PCM Frame: {len(bytes_data)} bytes")
-                # Using the input dict pattern which is standard for AsyncLiveSession.send
-                await self.gemini_session.send(input={
-                    "data": bytes_data, 
-                    "mime_type": "audio/pcm;rate=16000"
-                })
+                await self.gemini_session.send_realtime_input(
+                    audio=types.Blob(
+                        data=bytes_data, 
+                        mime_type="audio/pcm;rate=16000"
+                    )
+                )
         except Exception as e:
             logger.error(f"[LiveTrace] Send Error: {e}")
