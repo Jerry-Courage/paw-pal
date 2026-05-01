@@ -220,7 +220,9 @@ export default function StudyCompanionSidebar({
         )}
       </div>
 
-      <div className="p-5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-white/5 relative z-10">
+      <div className="p-5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-white/5 relative z-10 flex-shrink-0"
+        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+      >
         <div className="relative group focus-within:ring-4 ring-primary/20 transition-all bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] p-3 border-2 border-slate-100 dark:border-white/5">
           <div className="flex items-end gap-3">
             <textarea
@@ -239,7 +241,7 @@ export default function StudyCompanionSidebar({
                 }
               }}
               placeholder="Ask FlowAI..."
-              className="flex-1 bg-transparent border-0 focus:ring-0 text-sm max-h-[150px] resize-none py-2 px-1 font-medium placeholder:text-slate-400"
+              className="flex-1 bg-transparent border-0 focus:ring-0 text-sm max-h-[150px] resize-none py-2 px-1 font-medium placeholder:text-slate-400 text-slate-900 dark:text-slate-100 outline-none"
             />
             <button 
               onClick={handleSend}

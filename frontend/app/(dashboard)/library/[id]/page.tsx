@@ -293,8 +293,12 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       {showSidebar && (
         <div className="lg:hidden fixed inset-0 z-[90] flex">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowSidebar(false)} />
-          <div className="relative ml-auto w-[90vw] max-w-sm h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="relative ml-auto w-[90vw] max-w-sm h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0"
+              style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+            >
               <span className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" /> FlowAI Study Tools
               </span>

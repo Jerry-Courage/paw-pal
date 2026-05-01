@@ -17,7 +17,9 @@ export default function MobileNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-slate-200/50 dark:border-slate-800/50 flex md:hidden safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-slate-200/50 dark:border-slate-800/50 flex md:hidden"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {navItems.map((item) => {
         const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
         return (

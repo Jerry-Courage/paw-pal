@@ -158,7 +158,7 @@ export default function ExpandableMobileHUD({
       >
         {/* Tools Container */}
         {isOpen && (
-        <div className="absolute bottom-20 right-0 w-[85vw] max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-10 zoom-in-95 duration-300">
+        <div className="absolute bottom-20 right-0 w-[85vw] max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-10 zoom-in-95 duration-300 max-h-[70vh] overflow-y-auto pb-2">
           
           {/* Header Action - Chat */}
           <button

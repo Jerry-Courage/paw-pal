@@ -522,7 +522,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="flex h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] -m-4 md:-m-6 bg-slate-50 dark:bg-slate-950 relative overflow-hidden text-slate-800 dark:text-slate-200">
+    <div className="flex h-[calc(100dvh-64px)] md:h-[calc(100dvh-64px)] -m-4 md:-m-6 bg-slate-50 dark:bg-slate-950 relative overflow-hidden text-slate-800 dark:text-slate-200">
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -753,7 +753,9 @@ function AIChat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 sm:p-6 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent dark:from-slate-950 dark:via-slate-950 pb-6 sm:pb-8 flex-shrink-0 relative z-20">
+        <div className="p-4 sm:p-6 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent dark:from-slate-950 dark:via-slate-950 flex-shrink-0 relative z-20"
+          style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 4.5rem))' }}
+        >
           <div className="max-w-4xl mx-auto">
             
             {/* Attached file preview */}

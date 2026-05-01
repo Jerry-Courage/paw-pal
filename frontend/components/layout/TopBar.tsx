@@ -19,7 +19,9 @@ export default function TopBar({ onMenuClick, onToggleSidebar, isSidebarOpen }: 
   const name = session?.user?.name || session?.user?.email || 'User'
 
   return (
-    <header className="h-16 glass-panel border-b-0 sticky top-0 z-[40] flex items-center px-4 md:px-6 gap-3 flex-shrink-0">
+    <header className="h-16 glass-panel border-b border-slate-200/50 dark:border-slate-800/50 fixed top-0 left-0 right-0 z-[40] flex items-center px-4 md:px-6 gap-3 flex-shrink-0"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       {/* Mobile: hamburger + Techy Logo */}
       <div className="flex items-center gap-3 md:hidden">
         <button

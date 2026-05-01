@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile sidebar drawer */}
       <MobileSidebar open={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
 
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 pt-16">
         <TopBar 
           onMenuClick={() => setMobileSidebarOpen(true)} 
           isSidebarOpen={desktopSidebarOpen}
