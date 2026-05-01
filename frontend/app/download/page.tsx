@@ -1,39 +1,6 @@
 import Link from 'next/link'
 import { ArrowLeft, Monitor, Apple, Terminal, Download, Zap, Shield, RefreshCw, Bell } from 'lucide-react'
 
-const VERSION = '1.0.1'
-const RELEASE_BASE = `https://github.com/Jerry-Courage/paw-pal/releases/download/v${VERSION}`
-
-const PLATFORMS = [
-  {
-    name: 'Windows',
-    icon: Monitor,
-    version: 'Windows 10 / 11',
-    file: `FlowState-${VERSION}-Setup.exe`,
-    color: 'from-sky-500 to-blue-600',
-    shadow: 'shadow-sky-500/20',
-    badge: 'Most Popular',
-  },
-  {
-    name: 'macOS',
-    icon: Apple,
-    version: 'macOS 11+  (Intel & Apple Silicon)',
-    file: `FlowState-${VERSION}.dmg`,
-    color: 'from-slate-600 to-slate-800',
-    shadow: 'shadow-slate-500/20',
-    badge: null,
-  },
-  {
-    name: 'Linux',
-    icon: Terminal,
-    version: 'Ubuntu, Fedora & more',
-    file: `FlowState-${VERSION}.AppImage`,
-    color: 'from-orange-500 to-amber-600',
-    shadow: 'shadow-orange-500/20',
-    badge: null,
-  },
-]
-
 const FEATURES = [
   { icon: Zap, label: 'Native performance', desc: 'Runs as a real desktop app, not a browser tab' },
   { icon: Bell, label: 'System notifications', desc: 'Get nudges even when the app is in the background' },
@@ -41,7 +8,71 @@ const FEATURES = [
   { icon: RefreshCw, label: 'Auto-updates', desc: 'Always on the latest version automatically' },
 ]
 
-export default function DownloadPage() {
+async function getLatestRelease() {
+  try {
+    const res = await fetch(
+      'https://api.github.com/repos/Jerry-Courage/paw-pal/releases/latest',
+      {
+        headers: { Accept: 'application/vnd.github+json' },
+        next: { revalidate: 3600 }, // re-fetch every hour
+      }
+    )
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+function getPlatforms(release: any) {
+  const assets = release?.assets || []
+  const version = release?.tag_name?.replace('v', '') || ''
+  const base = `https://github.com/Jerry-Courage/paw-pal/releases/download/${release?.tag_name}`
+
+  const find = (ext: string) => {
+    const asset = assets.find((a: any) => a.name.endsWith(ext))
+    return asset ? `${base}/${asset.name}` : `${base}/FlowState-${version}${ext}`
+  }
+
+  return [
+    {
+      name: 'Windows',
+      icon: Monitor,
+      version: 'Windows 10 / 11',
+      url: find('-Setup.exe'),
+      ext: '.exe',
+      color: 'from-sky-500 to-blue-600',
+      shadow: 'shadow-sky-500/20',
+      badge: 'Most Popular',
+    },
+    {
+      name: 'macOS',
+      icon: Apple,
+      version: 'macOS 11+  (Intel & Apple Silicon)',
+      url: find('.dmg'),
+      ext: '.dmg',
+      color: 'from-slate-600 to-slate-800',
+      shadow: 'shadow-slate-500/20',
+      badge: null,
+    },
+    {
+      name: 'Linux',
+      icon: Terminal,
+      version: 'Ubuntu, Fedora & more',
+      url: find('.AppImage'),
+      ext: '.AppImage',
+      color: 'from-orange-500 to-amber-600',
+      shadow: 'shadow-orange-500/20',
+      badge: null,
+    },
+  ]
+}
+
+export default async function DownloadPage() {
+  const release = await getLatestRelease()
+  const version = release?.tag_name || 'v1.0.1'
+  const platforms = getPlatforms(release)
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Ambient */}
@@ -65,17 +96,20 @@ export default function DownloadPage() {
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight mb-4">
             FlowState for <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400">Desktop</span>
           </h1>
-          <p className="text-white/50 text-lg max-w-md mx-auto leading-relaxed">
+          <p className="text-white/50 text-lg max-w-md mx-auto leading-relaxed mb-3">
             The full FlowState experience as a native app. Notifications, mic access, and keyboard shortcuts included.
           </p>
+          <span className="inline-block text-xs font-bold text-white/20 uppercase tracking-widest">
+            Latest: {version}
+          </span>
         </div>
 
         {/* Download cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-16">
-          {PLATFORMS.map((p) => (
+          {platforms.map((p) => (
             <a
               key={p.name}
-              href={`${RELEASE_BASE}/${p.file}`}
+              href={p.url}
               className={`relative group flex flex-col p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/8 transition-all duration-300 hover:-translate-y-1 shadow-xl ${p.shadow}`}
             >
               {p.badge && (
@@ -90,7 +124,7 @@ export default function DownloadPage() {
               <div className="text-xs text-white/40 font-medium mb-5 leading-relaxed">{p.version}</div>
               <div className="mt-auto flex items-center gap-2 text-sm font-bold text-primary group-hover:gap-3 transition-all">
                 <Download className="w-4 h-4" />
-                Download .{p.file.split('.').pop()}
+                Download {p.ext}
               </div>
             </a>
           ))}
@@ -101,7 +135,7 @@ export default function DownloadPage() {
           {FEATURES.map((f) => (
             <div key={f.label} className="flex flex-col p-4 rounded-2xl bg-white/5 border border-white/5">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-                <f.icon className="w-4.5 h-4.5 text-primary" />
+                <f.icon className="w-4 h-4 text-primary" />
               </div>
               <div className="text-sm font-black text-white mb-1">{f.label}</div>
               <div className="text-[11px] text-white/40 leading-relaxed">{f.desc}</div>
@@ -109,7 +143,7 @@ export default function DownloadPage() {
           ))}
         </div>
 
-        {/* All releases link */}
+        {/* All releases */}
         <div className="text-center">
           <a
             href="https://github.com/Jerry-Courage/paw-pal/releases"
