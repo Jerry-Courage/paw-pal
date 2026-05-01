@@ -1,15 +1,15 @@
 import Link from 'next/link'
 import { ArrowLeft, Monitor, Apple, Terminal, Download, Zap, Shield, RefreshCw, Bell } from 'lucide-react'
 
-const GITHUB_RELEASES = 'https://github.com/Jerry-Courage/paw-pal/releases/latest'
+const VERSION = '1.0.1'
+const RELEASE_BASE = `https://github.com/Jerry-Courage/paw-pal/releases/download/v${VERSION}`
 
 const PLATFORMS = [
   {
     name: 'Windows',
     icon: Monitor,
     version: 'Windows 10 / 11',
-    file: 'FlowState-Setup.exe',
-    url: `${GITHUB_RELEASES}/download/FlowState-Setup.exe`,
+    file: `FlowState-${VERSION}-Setup.exe`,
     color: 'from-sky-500 to-blue-600',
     shadow: 'shadow-sky-500/20',
     badge: 'Most Popular',
@@ -18,8 +18,7 @@ const PLATFORMS = [
     name: 'macOS',
     icon: Apple,
     version: 'macOS 11+  (Intel & Apple Silicon)',
-    file: 'FlowState.dmg',
-    url: `${GITHUB_RELEASES}/download/FlowState.dmg`,
+    file: `FlowState-${VERSION}.dmg`,
     color: 'from-slate-600 to-slate-800',
     shadow: 'shadow-slate-500/20',
     badge: null,
@@ -27,9 +26,8 @@ const PLATFORMS = [
   {
     name: 'Linux',
     icon: Terminal,
-    version: 'Ubuntu, Debian, Fedora & more',
-    file: 'FlowState.AppImage',
-    url: `${GITHUB_RELEASES}/download/FlowState.AppImage`,
+    version: 'Ubuntu, Fedora & more',
+    file: `FlowState-${VERSION}.AppImage`,
     color: 'from-orange-500 to-amber-600',
     shadow: 'shadow-orange-500/20',
     badge: null,
@@ -77,7 +75,7 @@ export default function DownloadPage() {
           {PLATFORMS.map((p) => (
             <a
               key={p.name}
-              href={p.url}
+              href={`${RELEASE_BASE}/${p.file}`}
               className={`relative group flex flex-col p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/8 transition-all duration-300 hover:-translate-y-1 shadow-xl ${p.shadow}`}
             >
               {p.badge && (
@@ -114,7 +112,7 @@ export default function DownloadPage() {
         {/* All releases link */}
         <div className="text-center">
           <a
-            href={GITHUB_RELEASES}
+            href="https://github.com/Jerry-Courage/paw-pal/releases"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-white/30 hover:text-white/60 transition-colors underline underline-offset-4"
