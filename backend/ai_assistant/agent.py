@@ -67,6 +67,12 @@ The available tools are:
 4. create_workspace:
    - Use when the user wants to start a collaborative project or a deep-dive document.
    - Parameters: {"name": "string", "subject": "string", "assignment_id": "Optional ID"}
+5. generate_image:
+   - Use when the user asks to visualize something, see an image, or says "show me", "generate an image of", "what does X look like".
+   - Parameters: {"prompt": "detailed visual description of what to generate"}
+6. generate_diagram:
+   - Use when the user asks for a diagram, flowchart, mind map, or visual representation of a process/concept.
+   - Parameters: {"description": "what the diagram should show", "type": "auto|flowchart|mindmap|sequence|classDiagram"}
 
 Example response: "Sure! I'll put that Biology session on your calendar for 3 PM tomorrow. ACTION: {"tool": "schedule_study_session", "parameters": {"title": "Biology Session", "start_time": "2026-04-10T15:00:00"}}"
 """
@@ -299,6 +305,56 @@ class FlowAgent:
                 )
                 return f"Added deadline: {d.title} for {d.due_date}"
                 
+            elif tool == 'generate_image':
+                prompt = params.get('prompt', '')
+                if not prompt:
+                    return None
+                logger.info(f"[Agent] Generating image for prompt: {prompt[:60]!r}")
+                image_data_uri = self.ai.generate_image(prompt)
+                if image_data_uri:
+                    logger.info(f"[Agent] Image generation SUCCESS | size={len(image_data_uri)}")
+                else:
+                    logger.error(f"[Agent] Image generation FAILED — all tiers exhausted")
+                return image_data_uri
+
+            elif tool == 'generate_diagram':
+                description = params.get('description') or params.get('prompt', '')
+                diagram_type = params.get('type', 'auto')
+                if not description:
+                    return None
+                logger.info(f"[Agent] Generating diagram | type={diagram_type} desc={description[:60]!r}")
+                if diagram_type == 'auto':
+                    prompt = (
+                        f"You are an expert at creating Mermaid.js diagrams for educational purposes.\n\n"
+                        f"The user wants a diagram for: {description}\n\n"
+                        f"Choose the MOST appropriate Mermaid.js diagram type and generate it.\n"
+                        f"Rules:\n"
+                        f"- Return ONLY the raw Mermaid code\n"
+                        f"- Do NOT wrap in ```mermaid``` or any code blocks\n"
+                        f"- Do NOT add any explanation before or after\n"
+                        f"- Use proper Mermaid syntax with simple arrows: --> or -->|label|\n"
+                        f"- ALWAYS quote node labels containing special chars: A[\"Label (info)\"]\n"
+                    )
+                else:
+                    prompt = (
+                        f"Generate a Mermaid.js {diagram_type} diagram for: {description}\n\n"
+                        f"Rules:\n"
+                        f"- Use valid Mermaid.js syntax only\n"
+                        f"- Make it detailed and educational\n"
+                        f"- Return ONLY the raw Mermaid code, no markdown blocks, no explanation"
+                    )
+                mermaid_code = await self.ai.chat([{'role': 'user', 'content': prompt}])
+                if mermaid_code:
+                    mermaid_code = mermaid_code.strip()
+                    for prefix in ['```mermaid', '```']:
+                        if mermaid_code.startswith(prefix):
+                            mermaid_code = mermaid_code[len(prefix):]
+                    if mermaid_code.endswith('```'):
+                        mermaid_code = mermaid_code[:-3]
+                    mermaid_code = mermaid_code.strip()
+                    logger.info(f"[Agent] Diagram generation SUCCESS | length={len(mermaid_code)}")
+                return mermaid_code
+
             return f"Unknown tool: {tool}"
         except Exception as e:
             logger.error(f"[Agent] Execution error in {tool}: {e}")
