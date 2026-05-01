@@ -39,6 +39,7 @@ export default function LandingPage() {
             <Link href="#tools" className="hover:text-primary transition-colors">Tools</Link>
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/download" className="text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors hidden sm:block">Download</Link>
             <Link href="/login" className="text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors">Log in</Link>
             <Link href="/signup" className="btn-primary py-2 px-5 text-sm shadow-primary/20">Sign up free</Link>
           </div>
