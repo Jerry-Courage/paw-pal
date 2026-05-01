@@ -5,10 +5,9 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g. 1.0.0)'
-        required: true
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -21,11 +20,14 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: desktop
+      - name: Generate icon.ico
+        shell: bash
+        run: |
+          npm install -g png-to-ico
+          png-to-ico desktop/assets/icon.png > desktop/assets/icon.ico
       - name: Build Windows installer
         run: npm run build:win
         working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -42,11 +44,22 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: desktop
+      - name: Generate icon.icns
+        run: |
+          mkdir -p desktop/assets/icon.iconset
+          sips -z 16 16   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16.png
+          sips -z 32 32   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16@2x.png
+          sips -z 32 32   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32.png
+          sips -z 64 64   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32@2x.png
+          sips -z 128 128 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128.png
+          sips -z 256 256 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128@2x.png
+          sips -z 256 256 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256.png
+          sips -z 512 512 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256@2x.png
+          sips -z 512 512 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_512x512.png
+          iconutil -c icns desktop/assets/icon.iconset -o desktop/assets/icon.icns
       - name: Build Mac DMG
         run: npm run build:mac
         working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -66,10 +79,38 @@ jobs:
       - name: Build Linux AppImage
         run: npm run build:linux
         working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: flowstate-linux
           path: desktop/dist/*.AppImage
+
+  release:
+    needs: [build-windows, build-mac, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: FlowState ${{ github.ref_name }}
+          body: |
+            ## FlowState Desktop ${{ github.ref_name }}
+
+            Download the installer for your platform below.
+
+            | Platform | File |
+            |----------|------|
+            | Windows | `FlowState-Setup.exe` |
+            | macOS | `FlowState.dmg` |
+            | Linux | `FlowState.AppImage` |
+          files: |
+            artifacts/flowstate-windows/*.exe
+            artifacts/flowstate-mac/*.dmg
+            artifacts/flowstate-linux/*.AppImage
+          token: ${{ secrets.GITHUB_TOKEN }}

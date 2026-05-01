@@ -3,15 +3,19 @@
   "version": "1.0.0",
   "description": "FlowState — AI Study Platform Desktop App",
   "main": "src/main.js",
-  "author": "Jerry Courage",
+  "homepage": "https://github.com/Jerry-Courage/paw-pal",
+  "author": {
+    "name": "Jerry Courage",
+    "email": "jerry_2044@outlook.com"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --win --mac --linux"
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:linux": "electron-builder --linux --publish never",
+    "build:all": "electron-builder --win --mac --linux --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.1.7"
@@ -42,20 +46,16 @@
       "entitlementsInherit": "assets/entitlements.mac.plist"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": ["AppImage"],
       "icon": "assets/icon.png",
-      "category": "Education"
+      "category": "Education",
+      "maintainer": "Jerry Courage <jerry_2044@outlook.com>"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "Jerry-Courage",
-      "repo": "paw-pal"
     }
   }
 }
