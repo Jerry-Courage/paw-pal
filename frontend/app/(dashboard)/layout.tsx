@@ -29,16 +29,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return
     }
     if (status === 'authenticated') {
-      const onboarded = localStorage.getItem('flowstate_onboarded')
+      // Check server-side onboarding status first, fall back to localStorage
+      // This prevents re-showing onboarding after cache clear or PWA reinstall
+      const serverOnboarded = (session?.user as any)?.onboarding_status?.completed
+      const localOnboarded = localStorage.getItem('flowstate_onboarded')
       const tutorialSeen = localStorage.getItem('flowstate_tutorial_seen')
-      
-      if (!onboarded) {
+
+      if (!serverOnboarded && !localOnboarded) {
         setShowOnboarding(true)
       } else if (!tutorialSeen) {
         setShowTutorial(true)
       }
     }
-  }, [status, router])
+  }, [status, router, session])
 
   if (status === 'loading' || status === 'unauthenticated') {
     return (

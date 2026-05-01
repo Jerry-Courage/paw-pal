@@ -54,6 +54,7 @@ export const authApi = {
   markRead: (id: number) => api.patch(`/auth/notifications/${id}/`),
   deleteNotification: (id: number) => api.delete(`/auth/notifications/${id}/`),
   registerPushSubscription: (sub: any) => api.post('/auth/push-notifications/', sub),
+  updateOnboarding: (tourId: string) => api.post('/auth/onboarding/update/', { tour_id: tourId }),
 }
 
 export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BKkB2niwQFfIfOdWDSwnu5J03lsnCgNmPoMo9Epx1hpiRMr8jjnNJ5exdYiKZ7Jsis3zectYYeCwh0NHWI0gboM'
