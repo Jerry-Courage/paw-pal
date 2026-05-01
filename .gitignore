@@ -37,3 +37,7 @@ Thumbs.db
 # Temp files
 tmp/
 *.log
+
+# Desktop (Electron)
+desktop/node_modules/
+desktop/dist/
