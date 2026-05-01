@@ -1571,6 +1571,7 @@ class AIService:
     def generate_image(self, prompt: str, model: str = 'turbo') -> str:
         """
         Generates an image from a text prompt using a resilient multi-tier fallback strategy.
+        Tier 0: Google Imagen 4
         Tier 1: Pollinations AI (Generative, Free, Fast)
         Tier 2: Lexica.art (Search-based retrieval)
         Tier 3: OpenRouter (Generative, Paid)
@@ -1579,27 +1580,30 @@ class AIService:
         style = self._get_style_suffix(prompt)
         full_enhanced_prompt = f"{prompt}. {style}"
 
-        # --- TIER 0: GOOGLE IMAGEN 4 (Premium Generative - reserved/scared) ---
+        logger.info(f"[ImageGen:Service] Starting generation | prompt_preview={prompt[:60]!r}")
+
+        # --- TIER 0: GOOGLE IMAGEN 4 (Premium Generative) ---
         if self.google_client:
             try:
-                with open(log_path, 'a', encoding='utf-8') as f: 
+                with open(log_path, 'a', encoding='utf-8') as f:
                     f.write(f"[GEN-SIGNAL] Tier 0 (Imagen 4): Attempting for: {prompt[:50]}...\n")
-                
-                # ADVANCED IMAGEN 4 UPGRADE
+                logger.info(f"[ImageGen:Service] Tier 0 (Imagen 4) attempting")
+
                 response = self.google_client.models.generate_images(
                     model='models/imagen-4-generate',
                     prompt=full_enhanced_prompt,
                     config={'number_of_images': 1}
                 )
-                
+
                 if response and hasattr(response, 'generated_images') and response.generated_images:
-                    import base64
                     img_data = response.generated_images[0].image_bytes
                     encoded = base64.b64encode(img_data).decode('utf-8')
                     with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success (Imagen 4)\n")
+                    logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Imagen 4)")
                     return f"data:image/png;base64,{encoded}"
             except Exception as e:
                 with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Imagen 4) Failed: {str(e)}\n")
+                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Imagen 4) | error={str(e)[:200]}")
 
         # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
         models_to_try = [('flux', 25), ('turbo', 15)]
@@ -1607,9 +1611,9 @@ class AIService:
             try:
                 with open(log_path, 'a', encoding='utf-8') as f: 
                     f.write(f"[GEN-SIGNAL] Tier 1 ({poll_model}): Attempting for: {prompt[:50]}...\n")
+                logger.info(f"[ImageGen:Service] Tier 1 (Pollinations/{poll_model}) attempting")
                 
                 import requests
-                import base64
                 
                 # If it's a retry, use a simpler prompt
                 current_prompt = prompt if poll_model == 'flux' else prompt.split(',')[0]
@@ -1617,30 +1621,34 @@ class AIService:
                 poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}"
                 
                 res = requests.get(poll_url, timeout=poll_timeout)
-                if res.status_code == 200 and len(res.content) > 1000: # Ensure we didn't just get a tiny error image
+                if res.status_code == 200 and len(res.content) > 1000:
                     encoded = base64.b64encode(res.content).decode('utf-8')
                     with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 1 Success ({poll_model})\n")
+                    logger.info(f"[ImageGen:Service] Tier 1 SUCCESS (Pollinations/{poll_model}) | size={len(res.content)}")
                     return f"data:image/jpeg;base64,{encoded}"
+                else:
+                    logger.warning(f"[ImageGen:Service] Tier 1 bad response (Pollinations/{poll_model}) | status={res.status_code} size={len(res.content)}")
             except Exception as e:
                 with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 1 ({poll_model}) Failed: {str(e)}\n")
+                logger.warning(f"[ImageGen:Service] Tier 1 FAILED (Pollinations/{poll_model}) | error={str(e)[:200]}")
 
         # --- TIER 2: LEXICA.ART (High Quality Search) ---
-        # Try specific search first, then broad search
         clean_prompt = re.sub(r'[^\w\s]', '', prompt)
         words = [w for w in clean_prompt.split() if len(w) > 3]
-        
+
         search_strategies = [
-            "+".join(words[:6]), # Specific
-            "+".join(words[:3]), # Broad
-            "+".join(words[:1])  # Ultra-broad
+            "+".join(words[:6]),
+            "+".join(words[:3]),
+            "+".join(words[:1])
         ]
 
         for keywords in search_strategies:
             if not keywords: continue
             try:
                 with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 2: Attempting Lexica ({keywords})...\n")
+                logger.info(f"[ImageGen:Service] Tier 2 (Lexica) attempting | keywords={keywords!r}")
                 lexica_url = f"https://lexica.art/api/v1/search?q={keywords}"
-                
+
                 res = requests.get(lexica_url, timeout=10)
                 if res.status_code == 200:
                     images = res.json().get('images', [])
@@ -1651,17 +1659,23 @@ class AIService:
                         img_res = requests.get(img_url, timeout=10)
                         if img_res.status_code == 200:
                             encoded = base64.b64encode(img_res.content).decode('utf-8')
-                            with open(log_path, 'a', encoding='utf-8') as f: 
+                            with open(log_path, 'a', encoding='utf-8') as f:
                                 f.write(f"[OK] Tier 2 Success (Lexica: {keywords})\n")
+                            logger.info(f"[ImageGen:Service] Tier 2 SUCCESS (Lexica) | keywords={keywords!r}")
                             return f"data:image/jpeg;base64,{encoded}"
+                    else:
+                        logger.warning(f"[ImageGen:Service] Tier 2 Lexica returned no images | keywords={keywords!r}")
+                else:
+                    logger.warning(f"[ImageGen:Service] Tier 2 Lexica bad status | status={res.status_code} keywords={keywords!r}")
             except Exception as e:
                 with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 ({keywords}) Failed: {str(e)}\n")
+                logger.warning(f"[ImageGen:Service] Tier 2 FAILED (Lexica/{keywords}) | error={str(e)[:200]}")
 
         # --- TIER 3: OPENROUTER (Generative, Paid) ---
-        # Already highly capable but often out of credits in this environment
         models_to_try = [model, 'openrouter/auto']
         for current_model in models_to_try:
             try:
+                logger.info(f"[ImageGen:Service] Tier 3 (OpenRouter/{current_model}) attempting")
                 payload = {
                     "model": current_model,
                     "messages": [{"role": "user", "content": [{"type": "text", "text": full_enhanced_prompt}]}],
@@ -1674,9 +1688,17 @@ class AIService:
                     images = data.get('choices', [{}])[0].get('message', {}).get('images', [])
                     if images and images[0].get('type') == 'image_url':
                         with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 3 Success ({current_model})\n")
+                        logger.info(f"[ImageGen:Service] Tier 3 SUCCESS (OpenRouter/{current_model})")
                         return images[0]['image_url']['url']
+                    else:
+                        logger.warning(f"[ImageGen:Service] Tier 3 OpenRouter/{current_model} returned no images | status={response.status_code}")
+                else:
+                    logger.warning(f"[ImageGen:Service] Tier 3 OpenRouter/{current_model} bad status | status={response.status_code} body={response.text[:200]}")
             except Exception as e:
+                logger.warning(f"[ImageGen:Service] Tier 3 FAILED (OpenRouter/{current_model}) | error={str(e)[:200]}")
                 continue
+
+        logger.error(f"[ImageGen:Service] ALL TIERS EXHAUSTED — returning None | prompt_preview={prompt[:60]!r}")
 
         return ""
 

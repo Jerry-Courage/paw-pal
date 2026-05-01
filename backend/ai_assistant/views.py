@@ -275,14 +275,54 @@ class StudyNotesView(APIView):
     def post(self, request, resource_id):
         """Generate only — does NOT save."""
         resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        logger.info(
+            f"[StudyNotes] Generation requested | resource_id={resource_id} "
+            f"type={resource.resource_type} status={resource.status} "
+            f"has_text={bool(resource.ai_concepts)} user={request.user.id}"
+        )
+
         if resource.status == 'processing':
+            logger.warning(f"[StudyNotes] Resource {resource_id} still processing — rejecting request")
             return Response(
                 {'error': 'Resource is still being processed. Please wait a few seconds.'},
                 status=status.HTTP_202_ACCEPTED
             )
-        ai = AIService()
-        notes = ai.generate_study_notes(resource)
-        return Response({'notes': notes})
+
+        if resource.status == 'failed':
+            logger.error(f"[StudyNotes] Resource {resource_id} is in failed state — status_text={resource.status_text}")
+            return Response(
+                {'error': f'Resource processing failed: {resource.status_text}'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
+
+        try:
+            ai = AIService()
+            logger.info(f"[StudyNotes] Calling generate_study_notes for resource {resource_id}")
+            notes = ai.generate_study_notes(resource)
+
+            if not notes or notes == "Study notes are being prepared...":
+                logger.error(
+                    f"[StudyNotes] Empty/fallback result for resource {resource_id} | "
+                    f"has_ai_notes_json={bool(resource.ai_notes_json)} "
+                    f"has_study_kit={getattr(resource, 'has_study_kit', False)}"
+                )
+                return Response(
+                    {'error': 'Notes could not be generated. The resource may lack extractable content.'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            logger.info(f"[StudyNotes] Success for resource {resource_id} | notes_length={len(notes)}")
+            return Response({'notes': notes})
+
+        except Exception as e:
+            logger.exception(
+                f"[StudyNotes] EXCEPTION for resource {resource_id} | "
+                f"type={resource.resource_type} error={str(e)}"
+            )
+            return Response(
+                {'error': f'Failed to generate notes: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MindMapView(APIView):
@@ -701,8 +741,7 @@ class GenerateDiagramView(APIView):
 
 class GenerateImageView(APIView):
     """
-    Generate an image from a text prompt using OpenAI DALL-E.
-    Requires OPENAI_API_KEY to be in the environment.
+    Generate an image from a text prompt using a multi-tier fallback strategy.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -714,7 +753,9 @@ class GenerateImageView(APIView):
 
         enhance = request.data.get('enhance', True)
         final_prompt = prompt
-        
+
+        logger.info(f"[ImageGen] Request received | user={request.user.id} prompt_preview={prompt[:80]!r} enhance={enhance}")
+
         if enhance:
             try:
                 ai = AIService()
@@ -727,24 +768,33 @@ class GenerateImageView(APIView):
                     )
                 }])
                 final_prompt = enhanced.strip() if enhanced else prompt
+                logger.info(f"[ImageGen] Prompt enhanced | original_len={len(prompt)} enhanced_len={len(final_prompt)}")
             except Exception as e:
-                logger.warning(f"Failed to enhance image prompt: {e}")
+                logger.warning(f"[ImageGen] Prompt enhancement failed — using original | error={e}")
                 final_prompt = prompt
 
         try:
             ai = AIService()
+            logger.info(f"[ImageGen] Calling generate_image | final_prompt_preview={final_prompt[:80]!r}")
             image_data_uri = ai.generate_image(final_prompt)
-            
+
             if image_data_uri:
-                # Link to existing message if provided
+                logger.info(
+                    f"[ImageGen] SUCCESS | user={request.user.id} "
+                    f"result_type={'base64' if image_data_uri.startswith('data:') else 'url'} "
+                    f"result_size={len(image_data_uri)}"
+                )
                 if message_id:
                     try:
                         msg = ChatMessage.objects.filter(id=message_id, session__user=request.user).first()
                         if msg:
                             msg.image = image_data_uri
                             msg.save()
+                            logger.info(f"[ImageGen] Linked image to message {message_id}")
+                        else:
+                            logger.warning(f"[ImageGen] message_id={message_id} not found for user={request.user.id}")
                     except Exception as e:
-                        logger.warning(f"Failed to link image to message {message_id}: {e}")
+                        logger.warning(f"[ImageGen] Failed to link image to message {message_id}: {e}")
 
                 return Response({
                     'url': image_data_uri,
@@ -752,13 +802,20 @@ class GenerateImageView(APIView):
                     'original_prompt': prompt,
                 })
             else:
+                logger.error(
+                    f"[ImageGen] ALL TIERS FAILED — no image returned | "
+                    f"user={request.user.id} prompt_preview={final_prompt[:80]!r}"
+                )
                 return Response(
-                    {'error': "Failed to generate image. All available models are currently unavailable."}, 
+                    {'error': "Failed to generate image. All available models are currently unavailable."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
         except Exception as e:
-            logger.error(f"Generate Image exception: {e}")
+            logger.exception(
+                f"[ImageGen] EXCEPTION | user={request.user.id} "
+                f"prompt_preview={final_prompt[:80]!r} error={str(e)}"
+            )
             return Response({'error': f'Failed to generate image: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

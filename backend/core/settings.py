@@ -106,7 +106,7 @@ import dj_database_url as _dj_db_url
 
 _db_url = os.getenv('DATABASE_URL')
 if _db_url:
-    DATABASES = {'default': _dj_db_url.config(default=_db_url, conn_max_age=0, ssl_require=False)}
+    DATABASES = {'default': _dj_db_url.config(default=_db_url, conn_max_age=0, ssl_require=not DEBUG)}
 else:
     DATABASES = {
         'default': {
