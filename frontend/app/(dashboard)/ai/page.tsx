@@ -667,9 +667,15 @@ function AIChat() {
         
         {/* Header */}
         <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 glass-panel border-b border-slate-200 dark:border-slate-800 z-[50] sticky top-0 flex-shrink-0 shadow-sm">
+          {/* Desktop only — mobile uses TopBar hamburger */}
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-primary hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 bg-white transition-all shadow-lg shadow-primary/5 active:scale-95">
+            className="hidden lg:flex p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-primary hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 bg-white transition-all shadow-lg shadow-primary/5 active:scale-95">
             <Menu className="w-5 h-5" />
+          </button>
+          {/* Mobile only — compact history toggle, no collision with TopBar */}
+          <button onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="lg:hidden p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95">
+            <MessageSquare className="w-5 h-5" />
           </button>
           
           <div className="w-10 h-10 bg-gradient-to-br from-primary to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
