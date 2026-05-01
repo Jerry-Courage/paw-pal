@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes'
 import { useState } from 'react'
 import { AudioProvider } from '@/context/AudioContext'
 import FloatingMiniPlayer from '@/components/ui/FloatingMiniPlayer'
+import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -31,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <AudioProvider>
             {children}
             <FloatingMiniPlayer />
+            <PWAInstallPrompt />
           </AudioProvider>
         </ThemeProvider>
       </QueryClientProvider>
