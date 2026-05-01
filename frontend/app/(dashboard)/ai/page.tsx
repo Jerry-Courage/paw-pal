@@ -666,7 +666,7 @@ function AIChat() {
       <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-slate-50 dark:bg-slate-950">
         
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 glass-panel border-b border-slate-200 dark:border-slate-800 z-[50] sticky top-0 flex-shrink-0 shadow-sm">
+        <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 glass-panel border-b border-slate-200 dark:border-slate-800 z-10 flex-shrink-0 shadow-sm">
           {/* Desktop only — mobile uses TopBar hamburger */}
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
             className="hidden lg:flex p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-primary hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 bg-white transition-all shadow-lg shadow-primary/5 active:scale-95">

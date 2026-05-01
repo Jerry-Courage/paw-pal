@@ -149,7 +149,9 @@ export default function WorkspaceCollaborationStudio() {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
+      // Always connect WS to the backend, not the frontend host
+      const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
+      const host = backendHost || (window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host)
       
       try {
         const token = await getAuthToken()
