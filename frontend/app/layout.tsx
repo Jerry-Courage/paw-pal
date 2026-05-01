@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Outfit } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
@@ -12,14 +12,48 @@ const outfit = Outfit({
   variable: '--font-outfit',
 })
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#0EA5E9',
+}
+
 export const metadata: Metadata = {
   title: 'FlowState — Study Smarter with Your AI Third Member',
   description: 'Transform PDFs, YouTube videos, and class notes into interactive lessons, flashcards, and quizzes.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'FlowState',
+    startupImage: '/images/logo-icon.png',
+  },
+  icons: {
+    icon: '/images/logo-icon.png',
+    apple: '/images/logo-icon.png',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'msapplication-TileImage': '/images/logo-icon.png',
+    'msapplication-TileColor': '#0EA5E9',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="FlowState" />
+        <link rel="apple-touch-icon" href="/images/logo-icon.png" />
+      </head>
       <body suppressHydrationWarning className={cn(outfit.className, outfit.variable)}>
         <NextTopLoader
           color="#8b5cf6"
@@ -36,6 +70,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <Toaster position="top-right" richColors />
         </Providers>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js');
+              });
+            }
+          `
+        }} />
       </body>
     </html>
   )
