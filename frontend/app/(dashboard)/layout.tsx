@@ -9,9 +9,7 @@ import MobileNav from '@/components/layout/MobileNav'
 import MobileSidebar from '@/components/layout/MobileSidebar'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-import { useWakeWord } from '@/hooks/useWakeWord'
-import LiveIndicator from '@/components/ai/LiveIndicator'
-import LiveVoiceAssistant from '@/components/ai/LiveVoiceAssistant'
+
 
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 const VideoTutorialModal = dynamic(() => import('@/components/onboarding/VideoTutorialModal'), { ssr: false })
@@ -24,18 +22,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showTutorial, setShowTutorial] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
-  const [showLive, setShowLive] = useState(false)
-
-  // Initialize the elite "Live-First" Wake Engine
-  const { isListening, startListening } = useWakeWord({
-    onWake: () => setShowLive(true)
-  })
-
-  useEffect(() => {
-    if (status === 'authenticated') {
-      startListening()
-    }
-  }, [status, startListening])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -98,13 +84,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <MobileNav />
-
-      {/* The Global Live Hub & Status Indicator */}
-      <LiveIndicator isListening={isListening} onClick={() => setShowLive(true)} />
-      
-      {showLive && (
-        <LiveVoiceAssistant onClose={() => setShowLive(false)} />
-      )}
 
       {showOnboarding && (
         <OnboardingWizard onComplete={() => {
