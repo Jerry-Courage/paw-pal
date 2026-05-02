@@ -254,21 +254,24 @@ class WorkspaceMessageView(APIView):
                 # 4. Mode Mirroring (Voice Decision)
                 should_vocalize = is_audio_trigger
                 audio_path = None
-                
+
                 if should_vocalize:
                     from ai_assistant.podcast import generate_tts_file
                     import os
                     voice = "en-US-AndrewNeural"
                     filename = f"flow_vn_{workspace.id}_{int(timezone.now().timestamp())}.mp3"
-                    rel_path = os.path.join('workspace_audio', filename)
-                    full_path = os.path.join(settings.MEDIA_ROOT, rel_path)
-                    
-                    # Ensure directory exists
+                    full_path = os.path.join(settings.MEDIA_ROOT, 'workspace_audio', filename)
                     os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                    
+
                     tts_text = reply if len(reply) < 300 else reply[:297] + "..."
-                    if generate_tts_file(tts_text, voice, full_path):
-                        audio_path = rel_path
+                    try:
+                        if generate_tts_file(tts_text, voice, full_path):
+                            audio_path = os.path.join('workspace_audio', filename)
+                            logger.info(f"[Workspace TTS] Generated voice note: {filename}")
+                        else:
+                            logger.error(f"[Workspace TTS] generate_tts_file returned False for workspace {workspace.id}")
+                    except Exception as tts_err:
+                        logger.error(f"[Workspace TTS] Failed: {tts_err}")
 
                 # 5. Save & Broadcast Real Response
                 ai_msg = WorkspaceMessage.objects.create(
@@ -278,7 +281,7 @@ class WorkspaceMessageView(APIView):
                     audio_file=audio_path,
                     parent_id=msg.id if msg else None
                 )
-                
+
                 # Use class method for clean broadcast
                 self._broadcast(workspace.id, ai_msg)
 

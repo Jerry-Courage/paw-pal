@@ -596,13 +596,9 @@ export default function WorkspaceCollaborationStudio() {
             <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-end gap-3 sm:gap-4">
               <button 
                 type="button"
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onMouseLeave={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
+                onClick={isRecording ? stopRecording : startRecording}
                 className={cn(
-                  "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-all duration-300",
+                  "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-all duration-300 flex-shrink-0",
                   isRecording 
                     ? "bg-red-500 animate-pulse scale-110 shadow-[0_0_20px_rgba(239,68,68,0.4)]" 
                     : "bg-[#111] border border-white/5 text-zinc-500 hover:text-white hover:border-violet-500/30 shadow-xl"
@@ -632,7 +628,7 @@ export default function WorkspaceCollaborationStudio() {
               </div>
             </form>
             <p className="text-center text-[8px] sm:text-[9px] text-zinc-600 mt-3 sm:mt-4 uppercase tracking-[0.2em] font-medium">
-              {isRecording ? "Release to Send" : <>Hold <Mic className="w-2.5 h-2.5 inline mx-0.5" /> to Record • Mention <span className="text-violet-400 font-bold">Flow</span> for AI</>}
+              {isRecording ? "Tap mic again to stop & send" : <>Tap <Mic className="w-2.5 h-2.5 inline mx-0.5" /> to Record • Mention <span className="text-violet-400 font-bold">Flow</span> for AI</>}
             </p>
           </div>
         </div>
