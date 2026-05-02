@@ -24,4 +24,5 @@ except Exception as e:
 "
 
 python manage.py migrate --noinput
+python manage.py clear_dead_tasks || true
 python manage.py seed_discovery || true
