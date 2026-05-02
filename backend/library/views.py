@@ -104,16 +104,9 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource.status_text = "🧬 Synthesis Engine Initializing..."
         resource.save()
 
-        # ─── IMPERIAL HYBRID ENGINE ─────────────────────────────────────────────────
-        # Primary: Offload heavy synthesis to GitHub Actions (Bypasses Timeouts)
-        signal_sent = trigger_github_synthesis(resource.id)
-        
-        # Fallback: If GitHub link is missing or fails, process locally via Django-Q
-        if not signal_sent:
-            logger.info(f'[Hybrid Failover] Engaging local Imperial Task Queue for Resource {resource.id}')
-            async_task('library.tasks.process_resource_task', resource.id)
-        else:
-            logger.info(f'Resource {resource.id} signaled to GitHub Engine for user {self.request.user.id}')
+        # Use local Django-Q worker — GitHub Actions can't access Render's file storage
+        logger.info(f'[Task Queue] Dispatching synthesis for Resource {resource.id} to local worker')
+        async_task('library.tasks.process_resource_task', resource.id)
 
     def get_serializer_context(self):
         return {'request': self.request}
