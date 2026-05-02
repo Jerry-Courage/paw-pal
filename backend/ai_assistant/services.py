@@ -1595,7 +1595,7 @@ class AIService:
                 logger.info(f"[ImageGen:Service] Tier 0 (Imagen 4) attempting")
 
                 response = self.google_client.models.generate_images(
-                    model='models/imagen-4-generate',
+                    model='models/imagen-4.0-generate-preview-06-06',
                     prompt=full_enhanced_prompt,
                     config={'number_of_images': 1}
                 )
@@ -1675,31 +1675,19 @@ class AIService:
                 with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 ({keywords}) Failed: {str(e)}\n")
                 logger.warning(f"[ImageGen:Service] Tier 2 FAILED (Lexica/{keywords}) | error={str(e)[:200]}")
 
-        # --- TIER 3: OPENROUTER (Generative, Paid) ---
-        models_to_try = [model, 'openrouter/auto']
-        for current_model in models_to_try:
+        # --- TIER 3: POLLINATIONS FALLBACK (different models) ---
+        for poll_model, poll_timeout in [('stable-diffusion', 30), ('dall-e-3', 20)]:
             try:
-                logger.info(f"[ImageGen:Service] Tier 3 (OpenRouter/{current_model}) attempting")
-                payload = {
-                    "model": current_model,
-                    "messages": [{"role": "user", "content": [{"type": "text", "text": full_enhanced_prompt}]}],
-                    "modalities": ["image"]
-                }
-                response = requests.post(f"{self.base_url}/chat/completions", headers=self.headers, json=payload, timeout=45)
-
-                if response.status_code == 200:
-                    data = response.json()
-                    images = data.get('choices', [{}])[0].get('message', {}).get('images', [])
-                    if images and images[0].get('type') == 'image_url':
-                        with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 3 Success ({current_model})\n")
-                        logger.info(f"[ImageGen:Service] Tier 3 SUCCESS (OpenRouter/{current_model})")
-                        return images[0]['image_url']['url']
-                    else:
-                        logger.warning(f"[ImageGen:Service] Tier 3 OpenRouter/{current_model} returned no images | status={response.status_code}")
-                else:
-                    logger.warning(f"[ImageGen:Service] Tier 3 OpenRouter/{current_model} bad status | status={response.status_code} body={response.text[:200]}")
+                logger.info(f"[ImageGen:Service] Tier 3 (Pollinations/{poll_model}) attempting")
+                encoded_prompt = requests.utils.quote(f"{prompt}. {style}")
+                poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}"
+                res = requests.get(poll_url, timeout=poll_timeout)
+                if res.status_code == 200 and len(res.content) > 1000:
+                    encoded = base64.b64encode(res.content).decode('utf-8')
+                    logger.info(f"[ImageGen:Service] Tier 3 SUCCESS (Pollinations/{poll_model})")
+                    return f"data:image/jpeg;base64,{encoded}"
             except Exception as e:
-                logger.warning(f"[ImageGen:Service] Tier 3 FAILED (OpenRouter/{current_model}) | error={str(e)[:200]}")
+                logger.warning(f"[ImageGen:Service] Tier 3 FAILED (Pollinations/{poll_model}) | error={str(e)[:200]}")
                 continue
 
         logger.error(f"[ImageGen:Service] ALL TIERS EXHAUSTED — returning None | prompt_preview={prompt[:60]!r}")

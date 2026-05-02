@@ -446,22 +446,28 @@ class ResourceFileView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, resource_id):
-        # The "Nuclear Option": Encode PDF to Base64 and return as JSON text
-        # This makes it impossible for IDM to recognize it as a file to intercept.
         resource = get_object_or_404(Resource, id=resource_id)
         
         if not resource.file:
             return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
-            
-        import base64
-        file_data = resource.file.read()
-        base64_data = base64.b64encode(file_data).decode('utf-8')
-        
-        return Response({
-            'data': base64_data,
-            'file_name': resource.file.name,
-            'size': len(file_data)
-        })
+
+        try:
+            import base64, os
+            # Check file exists before trying to read
+            if not os.path.exists(resource.file.path):
+                return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
+            file_data = resource.file.read()
+            base64_data = base64.b64encode(file_data).decode('utf-8')
+            return Response({
+                'data': base64_data,
+                'file_name': resource.file.name,
+                'size': len(file_data)
+            })
+        except FileNotFoundError:
+            return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"[ResourceFileView] Error reading file for resource {resource_id}: {e}")
+            return Response({'error': 'Failed to read file.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ReprocessResourceView(APIView):
     """
