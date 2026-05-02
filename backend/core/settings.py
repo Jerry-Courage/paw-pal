@@ -388,12 +388,13 @@ UNFOLD = {
 # ─── DJANGO Q BACKGROUND WORKER ─────────────────────────────────────────────
 Q_CLUSTER = {
     'name': 'flowstate_worker',
-    'orm': 'default',   # Use DB instead of Redis for easier local testing
-    'timeout': 600,     # Max time for a RAG vectorization task (Extended for large PDFs)
+    'orm': 'default',
+    'timeout': 600,
     'retry': 700,
-    'workers': 1,       # Optimized for Windows stability (prevents reincarnated worker loops)
+    'workers': 1,
     'recycle': 500,
     'save_limit': 250,
     'label': 'Django Q',
+    'sync': False,
 }
 # Signal: Forced Reload 2026-04-07
