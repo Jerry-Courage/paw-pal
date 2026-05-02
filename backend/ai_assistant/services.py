@@ -263,39 +263,39 @@ class AIService:
                 if any(p.get('type') == 'image_url' for p in msg['content']):
                     has_images = True
                     break
-        
-            if self.google_client_beta:
-                # Speed-first ordering: fastest models first
-                for g_model in [
-                    'models/gemma-4-31b-it',
-                    'models/gemma-4-26b-a4b-it',
-                    'models/gemma-3-27b-it',
-                    'models/gemini-2.5-flash-lite',
-                    'models/gemini-2.5-flash',
-                    'models/gemini-3.1-flash-lite-preview',
-                ]:
-                    try:
-                        contents, sys_instr = self._to_gemini_format(messages)
-                        
-                        # Gemma 3 Fix: Developer instructions must be in the prompt history
-                        if 'gemma' in g_model.lower():
-                            if sys_instr:
-                                if contents and contents[0].get('role') == 'user':
-                                    contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                            config = {'max_output_tokens': max_tokens}
-                        else:
-                            config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                        # Using Async Client to prevent event-loop deadlocks
-                        response = await self.google_client.aio.models.generate_content(
-                            model=g_model,
-                            contents=contents,
-                            config=config
-                        )
-                        if response.text:
-                            return response.text
-                    except Exception as e:
-                        logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
+        # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Gemma + Gemini Fleet) ---
+        if self.google_client_beta:
+            # Gemma first (highest quota), then Gemini
+            for g_model in [
+                'models/gemma-4-31b-it',
+                'models/gemma-4-26b-a4b-it',
+                'models/gemma-3-27b-it',
+                'models/gemini-2.5-flash-lite',
+                'models/gemini-2.5-flash',
+                'models/gemini-3.1-flash-lite-preview',
+            ]:
+                try:
+                    contents, sys_instr = self._to_gemini_format(messages)
+
+                    if 'gemma' in g_model.lower():
+                        if sys_instr:
+                            if contents and contents[0].get('role') == 'user':
+                                contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        config = {'max_output_tokens': max_tokens}
+                    else:
+                        config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
+
+                    response = await self.google_client.aio.models.generate_content(
+                        model=g_model,
+                        contents=contents,
+                        config=config
+                    )
+                    if response.text:
+                        logger.info(f"[Google SDK Chat] Success via {g_model}")
+                        return response.text
+                except Exception as e:
+                    logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
 
         # --- STAGE 1: HYPER-FAST GROQ (Text-Only or Direct Vision) ---
         groq_key = os.getenv('GROQ_API_KEY')

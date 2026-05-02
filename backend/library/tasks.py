@@ -32,9 +32,19 @@ def create_vector_embeddings(resource, text):
         chunks = text_splitter.split_text(text)
         
         logger.info(f'[RAG] Generating {len(chunks)} vectors via Cloud Engine...')
-        # Cloud Calculation (Batch): RAM-Zero footprint with Document Optimization
-        vector_data = ai.embed_text_cloud(chunks, is_query=False)
+        # Batch in groups of 50 to respect API limits
+        BATCH_SIZE = 50
+        all_vectors = []
+        for batch_start in range(0, len(chunks), BATCH_SIZE):
+            batch = chunks[batch_start:batch_start + BATCH_SIZE]
+            batch_vectors = ai.embed_text_cloud(batch, is_query=False)
+            if not batch_vectors:
+                logger.error(f"[RAG Error] Batch {batch_start}-{batch_start+len(batch)} failed for {resource.id}")
+                return
+            all_vectors.extend(batch_vectors)
+            logger.info(f'[RAG] Embedded {len(all_vectors)}/{len(chunks)} chunks...')
         
+        vector_data = all_vectors
         if not vector_data:
             logger.error(f"[RAG Error] Failed to generate cloud vectors for {resource.id}")
             return
