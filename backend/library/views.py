@@ -97,16 +97,24 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        from django_q.tasks import async_task
+        import threading
 
         resource = serializer.save(owner=self.request.user)
         resource.file_size = resource.file.size if resource.file else 0
         resource.status_text = "🧬 Synthesis Engine Initializing..."
         resource.save()
 
-        # Use local Django-Q worker — GitHub Actions can't access Render's file storage
-        logger.info(f'[Task Queue] Dispatching synthesis for Resource {resource.id} to local worker')
-        async_task('library.tasks.process_resource_task', resource.id)
+        # Run synthesis in a background thread on the same process (shares filesystem)
+        def run():
+            try:
+                from library.tasks import process_resource_task
+                process_resource_task(resource.id)
+            except Exception as e:
+                logger.error(f'[Synthesis Thread] Failed for resource {resource.id}: {e}')
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
+        logger.info(f'[Synthesis Thread] Started for Resource {resource.id}')
 
     def get_serializer_context(self):
         return {'request': self.request}
