@@ -193,23 +193,17 @@ class UpdateOnboardingView(APIView):
     """Mark a specific tour as completed in the onboarding_status."""
     permission_classes = [permissions.IsAuthenticated]
 
-    async def post(self, request):
+    def post(self, request):
         tour_id = request.data.get('tour_id')
         if not tour_id:
             return Response({'error': 'tour_id required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Define a helper for the sync DB operation
-        @sync_to_async
-        def update_user_status(user_id, t_id):
-            user = User.objects.get(id=user_id)
-            if not user.onboarding_status:
-                user.onboarding_status = {}
-            user.onboarding_status[t_id] = True
-            user.save(update_fields=['onboarding_status'])
-            return user.onboarding_status
 
-        new_status = await update_user_status(request.user.id, tour_id)
-        return Response({'onboarding_status': new_status})
+        user = request.user
+        if not user.onboarding_status:
+            user.onboarding_status = {}
+        user.onboarding_status[tour_id] = True
+        user.save(update_fields=['onboarding_status'])
+        return Response({'onboarding_status': user.onboarding_status})
 
 
 class GlobalConfigView(APIView):
