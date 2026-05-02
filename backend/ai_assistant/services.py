@@ -115,7 +115,6 @@ FALLBACK_MODELS = [
     'models/gemma-4-26b-a4b-it',     # STABLE: Unlimited Tokens
     'models/gemini-2.5-flash',
     'models/gemini-2.5-flash-lite',
-    'models/gemini-3-flash-preview',
     'models/gemini-3.1-flash-lite-preview',
     'models/gemma-3-27b-it',
     'openrouter/auto',
@@ -268,13 +267,12 @@ class AIService:
             if self.google_client_beta:
                 # Speed-first ordering: fastest models first
                 for g_model in [
-                    'models/gemini-2.5-flash-lite',      # Fastest
-                    'models/gemini-2.5-flash',            # Fast + capable
-                    'models/gemini-3.1-flash-lite-preview',
-                    'models/gemini-3-flash-preview',
-                    'models/gemma-4-26b-a4b-it',
                     'models/gemma-4-31b-it',
-                    'models/gemma-3-27b-it'
+                    'models/gemma-4-26b-a4b-it',
+                    'models/gemma-3-27b-it',
+                    'models/gemini-2.5-flash-lite',
+                    'models/gemini-2.5-flash',
+                    'models/gemini-3.1-flash-lite-preview',
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -449,13 +447,12 @@ class AIService:
                 # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
                 # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
+                    'models/gemma-4-31b-it',
+                    'models/gemma-4-26b-a4b-it',
+                    'models/gemma-3-27b-it',
                     'models/gemini-2.5-flash-lite',
                     'models/gemini-2.5-flash',
                     'models/gemini-3.1-flash-lite-preview',
-                    'models/gemini-3-flash-preview',
-                    'models/gemma-4-26b-a4b-it',
-                    'models/gemma-4-31b-it',
-                    'models/gemma-3-27b-it'
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -630,9 +627,17 @@ class AIService:
                     config={'task_type': task_type}
                 )
                 if isinstance(content, str):
-                    return result.embeddings[0].values
+                    if result.embeddings and len(result.embeddings) > 0:
+                        return result.embeddings[0].values
+                    return None
                 else:
-                    return [e.values for e in result.embeddings]
+                    if result.embeddings and len(result.embeddings) == len(content):
+                        return [e.values for e in result.embeddings]
+                    elif result.embeddings:
+                        # Partial result — return what we got
+                        logger.warning(f"[RAG Cloud] Got {len(result.embeddings)} embeddings for {len(content)} chunks")
+                        return [e.values for e in result.embeddings]
+                    return None
             except Exception as e:
                 logger.warning(f"[RAG Cloud] {model_id} failed: {e}. Falling back...")
                 continue
@@ -1405,7 +1410,7 @@ class AIService:
         # ── 1. Google Gemini (Dedicated Key) ──────────────────────────────────
         if self.google_key:
             # ADVANCED VISION SCOUTS: Gemini 2.5 and 3.0 Flash
-            for model_attempt in ['models/gemini-2.5-flash', 'models/gemini-2.5-flash-lite', 'models/gemini-3-flash']:
+            for model_attempt in ['models/gemini-2.5-flash', 'models/gemini-2.5-flash-lite']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
                     result = self._call_google_studio_vision(messages, model_name=model_attempt)
