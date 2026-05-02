@@ -1086,8 +1086,8 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
             <Reply className="w-4 h-4" />
           </button>
 
-          {message.audio_file ? (
-            <AudioPlayer url={message.audio_file} isMe={isMe} />
+          {(message.audio_file || message.audio_data) ? (
+            <AudioPlayer url={message.audio_data || message.audio_file} isMe={isMe} />
           ) : (
             <div className="prose-collab">
               <ReactMarkdown>

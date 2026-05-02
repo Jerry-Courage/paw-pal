@@ -48,6 +48,7 @@ class WorkspaceMessage(models.Model):
     pinned_resource = models.ForeignKey('library.Resource', on_delete=models.SET_NULL, null=True, blank=True, related_name='workspace_mentions')
     shared_assignment = models.ForeignKey('assignments.Assignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='workspace_shares')
     audio_file = models.FileField(upload_to='workspace_audio/', null=True, blank=True)
+    audio_data = models.TextField(null=True, blank=True)  # base64 data URI for AI voice notes
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
 

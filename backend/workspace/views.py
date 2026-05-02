@@ -257,19 +257,24 @@ class WorkspaceMessageView(APIView):
 
                 if should_vocalize:
                     from ai_assistant.podcast import generate_tts_file
-                    import os
-                    voice = "en-US-AndrewNeural"
-                    filename = f"flow_vn_{workspace.id}_{int(timezone.now().timestamp())}.mp3"
-                    full_path = os.path.join(settings.MEDIA_ROOT, 'workspace_audio', filename)
-                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                    import os, tempfile, base64
 
+                    voice = "en-US-AndrewNeural"
                     tts_text = reply if len(reply) < 300 else reply[:297] + "..."
                     try:
-                        if generate_tts_file(tts_text, voice, full_path):
-                            audio_path = os.path.join('workspace_audio', filename)
-                            logger.info(f"[Workspace TTS] Generated voice note: {filename}")
+                        # Write to a temp file, read back as base64, store as data URI
+                        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+                            tmp_path = tmp.name
+
+                        if generate_tts_file(tts_text, voice, tmp_path):
+                            with open(tmp_path, 'rb') as f:
+                                encoded = base64.b64encode(f.read()).decode('utf-8')
+                            os.unlink(tmp_path)
+                            # Save as data URI — no filesystem dependency
+                            audio_path = f"data:audio/mpeg;base64,{encoded}"
+                            logger.info(f"[Workspace TTS] Generated voice note as data URI for workspace {workspace.id}")
                         else:
-                            logger.error(f"[Workspace TTS] generate_tts_file returned False for workspace {workspace.id}")
+                            logger.error(f"[Workspace TTS] generate_tts_file returned False")
                     except Exception as tts_err:
                         logger.error(f"[Workspace TTS] Failed: {tts_err}")
 
@@ -278,7 +283,8 @@ class WorkspaceMessageView(APIView):
                     workspace=workspace,
                     content=reply,
                     is_ai=True,
-                    audio_file=audio_path,
+                    audio_data=audio_path if audio_path and audio_path.startswith('data:') else None,
+                    audio_file=audio_path if audio_path and not audio_path.startswith('data:') else None,
                     parent_id=msg.id if msg else None
                 )
 

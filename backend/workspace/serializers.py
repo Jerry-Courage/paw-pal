@@ -36,7 +36,7 @@ class WorkspaceMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkspaceMessage
-        fields = ['id', 'author', 'author_name', 'author_initials', 'content', 'is_ai', 'pinned_resource', 'pinned_resource_data', 'shared_assignment', 'shared_assignment_data', 'audio_file', 'parent', 'parent_data', 'created_at']
+        fields = ['id', 'author', 'author_name', 'author_initials', 'content', 'is_ai', 'pinned_resource', 'pinned_resource_data', 'shared_assignment', 'shared_assignment_data', 'audio_file', 'audio_data', 'parent', 'parent_data', 'created_at']
 
     def get_parent_data(self, obj):
         if obj.parent:
