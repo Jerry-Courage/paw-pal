@@ -211,6 +211,11 @@ SIMPLE_JWT = {
     'SIGNING_KEY': SECRET_KEY,
 }
 
+# Required so Django authenticates via email (USERNAME_FIELD = 'email')
+AUTHENTICATION_BACKENDS = [
+    'users.backends.EmailBackend',
+]
+
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 import re as _re
 
