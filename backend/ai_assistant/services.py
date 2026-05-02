@@ -266,14 +266,14 @@ class AIService:
                     break
         
             if self.google_client_beta:
-                # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
+                # Speed-first ordering: fastest models first
                 for g_model in [
-                    'models/gemma-4-31b-it', 
-                    'models/gemma-4-26b-a4b-it',
-                    'models/gemini-2.5-flash',
-                    'models/gemini-2.5-flash-lite',
-                    'models/gemini-3-flash-preview',
+                    'models/gemini-2.5-flash-lite',      # Fastest
+                    'models/gemini-2.5-flash',            # Fast + capable
                     'models/gemini-3.1-flash-lite-preview',
+                    'models/gemini-3-flash-preview',
+                    'models/gemma-4-26b-a4b-it',
+                    'models/gemma-4-31b-it',
                     'models/gemma-3-27b-it'
                 ]:
                     try:
@@ -449,12 +449,12 @@ class AIService:
                 # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
                 # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
                 for g_model in [
-                    'models/gemma-4-31b-it', 
-                    'models/gemma-4-26b-a4b-it',
-                    'models/gemini-2.5-flash',
                     'models/gemini-2.5-flash-lite',
-                    'models/gemini-3-flash-preview',
+                    'models/gemini-2.5-flash',
                     'models/gemini-3.1-flash-lite-preview',
+                    'models/gemini-3-flash-preview',
+                    'models/gemma-4-26b-a4b-it',
+                    'models/gemma-4-31b-it',
                     'models/gemma-3-27b-it'
                 ]:
                     try:
@@ -1606,20 +1606,19 @@ class AIService:
                 logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Imagen 4) | error={str(e)[:200]}")
 
         # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
-        models_to_try = [('flux', 25), ('turbo', 15)]
+        models_to_try = [('flux', 45), ('turbo', 35)]
         for poll_model, poll_timeout in models_to_try:
             try:
-                with open(log_path, 'a', encoding='utf-8') as f: 
+                with open(log_path, 'a', encoding='utf-8') as f:
                     f.write(f"[GEN-SIGNAL] Tier 1 ({poll_model}): Attempting for: {prompt[:50]}...\n")
                 logger.info(f"[ImageGen:Service] Tier 1 (Pollinations/{poll_model}) attempting")
-                
+
                 import requests
-                
-                # If it's a retry, use a simpler prompt
+
                 current_prompt = prompt if poll_model == 'flux' else prompt.split(',')[0]
                 encoded_prompt = requests.utils.quote(f"{current_prompt}. {style}")
-                poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}"
-                
+                poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}&seed={abs(hash(prompt)) % 9999}"
+
                 res = requests.get(poll_url, timeout=poll_timeout)
                 if res.status_code == 200 and len(res.content) > 1000:
                     encoded = base64.b64encode(res.content).decode('utf-8')

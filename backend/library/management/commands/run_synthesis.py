@@ -1,4 +1,4 @@
-import argparse
+import traceback
 from django.core.management.base import BaseCommand
 from library.models import Resource
 from library.tasks import process_resource_task
@@ -14,17 +14,31 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         resource_id = options['resource_id']
-        self.stdout.write(self.style.SUCCESS(f'--- [GitHub Engine] Initializing Synthesis for Resource {resource_id} ---'))
-        
+        self.stdout.write(f'--- [GitHub Engine] Initializing Synthesis for Resource {resource_id} ---')
+
         try:
             resource = Resource.objects.get(id=resource_id)
-            self.stdout.write(f'[*] Processing: {resource.title}')
-            
-            # Use the existing process_resource_task logic
-            process_resource_task(resource_id)
-            
-            self.stdout.write(self.style.SUCCESS(f'--- [GitHub Engine] Synthesis Complete for Resource {resource_id} ---'))
+            self.stdout.write(f'[*] Found resource: "{resource.title}" | type={resource.resource_type} | status={resource.status}')
         except Resource.DoesNotExist:
             self.stdout.write(self.style.ERROR(f'[!] ERROR: Resource {resource_id} not found in Database.'))
+            return
+
+        try:
+            process_resource_task(resource_id)
+            # Re-fetch to confirm status was saved
+            resource.refresh_from_db()
+            self.stdout.write(self.style.SUCCESS(
+                f'--- [GitHub Engine] Synthesis Complete | status={resource.status} has_kit={resource.has_study_kit} ---'
+            ))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'[!] CRITICAL ERROR: {str(e)}'))
+            self.stdout.write(self.style.ERROR(traceback.format_exc()))
+            # Mark resource as failed so UI doesn't spin forever
+            try:
+                resource.refresh_from_db()
+                resource.status = 'failed'
+                resource.status_text = f'❌ GitHub Engine Error: {str(e)[:150]}'
+                resource.save(update_fields=['status', 'status_text'])
+            except Exception:
+                pass
+            raise SystemExit(1)
