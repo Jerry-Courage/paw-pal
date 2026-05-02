@@ -23,6 +23,22 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         return obj.image
 
 
+class ChatSessionListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for session list — excludes heavy image data."""
+    last_message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatSession
+        fields = ('id', 'context_type', 'resource', 'group', 'title', 'last_message', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def get_last_message(self, obj):
+        last = obj.messages.order_by('-created_at').first()
+        if last:
+            return {'role': last.role, 'content': last.content[:100]}
+        return None
+
+
 class ChatSessionSerializer(serializers.ModelSerializer):
     messages = ChatMessageSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()

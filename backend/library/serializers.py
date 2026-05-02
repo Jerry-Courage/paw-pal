@@ -11,7 +11,17 @@ class ResourceImageSerializer(serializers.ModelSerializer):
         fields = ('id', 'image', 'page_number', 'description', 'created_at')
 
     def get_image(self, obj):
-        if not obj.image: return None
+        # If description contains a base64 data URI, use that (survives redeploys)
+        if obj.description and obj.description.startswith('data:'):
+            return obj.description
+        if not obj.image:
+            return None
+        try:
+            import os
+            if obj.image.name and not os.path.exists(obj.image.path):
+                return None
+        except Exception:
+            pass
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(obj.image.url)

@@ -122,9 +122,12 @@ def process_resource_task(res_id):
                         image_objs = []
                         
                         for img_data in images:
+                            import base64
                             res_img = ResourceImage(resource=res, page_number=img_data['page'])
-                            image_name = f"res_{res.id}_p{img_data['page']}_{img_data.get('width',0)}x{img_data.get('height',0)}.{img_data['ext']}"
-                            res_img.image.save(image_name, ContentFile(img_data['data']), save=False)
+                            # Store as base64 data URI in description so it survives redeploys
+                            mime = f"image/{img_data['ext']}" if img_data['ext'] != 'jpg' else 'image/jpeg'
+                            b64 = base64.b64encode(img_data['data']).decode('utf-8')
+                            res_img.description = f"data:{mime};base64,{b64}"
                             res_img.save()
                             
                             image_objs.append({
@@ -139,14 +142,12 @@ def process_resource_task(res_id):
                             idx, item = idx_item_tuple
                             if item['is_large']:
                                 try:
-                                    # Update Progress inside the loop for UI visibility
                                     res.status_text = f"👁️ Scanning Diagram {idx+1}/{len(image_objs)}..."
                                     res.save(update_fields=['status_text'])
-                                    
                                     ai = AIService()
                                     desc = ai.describe_image_for_notes(item['data'], item['page'], item['ext'])
-                                    item['img'].description = desc
-                                    item['img'].save()
+                                    # Don't overwrite the base64 data URI — it's stored in description
+                                    # Store AI caption in page_image_map instead
                                     return desc
                                 except Exception as e:
                                     logger.error(f"Image desc error: {e}")
@@ -164,14 +165,17 @@ def process_resource_task(res_id):
                         except Exception as e:
                             logger.error(f"[Task Queue] Thread pool error: {e}")
                             
-                        # Build the multi-image map
+                        # Build the multi-image map using base64 data URIs
                         for item in image_objs:
                             if item['page'] not in page_image_map:
                                 page_image_map[item['page']] = []
-                            page_image_map[item['page']].append({
-                                'url': item['img'].image.url,
-                                'description': item['img'].description or f"Illustration on page {item['page']}"
-                            })
+                            # Use the base64 data URI stored in description
+                            img_url = item['img'].description if item['img'].description and item['img'].description.startswith('data:') else None
+                            if img_url:
+                                page_image_map[item['page']].append({
+                                    'url': img_url,
+                                    'description': f"Illustration on page {item['page']}"
+                                })
                 else:
                     logger.error(f"[Task Queue] Extraction failed for {res.id}: {extraction.get('error')}")
             except Exception as e:

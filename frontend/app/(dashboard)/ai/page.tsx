@@ -338,22 +338,35 @@ function AIChat() {
     toast.info('New chat started')
   }
 
-  const loadSession = (session: any) => {
-    // Clear current state first to prevent flash of old content
+  const loadSession = async (session: any) => {
     setMessages([])
     setAttachedFile(null)
     setFilePreview(null)
-    
-    // Map backend fields (diagram_code, image) to frontend state (diagram, image)
-    const mappedMessages = (session.messages || []).map((m: any) => ({
-      role: m.role,
-      content: m.content || '',
-      diagram: m.diagram_code || m.diagram || undefined,
-      image: m.image || undefined
-    }))
-    setMessages(mappedMessages)
     setActiveSession(session)
     setSidebarOpen(false)
+
+    try {
+      // Fetch full session with images from the detail endpoint
+      const res = await aiApi.getSession(session.id)
+      const fullSession = res.data
+      const mappedMessages = (fullSession.messages || []).map((m: any) => ({
+        role: m.role,
+        content: m.content || '',
+        diagram: m.diagram_code || m.diagram || undefined,
+        image: m.image || undefined
+      }))
+      setMessages(mappedMessages)
+      setActiveSession(fullSession)
+    } catch {
+      // Fallback to cached data if fetch fails
+      const mappedMessages = (session.messages || []).map((m: any) => ({
+        role: m.role,
+        content: m.content || '',
+        diagram: m.diagram_code || m.diagram || undefined,
+        image: m.image || undefined
+      }))
+      setMessages(mappedMessages)
+    }
   }
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: number) => {

@@ -17,7 +17,7 @@ from django.http import StreamingHttpResponse
 from asgiref.sync import async_to_sync
 
 from .models import ChatSession, ChatMessage
-from .serializers import ChatSessionSerializer, ChatMessageSerializer
+from .serializers import ChatSessionSerializer, ChatSessionListSerializer, ChatMessageSerializer
 from .services import AIService, VoiceSanitizer
 from library.models import Resource
 from .agent import FlowAgent
@@ -37,7 +37,11 @@ def _get_history(session, exclude_last=True):
 
 class ChatSessionListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ChatSessionSerializer
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return ChatSessionListSerializer
+        return ChatSessionSerializer
 
     def get_queryset(self):
         return ChatSession.objects.filter(user=self.request.user).prefetch_related('messages')
