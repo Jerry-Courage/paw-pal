@@ -6,9 +6,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi, API_BASE, getAuthToken } from '@/lib/api'
 import {
   X, Upload, FileText, Youtube, Code, Presentation, Plus, Loader2,
-  Sparkles, CheckCircle2, Cloud, BookOpen, HelpCircle, Map,
-  Wand2, Radio, ArrowRight, ArrowLeft, Check, Brain, Headphones,
-  FlaskConical, Layers, MessageSquare
+  Sparkles, CheckCircle2, Brain, HelpCircle, Map,
+  Wand2, Radio, ArrowLeft, Check, Headphones,
+  FlaskConical, Layers, Link2, Mic, BookOpen, Calculator
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -21,40 +21,42 @@ const TYPES = [
 ]
 
 const FEATURES = [
-  { id: 'notes', label: 'Study Notes', desc: 'AI-generated structured notes', icon: Brain, color: 'text-primary bg-primary/10', required: true },
-  { id: 'flashcards', label: 'Flashcards', desc: '20–40 recall cards', icon: Layers, color: 'text-sky-500 bg-sky-500/10' },
-  { id: 'quiz', label: 'Quiz', desc: '20–40 MCQ questions', icon: HelpCircle, color: 'text-orange-500 bg-orange-500/10' },
-  { id: 'practice', label: 'Practice Test', desc: '20–40 exam questions', icon: FlaskConical, color: 'text-emerald-500 bg-emerald-500/10' },
-  { id: 'mindmap', label: 'Mind Map', desc: 'Visual concept web', icon: Map, color: 'text-violet-500 bg-violet-500/10' },
-  { id: 'podcast', label: 'Podcast', desc: '20–30 segment audio', icon: Headphones, color: 'text-pink-500 bg-pink-500/10' },
+  { id: 'notes',     label: 'Notes',           icon: BookOpen,    required: true },
+  { id: 'quiz',      label: 'Multiple Choice', icon: HelpCircle,  required: false },
+  { id: 'flashcards',label: 'Flashcards',      icon: Layers,      required: false },
+  { id: 'practice',  label: 'Written Tests',   icon: Wand2,       required: false },
+  { id: 'podcast',   label: 'Podcast',         icon: Headphones,  required: false },
+  { id: 'mindmap',   label: 'Mind Map',        icon: Map,         required: false },
 ]
 
-export default function UploadModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<'details' | 'features'>('details')
-  const [type, setType] = useState('pdf')
+interface UploadModalProps {
+  onClose: () => void
+  initialMode?: 'file' | 'paste' | 'record'
+}
+
+export default function UploadModal({ onClose, initialMode = 'file' }: UploadModalProps) {
+  const [step, setStep] = useState<'upload' | 'features'>('upload')
+  const [type, setType] = useState(initialMode === 'paste' ? 'video' : 'pdf')
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [url, setUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>(['notes', 'flashcards', 'quiz'])
-
-  // Progress States
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [stage, setStage] = useState<'idle' | 'uploading' | 'building' | 'complete'>('idle')
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState({ progress: 0, text: 'Preparing ingestion...' })
   const [resourceId, setResourceId] = useState<number | null>(null)
 
   const qc = useQueryClient()
 
   const toggleFeature = (id: string) => {
-    if (id === 'notes') return // notes always required
+    if (id === 'notes') return
     setSelectedFeatures(prev =>
       prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
     )
   }
 
-  // SSE Stream Management
+  // SSE for progress tracking
   useEffect(() => {
     if (stage !== 'building' || !resourceId) return
     let eventSource: EventSource | null = null
@@ -67,7 +69,6 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
         const myResource = data.find((r: any) => r.id === resourceId)
         if (myResource) {
           setProcessingStatus({ progress: myResource.progress || 0, text: myResource.text || 'Building your study kit...' })
-          // Only close when truly ready (status=ready AND progress=100)
           if (myResource.status === 'ready' && myResource.progress >= 100) {
             setStage('complete')
             setProcessingStatus({ progress: 100, text: 'All features ready!' })
@@ -85,8 +86,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
 
   const mutation = useMutation({
     mutationFn: (data: FormData) => libraryApi.uploadResource(data, (pe) => {
-      const p = Math.round((pe.loaded * 100) / pe.total)
-      setUploadProgress(p)
+      setUploadProgress(Math.round((pe.loaded * 100) / pe.total))
     }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['resources'] })
@@ -96,7 +96,6 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     },
     onError: () => {
       setStage('idle')
-      setIsUploading(false)
       setUploadProgress(0)
       toast.error('Upload failed. Please try a smaller file.')
     },
@@ -126,7 +125,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
 
   const handleNext = () => {
     if (!title) { toast.error('Please add a title.'); return }
-    if (type !== 'video' && !file) { toast.error('Please select a file to upload.'); return }
+    if (type !== 'video' && !file) { toast.error('Please select a file.'); return }
     if (type === 'video' && !url) { toast.error('Please provide a YouTube URL.'); return }
     setStep('features')
   }
@@ -143,219 +142,264 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     mutation.mutate(fd)
   }
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-900 rounded-t-[1.5rem] sm:rounded-[2rem] w-full max-w-2xl shadow-2xl border border-slate-200/50 dark:border-slate-800/50 flex flex-col max-h-[92vh] sm:max-h-[95vh] animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-2 duration-300 overflow-hidden relative">
-
-        {/* Progress Overlay */}
-        {stage !== 'idle' && (
-          <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
-            <div className="w-full max-w-md space-y-8">
-              <div className="relative mx-auto w-24 h-24">
-                <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-25" />
-                <div className="relative bg-white dark:bg-slate-800 rounded-full w-full h-full flex items-center justify-center shadow-xl border border-slate-100 dark:border-slate-700">
-                  {stage === 'complete' ? (
-                    <CheckCircle2 className="w-12 h-12 text-emerald-500 animate-in zoom-in duration-300" />
-                  ) : (
-                    <Sparkles className="w-10 h-10 text-primary animate-pulse" />
-                  )}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {stage === 'uploading' ? 'Uploading...' : stage === 'building' ? 'Building Your Kit' : 'All Ready!'}
-                </h3>
-                <p className="text-slate-500 dark:text-slate-400 font-medium italic">
-                  {stage === 'uploading' ? `Uploading ${title}...` : processingStatus.text}
-                </p>
-              </div>
-              <div className="space-y-4">
-                <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner p-1">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-700 ease-out relative"
-                    style={{ width: `${stage === 'uploading' ? uploadProgress : processingStatus.progress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                  </div>
-                </div>
-                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">
-                  <span>{stage === 'uploading' ? 'Upload' : 'AI Generation'}</span>
-                  <span className="text-primary">{stage === 'uploading' ? uploadProgress : processingStatus.progress}%</span>
-                </div>
-              </div>
-              {stage === 'building' && (
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {selectedFeatures.map(f => {
-                    const feat = FEATURES.find(x => x.id === f)
-                    if (!feat) return null
-                    return (
-                      <span key={f} className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border', feat.color, 'border-current/20')}>
-                        {feat.label}
-                      </span>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
+  // ── STEP 2: Full-screen feature selection ────────────────────────
+  if (step === 'features' && stage === 'idle') {
+    return (
+      <div className="fixed inset-0 bg-[#0d0d0d] z-[100] flex flex-col animate-in fade-in duration-200">
         {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
-          <div className="flex items-center gap-3">
-            {step === 'features' && (
-              <button onClick={() => setStep('details')} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            )}
-            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-              {step === 'details' ? <Upload className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                {step === 'details' ? 'Upload Material' : 'Choose Features'}
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {step === 'details' ? 'Step 1 of 2 — Add your file' : 'Step 2 of 2 — What to generate'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1.5">
-              <div className={cn('w-2 h-2 rounded-full transition-colors', step === 'details' ? 'bg-primary' : 'bg-primary/30')} />
-              <div className={cn('w-2 h-2 rounded-full transition-colors', step === 'features' ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700')} />
-            </div>
-            <button onClick={onClose} className="p-2.5 rounded-xl text-slate-400 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
+          <button onClick={() => setStep('upload')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-sm font-bold">Back</span>
+          </button>
+          <h2 className="text-sm font-black text-white">New Study Set</h2>
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 scrollbar-hide">
+        {/* Body */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+          <div className="w-full max-w-2xl space-y-10">
+            <div className="text-center">
+              <h1 className="text-3xl font-black text-white tracking-tight">What would you like to include?</h1>
+              <p className="text-slate-500 mt-2">Choose all the methods you want included in your study set:</p>
+            </div>
 
-          {/* ── STEP 1: DETAILS ── */}
-          {step === 'details' && (
-            <>
-              <div className="grid grid-cols-4 gap-2">
-                {TYPES.map((t) => (
-                  <button key={t.id} onClick={() => setType(t.id)}
-                    className={cn('p-3 rounded-2xl border-2 text-center transition-all group',
-                      type === t.id ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-slate-100 dark:border-slate-800 hover:border-primary/30'
+            {/* Feature grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {FEATURES.map(f => {
+                const selected = selectedFeatures.includes(f.id)
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => toggleFeature(f.id)}
+                    className={cn(
+                      'relative flex items-center gap-4 p-5 rounded-2xl border-2 text-left transition-all active:scale-[0.98]',
+                      selected
+                        ? 'border-orange-500/60 bg-orange-500/10'
+                        : 'border-white/8 bg-[#1a1a1a] hover:border-white/20 hover:bg-[#1f1f1f]',
+                      f.required && 'cursor-default'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                      selected ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-slate-400'
                     )}>
-                    <div className={cn('w-8 h-8 rounded-xl mx-auto mb-2 flex items-center justify-center transition-transform group-hover:scale-110',
-                      type === t.id ? 'bg-primary text-white shadow-lg' : t.color)}>
-                      <t.icon className="w-4 h-4" />
+                      <f.icon className="w-5 h-5" />
                     </div>
-                    <div className={cn('text-[9px] font-black uppercase tracking-widest', type === t.id ? 'text-primary' : 'text-slate-500')}>{t.label}</div>
+                    <span className={cn('text-sm font-bold', selected ? 'text-white' : 'text-slate-300')}>
+                      {f.label}
+                    </span>
+                    {selected && (
+                      <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    {f.required && !selected && (
+                      <div className="absolute top-3 right-3 text-[8px] font-black text-orange-500 uppercase tracking-widest">Always</div>
+                    )}
                   </button>
-                ))}
-              </div>
+                )
+              })}
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Title</label>
-                  <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Chapter 1: Intro" className="input" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Subject</label>
-                  <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Biology" className="input" />
-                </div>
+            {/* Footer row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <span className="w-5 h-5 rounded bg-white/5 flex items-center justify-center text-[10px] font-black text-slate-400">US</span>
+                <span className="font-medium">English</span>
               </div>
+              <button
+                onClick={handleSubmit}
+                className="px-8 py-3 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-95 transition-all shadow-lg shadow-orange-500/20 flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" /> Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-              {type === 'video' ? (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">YouTube Link</label>
-                  <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." className="input" />
+  // ── Progress overlay (uploading / building / complete) ────────────
+  if (stage !== 'idle') {
+    return (
+      <div className="fixed inset-0 bg-[#0d0d0d] z-[100] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+        <div className="w-full max-w-md space-y-8">
+          <div className="relative mx-auto w-24 h-24">
+            <div className="absolute inset-0 bg-orange-500/20 rounded-full animate-ping opacity-30" />
+            <div className="relative bg-[#1a1a1a] rounded-full w-full h-full flex items-center justify-center border border-white/10">
+              {stage === 'complete'
+                ? <CheckCircle2 className="w-12 h-12 text-emerald-400 animate-in zoom-in duration-300" />
+                : <Sparkles className="w-10 h-10 text-orange-400 animate-pulse" />}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black text-white">
+              {stage === 'uploading' ? 'Uploading...' : stage === 'building' ? 'Building Your Kit' : 'All Ready!'}
+            </h3>
+            <p className="text-slate-500 italic">
+              {stage === 'uploading' ? `Uploading ${title}...` : processingStatus.text}
+            </p>
+          </div>
+          <div className="space-y-3">
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-700"
+                style={{ width: `${stage === 'uploading' ? uploadProgress : processingStatus.progress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-600">
+              <span>{stage === 'uploading' ? 'Upload' : 'AI Generation'}</span>
+              <span className="text-orange-500">{stage === 'uploading' ? uploadProgress : processingStatus.progress}%</span>
+            </div>
+          </div>
+          {stage === 'building' && (
+            <div className="flex flex-wrap gap-2 justify-center">
+              {selectedFeatures.map(f => {
+                const feat = FEATURES.find(x => x.id === f)
+                if (!feat) return null
+                return (
+                  <span key={f} className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-slate-400">
+                    {feat.label}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── STEP 1: Upload modal ──────────────────────────────────────────
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-[#111] rounded-t-[1.5rem] sm:rounded-2xl w-full max-w-lg shadow-2xl border border-white/8 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
+          <div>
+            <h2 className="text-base font-black text-white">Please upload your file</h2>
+            <p className="text-xs text-slate-500 mt-0.5">We will turn your file into insane study material</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5 overflow-y-auto flex-1 scrollbar-hide">
+          {/* Type selector */}
+          <div className="grid grid-cols-4 gap-2">
+            {TYPES.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setType(t.id)}
+                className={cn(
+                  'p-3 rounded-xl border text-center transition-all',
+                  type === t.id ? 'border-orange-500/50 bg-orange-500/10' : 'border-white/8 bg-white/3 hover:border-white/15'
+                )}
+              >
+                <div className={cn('w-7 h-7 rounded-lg mx-auto mb-1.5 flex items-center justify-center', type === t.id ? 'bg-orange-500/20 text-orange-400' : t.color)}>
+                  <t.icon className="w-3.5 h-3.5" />
+                </div>
+                <div className={cn('text-[9px] font-black uppercase tracking-widest', type === t.id ? 'text-orange-400' : 'text-slate-500')}>{t.label}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Title + Subject */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Title</label>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="e.g. Chapter 1"
+                className="w-full bg-white/5 border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500/40 transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Subject</label>
+              <input
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                placeholder="e.g. Biology"
+                className="w-full bg-white/5 border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500/40 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* File / URL */}
+          {type === 'video' ? (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">YouTube URL</label>
+              <input
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder="https://youtube.com/watch?v=..."
+                className="w-full bg-white/5 border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500/40 transition-colors"
+              />
+            </div>
+          ) : (
+            <div
+              {...getRootProps()}
+              className={cn(
+                'border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center gap-3',
+                isDragActive ? 'border-orange-500 bg-orange-500/5' : 'border-white/10 hover:border-white/20 hover:bg-white/3'
+              )}
+            >
+              <input {...getInputProps()} />
+              {file ? (
+                <div className="flex items-center gap-3 w-full bg-white/5 rounded-xl px-4 py-3">
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4 text-rose-400" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-bold text-white truncate">{file.name}</p>
+                    <p className="text-[10px] text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Source File</label>
-                  <div {...getRootProps()} className={cn(
-                    'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center group',
-                    isDragActive ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                  )}>
-                    <input {...getInputProps()} />
-                    <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-3 flex items-center justify-center group-hover:scale-110 transition-transform text-slate-400">
-                      <Plus className="w-6 h-6" />
-                    </div>
-                    {file ? (
-                      <div>
-                        <p className="text-sm font-black text-primary truncate max-w-xs">{file.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Ready to ingest</p>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-sm font-black text-slate-700 dark:text-slate-200">Drag & Drop or Browse</p>
-                        <p className="text-xs text-slate-400 mt-1">PDF, DOCX, PPTX, Code files</p>
-                      </>
-                    )}
+                <>
+                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-slate-500" />
                   </div>
-                </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-300">Drop file here or click to browse</p>
+                    <p className="text-xs text-slate-600 mt-0.5">PDF, DOCX, PPTX, images</p>
+                  </div>
+                </>
               )}
-            </>
+            </div>
           )}
 
-          {/* ── STEP 2: FEATURES ── */}
-          {step === 'features' && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                Select what to generate for <span className="font-black text-slate-900 dark:text-white">"{title}"</span>. Everything runs in parallel — it'll all be ready when you open it.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {FEATURES.map((f) => {
-                  const selected = selectedFeatures.includes(f.id)
-                  return (
-                    <button key={f.id} onClick={() => toggleFeature(f.id)}
-                      className={cn(
-                        'relative p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98]',
-                        selected ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700',
-                        f.required && 'cursor-default'
-                      )}>
-                      {selected && (
-                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                          <Check className="w-3 h-3 text-white" />
-                        </div>
-                      )}
-                      {f.required && (
-                        <div className="absolute top-3 right-3 text-[8px] font-black text-primary uppercase tracking-widest">Required</div>
-                      )}
-                      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center mb-3', f.color)}>
-                        <f.icon className="w-4.5 h-4.5" />
-                      </div>
-                      <div className="font-black text-sm text-slate-900 dark:text-white">{f.label}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">{f.desc}</div>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="p-3 bg-primary/5 rounded-2xl border border-primary/10 text-xs text-primary font-bold">
-                {selectedFeatures.length} feature{selectedFeatures.length !== 1 ? 's' : ''} selected — all generate simultaneously after upload.
-              </div>
-            </div>
+          {file && (
+            <button
+              onClick={() => { setFile(null); setTitle('') }}
+              className="w-full py-2 rounded-xl border border-dashed border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-widest hover:bg-orange-500/5 transition-all"
+            >
+              + Add Another File
+            </button>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex items-center justify-between gap-3 p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900"
-          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-          <button onClick={onClose} className="px-5 py-2.5 text-xs font-black text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 uppercase tracking-widest transition-colors">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-white/5">
+          <button onClick={onClose} className="text-xs font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors">
             Cancel
           </button>
-          {step === 'details' ? (
-            <button onClick={handleNext} className="btn-primary px-8 py-3 flex items-center gap-2 text-sm">
-              Next <ArrowRight className="w-4 h-4" />
-            </button>
-          ) : (
-            <button onClick={handleSubmit} disabled={mutation.isPending || stage !== 'idle'}
-              className={cn('btn-primary px-8 py-3 flex items-center gap-2 text-sm', (mutation.isPending || stage !== 'idle') && 'opacity-75 cursor-wait')}>
-              {mutation.isPending || stage !== 'idle'
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Building...</>
-                : <><Sparkles className="w-4 h-4" /> Generate All</>}
-            </button>
-          )}
+          <button
+            onClick={handleNext}
+            className="px-8 py-2.5 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-95 transition-all shadow-lg shadow-orange-500/20"
+          >
+            Next
+          </button>
         </div>
       </div>
     </div>
   )
 }
-

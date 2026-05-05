@@ -4,76 +4,181 @@ import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import {
-  ArrowLeft, Sparkles, HelpCircle, Loader2,
-  Brain, Map, X, RotateCcw, Save, Wand2, BookOpen,
-  PanelBottomOpen, ChevronDown, Radio,
-  PanelRightOpen, PanelRightClose
+  ArrowLeft, Sparkles, Loader2, X, RotateCcw, BookOpen,
+  HelpCircle, Map, Wand2, Radio, Calculator, Layers,
+  MoreHorizontal, PanelRight, PanelRightClose, Plus
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useSearchParams } from 'next/navigation'
 
-// Components
 import RichNotesViewer from '@/components/library/RichNotesViewer'
-import StudyCompanionSidebar from '@/components/library/StudyCompanionSidebar'
-import PracticeTest from '@/components/library/PracticeTest'
-import MCQQuizContainer from '@/components/library/MCQQuiz'
-import PodcastPlayer from '@/components/library/PodcastPlayer'
-import ExpandableMobileHUD from '@/components/ui/ExpandableMobileHUD'
 import MusicGeneratorModal from '@/components/library/MusicGeneratorModal'
-import MathSolverModal from '@/components/library/MathSolverModal'
-import MindMapContent from '@/components/library/MindMapContent'
+import ExpandableMobileHUD from '@/components/ui/ExpandableMobileHUD'
 
-import FlashcardGeneratorModal from '@/components/library/FlashcardGeneratorModal'
-
+// Lazy-load heavy components
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
 
+// ── Tool definitions ──────────────────────────────────────────────
+const TOOLS = [
+  { id: 'notes',     label: 'Notes',           icon: BookOpen,   href: (id: number) => `/library/${id}` },
+  { id: 'quiz',      label: 'Multiple Choice', icon: HelpCircle, href: (id: number) => `/library/${id}/quiz` },
+  { id: 'flashcards',label: 'Flashcards',      icon: Layers,     href: (id: number) => `/library/${id}/flashcards` },
+  { id: 'podcast',   label: 'Podcast',         icon: Radio,      href: (id: number) => `/library/${id}/podcast` },
+  { id: 'practice',  label: 'Written Test',    icon: Wand2,      href: (id: number) => `/library/${id}/practice` },
+  { id: 'mindmap',   label: 'Mind Map',        icon: Map,        href: (id: number) => `/library/${id}/mindmap` },
+  { id: 'solver',    label: 'Math Solver',     icon: Calculator, href: (id: number) => `/library/${id}/solver` },
+  { id: 'content',   label: 'Content',         icon: BookOpen,   href: null },
+]
+
+// ── Inline AI Chat ────────────────────────────────────────────────
+import { useRef } from 'react'
+import { aiApi } from '@/lib/api'
+import ReactMarkdown from 'react-markdown'
+
+function AIChat({ resourceId, resourceTitle, hasNotes }: { resourceId: number; resourceTitle: string; hasNotes: boolean }) {
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sessionId, setSessionId] = useState<number | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async () => {
+    if (!input.trim() || sending) return
+    const userMsg = input.trim()
+    setInput('')
+    if (inputRef.current) inputRef.current.style.height = 'auto'
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }])
+    setSending(true)
+    try {
+      let sid = sessionId
+      if (!sid) {
+        const res = await aiApi.createSession({ title: `Study: ${resourceTitle}`, context_type: 'resource', resource: resourceId })
+        sid = res.data.id
+        setSessionId(sid)
+      }
+      const res = await aiApi.sendMessage(sid!, userMsg)
+      setMessages(prev => [...prev, { role: 'assistant', content: res.data.content }])
+    } catch {
+      toast.error('FlowAI is busy. Try again.')
+      setMessages(prev => prev.slice(0, -1))
+      setInput(userMsg)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-[#111] border-l border-white/5">
+      {/* Chat / Content tabs */}
+      <div className="flex border-b border-white/5 shrink-0">
+        <button className="flex-1 py-3 text-[10px] font-black uppercase tracking-widest text-white border-b-2 border-orange-500">Chat</button>
+        <button className="flex-1 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-400 transition-colors">Content</button>
+        <button className="flex-1 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-400 transition-colors">Notes</button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center gap-4 opacity-40">
+            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-slate-400" />
+            </div>
+            <p className="text-xs text-slate-500 font-medium">Here to help you learn</p>
+          </div>
+        ) : (
+          messages.map((msg, i) => (
+            <div key={i} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
+              <div className={cn(
+                'max-w-[85%] rounded-2xl px-3 py-2.5 text-xs leading-relaxed',
+                msg.role === 'user'
+                  ? 'bg-orange-500 text-white rounded-tr-none'
+                  : 'bg-white/5 text-slate-300 rounded-tl-none border border-white/5'
+              )}>
+                {msg.role === 'user'
+                  ? <p className="whitespace-pre-wrap">{msg.content}</p>
+                  : <ReactMarkdown className="prose prose-invert prose-xs max-w-none">{msg.content}</ReactMarkdown>}
+              </div>
+            </div>
+          ))
+        )}
+        {sending && (
+          <div className="flex gap-2">
+            <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-1.5">
+              {[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="p-3 border-t border-white/5 shrink-0">
+        <div className="flex items-end gap-2 bg-white/5 border border-white/8 rounded-2xl px-3 py-2 focus-within:border-white/20 transition-colors">
+          <textarea
+            ref={inputRef}
+            rows={1}
+            value={input}
+            onChange={e => {
+              setInput(e.target.value)
+              e.target.style.height = 'auto'
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+            placeholder="Ask me anything about the material..."
+            className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 resize-none focus:outline-none max-h-[120px] py-1"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || !input.trim()}
+            className="p-2 rounded-xl bg-orange-500 text-white hover:bg-orange-400 disabled:opacity-30 disabled:pointer-events-none transition-all shrink-0"
+          >
+            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeft className="w-3.5 h-3.5 rotate-180" />}
+          </button>
+        </div>
+        <button
+          onClick={() => { setMessages([]); setSessionId(null) }}
+          className="mt-2 w-full text-[10px] text-slate-600 hover:text-slate-400 transition-colors font-medium flex items-center justify-center gap-1"
+        >
+          <RotateCcw className="w-3 h-3" /> Reset chat
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────
 export default function ResourcePage({ params }: { params: { id: string } }) {
   const id = parseInt(params.id)
-  const [tab, setTab] = useState<'notes' | 'original'>('notes')
-  const [showQuiz, setShowQuiz] = useState(false)
-  const [showMindMap, setShowMindMap] = useState(false)
-  const [showPractice, setShowPractice] = useState(false)
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const [showPodcast, setShowPodcast] = useState(false)
-
-  // Auto-open podcast modal when navigating from FloatingMiniPlayer
-  useEffect(() => {
-    if (searchParams.get('podcast') === 'open') {
-      setShowPodcast(true)
-    }
-  }, [searchParams])
-  const [currentTheme, setCurrentTheme] = useState('theme-slate')
+  const [activeTool, setActiveTool] = useState('notes')
+  const [showChat, setShowChat] = useState(true)
   const [showMusic, setShowMusic] = useState(false)
-  const [showMath, setShowMath] = useState(false)
-  const [showFlashcards, setShowFlashcards] = useState(false)
-  const [showSidebar, setShowSidebar] = useState(false) 
-  const [mindMapData, setMindMapData] = useState<any>(null)
-  const [practiceData, setPracticeData] = useState<any>(null)
-  const [isCompanionVisible, setIsCompanionVisible] = useState(true)
-  const [generatingTool, setGeneratingTool] = useState<string | null>(null)
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [selectedProblem, setSelectedProblem] = useState('')
-
   const qc = useQueryClient()
 
   const { data: resource, isLoading, refetch } = useQuery({
     queryKey: ['resource', id],
-    queryFn: () => libraryApi.getResource(id).then((r) => r.data),
+    queryFn: () => libraryApi.getResource(id).then(r => r.data),
     refetchInterval: (query) => {
       const data = query.state.data as any
       return (data?.status === 'processing' || !data?.has_study_kit) ? 5000 : false
     }
   })
 
-  // High-Performance Subject Detection
   const isMathMode = useMemo(() => {
     if (!resource?.title) return false
-    const title = resource.title.toLowerCase()
     const mathKeywords = ['math', 'calculus', 'ebs301', 'algebra', 'physics', 'stats', 'geometry', 'matrix']
-    return mathKeywords.some(kw => title.includes(kw))
+    return mathKeywords.some(kw => resource.title.toLowerCase().includes(kw))
   }, [resource?.title])
 
   const saveNotesMutation = useMutation({
@@ -84,146 +189,152 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
     }
   })
 
-  const handleOpenQuiz = () => setShowQuiz(true)
-
-  const handleOpenMindMap = async () => {
-    if (mindMapData) { setShowMindMap(true); return }
-    setGeneratingTool('mindmap')
-    try {
-      const res = await libraryApi.generateMindMap(id)
-      setMindMapData(res.data)
-      setShowMindMap(true)
-    } catch {
-      toast.error('Failed to generate mind map.')
-    } finally {
-      setGeneratingTool(null)
-    }
-  }
-
-  const handleOpenPractice = async () => {
-    setGeneratingTool('practice')
-    try {
-      const res = await libraryApi.generatePracticeQuestions(id, 'medium', 5)
-      setPracticeData(res.data.questions || res.data)
-      setShowPractice(true)
-    } catch {
-      toast.error('Failed to generate practice session.')
-    } finally {
-      setGeneratingTool(null)
-    }
-  }
-
-  const handleOpenFlashcards = () => {
-    setShowFlashcards(true)
-  }
-
-  const handleOpenMath = (prob?: string) => {
-    setSelectedProblem(prob || '')
-    setShowMath(true)
-  }
-
   if (isLoading) return (
-    <div className="flex items-center justify-center h-[80vh]">
+    <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center animate-bounce">
-          <Sparkles className="w-6 h-6 text-primary" />
+        <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center animate-pulse">
+          <Sparkles className="w-6 h-6 text-orange-400" />
         </div>
-        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Entering Study Center...</p>
+        <p className="text-xs font-black text-slate-600 uppercase tracking-widest">Loading...</p>
       </div>
     </div>
   )
 
   if (!resource) return (
-    <div className="flex flex-col items-center justify-center h-[80vh] text-center p-6">
-      <X className="w-12 h-12 text-rose-500 mb-4" />
-      <h1 className="text-2xl font-black text-slate-900 dark:text-white">Resource Not Found</h1>
-      <p className="text-slate-500 mt-2">The document you're looking for doesn't exist.</p>
-      <Link href="/library" className="btn-primary mt-6">Back to Library</Link>
+    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center gap-4">
+      <X className="w-10 h-10 text-rose-500" />
+      <h1 className="text-xl font-black text-white">Resource Not Found</h1>
+      <Link href="/library" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">Back to Library</Link>
     </div>
   )
 
   const hasNotes = resource.has_study_kit && resource.ai_notes_json && Object.keys(resource.ai_notes_json).length > 0
 
-  return (
-    <div className={cn(
-      "flex flex-col lg:flex-row h-[calc(100dvh-64px)] -m-4 md:-m-6 overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500",
-      currentTheme
-    )}>
+  // Filter tools to only show ones that were selected during upload
+  const selectedFeatures: string[] = resource.selected_features || []
+  const visibleTools = TOOLS.filter(t => {
+    if (t.id === 'notes' || t.id === 'content') return true
+    if (!selectedFeatures.length) return true // show all if no selection recorded
+    return selectedFeatures.includes(t.id)
+  })
 
-      {/* ── Main Content Area: The Material ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 overflow-hidden relative transition-all duration-700 ease-in-out">
-        
-        {/* Top Navigation Header */}
-        <div className="px-6 py-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-20 flex-shrink-0">
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Link href="/library" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all shrink-0">
-              <ArrowLeft className="w-5 h-5 text-slate-500" />
-            </Link>
-            <div className="min-w-0">
-              <div className="hidden sm:block text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-0.5">FlowState Matrix</div>
-              <h1 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white truncate">{resource.title}</h1>
-            </div>
-          </div>
-          
+  return (
+    <div className="flex h-[calc(100dvh-64px)] -m-4 md:-m-6 bg-[#0d0d0d] overflow-hidden">
+
+      {/* ── Left sidebar: tool nav ────────────────────────────────── */}
+      <div className="hidden lg:flex flex-col w-52 shrink-0 bg-[#111] border-r border-white/5 overflow-y-auto">
+        {/* Back + title */}
+        <div className="px-4 py-4 border-b border-white/5">
+          <Link href="/library" className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors mb-3">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-xs font-bold">Library</span>
+          </Link>
+          <h2 className="text-xs font-black text-white leading-snug line-clamp-2">{resource.title}</h2>
+        </div>
+
+        {/* Tool nav */}
+        <nav className="flex-1 py-3 px-2 space-y-0.5">
+          {visibleTools.map(tool => {
+            const isActive = activeTool === tool.id
+            const Icon = tool.icon
+            return (
+              <button
+                key={tool.id}
+                onClick={() => {
+                  if (tool.href) {
+                    const href = tool.href(id)
+                    if (href === `/library/${id}`) {
+                      setActiveTool('notes')
+                    } else {
+                      router.push(href)
+                    }
+                  } else {
+                    setActiveTool(tool.id)
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all',
+                  isActive
+                    ? 'bg-white/10 text-white'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                )}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="text-xs font-bold truncate">{tool.label}</span>
+              </button>
+            )
+          })}
+
+          {/* Add method */}
+          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:text-slate-400 hover:bg-white/5 transition-all mt-2">
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-bold">Add Method</span>
+          </button>
+        </nav>
+
+        {/* User avatar placeholder */}
+        <div className="px-4 py-4 border-t border-white/5">
           <div className="flex items-center gap-2">
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
-              {(['notes', 'original'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    'px-3 sm:px-4 py-1.5 sm:py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-xl transition-all',
-                    tab === t 
-                      ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' 
-                      : 'text-slate-400 hover:text-slate-600'
-                  )}
-                >
-                  {t === 'notes' ? 'Notes' : (resource.resource_type === 'video' ? 'Video' : 'PDF')}
-                </button>
-              ))}
+            <div className="w-7 h-7 rounded-full bg-orange-500/20 flex items-center justify-center">
+              <span className="text-[10px] font-black text-orange-400">U</span>
             </div>
-            
-            <Link href={`/api/library/resources/${id}/export/anki//`} className="hidden sm:flex p-2.5 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 rounded-2xl transition-all" title="Export Anki">
-              <Save className="w-5 h-5" />
+            <span className="text-xs text-slate-500 font-medium truncate">You</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Center: content area ──────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-[#111] shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Mobile back */}
+            <Link href="/library" className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-white transition-colors">
+              <ArrowLeft className="w-4 h-4" />
             </Link>
-            <button 
-              onClick={() => {
-                toast.promise(libraryApi.refetchTranscript(id), {
-                  loading: 'Re-extracting authentic content...',
-                  success: 'Authentic signal found! Regenerating Study Kit...',
-                  error: 'Failed to trigger recovery.'
-                })
-              }} 
-              className="hidden sm:flex p-2.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-2xl transition-all"
-              title="Re-Analyze Material (High Fidelity)"
+            <h1 className="text-sm font-black text-white truncate">{resource.title}</h1>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => refetch()}
+              className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+              title="Refresh"
             >
-              <RotateCcw className="w-5 h-5" />
+              <RotateCcw className="w-4 h-4" />
             </button>
-            <button onClick={() => refetch()} className="p-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-2xl transition-all" title="Refresh">
-              <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <button 
-              onClick={() => setIsCompanionVisible(!isCompanionVisible)} 
-              className="hidden lg:flex p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary rounded-2xl transition-all"
-              title={isCompanionVisible ? "Hide Companion" : "Show Companion"}
+            <button
+              onClick={() => setShowChat(v => !v)}
+              className="hidden lg:flex p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+              title="Toggle chat"
             >
-              {isCompanionVisible ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
+              {showChat ? <PanelRightClose className="w-4 h-4" /> : <PanelRight className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        {/* The Scrollable Learning Canvas */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide bg-slate-50/50 dark:bg-slate-950/50 relative">
-          {tab === 'notes' ? (
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto bg-[#0d0d0d]">
+          {activeTool === 'notes' && (
             !hasNotes ? (
-              <div className="flex flex-col items-center justify-center h-full p-12 text-center space-y-8">
-                <div className="w-24 h-24 bg-primary/10 rounded-[2.5rem] flex items-center justify-center animate-pulse">
-                  <Sparkles className="w-12 h-12 text-primary" />
+              <div className="flex flex-col items-center justify-center h-full p-12 text-center gap-6">
+                <div className="w-20 h-20 bg-orange-500/10 rounded-[2rem] flex items-center justify-center animate-pulse">
+                  <Sparkles className="w-10 h-10 text-orange-400" />
                 </div>
-                <div className="max-w-md">
-                  <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-4">Generating Matrix</h2>
-                  <p className="text-slate-500 font-medium leading-relaxed italic">FlowAI is extracting deep concepts and formalizing the math logic...</p>
+                <div>
+                  <h2 className="text-2xl font-black text-white tracking-tighter">Generating Notes</h2>
+                  <p className="text-slate-500 mt-2 text-sm">FlowAI is extracting concepts and building your study kit...</p>
                 </div>
+                {resource.processing_progress > 0 && (
+                  <div className="w-full max-w-xs space-y-2">
+                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-700"
+                        style={{ width: `${resource.processing_progress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-600 italic">{resource.status_text}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <RichNotesViewer
@@ -235,16 +346,21 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                   saveNotesMutation.mutate(updated)
                   setIsEditingNotes(false)
                 }}
-                onOpenMath={handleOpenMath}
+                onOpenMath={(prob) => {
+                  setSelectedProblem(prob || '')
+                  router.push(`/library/${id}/solver`)
+                }}
               />
             )
-          ) : (
+          )}
+
+          {activeTool === 'content' && (
             <div className="h-full">
               {resource.resource_type === 'pdf' && resource.file_url ? (
                 <PDFViewer fileUrl={resource.file_url} title={resource.title} />
               ) : resource.resource_type === 'video' && resource.url ? (
-                <div className="h-full flex flex-col p-6 space-y-4">
-                  <div className="flex-1 bg-black rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-100 dark:border-slate-800 relative group">
+                <div className="h-full flex flex-col p-6 gap-4">
+                  <div className="flex-1 bg-black rounded-2xl overflow-hidden">
                     <iframe
                       src={`https://www.youtube.com/embed/${resource.url.includes('v=') ? resource.url.split('v=')[1].split('&')[0] : resource.url.split('youtu.be/')[1]?.split('?')[0]}`}
                       className="w-full h-full"
@@ -252,15 +368,11 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                       allowFullScreen
                     />
                   </div>
-                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider mb-2">Original Context</h3>
-                    <p className="text-xs text-slate-500 italic">You are currently viewing the synchronized source video. The Study Kit below was generated from this timestamped transcript.</p>
-                  </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full p-12 text-center">
-                  <BookOpen className="w-12 h-12 text-slate-300 mb-4" />
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Preview Not Available</h2>
+                <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-600">
+                  <BookOpen className="w-10 h-10 opacity-30" />
+                  <p className="text-sm">Preview not available</p>
                 </div>
               )}
             </div>
@@ -268,197 +380,27 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* ── Fixed Sidebar: Traditional Support Desk ─────────────────────────── */}
-      {isCompanionVisible && (
-        <div className="hidden lg:flex border-l border-slate-100 dark:border-slate-800 flex-shrink-0 w-[400px] animate-in slide-in-from-right duration-300">
-          <StudyCompanionSidebar
-            resourceId={id}
-            resourceTitle={resource.title}
-            hasNotes={hasNotes}
-            onOpenQuiz={handleOpenQuiz}
-            onOpenFlashcards={handleOpenFlashcards}
-            onOpenMindMap={handleOpenMindMap}
-            onOpenPractice={handleOpenPractice}
-            onOpenMusic={() => setShowMusic(true)}
-            onOpenPodcast={() => setShowPodcast(true)}
-            onOpenMath={() => handleOpenMath()}
-            isGenerating={generatingTool}
-            currentTheme={currentTheme}
-            onThemeChange={(t) => setCurrentTheme(t)}
-          />
+      {/* ── Right: AI Chat ────────────────────────────────────────── */}
+      {showChat && (
+        <div className="hidden lg:flex flex-col w-72 shrink-0">
+          <AIChat resourceId={id} resourceTitle={resource.title} hasNotes={hasNotes} />
         </div>
       )}
 
-      {/* ── Mobile Sidebar Drawer ─────────────────────────────────── */}
-      {showSidebar && (
-        <div className="lg:hidden fixed inset-0 z-[90] flex">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowSidebar(false)} />
-          <div className="relative ml-auto w-[90vw] max-w-sm h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0"
-              style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
-            >
-              <span className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" /> FlowAI Study Tools
-              </span>
-              <button onClick={() => setShowSidebar(false)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <StudyCompanionSidebar
-                resourceId={id}
-                resourceTitle={resource.title}
-                hasNotes={hasNotes}
-                onOpenQuiz={() => { setShowSidebar(false); handleOpenQuiz() }}
-                onOpenFlashcards={() => { setShowSidebar(false); handleOpenFlashcards() }}
-                onOpenMindMap={() => { setShowSidebar(false); handleOpenMindMap() }}
-                onOpenPractice={() => { setShowSidebar(false); handleOpenPractice() }}
-                onOpenMusic={() => { setShowSidebar(false); setShowMusic(true) }}
-                onOpenPodcast={() => { setShowSidebar(false); setShowPodcast(true) }}
-                onOpenMath={() => { setShowSidebar(false); handleOpenMath() }}
-                isGenerating={generatingTool}
-                hideTools={true}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Music modal */}
+      {showMusic && <MusicGeneratorModal resourceId={id} onClose={() => setShowMusic(false)} />}
 
-      {/* ── Overlays (Quiz, Practice, etc.) ─────────────────────── */}
-      {showQuiz && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-950 w-full sm:max-w-lg h-[92vh] sm:h-[85vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden text-slate-900 dark:text-white">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-orange-500 shadow-lg shadow-orange-500/30">
-                  <HelpCircle className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-base font-black">Mastery Quiz</h2>
-                  <p className="text-xs text-slate-500">Multiple choice questions</p>
-                </div>
-              </div>
-              <button onClick={() => setShowQuiz(false)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <MCQQuizContainer resourceId={id} onClose={() => setShowQuiz(false)} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPractice && practiceData && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-950 w-full sm:max-w-2xl h-[92vh] sm:h-[85vh] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden text-slate-900 dark:text-white">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500 shadow-lg shadow-emerald-500/30">
-                  <Wand2 className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-base font-black">Practice Session</h2>
-                  <p className="text-xs text-slate-500">Written answers · AI graded feedback</p>
-                </div>
-              </div>
-              <button onClick={() => setShowPractice(false)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <PracticeTest
-                questions={practiceData}
-                resourceId={id}
-                onFinish={() => setShowPractice(false)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Podcast (FlowCast) Modal - Persistently mounted to allow background audio logic */}
-      <div className={cn(
-        "fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 transition-all duration-300",
-        showPodcast ? "opacity-100 pointer-events-auto scale-100" : "opacity-0 pointer-events-none scale-95"
-      )}>
-        <div className="bg-white dark:bg-slate-950 w-full sm:max-w-6xl h-full sm:h-auto max-h-[92vh] sm:rounded-[2.5rem] shadow-2xl border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden text-slate-900 dark:text-white">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary shadow-lg shadow-primary/30">
-                <Radio className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-base font-black uppercase tracking-tight">FlowCast AI</h2>
-                <p className="text-xs text-slate-500">Immersive Audio Analysis</p>
-              </div>
-            </div>
-            <button onClick={() => setShowPodcast(false)} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Minimize to Background
-            </button>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <PodcastPlayer resourceId={id} onClose={() => setShowPodcast(false)} />
-          </div>
-        </div>
-      </div>
-
-      {showMindMap && mindMapData && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="bg-white dark:bg-slate-950 w-full sm:max-w-6xl h-[92vh] sm:h-[85vh] rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-5 sm:px-8 py-4 sm:py-5 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
-              <div>
-                <h2 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" /> Visual Mind Map
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">AI-generated concept branches</p>
-              </div>
-              <button onClick={() => setShowMindMap(false)} className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] scrollbar-hide">
-              <MindMapContent data={mindMapData} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showMusic && (
-        <MusicGeneratorModal
-          resourceId={id}
-          onClose={() => setShowMusic(false)}
-        />
-      )}
-
-      {showFlashcards && (
-        <FlashcardGeneratorModal
-          resourceId={id}
-          onClose={() => setShowFlashcards(false)}
-          onGenerated={() => setShowFlashcards(false)}
-        />
-      )}
-
+      {/* Mobile HUD */}
       <ExpandableMobileHUD
         resourceId={id}
-        onOpenQuiz={handleOpenQuiz}
-        onOpenMindmap={handleOpenMindMap}
+        onOpenQuiz={() => router.push(`/library/${id}/quiz`)}
+        onOpenMindmap={() => router.push(`/library/${id}/mindmap`)}
         onOpenMusic={() => setShowMusic(true)}
-        onOpenPodcast={() => setShowPodcast(true)}
-        onOpenFlashcards={handleOpenFlashcards}
-        onOpenPractice={handleOpenPractice}
-        onOpenChat={() => setShowSidebar(true)}
-        onOpenMath={() => handleOpenMath()}
-        isGenerating={generatingTool}
-      />
-
-      <MathSolverModal 
-        isOpen={showMath}
-        onClose={() => setShowMath(false)}
-        resourceId={id}
-        initialProblem={selectedProblem}
+        onOpenPodcast={() => router.push(`/library/${id}/podcast`)}
+        onOpenFlashcards={() => router.push(`/library/${id}/flashcards`)}
+        onOpenPractice={() => router.push(`/library/${id}/practice`)}
+        onOpenChat={() => {}}
+        onOpenMath={() => router.push(`/library/${id}/solver`)}
       />
     </div>
   )
