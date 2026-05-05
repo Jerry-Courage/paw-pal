@@ -61,57 +61,13 @@ export default function ExpandableMobileHUD({
       desc: 'Modify Notes',
       color: 'bg-slate-700'
     }] : []),
-    { 
-      id: 'quiz', 
-      icon: HelpCircle, 
-      label: 'Quiz', 
-      desc: 'Mastery MCQ',
-      color: 'bg-orange-500',
-      href: resourceId ? `/library/${resourceId}/quiz` : undefined,
-    },
-    { 
-      id: 'podcast', 
-      icon: Radio, 
-      label: 'Podcast', 
-      desc: 'FlowCast AI',
-      color: 'bg-pink-500'
-    },
-    { 
-      id: 'flashcards', 
-      icon: BookOpen, 
-      label: 'Flashcards', 
-      desc: 'Recall Boost',
-      color: 'bg-sky-500',
-      href: resourceId ? `/library/${resourceId}/flashcards` : undefined,
-    },
-    { 
-      id: 'mindmap', 
-      icon: GitGraph, 
-      label: 'Mind Map', 
-      desc: 'Visual Flow',
-      color: 'bg-indigo-500'
-    },
-    { 
-      id: 'practice', 
-      icon: Wand2, 
-      label: 'Practice', 
-      desc: 'AI Grading',
-      color: 'bg-emerald-500'
-    },
-    {
-      id: 'math',
-      icon: Calculator,
-      label: 'Math Solver',
-      desc: 'Step-by-Step',
-      color: 'bg-emerald-600'
-    },
-    { 
-      id: 'music', 
-      icon: Music2, 
-      label: 'Music', 
-      desc: 'Focus Audio',
-      color: 'bg-indigo-400'
-    },
+    { id: 'quiz', icon: HelpCircle, label: 'Quiz', desc: 'Mastery MCQ', color: 'bg-orange-500', href: resourceId ? `/library/${resourceId}/quiz` : undefined },
+    { id: 'podcast', icon: Radio, label: 'Podcast', desc: 'FlowCast AI', color: 'bg-pink-500', href: resourceId ? `/library/${resourceId}/podcast` : undefined },
+    { id: 'flashcards', icon: BookOpen, label: 'Flashcards', desc: 'Recall Boost', color: 'bg-sky-500', href: resourceId ? `/library/${resourceId}/flashcards` : undefined },
+    { id: 'mindmap', icon: GitGraph, label: 'Mind Map', desc: 'Visual Flow', color: 'bg-indigo-500', href: resourceId ? `/library/${resourceId}/mindmap` : undefined },
+    { id: 'practice', icon: Wand2, label: 'Practice', desc: 'AI Grading', color: 'bg-emerald-500', href: resourceId ? `/library/${resourceId}/practice` : undefined },
+    { id: 'math', icon: Calculator, label: 'Math Solver', desc: 'Step-by-Step', color: 'bg-teal-500', href: resourceId ? `/library/${resourceId}/solver` : undefined },
+    { id: 'music', icon: Music2, label: 'Music', desc: 'Focus Audio', color: 'bg-indigo-400' },
   ]
 
   const handleToolClick = (tool: ToolItem) => {

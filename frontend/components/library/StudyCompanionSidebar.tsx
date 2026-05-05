@@ -139,10 +139,10 @@ export default function StudyCompanionSidebar({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
             <ToolCard id="quiz" icon={HelpCircle} title="Quiz" desc="Mastery MCQ" href={`/library/${resourceId}/quiz`} color="bg-orange-500/10 text-orange-500" badge="HOT" />
             <ToolCard id="flashcards" icon={BookOpen} title="Flash" desc="Recall Boost" href={`/library/${resourceId}/flashcards`} color="bg-sky-500/10 text-sky-500" />
-            <ToolCard id="mindmap" icon={Map} title="Map" desc="Neural Web" onClick={onOpenMindMap} color="bg-violet-500/10 text-violet-500" />
-            <ToolCard id="podcast" icon={Radio} title="Podcast" desc="FlowCast AI" onClick={onOpenPodcast} color="bg-pink-500/10 text-pink-500" badge="AI" />
-            <ToolCard id="math" icon={Calculator} title="Solver" desc="Step Logic" onClick={onOpenMath} color="bg-teal-500/10 text-teal-500" badge="PRO" />
-            <ToolCard id="practice" icon={Wand2} title="Drill" desc="Mock Exam" onClick={onOpenPractice} color="bg-emerald-500/10 text-emerald-500" />
+            <ToolCard id="mindmap" icon={Map} title="Map" desc="Neural Web" href={`/library/${resourceId}/mindmap`} color="bg-violet-500/10 text-violet-500" />
+            <ToolCard id="podcast" icon={Radio} title="Podcast" desc="FlowCast AI" href={`/library/${resourceId}/podcast`} color="bg-pink-500/10 text-pink-500" badge="AI" />
+            <ToolCard id="math" icon={Calculator} title="Solver" desc="Step Logic" href={`/library/${resourceId}/solver`} color="bg-teal-500/10 text-teal-500" badge="PRO" />
+            <ToolCard id="practice" icon={Wand2} title="Drill" desc="Mock Exam" href={`/library/${resourceId}/practice`} color="bg-emerald-500/10 text-emerald-500" />
             <ToolCard id="music" icon={Mic2} title="Focus" desc="Alpha Wave" onClick={onOpenMusic} color="bg-rose-500/10 text-rose-500" badge="Lofi" />
           </div>
         </div>
