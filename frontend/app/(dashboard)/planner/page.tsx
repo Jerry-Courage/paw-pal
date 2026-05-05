@@ -17,9 +17,9 @@ import { useSearchParams, useRouter } from 'next/navigation'
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7) // 7am–9pm
 
 const STATUS_STYLES: Record<string, string> = {
-  scheduled: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900',
+  scheduled: 'border-white/8 bg-[#1a1a1a]',
   active:    'border-emerald-500 bg-emerald-500/5 shadow-emerald-500/20 shadow-xl ring-2 ring-emerald-500/20',
-  completed: 'opacity-40 grayscale-[0.5] line-through bg-slate-50 dark:bg-slate-900/50',
+  completed: 'opacity-40 grayscale-[0.5] line-through bg-white/3',
   skipped:   'opacity-40 border-dashed bg-transparent',
 }
 
@@ -107,7 +107,7 @@ export default function PlannerPage() {
   const closePanel = () => { setActivePanel('none'); setTimeout(() => setPanelSession(null), 300) } // delay clear for exit animation
 
   return (
-    <div className="w-full flex h-[calc(100vh-64px)] overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+    <div className="w-full flex h-[calc(100vh-56px)] overflow-hidden bg-[#0d0d0d]">
       
       {/* ── Main Canvas (Calendar & Actions) ── */}
       <div className={cn(
@@ -200,7 +200,7 @@ export default function PlannerPage() {
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           {/* Calendar Grid */}
-          <div className="xl:col-span-3 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col">
+          <div className="xl:col-span-3 bg-[#111] rounded-[2rem] border border-white/6 overflow-hidden flex flex-col">
             
             {/* Mobile day strip */}
             <div className="flex xl:hidden overflow-x-auto scrollbar-hide border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
