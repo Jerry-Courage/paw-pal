@@ -296,6 +296,10 @@ class AIService:
                         return response.text
                 except Exception as e:
                     logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
+                    if "503" in str(e) or "UNAVAILABLE" in str(e):
+                        await asyncio.sleep(2)  # Brief pause on 503 before trying next model
+                    elif "429" in str(e):
+                        await asyncio.sleep(1)
 
         # --- STAGE 1: HYPER-FAST GROQ (Text-Only or Direct Vision) ---
         groq_key = os.getenv('GROQ_API_KEY')
@@ -856,12 +860,7 @@ class AIService:
         
         # Force the ultra-fast 2.0 Flash Lite model for instant feedback
         # Set a aggressive 25s timeout so it doesn't hang the UI if the API is down
-        raw_response = self.chat_sync(
-            [{'role': 'user', 'content': prompt}], 
-            forced_model='google/gemini-2.0-flash-lite-001',
-            timeout=25,
-            max_fallbacks=2
-        )
+        raw_response = self.chat_sync([{'role': 'user', 'content': prompt}])
         return self._parse_json(raw_response, [])
 
     def generate_quiz(self, resource, fmt: str, level: str, count: int) -> list:
