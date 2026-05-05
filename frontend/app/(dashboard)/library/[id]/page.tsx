@@ -442,6 +442,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       )}
 
       <ExpandableMobileHUD
+        resourceId={id}
         onOpenQuiz={handleOpenQuiz}
         onOpenMindmap={handleOpenMindMap}
         onOpenMusic={() => setShowMusic(true)}

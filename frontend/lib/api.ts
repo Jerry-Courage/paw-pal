@@ -93,6 +93,10 @@ export const libraryApi = {
   generatePracticeQuestions: (id: number, difficulty = 'medium', count = 5) =>
     api.post(`/library/resources/${id}/practice/generate/`, { difficulty, count }),
   getFlashcards: () => api.get('/library/flashcards/'),
+  getResourceFlashcards: (resourceId: number) =>
+    api.get('/library/flashcards/', { params: { resource: resourceId } }),
+  getResourceQuizzes: (resourceId: number) =>
+    api.get('/library/quizzes/', { params: { resource: resourceId } }),
   refetchTranscript: (resourceId: number) =>
     api.post(`/library/resources/${resourceId}/refetch-transcript/`),
   getQuizzes: () => api.get('/library/quizzes/'),

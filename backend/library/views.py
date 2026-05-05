@@ -329,7 +329,11 @@ class FlashcardListView(generics.ListAPIView):
     serializer_class = FlashcardSerializer
 
     def get_queryset(self):
-        return Flashcard.objects.filter(owner=self.request.user)
+        qs = Flashcard.objects.filter(owner=self.request.user)
+        resource_id = self.request.query_params.get('resource')
+        if resource_id:
+            qs = qs.filter(resource_id=resource_id)
+        return qs
 
 
 class QuizListView(generics.ListAPIView):
@@ -337,7 +341,11 @@ class QuizListView(generics.ListAPIView):
     serializer_class = QuizSerializer
 
     def get_queryset(self):
-        return Quiz.objects.filter(owner=self.request.user)
+        qs = Quiz.objects.filter(owner=self.request.user)
+        resource_id = self.request.query_params.get('resource')
+        if resource_id:
+            qs = qs.filter(resource_id=resource_id)
+        return qs
 
 
 class RefetchTranscriptView(APIView):

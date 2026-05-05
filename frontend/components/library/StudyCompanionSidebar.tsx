@@ -4,9 +4,9 @@ import { useState, useRef, useEffect } from 'react'
 import { 
   Sparkles, Send, BookOpen, HelpCircle, 
   MessageSquare, Wand2, X, Loader2,
-  ChevronRight, PanelBottomOpen, ChevronDown, Radio, Mic2, Calculator
+  ChevronRight, Radio, Mic2, Calculator, Map, ArrowUpRight
 } from 'lucide-react'
-
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { aiApi } from '@/lib/api'
 import { toast } from 'sonner'
@@ -94,29 +94,35 @@ export default function StudyCompanionSidebar({
     }
   }
 
-  const ToolCard = ({ icon: Icon, title, desc, onClick, color, id, badge }: any) => {
-    return (
-      <button 
-        onClick={onClick}
-        disabled={!!isGenerating}
-        className={cn(
-          "group relative overflow-hidden p-3.5 rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-white/5 transition-all text-left hover:shadow-xl hover:border-primary/30 active:scale-[0.97]",
-          isGenerating === id ? "ring-2 ring-primary border-transparent" : "",
-          isGenerating && isGenerating !== id ? "opacity-40 grayscale" : ""
-        )}
-      >
+  const ToolCard = ({ icon: Icon, title, desc, onClick, href, color, id, badge }: any) => {
+    const inner = (
+      <div className={cn(
+        "group relative overflow-hidden p-3.5 rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-white/5 transition-all text-left hover:shadow-xl hover:border-primary/30 active:scale-[0.97] w-full",
+        isGenerating === id ? "ring-2 ring-primary border-transparent" : "",
+        isGenerating && isGenerating !== id ? "opacity-40 grayscale" : ""
+      )}>
         <div className="flex items-center justify-between mb-2.5">
           <div className={cn("p-2 rounded-xl transition-transform group-hover:rotate-6 group-hover:scale-110 shadow-sm", color)}>
             <Icon className="w-4 h-4" />
           </div>
-          {badge && <span className="text-[7px] font-black uppercase tracking-widest text-primary/80 bg-primary/10 px-2 py-0.5 rounded-full border border-primary/10">{badge}</span>}
-          {isGenerating === id && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+          <div className="flex items-center gap-1">
+            {badge && <span className="text-[7px] font-black uppercase tracking-widest text-primary/80 bg-primary/10 px-2 py-0.5 rounded-full border border-primary/10">{badge}</span>}
+            {href && <ArrowUpRight className="w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-primary transition-colors" />}
+            {isGenerating === id && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+          </div>
         </div>
         <div className="font-black text-[11px] text-slate-800 dark:text-slate-100 truncate tracking-tight uppercase">{title}</div>
         <p className="text-[9px] text-slate-500 mt-0.5 leading-none opacity-60 truncate font-medium">{desc}</p>
-        
-        {/* Background Glow */}
         <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-primary/5 blur-2xl rounded-full group-hover:bg-primary/15 transition-colors" />
+      </div>
+    )
+
+    if (href) {
+      return <Link href={href} className="block">{inner}</Link>
+    }
+    return (
+      <button onClick={onClick} disabled={!!isGenerating} className="block w-full text-left">
+        {inner}
       </button>
     )
   }
@@ -131,9 +137,9 @@ export default function StudyCompanionSidebar({
             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/60">Study Toolkit</span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            <ToolCard id="quiz" icon={HelpCircle} title="Quiz" desc="Mastery MCQ" onClick={onOpenQuiz} color="bg-orange-500/10 text-orange-500" badge="HOT" />
-            <ToolCard id="flashcards" icon={BookOpen} title="Flash" desc="Recall Boost" onClick={onOpenFlashcards} color="bg-sky-500/10 text-sky-500" />
-            <ToolCard id="mindmap" icon={Sparkles} title="Map" desc="Neural Web" onClick={onOpenMindMap} color="bg-violet-500/10 text-violet-500" />
+            <ToolCard id="quiz" icon={HelpCircle} title="Quiz" desc="Mastery MCQ" href={`/library/${resourceId}/quiz`} color="bg-orange-500/10 text-orange-500" badge="HOT" />
+            <ToolCard id="flashcards" icon={BookOpen} title="Flash" desc="Recall Boost" href={`/library/${resourceId}/flashcards`} color="bg-sky-500/10 text-sky-500" />
+            <ToolCard id="mindmap" icon={Map} title="Map" desc="Neural Web" onClick={onOpenMindMap} color="bg-violet-500/10 text-violet-500" />
             <ToolCard id="podcast" icon={Radio} title="Podcast" desc="FlowCast AI" onClick={onOpenPodcast} color="bg-pink-500/10 text-pink-500" badge="AI" />
             <ToolCard id="math" icon={Calculator} title="Solver" desc="Step Logic" onClick={onOpenMath} color="bg-teal-500/10 text-teal-500" badge="PRO" />
             <ToolCard id="practice" icon={Wand2} title="Drill" desc="Mock Exam" onClick={onOpenPractice} color="bg-emerald-500/10 text-emerald-500" />
