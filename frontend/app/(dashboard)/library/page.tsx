@@ -99,12 +99,16 @@ function ResourceCard({ resource: r, onDelete }: { resource: any; onDelete: () =
         {/* Thumbnail */}
         <div className="h-40 relative overflow-hidden">
           {thumbnail ? (
-            <img src={thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={r.title} />
-          ) : (
-            <div className={cn('w-full h-full bg-gradient-to-br flex items-center justify-center', gradient)}>
-              <Icon className="w-10 h-10 text-white/30" />
-            </div>
-          )}
+            <img
+              src={thumbnail}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              alt={r.title}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden') }}
+            />
+          ) : null}
+          <div className={cn('w-full h-full bg-gradient-to-br flex items-center justify-center absolute inset-0', gradient, thumbnail ? 'hidden' : '')}>
+            <Icon className="w-10 h-10 text-white/30" />
+          </div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-transparent to-transparent" />
 
           {/* Type badge */}

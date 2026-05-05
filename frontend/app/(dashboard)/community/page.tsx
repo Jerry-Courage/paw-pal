@@ -60,8 +60,8 @@ export default function CommunityPage() {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Left Sidebar - Navigation & Quick Links (Desktop) */}
         <aside className="hidden lg:block w-64 flex-shrink-0">
-          <div className="sticky top-24 space-y-6">
-            <nav id="tour-community-tabs" className="glass-card p-3 border-transparent shadow-none dark:bg-white/5">
+          <div className="sticky top-16 space-y-6">
+            <nav id="tour-community-tabs" className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-3">
               <div className="space-y-1">
                 {TABS.map(t => {
                   const Icon = TAB_ICONS[t.id]
@@ -98,8 +98,8 @@ export default function CommunityPage() {
                   className={cn(
                     'flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all',
                     tab === t.id 
-                      ? 'bg-primary text-white shadow-lg' 
-                      : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-100 dark:border-slate-800'
+                      ? 'bg-orange-500/10 text-orange-400' 
+                      : 'bg-white/3 text-slate-500 border border-white/6 hover:text-slate-300'
                   )}
                 >
                   <Icon className="w-4 h-4" />
@@ -135,8 +135,8 @@ export default function CommunityPage() {
                       className={cn(
                         'flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2',
                         filterType === '' 
-                          ? 'bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-900' 
-                          : 'border-slate-100 dark:border-slate-800 text-slate-500 hover:border-primary/30'
+                          ? 'bg-white text-black border-white' 
+                          : 'border-white/8 text-slate-500 hover:border-white/20 hover:text-white'
                       )}
                     >
                       All Pulse
@@ -162,11 +162,11 @@ export default function CommunityPage() {
                 {/* Posts Feed */}
                 <div className="space-y-4">
                   {postsLoading ? (
-                    [1,2,3].map(i => <div key={i} className="glass-card p-20 animate-pulse border-slate-200/50" />)
+                    [1,2,3].map(i => <div key={i} className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-20 animate-pulse" />)
                   ) : posts.length === 0 ? (
-                    <div className="glass-card p-20 text-center border-dashed border-2">
-                       <div className="w-20 h-20 bg-slate-50 dark:bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                        <Sparkles className="w-10 h-10 text-slate-200 dark:text-slate-800" />
+                    <div className="bg-[#1a1a1a] border border-dashed border-white/8 rounded-2xl p-20 text-center">
+                       <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                        <Sparkles className="w-10 h-10 text-slate-700" />
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Feed is Quiet</h3>
                       <p className="text-sm text-slate-500 font-medium">Be the one to spark a conversation in the Nexus.</p>
@@ -206,7 +206,7 @@ export default function CommunityPage() {
 
         {/* Right Sidebar - Widgets (Desktop) */}
         <aside className="hidden xl:block w-80 flex-shrink-0">
-          <div className="sticky top-24">
+          <div className="sticky top-16">
             <CommunitySidebar posts={posts} />
           </div>
         </aside>

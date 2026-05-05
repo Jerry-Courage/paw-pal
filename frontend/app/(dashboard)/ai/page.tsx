@@ -724,25 +724,24 @@ function AIChat() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto w-full">
+        <div className="flex-1 overflow-y-auto w-full scrollbar-hide">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 py-12 text-center animate-fade-in-up">
-              <div className="w-24 h-24 bg-gradient-to-br from-primary to-violet-500 rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl shadow-primary/30 rotate-3 hover:rotate-6 transition-transform">
-                <Sparkles className="w-12 h-12 text-white" />
+            <div className="flex flex-col items-center justify-center min-h-full px-4 sm:px-6 py-16 text-center">
+              <div className="w-20 h-20 bg-orange-500/10 border border-orange-500/20 rounded-[2rem] flex items-center justify-center mb-6">
+                <Sparkles className="w-10 h-10 text-orange-400" />
               </div>
               <h1 className="text-3xl font-black text-white mb-3 tracking-tight">Hi, I'm FlowAI</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-base max-w-sm mb-10 leading-relaxed font-medium">
+              <p className="text-slate-500 text-sm max-w-sm mb-10 leading-relaxed">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-3xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-2xl">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
-                    className={cn('flex items-start gap-4 p-4 glass-card text-left transition-all group hover:border-primary/50', 
+                    className={cn('flex items-start gap-3 p-4 bg-[#1a1a1a] border border-white/6 rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f1f] group',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
                     )}>
-                    <div className="text-2xl flex-shrink-0 bg-white/5 p-2 rounded-xl group-hover:scale-110 transition-transform">{s.icon}</div>
-                    <span className="text-sm font-bold text-slate-400 group-hover:text-orange-400 transition-colors leading-relaxed mt-0.5">{s.text}</span>
+                    <div className="text-xl shrink-0 bg-white/5 p-2 rounded-xl group-hover:scale-110 transition-transform">{s.icon}</div>
+                    <span className="text-xs font-bold text-slate-400 group-hover:text-orange-400 transition-colors leading-relaxed mt-0.5">{s.text}</span>
                   </button>
                 ))}
               </div>
@@ -772,14 +771,14 @@ function AIChat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 sm:p-6 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent dark:from-slate-950 dark:via-slate-950 flex-shrink-0 relative z-20"
-          style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 4.5rem))' }}
+        <div className="p-4 sm:p-5 bg-[#0d0d0d] border-t border-white/5 flex-shrink-0 relative z-20"
+          style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))' }}
         >
           <div className="max-w-4xl mx-auto">
             
             {/* Attached file preview */}
             {attachedFile && (
-              <div className="flex items-center gap-3 mb-4 p-3 glass-card rounded-2xl border border-primary/20 shadow-lg shadow-primary/5 animate-fade-in-up w-fit pr-10 relative">
+              <div className="flex items-center gap-3 mb-4 p-3 bg-[#1a1a1a] border border-white/8 rounded-2xl animate-fade-in-up w-fit pr-10 relative">
                 {filePreview ? (
                   <img src={filePreview} alt="preview" className="w-12 h-12 rounded-xl object-cover shadow-sm" />
                 ) : (
@@ -849,7 +848,7 @@ function AIChat() {
 
 export default function AIPage() {
   return (
-    <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+    <Suspense fallback={<div className="h-full flex items-center justify-center bg-[#0d0d0d]"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>}>
       <AIChat />
     </Suspense>
   )

@@ -45,7 +45,7 @@ export default function TopNav() {
           </span>
         </Link>
 
-        {/* Desktop nav links */}
+        {/* Desktop nav links + search */}
         <nav className="hidden md:flex items-center gap-0.5 flex-1">
           {NAV_ITEMS.map(item => {
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
@@ -54,7 +54,7 @@ export default function TopNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap',
                   active
                     ? 'bg-orange-500/10 text-orange-400'
                     : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
@@ -65,20 +65,20 @@ export default function TopNav() {
               </Link>
             )
           })}
+          <div className="ml-3">
+            <SearchBar />
+          </div>
         </nav>
 
         {/* Right side */}
-        <div className="flex items-center gap-2 ml-auto shrink-0">
-          <div className="hidden md:block">
-            <SearchBar />
-          </div>
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <NotificationsPanel />
           <div className="relative group">
-            <button className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 transition-all">
-              <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center text-white text-xs font-black">
+            <button className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-white/5 transition-all">
+              <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0">
                 {getInitials(name)}
               </div>
-              <ChevronDown className="w-3 h-3 text-slate-500 hidden md:block" />
+              <ChevronDown className="w-3 h-3 text-slate-600 hidden md:block" />
             </button>
             {/* Dropdown */}
             <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/8 rounded-2xl shadow-2xl overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all">

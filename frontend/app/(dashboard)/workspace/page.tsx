@@ -32,68 +32,45 @@ export default function WorkspacePortal() {
   const workspaceList = Array.isArray(workspaces) ? workspaces : workspaces?.results || []
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 sm:space-y-10 py-6 sm:py-8">
-      {/* --- Adaptive Header --- */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 px-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-600/20">
-              <LayoutGrid className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white uppercase italic">Collab Space</h1>
-          </div>
-          <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-xs sm:max-w-none">Collaborative group study with <span className="text-violet-400">FlowAI</span> as your third member.</p>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
+        <div>
+          <h1 className="text-xl font-black text-white tracking-tight uppercase">Collab Space</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Collaborative group study with <span className="text-violet-400">FlowAI</span> as your third member.</p>
         </div>
-        
-        <div className="flex gap-2 sm:gap-3">
-          <button 
-            onClick={() => setShowJoin(true)} 
-            className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 bg-zinc-900 border border-white/5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all text-xs sm:text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2"
-          >
-            <Link2 className="w-4 h-4" /> Join
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => setShowJoin(true)}
+            className="btn-secondary text-xs px-4 py-2">
+            <Link2 className="w-3.5 h-3.5" /> Join
           </button>
-          <button 
-            onClick={() => setShowCreate(true)} 
-            className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl shadow-lg shadow-violet-600/20 transition-all text-xs sm:text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95"
-          >
-            <Plus className="w-4 h-4" /> Initialize
+          <button onClick={() => setShowCreate(true)}
+            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-violet-600/20">
+            <Plus className="w-3.5 h-3.5" /> Initialize
           </button>
         </div>
       </div>
 
       {/* --- Content Area --- */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1,2,3].map(i => (
-            <div key={i} className="h-48 bg-zinc-900/50 rounded-3xl border border-white/5 animate-pulse" />
+            <div key={i} className="h-48 bg-white/3 rounded-2xl border border-white/5 animate-pulse" />
           ))}
         </div>
       ) : workspaceList.length === 0 ? (
-        <div className="px-4">
-          <div className="relative group p-10 sm:p-16 bg-zinc-900/30 border border-dashed border-white/10 rounded-[2rem] sm:rounded-[3rem] text-center overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            
-            <div className="relative z-10">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-[1.5rem] sm:rounded-[2rem] flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-2xl shadow-violet-600/30 ring-4 ring-white/5">
-                <MessageSquare className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
-              </div>
-              <h3 className="font-black text-xl sm:text-2xl mb-3 text-white italic tracking-tight uppercase">The studio is quiet</h3>
-              <p className="text-xs sm:text-sm text-zinc-500 mb-6 sm:mb-8 max-w-sm mx-auto leading-relaxed font-medium">
-                Create a space for your study group. Sync your library, mention <span className="text-violet-400 font-bold italic tracking-tighter">Flow</span>, and master anything together.
-              </p>
-              <div className="flex gap-4 justify-center">
-                <button 
-                  onClick={() => setShowCreate(true)} 
-                  className="px-8 py-3 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs hover:bg-zinc-200 transition-all active:scale-95 shadow-xl"
-                >
-                  Create Your First Studio
-                </button>
-              </div>
-            </div>
+        <div className="border border-dashed border-white/8 rounded-2xl p-16 text-center">
+          <div className="w-16 h-16 bg-violet-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
+            <MessageSquare className="w-8 h-8 text-violet-400" />
           </div>
+          <h3 className="font-black text-lg text-white mb-2">The studio is quiet</h3>
+          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Create a space for your study group. Sync your library, mention Flow, and master anything together.</p>
+          <button onClick={() => setShowCreate(true)} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95">
+            Create Your First Studio
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-4 pb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-8">
           {workspaceList.map((ws: any, i: number) => (
             <Link key={ws.id} href={`/workspace/${ws.id}`} className="group">
               <motion.div 

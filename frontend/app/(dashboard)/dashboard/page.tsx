@@ -62,7 +62,7 @@ export default function DashboardPage() {
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl pointer-events-none" />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
-            <div className="inline-block px-3 py-1 mb-3 rounded-full bg-white/5 border border-white/8 text-[10px] font-black text-slate-500 tracking-widest uppercase">
+            <div className="inline-block px-3 py-1 mb-3 rounded-full bg-white/5 text-[10px] font-black text-slate-500 tracking-widest uppercase">
               Your Workspace
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2">
@@ -74,25 +74,22 @@ export default function DashboardPage() {
             {weeklyGoal > 0 && (
               <div className="mt-4 flex items-center gap-3 w-fit">
                 <div className="w-32 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-orange-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${weeklyProgress}%` }}
-                  />
+                  <div className="h-full bg-orange-500 rounded-full transition-all duration-1000" style={{ width: `${weeklyProgress}%` }} />
                 </div>
                 <span className="text-xs text-slate-500 font-bold">{weeklyProgress}% of weekly goal</span>
               </div>
             )}
           </div>
-          <div className="flex gap-4 shrink-0">
-            <div className="bg-white/5 border border-white/8 p-4 rounded-2xl text-center min-w-[100px]">
+          <div className="flex gap-3 shrink-0">
+            <div className="bg-white/5 p-4 rounded-2xl text-center min-w-[90px]">
               <div className="text-2xl font-black text-orange-400">
                 {studyTime < 1 ? `${Math.round(studyTime * 60)}m` : `${studyTime.toFixed(1)}h`}
               </div>
               <div className="text-[9px] font-black text-slate-600 mt-1 uppercase tracking-widest">Total Focus</div>
             </div>
-            <div className="bg-white/5 border border-white/8 p-4 rounded-2xl text-center min-w-[100px]">
+            <div className="bg-white/5 p-4 rounded-2xl text-center min-w-[90px]">
               <div className="text-2xl font-black text-orange-400 flex items-center justify-center gap-1">
-                {studyStreak} <Flame className="w-4 h-4 text-orange-400" />
+                {studyStreak} <Flame className="w-4 h-4" />
               </div>
               <div className="text-[9px] font-black text-slate-600 mt-1 uppercase tracking-widest">Day Streak</div>
             </div>

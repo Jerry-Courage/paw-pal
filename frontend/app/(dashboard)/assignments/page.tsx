@@ -48,13 +48,13 @@ export default function AssignmentsPage() {
   const processingCount = allAssignments.filter((a: any) => a.status === 'processing').length
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-6xl mx-auto space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Assignments</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{allAssignments.length} task{allAssignments.length !== 1 ? 's' : ''} · AI-synthesized solutions</p>
+          <h1 className="text-xl font-black text-white tracking-tight">Assignments</h1>
+          <p className="text-slate-500 text-xs mt-0.5">{allAssignments.length} task{allAssignments.length !== 1 ? 's' : ''} · AI-synthesized solutions</p>
         </div>
-        <Link href="/assignments/new" className="btn-primary text-sm">
+        <Link href="/assignments/new" className="btn-primary text-sm shrink-0">
           <Plus className="w-4 h-4" /> New Assignment
         </Link>
       </div>
