@@ -636,23 +636,29 @@ class AIService:
                         return result.embeddings[0].values
                     return None
                 else:
-                    # List — embed one at a time (API doesn't support true batch)
+                    # List — embed in small batches of 5 to balance speed vs API limits
+                    import time as _time
                     vectors = []
-                    for item in content:
-                        try:
-                            r = self.google_client_v1.models.embed_content(
-                                model=model_id,
-                                contents=item,
-                                config={'task_type': task_type}
-                            )
-                            if r.embeddings and len(r.embeddings) > 0:
-                                vectors.append(r.embeddings[0].values)
-                            else:
+                    BATCH = 5
+                    for i in range(0, len(content), BATCH):
+                        batch = content[i:i + BATCH]
+                        for item in batch:
+                            try:
+                                r = self.google_client_v1.models.embed_content(
+                                    model=model_id,
+                                    contents=item,
+                                    config={'task_type': task_type}
+                                )
+                                if r.embeddings and len(r.embeddings) > 0:
+                                    vectors.append(r.embeddings[0].values)
+                                else:
+                                    vectors.append(None)
+                            except Exception as item_err:
+                                logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
                                 vectors.append(None)
-                        except Exception as item_err:
-                            logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
-                            vectors.append(None)
-                    # Filter out None values
+                        # Small pause between batches to avoid rate limits
+                        if i + BATCH < len(content):
+                            _time.sleep(0.3)
                     valid = [v for v in vectors if v is not None]
                     if valid:
                         return valid
