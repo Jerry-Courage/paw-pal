@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Brain, BookOpen, Layers, Headphones } from 'lucide-react'
 
 function LoginForm() {
   const router = useRouter()
@@ -21,8 +21,7 @@ function LoginForm() {
   }, [status, router])
 
   useEffect(() => {
-    const err = searchParams.get('error')
-    if (err) setError('Invalid email or password. Please try again.')
+    if (searchParams.get('error')) setError('Invalid email or password. Please try again.')
   }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,67 +34,41 @@ function LoginForm() {
       redirect: false,
     })
     setLoading(false)
-    if (res?.ok) {
-      router.push('/dashboard')
-    } else {
-      setError('Invalid email or password. Please try again.')
-    }
+    if (res?.ok) router.push('/dashboard')
+    else setError('Invalid email or password. Please try again.')
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 grid lg:grid-cols-2">
+    <div className="min-h-screen bg-[#0d0d0d] grid lg:grid-cols-2">
       {/* Left — form */}
       <div className="flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">
-        <Link href="/" className="flex flex-col items-center justify-center mb-12 group">
-          <div className="relative mb-6">
-            <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full group-hover:bg-primary/30 transition-colors" />
-            <img 
-              src="/images/logo-icon.png" 
-              alt="FlowState" 
-              className="h-28 w-auto relative z-10 transition-transform duration-500 group-hover:scale-110 contrast-115 brightness-110 drop-shadow-[0_0_20px_rgba(139,92,246,0.3)]"
-              style={{ imageRendering: '-webkit-optimize-contrast' }} 
-            />
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-3 mb-12 group w-fit">
+          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+            <Brain className="w-5 h-5 text-orange-400" />
           </div>
-          <div className="text-center">
-            <h1 className="text-5xl font-black tracking-tighter text-slate-900 dark:text-white flex items-center gap-0.5">
-              FLOW<span className="text-primary">STATE</span>
-            </h1>
-            <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-primary/50 to-transparent mt-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
+          <span className="text-xl font-black text-white uppercase tracking-tight">
+            Flow<span className="text-orange-500">State</span>
+          </span>
         </Link>
-        <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
-          Log in to your workspace or create a new account to start studying with AI.
-        </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <button disabled className="btn-secondary flex items-center justify-center gap-2 text-sm opacity-50 cursor-not-allowed">
-            🌐 Google
-          </button>
-          <button disabled className="btn-secondary flex items-center justify-center gap-2 text-sm opacity-50 cursor-not-allowed">
-            🐙 Github
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-          <span className="text-xs text-gray-400 font-medium tracking-wider">OR CONTINUE WITH EMAIL</span>
-          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-        </div>
+        <h1 className="text-3xl font-black text-white tracking-tight mb-2">Welcome back</h1>
+        <p className="text-slate-500 text-sm mb-8">Log in to your workspace and keep learning.</p>
 
         {error && (
-          <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
+          <div className="mb-5 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
             <input
               type="email"
               placeholder="name@university.edu"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={e => setEmail(e.target.value)}
               className="input pl-10"
               required
               autoComplete="email"
@@ -103,12 +76,12 @@ function LoginForm() {
           </div>
 
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
             <input
               type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               className="input pl-10 pr-10"
               required
               autoComplete="current-password"
@@ -116,18 +89,18 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
 
           <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 cursor-pointer">
-              <input type="checkbox" className="accent-sky-500" />
+            <label className="flex items-center gap-2 text-sm text-slate-500 cursor-pointer">
+              <input type="checkbox" className="accent-orange-500 rounded" />
               Remember me
             </label>
-            <button type="button" className="text-sm text-sky-500 hover:underline">
+            <button type="button" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
               Forgot password?
             </button>
           </div>
@@ -135,7 +108,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full py-3 flex items-center justify-center gap-2 text-base"
+            className="btn-primary w-full py-3 text-base"
           >
             {loading ? (
               <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Signing in...</>
@@ -145,55 +118,51 @@ function LoginForm() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
+        <p className="text-center text-sm text-slate-600 mt-6">
           New to FlowState?{' '}
-          <Link href="/signup" className="text-sky-500 font-semibold hover:underline">Sign up for free</Link>
+          <Link href="/signup" className="text-orange-400 font-bold hover:text-orange-300 transition-colors">Sign up for free</Link>
         </p>
       </div>
 
       {/* Right — promo */}
-      <div className="hidden lg:flex flex-col justify-center bg-gradient-to-br from-sky-50 via-white to-violet-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 px-16 py-12 border-l border-gray-100 dark:border-gray-800">
-        <div className="inline-flex items-center gap-2 bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 w-fit tracking-wider">
-          <Sparkles className="w-3 h-3" /> THE "THIRD MEMBER" OF YOUR STUDY GROUP
+      <div className="hidden lg:flex flex-col justify-center bg-[#111] px-16 py-12 border-l border-white/5">
+        <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-black px-3 py-1.5 rounded-full mb-8 w-fit tracking-widest uppercase">
+          The AI Study Platform
         </div>
-        <h2 className="text-4xl font-extrabold text-gray-900 dark:text-white mb-4 leading-tight">
-          Study smarter,{' '}
-          <span className="text-sky-500 italic">together.</span>
+        <h2 className="text-4xl font-black text-white mb-4 leading-tight tracking-tight">
+          Study smarter,<br />
+          <span className="text-orange-400">not harder.</span>
         </h2>
-        <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed text-sm">
-          Connect your materials, invite your classmates, and let our AI facilitate your
-          collaborative sessions with real-time flashcards and summaries.
+        <p className="text-slate-500 mb-10 leading-relaxed text-sm">
+          Upload any material and get interactive notes, flashcards, quizzes, podcasts, and an AI tutor — all in seconds.
         </p>
-        <div className="card p-5 shadow-xl mb-8 dark:border-gray-700">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+
+        <div className="space-y-3">
+          {[
+            { icon: Brain,     color: 'bg-orange-500/10 text-orange-400', title: 'AI Personal Tutor',    desc: '24/7 AI that understands your exact materials' },
+            { icon: Layers,    color: 'bg-sky-500/10 text-sky-400',       title: 'Smart Flashcards',     desc: 'Spaced repetition that adapts to your memory' },
+            { icon: Headphones,color: 'bg-pink-500/10 text-pink-400',     title: 'Study Podcasts',       desc: 'Turn any document into an audio deep-dive' },
+            { icon: BookOpen,  color: 'bg-violet-500/10 text-violet-400', title: 'AI Study Notes',       desc: 'Structured notes generated from your uploads' },
+          ].map(f => (
+            <div key={f.title} className="flex items-center gap-4 p-4 rounded-2xl bg-white/3 border border-white/5">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${f.color}`}>
+                <f.icon className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-white">{f.title}</div>
+                <div className="text-xs text-slate-600 mt-0.5">{f.desc}</div>
+              </div>
             </div>
-            <div className="flex-1">
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full w-3/4 mb-1.5" />
-              <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full w-1/2" />
-            </div>
-          </div>
-          <div className="h-px bg-gray-100 dark:bg-gray-800 mb-4" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-sky-50 dark:bg-sky-950/50 rounded-xl p-3 border border-sky-100 dark:border-sky-900">
-              <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold">Concept</span>
-              <div className="h-2 bg-sky-200 dark:bg-sky-800 rounded-full mt-2 w-3/4" />
-            </div>
-            <div className="bg-emerald-50 dark:bg-emerald-950/50 rounded-xl p-3 border border-emerald-100 dark:border-emerald-900">
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">Quiz</span>
-              <div className="h-2 bg-emerald-200 dark:bg-emerald-800 rounded-full mt-2 w-2/3" />
-            </div>
-          </div>
+          ))}
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="mt-8 flex items-center gap-3">
           <div className="flex -space-x-2">
-            {['bg-sky-400', 'bg-emerald-400', 'bg-violet-400', 'bg-orange-400'].map((c, i) => (
-              <div key={i} className={`w-9 h-9 rounded-full ${c} border-2 border-white dark:border-gray-950`} />
+            {['bg-orange-400', 'bg-emerald-400', 'bg-violet-400', 'bg-sky-400'].map((c, i) => (
+              <div key={i} className={`w-8 h-8 rounded-full ${c} border-2 border-[#111]`} />
             ))}
-            <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-950 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">+12</div>
           </div>
-          <span className="text-sm text-gray-500 dark:text-gray-400">Joined by 1,200+ students this week</span>
+          <span className="text-sm text-slate-600">Joined by 50,000+ students</span>
         </div>
       </div>
     </div>
@@ -203,8 +172,8 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950">
-        <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0d0d]">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <LoginForm />
