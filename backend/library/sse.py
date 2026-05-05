@@ -79,8 +79,11 @@ class ResourceStatusSSEView(APIView):
                     if changed:
                         yield f"event: status\ndata: {json.dumps(changed)}\n\n"
 
-                    # Close if everything is idle
-                    if current_states and all(s[0] in ['ready', 'error'] for s in current_states.values()):
+                    # Close only when everything is truly idle (ready + 100%)
+                    if current_states and all(
+                        s[0] in ['ready', 'error'] and s[1] >= 100
+                        for s in current_states.values()
+                    ):
                         yield f"event: done\ndata: {json.dumps({'message': 'All resources ready'})}\n\n"
                         return
 

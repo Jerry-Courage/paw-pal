@@ -316,10 +316,20 @@ def process_resource_task(res_id):
         logger.info(f'[Task Queue] Resource {res.id} marked as ready.')
 
         # ─── AUTO-GENERATE SELECTED FEATURES ───
-        features = res.selected_features or []
+        features = [f for f in (res.selected_features or []) if f != 'notes']
         if features:
+            # Keep status as generating so SSE stays open during feature generation
+            res.status = 'generating'
+            res.processing_progress = 80
+            res.status_text = f"⚡ Generating {', '.join(features)}..."
+            res.save()
             logger.info(f'[Task Queue] Auto-generating features {features} for Resource {res.id}')
             _generate_selected_features(res, features)
+            # Now truly done
+            res.refresh_from_db()
+            res.status = 'ready'
+            res.processing_progress = 100
+            res.save()
 
     except Exception as e:
         error_msg = str(e)
@@ -456,16 +466,31 @@ def _generate_selected_features(resource, features: list):
         'podcast': gen_podcast,
     }
 
-    for feat in features:
-        if feat == 'notes':
-            continue  # already generated as study kit
+    active = [f for f in features if f != 'notes' and f in feature_map]
+    total = len(active)
+    completed = [0]  # mutable counter for threads
+
+    def wrap(fn, feat_name):
+        def wrapped():
+            fn()
+            completed[0] += 1
+            try:
+                pct = 80 + int((completed[0] / total) * 18)  # 80→98%
+                resource.refresh_from_db()
+                resource.processing_progress = pct
+                resource.status_text = f"✅ {feat_name.title()} done ({completed[0]}/{total})"
+                resource.save(update_fields=['processing_progress', 'status_text'])
+            except Exception:
+                pass
+        return wrapped
+
+    for feat in active:
         fn = feature_map.get(feat)
         if fn:
-            t = threading.Thread(target=fn, daemon=True)
+            t = threading.Thread(target=wrap(fn, feat), daemon=True)
             threads.append(t)
             t.start()
 
-    # Wait for all to finish before marking ready
     for t in threads:
         t.join(timeout=600)
 

@@ -67,7 +67,8 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
         const myResource = data.find((r: any) => r.id === resourceId)
         if (myResource) {
           setProcessingStatus({ progress: myResource.progress || 0, text: myResource.text || 'Building your study kit...' })
-          if (myResource.status === 'ready') {
+          // Only close when truly ready (status=ready AND progress=100)
+          if (myResource.status === 'ready' && myResource.progress >= 100) {
             setStage('complete')
             setProcessingStatus({ progress: 100, text: 'All features ready!' })
             qc.invalidateQueries({ queryKey: ['resources'] })
