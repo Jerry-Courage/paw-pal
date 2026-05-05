@@ -315,6 +315,12 @@ def process_resource_task(res_id):
         res.save()
         logger.info(f'[Task Queue] Resource {res.id} marked as ready.')
 
+        # ─── AUTO-GENERATE SELECTED FEATURES ───
+        features = res.selected_features or []
+        if features:
+            logger.info(f'[Task Queue] Auto-generating features {features} for Resource {res.id}')
+            _generate_selected_features(res, features)
+
     except Exception as e:
         error_msg = str(e)
         logger.error(f'[Task Queue] Critical abort processing resource {res_id}: {error_msg}')
@@ -338,3 +344,256 @@ def heartbeat_task():
     """
     import datetime
     logger.info(f'[Heartbeat] Worker Healthy at {datetime.datetime.now().isoformat()}')
+
+
+def _generate_selected_features(resource, features: list):
+    """
+    Auto-generate all selected features in parallel threads after study kit is ready.
+    Called at the end of process_resource_task.
+    """
+    import threading
+    from ai_assistant.services import AIService
+    from library.models import Flashcard, Quiz, Deck
+
+    ai = AIService()
+    threads = []
+
+    def gen_flashcards():
+        try:
+            resource.status_text = "🃏 Generating flashcards..."
+            resource.save(update_fields=['status_text'])
+            cards = ai.generate_flashcards(resource, count=30, level='undergrad')
+            if cards:
+                deck, _ = Deck.objects.get_or_create(
+                    owner=resource.owner,
+                    title=f"{resource.title} — Flashcards",
+                    defaults={'subject': resource.subject or ''}
+                )
+                for card in cards[:40]:
+                    Flashcard.objects.get_or_create(
+                        deck=deck,
+                        resource=resource,
+                        question=card.get('question', ''),
+                        defaults={
+                            'answer': card.get('answer', ''),
+                            'subject': resource.subject or '',
+                            'difficulty': card.get('difficulty', 'medium'),
+                            'owner': resource.owner,
+                        }
+                    )
+                logger.info(f'[AutoGen] Flashcards done for {resource.id} ({len(cards)} cards)')
+        except Exception as e:
+            logger.error(f'[AutoGen] Flashcards failed for {resource.id}: {e}')
+
+    def gen_quiz():
+        try:
+            resource.status_text = "❓ Generating quiz..."
+            resource.save(update_fields=['status_text'])
+            questions = ai.generate_quiz(resource, fmt='multiple_choice', level='undergrad', count=30)
+            if questions:
+                Quiz.objects.create(
+                    resource=resource,
+                    owner=resource.owner,
+                    title=f"{resource.title} — Quiz",
+                    format='multiple_choice',
+                    questions=questions[:40],
+                    academic_level='undergrad',
+                )
+                logger.info(f'[AutoGen] Quiz done for {resource.id} ({len(questions)} questions)')
+        except Exception as e:
+            logger.error(f'[AutoGen] Quiz failed for {resource.id}: {e}')
+
+    def gen_practice():
+        try:
+            resource.status_text = "📝 Generating practice test..."
+            resource.save(update_fields=['status_text'])
+            questions = ai.generate_practice_questions(resource, difficulty='medium', count=30)
+            if questions:
+                # Store in ai_concepts as practice_questions
+                existing = [c for c in (resource.ai_concepts or []) if 'practice_questions' not in c]
+                resource.ai_concepts = existing + [{'practice_questions': questions[:40]}]
+                resource.save(update_fields=['ai_concepts'])
+                logger.info(f'[AutoGen] Practice test done for {resource.id} ({len(questions)} questions)')
+        except Exception as e:
+            logger.error(f'[AutoGen] Practice test failed for {resource.id}: {e}')
+
+    def gen_mindmap():
+        try:
+            resource.status_text = "🗺️ Generating mind map..."
+            resource.save(update_fields=['status_text'])
+            mindmap = ai.generate_mind_map(resource)
+            if mindmap:
+                notes = resource.ai_notes_json or {}
+                notes['mind_map'] = mindmap
+                resource.ai_notes_json = notes
+                resource.save(update_fields=['ai_notes_json'])
+                logger.info(f'[AutoGen] Mind map done for {resource.id}')
+        except Exception as e:
+            logger.error(f'[AutoGen] Mind map failed for {resource.id}: {e}')
+
+    def gen_podcast():
+        try:
+            resource.status_text = "🎙️ Generating podcast..."
+            resource.save(update_fields=['status_text'])
+            from library.models import PodcastSession
+            from ai_assistant.views_podcast import bg_generate_script
+            notes = resource.ai_notes_json or {}
+            session = PodcastSession.objects.create(
+                resource=resource,
+                owner=resource.owner,
+                pref_length=25,
+                status='generating',
+            )
+            bg_generate_script(session.id, notes)
+            logger.info(f'[AutoGen] Podcast done for {resource.id}')
+        except Exception as e:
+            logger.error(f'[AutoGen] Podcast failed for {resource.id}: {e}')
+
+    feature_map = {
+        'flashcards': gen_flashcards,
+        'quiz': gen_quiz,
+        'practice': gen_practice,
+        'mindmap': gen_mindmap,
+        'podcast': gen_podcast,
+    }
+
+    for feat in features:
+        if feat == 'notes':
+            continue  # already generated as study kit
+        fn = feature_map.get(feat)
+        if fn:
+            t = threading.Thread(target=fn, daemon=True)
+            threads.append(t)
+            t.start()
+
+    # Wait for all to finish before marking ready
+    for t in threads:
+        t.join(timeout=600)
+
+    resource.refresh_from_db()
+    resource.status_text = "✅ All features ready!"
+    resource.save(update_fields=['status_text'])
+    logger.info(f'[AutoGen] All features complete for {resource.id}')
+
+
+def _generate_selected_features(resource, features: list):
+    """
+    Auto-generate all selected features in parallel threads after study kit is ready.
+    Features: notes, flashcards, quiz, mindmap, practice, podcast
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from ai_assistant.services import AIService
+
+    def gen_flashcards():
+        try:
+            resource.status_text = "🃏 Generating flashcards..."
+            resource.save(update_fields=['status_text'])
+            ai = AIService()
+            cards = ai.generate_flashcards(resource, count=30, level='undergrad')
+            if cards:
+                from library.models import Flashcard
+                Flashcard.objects.filter(resource=resource, owner=resource.owner).delete()
+                Flashcard.objects.bulk_create([
+                    Flashcard(
+                        resource=resource,
+                        owner=resource.owner,
+                        question=c.get('question', ''),
+                        answer=c.get('answer', ''),
+                    ) for c in cards if c.get('question')
+                ])
+                logger.info(f'[AutoGen] Flashcards done for {resource.id}: {len(cards)} cards')
+        except Exception as e:
+            logger.error(f'[AutoGen] Flashcards failed for {resource.id}: {e}')
+
+    def gen_quiz():
+        try:
+            resource.status_text = "📝 Generating quiz..."
+            resource.save(update_fields=['status_text'])
+            ai = AIService()
+            questions = ai.generate_quiz(resource, fmt='mcq', level='undergrad', count=30)
+            if questions:
+                from library.models import Quiz
+                Quiz.objects.filter(resource=resource, owner=resource.owner, title__endswith='— Auto Quiz').delete()
+                Quiz.objects.create(
+                    resource=resource,
+                    owner=resource.owner,
+                    title=f"{resource.title} — Auto Quiz",
+                    format='mcq',
+                    questions=questions,
+                )
+                logger.info(f'[AutoGen] Quiz done for {resource.id}: {len(questions)} questions')
+        except Exception as e:
+            logger.error(f'[AutoGen] Quiz failed for {resource.id}: {e}')
+
+    def gen_mindmap():
+        try:
+            resource.status_text = "🗺️ Generating mind map..."
+            resource.save(update_fields=['status_text'])
+            ai = AIService()
+            mindmap = ai.generate_mind_map(resource)
+            if mindmap:
+                notes_json = resource.ai_notes_json or {}
+                notes_json['mind_map'] = mindmap
+                resource.ai_notes_json = notes_json
+                resource.save(update_fields=['ai_notes_json'])
+                logger.info(f'[AutoGen] Mind map done for {resource.id}')
+        except Exception as e:
+            logger.error(f'[AutoGen] Mind map failed for {resource.id}: {e}')
+
+    def gen_practice():
+        try:
+            resource.status_text = "🎯 Generating practice test..."
+            resource.save(update_fields=['status_text'])
+            ai = AIService()
+            questions = ai.generate_practice_questions(resource, difficulty='medium', count=30)
+            if questions:
+                notes_json = resource.ai_notes_json or {}
+                notes_json['practice_questions'] = questions
+                resource.ai_notes_json = notes_json
+                resource.save(update_fields=['ai_notes_json'])
+                logger.info(f'[AutoGen] Practice test done for {resource.id}: {len(questions)} questions')
+        except Exception as e:
+            logger.error(f'[AutoGen] Practice test failed for {resource.id}: {e}')
+
+    def gen_podcast():
+        try:
+            resource.status_text = "🎙️ Generating podcast..."
+            resource.save(update_fields=['status_text'])
+            from library.models import PodcastSession
+            from ai_assistant.views_podcast import bg_generate_script
+            import threading
+            session = PodcastSession.objects.create(
+                resource=resource,
+                owner=resource.owner,
+                pref_length=20,
+            )
+            notes = resource.ai_notes_json or {}
+            t = threading.Thread(target=bg_generate_script, args=(session.id, notes), daemon=True)
+            t.start()
+            logger.info(f'[AutoGen] Podcast generation started for {resource.id}, session {session.id}')
+        except Exception as e:
+            logger.error(f'[AutoGen] Podcast failed for {resource.id}: {e}')
+
+    FEATURE_MAP = {
+        'flashcards': gen_flashcards,
+        'quiz': gen_quiz,
+        'mindmap': gen_mindmap,
+        'practice': gen_practice,
+        'podcast': gen_podcast,
+    }
+
+    tasks = [FEATURE_MAP[f] for f in features if f in FEATURE_MAP]
+    if not tasks:
+        return
+
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = [executor.submit(t) for t in tasks]
+        for f in futures:
+            try:
+                f.result()
+            except Exception as e:
+                logger.error(f'[AutoGen] Feature thread error: {e}')
+
+    resource.status_text = "✅ All features ready!"
+    resource.save(update_fields=['status_text'])
+    logger.info(f'[AutoGen] All features complete for Resource {resource.id}')

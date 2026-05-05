@@ -98,10 +98,19 @@ class ResourceListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         import threading
+        import json
 
         resource = serializer.save(owner=self.request.user)
         resource.file_size = resource.file.size if resource.file else 0
         resource.status_text = "🧬 Synthesis Engine Initializing..."
+
+        # Store selected features from the upload request
+        raw_features = self.request.data.get('selected_features', '[]')
+        try:
+            features = json.loads(raw_features) if isinstance(raw_features, str) else raw_features
+        except Exception:
+            features = []
+        resource.selected_features = features if isinstance(features, list) else []
         resource.save()
 
         # Run synthesis in a background thread on the same process (shares filesystem)

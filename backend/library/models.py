@@ -29,6 +29,7 @@ class Resource(models.Model):
     file_size = models.BigIntegerField(default=0)
     ai_summary = models.TextField(blank=True)
     ai_notes_json = models.JSONField(default=dict, blank=True)
+    selected_features = models.JSONField(default=list, blank=True)  # features to auto-generate on upload
     ai_concepts = models.JSONField(default=list)
     has_study_kit = models.BooleanField(default=False)
     cover_image = models.ImageField(upload_to='resources/covers/', null=True, blank=True)
