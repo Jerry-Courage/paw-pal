@@ -625,22 +625,37 @@ class AIService:
         # --- PRIMARY: Gemini Embedding 2 (The Elite Signal) ---
         for model_id in ['models/gemini-embedding-2-preview', 'models/gemini-embedding-001']:
             try:
-                result = self.google_client_v1.models.embed_content(
-                    model=model_id,
-                    contents=content,
-                    config={'task_type': task_type}
-                )
                 if isinstance(content, str):
+                    # Single string — one API call
+                    result = self.google_client_v1.models.embed_content(
+                        model=model_id,
+                        contents=content,
+                        config={'task_type': task_type}
+                    )
                     if result.embeddings and len(result.embeddings) > 0:
                         return result.embeddings[0].values
                     return None
                 else:
-                    if result.embeddings and len(result.embeddings) == len(content):
-                        return [e.values for e in result.embeddings]
-                    elif result.embeddings:
-                        # Partial result — return what we got
-                        logger.warning(f"[RAG Cloud] Got {len(result.embeddings)} embeddings for {len(content)} chunks")
-                        return [e.values for e in result.embeddings]
+                    # List — embed one at a time (API doesn't support true batch)
+                    vectors = []
+                    for item in content:
+                        try:
+                            r = self.google_client_v1.models.embed_content(
+                                model=model_id,
+                                contents=item,
+                                config={'task_type': task_type}
+                            )
+                            if r.embeddings and len(r.embeddings) > 0:
+                                vectors.append(r.embeddings[0].values)
+                            else:
+                                vectors.append(None)
+                        except Exception as item_err:
+                            logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
+                            vectors.append(None)
+                    # Filter out None values
+                    valid = [v for v in vectors if v is not None]
+                    if valid:
+                        return valid
                     return None
             except Exception as e:
                 logger.warning(f"[RAG Cloud] {model_id} failed: {e}. Falling back...")
@@ -1996,6 +2011,11 @@ class AIService:
         try:
             text = text.strip()
             import re
+
+            # Strip markdown code fences early (Gemma often wraps in ```json ... ```)
+            text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
+            text = re.sub(r'\s*```$', '', text, flags=re.MULTILINE)
+            text = text.strip()
             
             # Phase 1: Identifying the outermost JSON enclosure
             start_indices = [text.find('{'), text.find('[')]
