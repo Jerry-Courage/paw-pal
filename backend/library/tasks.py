@@ -441,7 +441,6 @@ def _generate_selected_features(resource, features: list):
             session = PodcastSession.objects.create(
                 resource=resource,
                 owner=resource.owner,
-                pref_length=25,
                 status='generating',
             )
             bg_generate_script(session.id, notes)
