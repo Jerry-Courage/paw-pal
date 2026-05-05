@@ -1137,6 +1137,24 @@ class AIService:
                         else:
                             # CRITICAL DEBUG: If total sections are still 0, log what the AI actually said
                             logger.warning(f"[AI Service] Chunk {idx+1} yielded 0 sections. Key Mismatch? Raw sample: {str(res_content)[:300]}")
+                            # Retry once — model may have returned only overview or partial JSON
+                            try:
+                                import time as _time
+                                _time.sleep(3)
+                                retry_content = self._task_with_watchdog(prompts[idx], idx, [])
+                                if retry_content:
+                                    retry_kit = self._parse_json(retry_content, {})
+                                    s_key_retry = next((k for k in possible_keys if k in retry_kit and isinstance(retry_kit[k], list)), None)
+                                    if s_key_retry:
+                                        for sec in retry_kit[s_key_retry]:
+                                            if isinstance(sec, dict) and sec.get('title'):
+                                                sections_added += 1
+                                                all_sections.append(sec)
+                                        logger.info(f"[AI Service] Chunk {idx+1} retry recovered {sections_added} sections.")
+                                    else:
+                                        logger.warning(f"[AI Service] Chunk {idx+1} retry also yielded 0 sections. Skipping.")
+                            except Exception as retry_err:
+                                logger.error(f"[AI Service] Chunk {idx+1} retry failed: {retry_err}")
                         
                         # Merge vocabulary
                         if 'vocabulary' in chunk_kit and isinstance(chunk_kit['vocabulary'], list):
