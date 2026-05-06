@@ -35,8 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-[#0d0d0d]">
       <TopNav />
       <main className={cn(
-        'pt-14',
-        isStudio ? 'h-[calc(100vh-56px)] overflow-hidden' : 'p-4 md:p-6 pb-20 md:pb-8'
+        isStudio ? 'h-[calc(100dvh-56px)] overflow-hidden mt-14' : 'pt-14 px-4 md:px-6 pb-20 md:pb-8'
       )}>
         {children}
       </main>
