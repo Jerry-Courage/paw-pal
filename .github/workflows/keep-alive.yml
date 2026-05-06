@@ -2,8 +2,8 @@ name: Keep Render Services Alive
 
 on:
   schedule:
-    # Runs every 10 minutes — prevents Render free tier cold starts
-    - cron: '*/10 * * * *'
+    # Runs every 5 minutes — prevents Render free tier cold starts
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allow manual trigger from GitHub Actions UI
 
 jobs:
