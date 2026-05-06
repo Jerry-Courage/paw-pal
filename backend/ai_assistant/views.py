@@ -214,24 +214,41 @@ class SummarizeResourceView(APIView):
 class StudyNudgeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    # Rotating fallback nudges so it never feels stale
+    FALLBACKS = [
+        "Keep up the great work! Consistency is key to mastering any subject.",
+        "Every study session counts. You're building something great, one concept at a time.",
+        "The best time to study was yesterday. The second best time is right now. Let's go!",
+        "Small progress every day adds up to big results. Keep pushing forward.",
+        "You're doing better than you think. Stay consistent and trust the process.",
+        "Focus beats talent when talent doesn't focus. You've got this.",
+        "One more session today puts you ahead of where you were yesterday.",
+        "Your future self will thank you for the work you put in today.",
+    ]
+
     def get(self, request):
+        import random
         recent = list(
             request.user.resources.values_list('subject', flat=True)
             .exclude(subject='').distinct()[:5]
         )
         ai = AIService()
-        
-        # Enforce strict 5s timeout to prevent Daphne process kills
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError
-        nudge = "Keep up the great work! Consistency is key to mastering any subject."
-        
+
+        # Pick a random fallback in case AI times out
+        fallback = random.choice(self.FALLBACKS)
+        nudge = fallback
+
         try:
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
             with ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(ai.generate_study_nudge, request.user, recent)
-                nudge = future.result(timeout=5.0)
+                # Increased to 12s — cold AI starts can take 8-10s
+                nudge = future.result(timeout=12.0)
+                if not nudge or len(nudge.strip()) < 10:
+                    nudge = fallback
         except (TimeoutError, Exception) as e:
             logger.warning(f"[StudyNudge] Timeout or Error: {e}. Using fallback.")
-            
+
         return Response({'nudge': nudge})
 
 

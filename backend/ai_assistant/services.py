@@ -900,12 +900,15 @@ class AIService:
         return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 
     def generate_study_nudge(self, user, recent_topics: list) -> str:
-        topics = ', '.join(recent_topics) if recent_topics else 'various subjects'
+        topics = ', '.join(recent_topics) if recent_topics else 'general studies'
+        name = user.first_name or user.username or 'there'
         prompt = (
-            f"You are FlowAI. Student {user.first_name or user.username} has been studying: {topics}. "
-            "Give a short encouraging study nudge (2-3 sentences). Be warm and motivating."
+            f"Write a short, warm, motivating study nudge (1-2 sentences max) for a student named {name} "
+            f"who has been studying: {topics}. Be specific to their subject if possible. "
+            "Sound like a supportive friend, not a robot. No emojis. No quotes around the response."
         )
-        return self.chat_sync([{'role': 'user', 'content': prompt}])
+        result = self.chat_sync([{'role': 'user', 'content': prompt}], max_tokens=80)
+        return result.strip() if result else ''
 
     def group_chat_assist(self, group_name: str, context: str, question: str) -> str:
         system = (
