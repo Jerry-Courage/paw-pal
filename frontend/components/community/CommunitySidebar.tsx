@@ -27,7 +27,7 @@ function TrendingTopics({ posts }: { posts: any[] }) {
     : staticTopics.map(t => ({ tag: t, sub: 'Community Favorite' }))
 
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-5">
+    <div className="bg-[#1a1a1a] rounded-2xl p-5">
       <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
         <Hash className="w-3.5 h-3.5 text-orange-400" /> Trending Now
       </h3>
@@ -61,7 +61,7 @@ function SuggestedGroups() {
   if (groups.length === 0) return null
 
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-5">
+    <div className="bg-[#1a1a1a] rounded-2xl p-5">
       <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
         <Users className="w-3.5 h-3.5 text-orange-400" /> Squad Suggestions
       </h3>
@@ -97,7 +97,7 @@ function QuickStats() {
   if (!myRank) return null
 
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-5 relative overflow-hidden">
+    <div className="bg-[#1a1a1a] rounded-2xl p-5 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-[60px] -mr-16 -mt-16 pointer-events-none" />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">

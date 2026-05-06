@@ -27,7 +27,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tab pills */}
-      <div className="flex gap-1 p-1 bg-white/3 border border-white/6 rounded-2xl w-fit">
+      <div className="flex gap-1 p-1 bg-white/3 rounded-2xl w-fit">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
@@ -80,7 +80,7 @@ function ProfileSettings() {
     : session?.user?.name || 'User'
 
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-6 space-y-6">
+    <div className="bg-[#1a1a1a] rounded-2xl p-6 space-y-6">
       <h2 className="text-sm font-black text-white uppercase tracking-widest">Profile Information</h2>
 
       <div className="flex items-center gap-4">
@@ -147,7 +147,7 @@ function NotificationSettings() {
     { key: 'weekly_summary',  label: 'Weekly Summary',   sub: 'Your weekly study stats and achievements' },
   ]
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-6">
+    <div className="bg-[#1a1a1a] rounded-2xl p-6">
       <h2 className="text-sm font-black text-white uppercase tracking-widest mb-5">Notification Preferences</h2>
       <div className="space-y-1">
         {items.map(item => (
@@ -169,7 +169,7 @@ function NotificationSettings() {
 
 function AppearanceSettings() {
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-6 space-y-6">
+    <div className="bg-[#1a1a1a] rounded-2xl p-6 space-y-6">
       <h2 className="text-sm font-black text-white uppercase tracking-widest">Appearance</h2>
       <div className="flex items-center justify-between py-3 border-b border-white/5">
         <div>
@@ -200,7 +200,7 @@ function SecuritySettings() {
   const [form, setForm] = useState({ current: '', new_pass: '', confirm: '' })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-6 space-y-6">
+    <div className="bg-[#1a1a1a] rounded-2xl p-6 space-y-6">
       <h2 className="text-sm font-black text-white uppercase tracking-widest">Security</h2>
       <div className="space-y-4">
         <div>

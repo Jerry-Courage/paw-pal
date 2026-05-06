@@ -61,7 +61,7 @@ export default function CommunityPage() {
         {/* Left Sidebar - Navigation & Quick Links (Desktop) */}
         <aside className="hidden lg:block w-64 flex-shrink-0">
           <div className="sticky top-16 space-y-6">
-            <nav id="tour-community-tabs" className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-3">
+            <nav id="tour-community-tabs" className="bg-[#1a1a1a] rounded-2xl p-3">
               <div className="space-y-1">
                 {TABS.map(t => {
                   const Icon = TAB_ICONS[t.id]
@@ -99,7 +99,7 @@ export default function CommunityPage() {
                     'flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all',
                     tab === t.id 
                       ? 'bg-orange-500/10 text-orange-400' 
-                      : 'bg-white/3 text-slate-500 border border-white/6 hover:text-slate-300'
+                      : 'bg-white/3 text-slate-500 hover:text-slate-300'
                   )}
                 >
                   <Icon className="w-4 h-4" />
@@ -162,7 +162,7 @@ export default function CommunityPage() {
                 {/* Posts Feed */}
                 <div className="space-y-4">
                   {postsLoading ? (
-                    [1,2,3].map(i => <div key={i} className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-20 animate-pulse" />)
+                    [1,2,3].map(i => <div key={i} className="bg-[#1a1a1a] rounded-2xl p-20 animate-pulse" />)
                   ) : posts.length === 0 ? (
                     <div className="bg-[#1a1a1a] border border-dashed border-white/8 rounded-2xl p-20 text-center">
                        <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6">

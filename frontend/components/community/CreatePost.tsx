@@ -35,7 +35,7 @@ export default function CreatePost({ session, resources }: { session: any; resou
   const initials = getInitials(session?.user?.name || 'Me')
 
   return (
-    <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl mb-4 overflow-hidden p-4">
+    <div className="bg-[#1a1a1a] rounded-2xl mb-4 overflow-hidden p-4">
       <div className="flex gap-3">
         <div className="w-10 h-10 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 text-sm font-black shrink-0">
           {initials}

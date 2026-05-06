@@ -58,7 +58,7 @@ export default function DashboardPage() {
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in-up">
 
       {/* Welcome banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#1a1a1a] border border-white/6 p-6 md:p-8">
+      <div className="relative overflow-hidden rounded-2xl bg-[#1a1a1a] p-6 md:p-8">
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl pointer-events-none" />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
@@ -107,7 +107,7 @@ export default function DashboardPage() {
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {quickActions.map(a => (
-                <Link key={a.label} href={a.href} className="group flex flex-col gap-3 p-4 rounded-2xl bg-[#1a1a1a] border border-white/6 hover:border-white/12 transition-all hover:-translate-y-0.5">
+                <Link key={a.label} href={a.href} className="group flex flex-col gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:border-white/12 transition-all hover:-translate-y-0.5">
                   <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center border transition-transform group-hover:scale-110', a.color)}>
                     <a.icon className="w-5 h-5" />
                   </div>
@@ -154,7 +154,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {resources.slice(0, 6).map((r: any) => (
-                <Link key={r.id} href={`/library/${r.id}`} className="group flex items-center gap-3 p-4 rounded-2xl bg-[#1a1a1a] border border-white/6 hover:border-white/12 transition-all">
+                <Link key={r.id} href={`/library/${r.id}`} className="group flex items-center gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:border-white/12 transition-all">
                   <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
                     <BookIcon type={r.resource_type} />
                   </div>
@@ -210,7 +210,7 @@ function ActivePulse() {
   const COLORS = ['bg-emerald-400', 'bg-sky-400', 'bg-orange-400', 'bg-violet-400']
 
   return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-white/6 p-5">
+    <div className="rounded-2xl bg-[#1a1a1a] p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <Users className="w-3.5 h-3.5 text-emerald-400" /> Study Groups
@@ -253,7 +253,7 @@ function StudyInsights({ analytics }: { analytics?: any }) {
   const queryClient = useQueryClient()
 
   if (!analytics) return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-white/6 p-5 space-y-3 animate-pulse">
+    <div className="rounded-2xl bg-[#1a1a1a] p-5 space-y-3 animate-pulse">
       <div className="h-4 bg-white/5 rounded w-1/2" />
       <div className="h-20 bg-white/5 rounded-xl" />
     </div>
@@ -275,7 +275,7 @@ function StudyInsights({ analytics }: { analytics?: any }) {
   }
 
   return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-white/6 p-5">
+    <div className="rounded-2xl bg-[#1a1a1a] p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <BarChart2 className="w-3.5 h-3.5 text-orange-400" /> Study Analytics
@@ -381,7 +381,7 @@ function AIMastery({ analytics }: { analytics?: any }) {
   ]
 
   return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-white/6 p-5">
+    <div className="rounded-2xl bg-[#1a1a1a] p-5">
       <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
         <Sparkles className="w-3.5 h-3.5 text-orange-400" /> AI Mastery
       </h3>

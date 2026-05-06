@@ -45,7 +45,7 @@ export default function PostCard({ post, onLike }: { post: any; onLike: () => vo
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-      className="bg-[#1a1a1a] border border-white/6 rounded-2xl mb-3 overflow-hidden hover:border-white/10 transition-all">
+      className="bg-[#1a1a1a] rounded-2xl mb-3 overflow-hidden hover:border-white/10 transition-all">
       <div className="p-5">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">

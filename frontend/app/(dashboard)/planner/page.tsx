@@ -151,7 +151,7 @@ export default function PlannerPage() {
 
            {/* TodayHUD */}
            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-emerald-500/20 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl flex items-center gap-4 group hover:border-emerald-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <GraduationCap className="w-7 h-7" />
                  </div>
@@ -162,7 +162,7 @@ export default function PlannerPage() {
                     </p>
                  </div>
               </div>
-              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-violet-500/20 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl flex items-center gap-4 group hover:border-violet-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <BookOpen className="w-7 h-7" />
                  </div>
@@ -173,7 +173,7 @@ export default function PlannerPage() {
                     </p>
                  </div>
               </div>
-              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-rose-500/20 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl flex items-center gap-4 group hover:border-rose-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <Target className="w-7 h-7" />
                  </div>
@@ -184,7 +184,7 @@ export default function PlannerPage() {
                     </p>
                  </div>
               </div>
-              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-sky-500/20 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl flex items-center gap-4 group hover:border-sky-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <Zap className="w-7 h-7" />
                  </div>
@@ -200,7 +200,7 @@ export default function PlannerPage() {
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           {/* Calendar Grid */}
-          <div className="xl:col-span-3 bg-[#111] rounded-[2rem] border border-white/6 overflow-hidden flex flex-col">
+          <div className="xl:col-span-3 bg-[#111] rounded-[2rem] overflow-hidden flex flex-col">
             
             {/* Mobile day strip */}
             <div className="flex xl:hidden overflow-x-auto scrollbar-hide border-b border-white/5 bg-[#111]">
@@ -301,7 +301,7 @@ export default function PlannerPage() {
           <div className="space-y-6">
             
             {/* AI Suggestions Widget */}
-            <div className="bg-[#1a1a1a] border border-white/6 rounded-[2rem] p-6 overflow-hidden relative group">
+            <div className="bg-[#1a1a1a] rounded-[2rem] p-6 overflow-hidden relative group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110 pointer-events-none" />
               <h3 className="font-black text-white text-sm mb-1 flex items-center gap-2 relative z-10">
                 <Zap className="w-4 h-4 text-yellow-500" /> Smart Suggestions
@@ -352,7 +352,7 @@ export default function PlannerPage() {
             </div>
 
             {/* Deadlines Widget */}
-            <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-6">
+            <div className="bg-[#1a1a1a] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="font-black text-white text-sm">Deadlines</h3>

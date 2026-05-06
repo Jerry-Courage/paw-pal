@@ -119,7 +119,7 @@ function AssignmentCard({ assignment: a, view, onClick, onDelete, onShare }: any
 
   if (view === 'list') {
     return (
-      <div onClick={onClick} className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-[#1a1a1a] border border-white/6 hover:border-white/12 transition-all group cursor-pointer">
+      <div onClick={onClick} className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-[#1a1a1a] hover:border-white/12 transition-all group cursor-pointer">
         <div className={cn('flex items-center justify-center w-9 h-9 rounded-xl border', cfg.color)}>
           <Icon className={cn('w-4 h-4', a.status === 'processing' && 'animate-spin')} />
         </div>
@@ -144,7 +144,7 @@ function AssignmentCard({ assignment: a, view, onClick, onDelete, onShare }: any
   }
 
   return (
-    <div onClick={onClick} className="group relative bg-[#1a1a1a] border border-white/6 rounded-2xl p-5 hover:border-white/12 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
+    <div onClick={onClick} className="group relative bg-[#1a1a1a] rounded-2xl p-5 hover:border-white/12 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
       <div className="flex items-start justify-between mb-4">
         <div className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border', cfg.color)}>
           <Icon className={cn('w-3 h-3', a.status === 'processing' && 'animate-spin')} />
