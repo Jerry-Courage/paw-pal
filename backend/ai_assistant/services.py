@@ -266,13 +266,13 @@ class AIService:
 
         # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Gemma + Gemini Fleet) ---
         if self.google_client_beta:
-            # Gemma first (highest quota), then Gemini
+            # Speed-first order for chat: flash-lite is fastest (1-3s), then flash, then Gemma
             for g_model in [
-                'models/gemma-4-31b-it',
-                'models/gemma-4-26b-a4b-it',
-                'models/gemma-3-27b-it',
-                'models/gemini-2.5-flash-lite',
-                'models/gemini-2.5-flash',
+                'models/gemini-2.5-flash-lite',  # Fastest: 1-3s
+                'models/gemini-2.5-flash',        # Fast: 2-4s
+                'models/gemma-3-27b-it',          # Medium: 3-5s
+                'models/gemma-4-26b-a4b-it',      # Slower: 6-10s
+                'models/gemma-4-31b-it',          # Slowest: 8-15s (fallback only)
                 'models/gemini-3.1-flash-lite-preview',
             ]:
                 try:
@@ -286,18 +286,26 @@ class AIService:
                     else:
                         config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                    response = await self.google_client.aio.models.generate_content(
-                        model=g_model,
-                        contents=contents,
-                        config=config
+                    # Per-model timeout: fast models get 8s, slow models get 20s
+                    model_timeout = 8 if 'flash' in g_model else 20
+                    response = await asyncio.wait_for(
+                        self.google_client.aio.models.generate_content(
+                            model=g_model,
+                            contents=contents,
+                            config=config
+                        ),
+                        timeout=model_timeout
                     )
                     if response.text:
                         logger.info(f"[Google SDK Chat] Success via {g_model}")
                         return response.text
+                except asyncio.TimeoutError:
+                    logger.warning(f"[Google SDK Chat Fallback] {g_model} timed out, trying next model")
+                    continue
                 except Exception as e:
                     logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
                     if "503" in str(e) or "UNAVAILABLE" in str(e):
-                        await asyncio.sleep(2)  # Brief pause on 503 before trying next model
+                        await asyncio.sleep(1)
                     elif "429" in str(e):
                         await asyncio.sleep(1)
 
@@ -448,14 +456,14 @@ class AIService:
         try:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Immortal Pantheon Restoration) ---
             if self.google_client_beta:
-                # Pantheon Fleet Stack: Prioritizing your premium high-capacity tiers
-                # ADVANCED QUOTA BUFF: Rotating through your 2026 Registry
+                # Speed-first order for streaming: flash-lite is fastest
                 for g_model in [
-                    'models/gemma-4-31b-it',
-                    'models/gemma-4-26b-a4b-it',
-                    'models/gemma-3-27b-it',
-                    'models/gemini-2.5-flash-lite',
-                    'models/gemini-2.5-flash',
+                    'models/gemini-2.5-flash-lite',  # Fastest: 1-3s
+                    'models/gemini-2.5-flash',        # Fast: 2-4s
+                    'models/gemma-3-27b-it',          # Medium: 3-5s
+                    'models/gemma-4-26b-a4b-it',      # Slower: 6-10s
+                    'models/gemma-4-31b-it',          # Slowest: 8-15s (fallback only)
+                    'models/gemini-3.1-flash-lite-preview',
                     'models/gemini-3.1-flash-lite-preview',
                 ]:
                     try:
