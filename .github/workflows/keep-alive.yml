@@ -2,42 +2,25 @@ name: Keep Render Services Alive
 
 on:
   schedule:
-    # Runs every 5 minutes — prevents Render free tier cold starts
     - cron: '*/5 * * * *'
-  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
 
 jobs:
   ping:
-    name: Ping Services
     runs-on: ubuntu-latest
-    timeout-minutes: 2
-
+    timeout-minutes: 3
     steps:
       - name: Ping Backend
         run: |
-          echo "Pinging backend..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+          echo "Pinging backend at $(date -u)..."
+          curl -s -o /dev/null -w "Backend HTTP: %{http_code}\n" \
+            --max-time 45 \
             "https://flowstate-backend-pukh.onrender.com/api/auth/me/" \
-            -H "Accept: application/json")
-          echo "Backend status: $STATUS"
-          # 401 is fine — means the server is awake, just not authenticated
-          if [ "$STATUS" = "000" ]; then
-            echo "WARNING: Backend did not respond"
-          else
-            echo "Backend is alive (HTTP $STATUS)"
-          fi
+            -H "Accept: application/json" || echo "Backend ping failed"
 
       - name: Ping Frontend
         run: |
-          echo "Pinging frontend..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            "https://flowstate-frontend-7irq.onrender.com/")
-          echo "Frontend status: $STATUS"
-          if [ "$STATUS" = "000" ]; then
-            echo "WARNING: Frontend did not respond"
-          else
-            echo "Frontend is alive (HTTP $STATUS)"
-          fi
-
-      - name: Summary
-        run: echo "Keep-alive ping complete at $(date -u)"
+          echo "Pinging frontend at $(date -u)..."
+          curl -s -o /dev/null -w "Frontend HTTP: %{http_code}\n" \
+            --max-time 45 \
+            "https://flowstate-frontend-7irq.onrender.com/" || echo "Frontend ping failed"
