@@ -1086,7 +1086,7 @@ class AIService:
                 "1. MICRO-PARAGRAPHING: Limit every paragraph to a maximum of 3-4 sentences. NEVER return a wall of text.\n"
                 "2. SEMANTIC BOLDING: **Bold** high-impact keywords and concepts the first time they appear.\n"
                 "3. BULLET POINTS: Use bullet points religiousy for any lists or complex breakdowns.\n"
-                "4. ACADEMIC DEPTH: Provide a MINIMUM of 20 detailed 'sections' for a full Masterclass. Expansion is REQUIREMENT. \n\n"
+                "4. ACADEMIC DEPTH: Provide 10-15 detailed 'sections' per chunk. Focus on quality and depth, not quantity. \n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
                 "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Deep 3-paragraph summary\"},\n"
@@ -1204,7 +1204,7 @@ class AIService:
 
         kit = {
             'overview': overview,
-            'sections': all_sections[:150],
+            'sections': all_sections[:50],
             'vocabulary': all_vocabulary[:200],
             'exam_tips': list(dict.fromkeys(all_tips))[:50],
         }
