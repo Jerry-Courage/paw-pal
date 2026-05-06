@@ -59,6 +59,13 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     def get_cover_image_url(self, obj):
         if not obj.cover_image: return None
+        try:
+            # Check if the file actually exists on disk before returning URL
+            # (Render's ephemeral filesystem wipes files on redeploy)
+            if not obj.cover_image.storage.exists(obj.cover_image.name):
+                return None
+        except Exception:
+            return None
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(obj.cover_image.url)

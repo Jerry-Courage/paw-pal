@@ -1633,7 +1633,7 @@ class AIService:
                 logger.info(f"[ImageGen:Service] Tier 0 (Imagen 4) attempting")
 
                 response = self.google_client.models.generate_images(
-                    model='models/imagen-4.0-generate-preview-06-06',
+                    model='imagen-4.0-generate-001',
                     prompt=full_enhanced_prompt,
                     config={'number_of_images': 1}
                 )
