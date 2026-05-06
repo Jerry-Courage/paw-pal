@@ -125,8 +125,8 @@ export default function PlannerPage() {
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                <div className="flex items-center justify-between gap-1 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-[1.5rem] p-1.5 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all">
-                  <button onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all active:scale-90">
+                <div className="flex items-center justify-between gap-1 bg-white/5 backdrop-blur-md rounded-2xl p-1.5 border border-white/8 transition-all">
+                  <button onClick={() => setWeekStart(subWeeks(weekStart, 1))} className="p-2.5 rounded-xl hover:bg-white/5 text-slate-500 transition-all active:scale-90">
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <div className="px-6 flex flex-col items-center justify-center min-w-[150px]">
@@ -135,7 +135,7 @@ export default function PlannerPage() {
                       {format(weekStart, 'd')} – {format(weekEnd, 'd')}
                     </span>
                   </div>
-                  <button onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all active:scale-90">
+                  <button onClick={() => setWeekStart(addWeeks(weekStart, 1))} className="p-2.5 rounded-xl hover:bg-white/5 text-slate-500 transition-all active:scale-90">
                     <ChevronRight className="w-5 h-5" />
                   </button>
                 </div>
@@ -151,7 +151,7 @@ export default function PlannerPage() {
 
            {/* TodayHUD */}
            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-emerald-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <GraduationCap className="w-7 h-7" />
                  </div>
@@ -162,7 +162,7 @@ export default function PlannerPage() {
                     </p>
                  </div>
               </div>
-              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-violet-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-violet-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <BookOpen className="w-7 h-7" />
                  </div>
@@ -173,7 +173,7 @@ export default function PlannerPage() {
                     </p>
                  </div>
               </div>
-              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-rose-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-rose-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <Target className="w-7 h-7" />
                  </div>
@@ -184,7 +184,7 @@ export default function PlannerPage() {
                     </p>
                  </div>
               </div>
-              <div className="bg-white/40 dark:bg-slate-900/40 p-5 rounded-[2.25rem] border border-slate-200/50 dark:border-slate-800/50 shadow-sm flex items-center gap-4 group hover:border-sky-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all duration-300">
+              <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/6 flex items-center gap-4 group hover:border-sky-500/20 transition-all duration-300">
                  <div className="w-14 h-14 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-500 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-inner">
                     <Zap className="w-7 h-7" />
                  </div>
@@ -203,12 +203,12 @@ export default function PlannerPage() {
           <div className="xl:col-span-3 bg-[#111] rounded-[2rem] border border-white/6 overflow-hidden flex flex-col">
             
             {/* Mobile day strip */}
-            <div className="flex xl:hidden overflow-x-auto scrollbar-hide border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="flex xl:hidden overflow-x-auto scrollbar-hide border-b border-white/5 bg-[#111]">
               {days.map(day => (
                 <button key={day.toISOString()} onClick={() => setSelectedDay(day)}
                   className={cn('flex-shrink-0 flex flex-col items-center px-5 py-4 transition-colors relative',
-                    isSameDay(day, selectedDay) ? 'bg-sky-50 dark:bg-sky-900/30 text-sky-600' :
-                    isSameDay(day, new Date()) ? 'text-sky-500' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50')}>
+                    isSameDay(day, selectedDay) ? 'bg-orange-500/10 text-orange-400' :
+                    isSameDay(day, new Date()) ? 'text-orange-400' : 'text-slate-500 hover:bg-white/5')}>
                   <span className="text-[10px] font-bold uppercase tracking-widest">{format(day, 'EEE')}</span>
                   <span className="text-xl font-black mt-1">{format(day, 'd')}</span>
                   {getSessionsForDay(day).length > 0 && <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-sky-500 rounded-full" />}
@@ -217,7 +217,7 @@ export default function PlannerPage() {
             </div>
 
             {/* Mobile sessions list */}
-            <div className="xl:hidden p-6 space-y-3 bg-slate-50/30 dark:bg-slate-950/30 min-h-[400px]">
+            <div className="xl:hidden p-6 space-y-3 bg-[#0d0d0d] min-h-[400px]">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{format(selectedDay, 'EEEE, MMMM d')}</p>
               {getSessionsForDay(selectedDay).length === 0 ? (
                 <div className="text-center py-16">
@@ -232,12 +232,12 @@ export default function PlannerPage() {
 
             {/* Desktop week grid */}
             <div id="tour-planner-calendar" className="hidden xl:flex flex-col flex-1">
-              <div className="grid grid-cols-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 sticky top-0">
+              <div className="grid grid-cols-8 border-b border-white/5 bg-[#111] z-10 sticky top-0">
                 <div className="p-4" />
                 {days.map(day => (
-                  <div key={day.toISOString()} className={cn('p-4 text-center border-l border-slate-100 dark:border-slate-800', isSameDay(day, new Date()) && 'bg-sky-50 dark:bg-sky-900/20')}>
+                  <div key={day.toISOString()} className={cn('p-4 text-center border-l border-white/5', isSameDay(day, new Date()) && 'bg-orange-500/5')}>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(day, 'EEE')}</div>
-                    <div className={cn('text-xl font-black mt-1', isSameDay(day, new Date()) ? 'text-sky-500' : 'text-slate-900 dark:text-white')}>
+                    <div className={cn('text-xl font-black mt-1', isSameDay(day, new Date()) ? 'text-orange-400' : 'text-white')}>
                       {format(day, 'd')}
                     </div>
                     <div className="text-[10px] font-semibold text-slate-400 h-4 mt-1">
@@ -246,19 +246,19 @@ export default function PlannerPage() {
                   </div>
                 ))}
               </div>
-              <div className="overflow-y-auto custom-scrollbar flex-1 relative bg-slate-50/20 dark:bg-slate-950/20">
+              <div className="overflow-y-auto custom-scrollbar flex-1 relative bg-[#0d0d0d]">
                  {/* Current Time Indicator logic could go here */}
                 {HOURS.map(hour => (
                   <div key={hour} className="grid grid-cols-8 min-h-[80px] group relative">
                     {/* Hour Label */}
-                    <div className="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right border-b border-slate-50 dark:border-slate-800/50 flex-shrink-0 bg-white dark:bg-slate-900 z-10">
+                    <div className="p-3 text-[10px] font-bold text-slate-600 uppercase tracking-widest text-right border-b border-white/5 shrink-0 bg-[#111] z-10">
                       {hour}:00
                     </div>
                     {/* Day Columns */}
                     {days.map(day => {
                       const daySessions = getSessionsForDay(day).filter((s: any) => new Date(s.start_time).getHours() === hour)
                       return (
-                        <div key={day.toISOString()} className="border-l border-b border-slate-100 dark:border-slate-800 transition-colors group-hover:bg-slate-50/50 dark:group-hover:bg-slate-800/20 p-1.5 relative min-w-0">
+                        <div key={day.toISOString()} className="border-l border-b border-white/5 transition-colors group-hover:bg-white/3 p-1.5 relative min-w-0">
                           {daySessions.map((s: any) => {
                             const typeStyle = TYPE_STYLES[s.session_type] || TYPE_STYLES.study
                             const TypeIcon = typeStyle.icon
@@ -301,9 +301,9 @@ export default function PlannerPage() {
           <div className="space-y-6">
             
             {/* AI Suggestions Widget */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 shadow-sm overflow-hidden relative group">
+            <div className="bg-[#1a1a1a] border border-white/6 rounded-[2rem] p-6 overflow-hidden relative group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110 pointer-events-none" />
-              <h3 className="font-black text-slate-900 dark:text-white text-sm mb-1 flex items-center gap-2 relative z-10">
+              <h3 className="font-black text-white text-sm mb-1 flex items-center gap-2 relative z-10">
                 <Zap className="w-4 h-4 text-yellow-500" /> Smart Suggestions
               </h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10 mb-5">AI Gen Schedule</p>
@@ -352,10 +352,10 @@ export default function PlannerPage() {
             </div>
 
             {/* Deadlines Widget */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 shadow-sm">
+            <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="font-black text-slate-900 dark:text-white text-sm">Deadlines</h3>
+                  <h3 className="font-black text-white text-sm">Deadlines</h3>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Upcoming Goals</p>
                 </div>
                 <span className="text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1 rounded-full">{deadlines.length}</span>
@@ -376,12 +376,12 @@ export default function PlannerPage() {
 
       {/* ── Slide Over Panel (Overlay for Mobile) ── */}
       {activePanel !== 'none' && (
-        <div className="fixed inset-0 bg-slate-900/20 dark:bg-black/40 backdrop-blur-sm z-40 md:hidden transition-opacity" onClick={closePanel} />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden transition-opacity" onClick={closePanel} />
       )}
 
       {/* ── Right Slide Over Panel Container ── */}
       <div className={cn(
-        "fixed md:absolute top-0 right-0 bottom-0 w-full md:w-[400px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-50 transform transition-transform duration-500 ease-in-out flex flex-col",
+        "fixed md:absolute top-0 right-0 bottom-0 w-full md:w-[400px] bg-[#111] border-l border-white/5 shadow-2xl z-50 transform transition-transform duration-500 ease-in-out flex flex-col",
         activePanel !== 'none' ? "translate-x-0" : "translate-x-full"
       )}>
         {activePanel === 'detail' && panelSession && (
@@ -433,7 +433,7 @@ function AICommandBar({ onInterpret }: { onInterpret: (data: any) => void }) {
   return (
     <div className="relative group animate-in fade-in slide-in-from-top-4 duration-1000">
       <div className="absolute -inset-1 bg-gradient-to-r from-sky-500 to-violet-600 rounded-[2.5rem] blur opacity-5 group-hover:opacity-15 transition duration-1000 group-hover:duration-200"></div>
-      <div className="relative bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-[2rem] p-2 flex items-center gap-2 shadow-2xl shadow-slate-200/30 dark:shadow-none">
+      <div className="relative bg-[#1a1a1a] border border-white/8 rounded-2xl p-2 flex items-center gap-2">
         <div className="pl-4 sm:pl-6 flex items-center gap-3 text-sky-500">
           <Zap className={cn("w-6 h-6", interpreting && "animate-pulse")} />
           <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden md:inline-block">Command Intel</span>
@@ -445,7 +445,7 @@ function AICommandBar({ onInterpret }: { onInterpret: (data: any) => void }) {
           onKeyDown={(e) => e.key === 'Enter' && handleCommand()}
           placeholder="Schedule math lesson tomorrow at 3pm..."
           disabled={interpreting}
-          className="flex-1 bg-transparent px-2 sm:px-4 py-3 outline-none text-slate-900 dark:text-white font-bold text-base placeholder:text-slate-400 placeholder:font-bold disabled:opacity-50 min-w-0"
+          className="flex-1 bg-transparent px-2 sm:px-4 py-3 outline-none text-white font-bold text-base placeholder:text-slate-600 disabled:opacity-50 min-w-0"
         />
         <button 
           onClick={handleCommand}
@@ -530,8 +530,8 @@ function SlideDetailPanel({ session: s, onClose, onEdit, onDelete, onComplete, c
         {/* Timing */}
         <div className="space-y-3">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Schedule</h4>
-          <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-             <div className="p-2.5 bg-white dark:bg-slate-700 rounded-xl shadow-sm"><Calendar className="w-5 h-5 text-sky-500" /></div>
+          <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/6">
+             <div className="p-2.5 bg-white/10 rounded-xl"><Calendar className="w-5 h-5 text-sky-500" /></div>
              <div>
                <p className="text-sm font-bold text-slate-900 dark:text-white">{format(new Date(s.start_time), 'EEEE, MMMM d')}</p>
                <p className="text-xs font-semibold text-slate-500">{format(new Date(s.start_time), 'h:mm a')} – {format(new Date(s.end_time), 'h:mm a')} <span className="opacity-50">({s.duration_minutes}m)</span></p>
@@ -580,7 +580,7 @@ function SlideDetailPanel({ session: s, onClose, onEdit, onDelete, onComplete, c
         )}
       </div>
 
-      <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
+      <div className="p-6 md:p-8 border-t border-white/5 bg-[#111] space-y-3">
          {s.status !== 'completed' && (
            <button onClick={onComplete} disabled={completing} className="w-full btn-primary py-4 rounded-2xl shadow-xl shadow-sky-200 dark:shadow-none hover:-translate-y-1 transition-all active:scale-95 flex justify-center items-center font-bold text-base">
              <CheckCircle2 className="w-5 h-5 mr-3" /> {completing ? 'Logging Results...' : 'Mark Session Complete'}
@@ -683,7 +683,7 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
 
   return (
     <>
-      <div className="p-6 md:p-8 flex-shrink-0 border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between">
+      <div className="p-6 md:p-8 shrink-0 border-b border-white/5 bg-[#111] flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{isEdit ? 'Edit Directive' : 'New Plan Phase'}</h2>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Schedule Architecture</p>
@@ -691,7 +691,7 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
         <button onClick={onClose} className="p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 rounded-xl transition-all"><X className="w-5 h-5 text-slate-500" /></button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar bg-slate-50/30 dark:bg-slate-950/30">
+      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar bg-[#0d0d0d]">
         
         <div className="space-y-4">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Logistics</h4>
@@ -715,16 +715,16 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
              </div>
              <div>
                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Operation Title <span className="text-rose-500">*</span></label>
-               <input value={form.title} onChange={set('title')} placeholder="e.g. Master Calculus Physics" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-900 dark:text-white shadow-sm" />
+               <input value={form.title} onChange={set('title')} placeholder="e.g. Master Calculus Physics" className="input text-sm font-semibold" />
              </div>
              <div>
                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Subject Category</label>
-               <input value={form.subject} onChange={set('subject')} placeholder="e.g. Physics" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-900 dark:text-white shadow-sm" />
+               <input value={form.subject} onChange={set('subject')} placeholder="e.g. Physics" className="input text-sm font-semibold" />
              </div>
           </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
+        <div className="space-y-4 pt-4 border-t border-white/5">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Temporal Intelligence</h4>
           {form.session_type === 'class' && !isEdit && (
             <div className="space-y-4 bg-emerald-500/5 border border-emerald-500/10 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-500">
@@ -752,21 +752,21 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
           <div className="grid grid-cols-2 gap-4">
              <div>
                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Time Start <span className="text-rose-500">*</span></label>
-               <input type="datetime-local" value={form.start_time} onChange={set('start_time')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm" />
+               <input type="datetime-local" value={form.start_time} onChange={set('start_time')} className="input text-sm" />
              </div>
              <div>
                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Time End <span className="text-rose-500">*</span></label>
-               <input type="datetime-local" value={form.end_time} onChange={set('end_time')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm" />
+               <input type="datetime-local" value={form.end_time} onChange={set('end_time')} className="input text-sm" />
              </div>
           </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
+        <div className="space-y-4 pt-4 border-t border-white/5">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Library Integration</h4>
           {assignments.length > 0 && (
              <div>
                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2">Relate to Assignment</label>
-               <select value={form.assignment} onChange={handleAssignmentChange} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 appearance-none shadow-sm">
+               <select value={form.assignment} onChange={handleAssignmentChange} className="input text-sm appearance-none">
                  <option value="">No assignment attached</option>
                  {assignments.map((a: any) => <option key={a.id} value={a.id}>{a.title}{a.subject ? ` · ${a.subject}` : ''}</option>)}
                </select>
@@ -781,9 +781,9 @@ function SlideFormPanel({ session, isEdit, onClose }: { session?: any; isEdit: b
           </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
+        <div className="space-y-4 pt-4 border-t border-white/5">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operational Intel</h4>
-          <textarea placeholder="Specific focus areas, chapters, or goals for this phase..." value={form.notes} onChange={set('notes')} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/50 transition-all text-sm font-medium text-slate-900 dark:text-white resize-none shadow-sm" rows={3} />
+          <textarea placeholder="Specific focus areas, chapters, or goals for this phase..." value={form.notes} onChange={set('notes')} className="input text-sm resize-none" rows={3} />
         </div>
 
       </div>
