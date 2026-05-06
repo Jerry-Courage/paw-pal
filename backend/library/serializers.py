@@ -17,11 +17,11 @@ class ResourceImageSerializer(serializers.ModelSerializer):
         if not obj.image:
             return None
         try:
-            import os
-            if obj.image.name and not os.path.exists(obj.image.path):
+            # Check if file actually exists on disk (ephemeral filesystem check)
+            if not obj.image.storage.exists(obj.image.name):
                 return None
         except Exception:
-            pass
+            return None
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(obj.image.url)

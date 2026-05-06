@@ -115,8 +115,6 @@ FALLBACK_MODELS = [
     'models/gemma-4-26b-a4b-it',     # STABLE: Unlimited Tokens
     'models/gemini-2.5-flash',
     'models/gemini-2.5-flash-lite',
-    'models/gemini-3.1-flash-lite-preview',
-    'models/gemma-3-27b-it',
     'openrouter/auto',
 ]
 
@@ -270,10 +268,8 @@ class AIService:
             for g_model in [
                 'models/gemini-2.5-flash-lite',  # Fastest: 1-3s
                 'models/gemini-2.5-flash',        # Fast: 2-4s
-                'models/gemma-3-27b-it',          # Medium: 3-5s
-                'models/gemma-4-26b-a4b-it',      # Slower: 6-10s
-                'models/gemma-4-31b-it',          # Slowest: 8-15s (fallback only)
-                'models/gemini-3.1-flash-lite-preview',
+                'models/gemma-4-26b-a4b-it',      # Medium: 5-8s
+                'models/gemma-4-31b-it',          # Slower: 8-15s (fallback only)
             ]:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
@@ -286,8 +282,8 @@ class AIService:
                     else:
                         config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                    # Per-model timeout: fast models get 8s, slow models get 20s
-                    model_timeout = 8 if 'flash' in g_model else 20
+                    # Per-model timeout: flash models get 20s (cold start can be slow), Gemma gets 30s
+                    model_timeout = 20 if 'flash' in g_model else 30
                     response = await asyncio.wait_for(
                         self.google_client.aio.models.generate_content(
                             model=g_model,
@@ -460,10 +456,9 @@ class AIService:
                 for g_model in [
                     'models/gemini-2.5-flash-lite',  # Fastest: 1-3s
                     'models/gemini-2.5-flash',        # Fast: 2-4s
-                    'models/gemma-3-27b-it',          # Medium: 3-5s
-                    'models/gemma-4-26b-a4b-it',      # Slower: 6-10s
-                    'models/gemma-4-31b-it',          # Slowest: 8-15s (fallback only)
-                    'models/gemini-3.1-flash-lite-preview',
+                    'models/gemma-4-26b-a4b-it',      # Medium: 5-8s
+                    'models/gemma-4-31b-it',          # Slower: 8-15s (fallback only)
+                ]:
                     'models/gemini-3.1-flash-lite-preview',
                 ]:
                     try:
