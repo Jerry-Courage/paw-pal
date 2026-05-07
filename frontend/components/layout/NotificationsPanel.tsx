@@ -203,23 +203,3 @@ export default function NotificationsPanel() {
   )
 }
 
-const TYPE_CONFIG: Record<string, { icon: any; color: string }> = {
-  ai_nudge:  { icon: Sparkles, color: 'bg-sky-100 dark:bg-sky-950 text-sky-500' },
-  streak:    { icon: Flame,    color: 'bg-orange-100 dark:bg-orange-950 text-orange-500' },
-  deadline:  { icon: Calendar, color: 'bg-red-100 dark:bg-red-950 text-red-500' },
-  flashcard: { icon: BookOpen, color: 'bg-violet-100 dark:bg-violet-950 text-violet-500' },
-  group:     { icon: Users,    color: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-500' },
-  resource:  { icon: BookOpen, color: 'bg-violet-100 dark:bg-violet-950 text-violet-500' },
-  system:    { icon: Info,     color: 'bg-gray-100 dark:bg-gray-800 text-gray-500' },
-}
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
-
