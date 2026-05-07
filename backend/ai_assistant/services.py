@@ -111,12 +111,8 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
-    'gemma-3-1b-it',             # Fastest Gemma 3
-    'gemma-3-4b-it',             # Fast Gemma 3
-    'gemma-3-12b-it',            # Medium Gemma 3
-    'gemma-3-27b-it',            # Larger Gemma 3
-    'models/gemma-4-26b-a4b-it', # Gemma 4 stable
-    'models/gemma-4-31b-it',     # Gemma 4 supreme
+    'models/gemma-4-31b-it',         # SUPREME: Unlimited Tokens
+    'models/gemma-4-26b-a4b-it',     # STABLE: Unlimited Tokens
     'openrouter/auto',
 ]
 
@@ -266,15 +262,10 @@ class AIService:
 
         # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Gemma + Gemini Fleet) ---
         if self.google_client_beta:
-            # Speed-first: Gemma 3 1B is fastest (smallest model, lowest latency)
-            # then scale up to larger models as fallback
+            # Only models confirmed working on v1beta endpoint
             for g_model in [
-                'gemma-3-1b-it',              # Fastest: ~1-2s (primary for chat)
-                'gemma-3-4b-it',              # Fast: ~2-3s
-                'gemma-3-12b-it',             # Medium: ~3-5s
-                'gemma-3-27b-it',             # Slower: ~5-8s
-                'models/gemma-4-26b-a4b-it',  # Fallback: ~6-10s
-                'models/gemma-4-31b-it',      # Last resort: ~8-15s
+                'models/gemma-4-26b-a4b-it',  # Fast: 3-6s (confirmed working)
+                'models/gemma-4-31b-it',      # Slower: 8-15s (confirmed working)
             ]:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
@@ -287,13 +278,8 @@ class AIService:
                     else:
                         config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                    # Per-model timeout scaled by model size
-                    if '1b' in g_model or '4b' in g_model:
-                        model_timeout = 10   # Small models: fast
-                    elif '12b' in g_model or '27b' in g_model:
-                        model_timeout = 15   # Medium models
-                    else:
-                        model_timeout = 25   # Large Gemma 4 models
+                    # 25s timeout for Gemma 4 models
+                    model_timeout = 25
                     response = await asyncio.wait_for(
                         self.google_client.aio.models.generate_content(
                             model=g_model,
@@ -462,14 +448,10 @@ class AIService:
         try:
             # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Immortal Pantheon Restoration) ---
             if self.google_client_beta:
-                # Speed-first: Gemma 3 1B primary, scale up as fallback
+                # Only models confirmed working on v1beta endpoint
                 for g_model in [
-                    'gemma-3-1b-it',              # Fastest primary
-                    'gemma-3-4b-it',              # Fast fallback
-                    'gemma-3-12b-it',             # Medium fallback
-                    'gemma-3-27b-it',             # Slower fallback
-                    'models/gemma-4-26b-a4b-it',  # Large fallback
-                    'models/gemma-4-31b-it',      # Last resort
+                    'models/gemma-4-26b-a4b-it',  # Fast: 3-6s (confirmed working)
+                    'models/gemma-4-31b-it',      # Slower: 8-15s (confirmed working)
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
