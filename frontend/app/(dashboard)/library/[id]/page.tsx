@@ -177,7 +177,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   })
 
   if (isLoading) return (
-    <div className="min-h-[calc(100dvh-56px)] bg-[#0d0d0d] flex items-center justify-center">
+    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 bg-orange-500/10 rounded-2xl flex items-center justify-center animate-pulse">
           <Sparkles className="w-5 h-5 text-orange-400" />
@@ -188,7 +188,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   )
 
   if (!resource) return (
-    <div className="min-h-[calc(100dvh-56px)] bg-[#0d0d0d] flex flex-col items-center justify-center gap-4">
+    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col items-center justify-center gap-4">
       <X className="w-8 h-8 text-rose-500" />
       <h1 className="text-lg font-black text-white">Resource Not Found</h1>
       <Link href="/library" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">← Back to Library</Link>
@@ -204,7 +204,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   })
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] bg-[#0d0d0d] overflow-hidden -mx-4 md:-mx-6 -mb-8">
+    <div className="fixed inset-0 top-14 flex bg-[#0d0d0d] overflow-hidden">
 
       {/* ── Left sidebar ─────────────────────────────────────────── */}
       <div className="hidden lg:flex flex-col w-48 shrink-0 bg-[#0d0d0d] border-r border-white/5 overflow-y-auto">

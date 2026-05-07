@@ -29,13 +29,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
-  const isStudio = pathname.startsWith('/workspace/')
+  // Full-viewport pages: no padding, just offset for TopNav
+  const isFullViewport = pathname.startsWith('/workspace/')
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
       <TopNav />
       <main className={cn(
-        isStudio ? 'h-[calc(100dvh-56px)] overflow-hidden mt-14' : 'pt-14 px-4 md:px-6 pb-20 md:pb-8'
+        isFullViewport ? 'h-[calc(100dvh-56px)] overflow-hidden mt-14' : 'pt-14 px-4 md:px-6 pb-20 md:pb-8'
       )}>
         {children}
       </main>

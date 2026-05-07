@@ -260,9 +260,37 @@ class AIService:
                     has_images = True
                     break
 
-        # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Gemma + Gemini Fleet) ---
+        # --- STAGE 0: HYPER-FAST GROQ (Primary — 560-1000 t/s, sub-second responses) ---
+        groq_key = os.getenv('GROQ_API_KEY')
+        if groq_key and not has_images:
+            # Try fastest models first: llama-3.1-8b-instant (560 t/s), llama-3.3-70b-versatile (280 t/s)
+            for groq_model, groq_timeout in [
+                ('llama-3.1-8b-instant', 6),       # 560 t/s — fastest
+                ('llama-3.3-70b-versatile', 10),   # 280 t/s — smarter
+            ]:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                            json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=groq_timeout,
+                        )
+                        if resp.status_code == 200:
+                            result = self._extract_content(resp.json())
+                            if result and result.strip():
+                                logger.info(f"[Groq Chat] Success via {groq_model}")
+                                return result
+                        elif resp.status_code == 429:
+                            await asyncio.sleep(0.5)
+                            continue
+                except Exception as e:
+                    logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
+                    continue
+
+        # --- STAGE 1: DIRECT GOOGLE GENAI SDK (Gemma 4 Fleet — confirmed working) ---
         if self.google_client_beta:
-            # Only models confirmed working on v1beta endpoint
+            # Only Gemma 4 models are available on the Gemini API (Gemma 3 is Vertex AI only)
             for g_model in [
                 'models/gemma-4-26b-a4b-it',  # Fast: 3-6s (confirmed working)
                 'models/gemma-4-31b-it',      # Slower: 8-15s (confirmed working)
@@ -278,15 +306,13 @@ class AIService:
                     else:
                         config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
 
-                    # 25s timeout for Gemma 4 models
-                    model_timeout = 25
                     response = await asyncio.wait_for(
                         self.google_client.aio.models.generate_content(
                             model=g_model,
                             contents=contents,
                             config=config
                         ),
-                        timeout=model_timeout
+                        timeout=25
                     )
                     if response.text:
                         logger.info(f"[Google SDK Chat] Success via {g_model}")
@@ -301,24 +327,20 @@ class AIService:
                     elif "429" in str(e):
                         await asyncio.sleep(1)
 
-        # --- STAGE 1: HYPER-FAST GROQ (Text-Only or Direct Vision) ---
-        groq_key = os.getenv('GROQ_API_KEY')
-        if groq_key:
+        # --- STAGE 1b: GROQ VISION (for image requests) ---
+        if groq_key and has_images:
             try:
-                # If images are present, we MUST use a vision-capable model
-                groq_model = 'llama-3.2-11b-vision-preview' if has_images else 'llama-3.3-70b-versatile'
                 async with httpx.AsyncClient() as client:
-                    url = "https://api.groq.com/openai/v1/chat/completions"
                     resp = await client.post(
-                        url,
+                        "https://api.groq.com/openai/v1/chat/completions",
                         headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                        json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
-                        timeout=12 if has_images else 8,
+                        json={'model': 'meta-llama/llama-4-scout-17b-16e-instruct', 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=15,
                     )
                     if resp.status_code == 200:
                         return self._extract_content(resp.json())
             except Exception as e:
-                logger.error(f"[Groq Chat Error] {e}")
+                logger.error(f"[Groq Vision Chat Error] {e}")
 
         # --- STAGE 2: OPENROUTER FREE TIER CYCLE (The Safety Net) ---
         models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
@@ -446,9 +468,59 @@ class AIService:
         messages = self._sanitize_messages(messages)
         
         try:
-            # --- STAGE 0: DIRECT GOOGLE GENAI SDK (Immortal Pantheon Restoration) ---
+            # --- STAGE 0: HYPER-FAST GROQ STREAMING (Primary — fastest responses) ---
+            groq_key = os.getenv('GROQ_API_KEY')
+            if groq_key:
+                for groq_model in ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']:
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            async with client.stream(
+                                "POST",
+                                "https://api.groq.com/openai/v1/chat/completions",
+                                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                                json={'model': groq_model, 'messages': messages, 'stream': True, 'max_tokens': 4096},
+                                timeout=httpx.Timeout(45.0, connect=5.0)
+                            ) as response:
+                                if response.status_code == 200:
+                                    in_think_block = False
+                                    async for line in response.aiter_lines():
+                                        if line.startswith('data: '):
+                                            data = line[6:].strip()
+                                            if data == '[DONE]': return
+                                            try:
+                                                chunk = json.loads(data)
+                                                delta = chunk['choices'][0]['delta']
+                                                if delta.get('reasoning'):
+                                                    continue
+                                                text = delta.get('content', '')
+                                                if not text: continue
+                                                if '<think>' in text:
+                                                    in_think_block = True
+                                                    parts = text.split('<think>')
+                                                    text = parts[0]
+                                                if in_think_block:
+                                                    if '</think>' in text:
+                                                        in_think_block = False
+                                                        parts = text.split('</think>')
+                                                        text = parts[-1]
+                                                    else:
+                                                        continue
+                                                if text: yield text
+                                            except: continue
+                                    return  # SUCCESS
+                                elif response.status_code == 429:
+                                    await asyncio.sleep(0.5)
+                                    continue
+                                else:
+                                    logger.warning(f"[Groq Stream] {groq_model} status {response.status_code}, trying next")
+                                    continue
+                    except Exception as e:
+                        logger.warning(f"[Groq Stream] {groq_model} failed: {e}")
+                        continue
+
+            # --- STAGE 1: DIRECT GOOGLE GENAI SDK (Gemma 4 Fleet) ---
             if self.google_client_beta:
-                # Only models confirmed working on v1beta endpoint
+                # Only Gemma 4 models are available on the Gemini API
                 for g_model in [
                     'models/gemma-4-26b-a4b-it',  # Fast: 3-6s (confirmed working)
                     'models/gemma-4-31b-it',      # Slower: 8-15s (confirmed working)
@@ -487,60 +559,6 @@ class AIService:
                         logger.warning(f"[Google SDK Fallback] {g_model} failed: {e}")
                         if "429" in str(e):
                             await asyncio.sleep(1)
-
-            # --- STAGE 1: HYPER-FAST GROQ STREAMING ---
-            groq_key = os.getenv('GROQ_API_KEY')
-            if groq_key:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        async with client.stream(
-                            "POST",
-                            "https://api.groq.com/openai/v1/chat/completions",
-                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                            json={'model': 'llama-3.3-70b-versatile', 'messages': messages, 'stream': True, 'max_tokens': 4096},
-                            timeout=httpx.Timeout(45.0, connect=5.0)
-                        ) as response:
-                            if response.status_code == 200:
-                                in_think_block = False
-                                async for line in response.aiter_lines():
-                                    if line.startswith('data: '):
-                                        data = line[6:].strip()
-                                        if data == '[DONE]': return
-                                        try:
-                                            chunk = json.loads(data)
-                                            delta = chunk['choices'][0]['delta']
-                                            
-                                            # 1. Skip explicit reasoning fields (Groq/OpenRouter)
-                                            if delta.get('reasoning'):
-                                                continue
-                                                
-                                            text = delta.get('content', '')
-                                            if not text: continue
-
-                                            # 2. State-aware <think> tag filtering
-                                            if '<think>' in text:
-                                                in_think_block = True
-                                                parts = text.split('<think>')
-                                                text = parts[0] # Keep text BEFORE the tag if any
-                                                # If there is text AFTER the tag, it's handled by the in_think_block check next
-                                            
-                                            if in_think_block:
-                                                if '</think>' in text:
-                                                    in_think_block = False
-                                                    parts = text.split('</think>')
-                                                    text = parts[-1] # Keep text AFTER the tag
-                                                else:
-                                                    continue # Skip all tokens inside think block
-                                            
-                                            if text: yield text
-                                        except: continue
-                                return
-                            else:
-                                logger.warning(f"[Groq Stream] Status {response.status_code}. Falling back to OpenRouter...")
-                                if response.status_code == 429:
-                                    await asyncio.sleep(1)
-                except Exception as e:
-                    logger.error(f"[Groq Stream Error] {e}")
 
             # --- STAGE 2: OPENROUTER DEEP FALLBACK CHAIN ---
             models_to_try = [self.model] + [m for m in FALLBACK_MODELS if m != self.model]
