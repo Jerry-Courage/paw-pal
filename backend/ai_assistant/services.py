@@ -471,7 +471,6 @@ class AIService:
                     'models/gemma-4-26b-a4b-it',  # Large fallback
                     'models/gemma-4-31b-it',      # Last resort
                 ]:
-                ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         
