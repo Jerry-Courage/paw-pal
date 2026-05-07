@@ -15,8 +15,7 @@ jobs:
           echo "Pinging backend at $(date -u)..."
           curl -s -o /dev/null -w "Backend HTTP: %{http_code}\n" \
             --max-time 45 \
-            "https://flowstate-backend-pukh.onrender.com/api/auth/me/" \
-            -H "Accept: application/json" || echo "Backend ping failed"
+            "https://flowstate-backend-pukh.onrender.com/health/" || echo "Backend ping failed"
 
       - name: Ping Frontend
         run: |
