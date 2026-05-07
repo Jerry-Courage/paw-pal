@@ -263,10 +263,12 @@ class AIService:
         # --- STAGE 0: HYPER-FAST GROQ (Primary — 560-1000 t/s, sub-second responses) ---
         groq_key = os.getenv('GROQ_API_KEY')
         if groq_key and not has_images:
-            # Try fastest models first: llama-3.1-8b-instant (560 t/s), llama-3.3-70b-versatile (280 t/s)
+            # Speed order: gpt-oss-20b (1000 t/s) > llama-3.1-8b (560 t/s) > gpt-oss-120b (500 t/s) > llama-3.3-70b (280 t/s)
             for groq_model, groq_timeout in [
-                ('llama-3.1-8b-instant', 6),       # 560 t/s — fastest
-                ('llama-3.3-70b-versatile', 10),   # 280 t/s — smarter
+                ('openai/gpt-oss-20b', 6),         # 1000 t/s — absolute fastest
+                ('llama-3.1-8b-instant', 6),       # 560 t/s — fast + reliable
+                ('openai/gpt-oss-120b', 8),        # 500 t/s — smarter
+                ('llama-3.3-70b-versatile', 10),   # 280 t/s — most capable
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -471,7 +473,12 @@ class AIService:
             # --- STAGE 0: HYPER-FAST GROQ STREAMING (Primary — fastest responses) ---
             groq_key = os.getenv('GROQ_API_KEY')
             if groq_key:
-                for groq_model in ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']:
+                for groq_model in [
+                    'openai/gpt-oss-20b',          # 1000 t/s — absolute fastest
+                    'llama-3.1-8b-instant',        # 560 t/s — fast + reliable
+                    'openai/gpt-oss-120b',         # 500 t/s — smarter
+                    'llama-3.3-70b-versatile',     # 280 t/s — most capable
+                ]:
                     try:
                         async with httpx.AsyncClient() as client:
                             async with client.stream(
