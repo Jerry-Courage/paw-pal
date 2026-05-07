@@ -253,7 +253,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       {/* ── Center: content ───────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Slim top bar — no title duplication */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 shrink-0">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 shrink-0 bg-[#0d0d0d]">
           <div className="flex items-center gap-2 min-w-0">
             <Link href="/library" className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-white transition-colors shrink-0">
               <ArrowLeft className="w-4 h-4" />
@@ -271,7 +271,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Content area */}
-        <div className="flex-1 overflow-y-auto bg-[#0d0d0d] scrollbar-hide">
+        <div className="flex-1 overflow-y-auto bg-[#0d0d0d] scrollbar-hide scroll-pt-4">
           {activeTool === 'notes' && (
             !hasNotes ? (
               <div className="flex flex-col items-center justify-center h-full p-12 text-center gap-5">

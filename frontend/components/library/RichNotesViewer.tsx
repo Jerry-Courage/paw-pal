@@ -61,7 +61,7 @@ export default function RichNotesViewer({
 
   return (
     <div className={cn(
-      "relative pb-24 max-w-3xl mx-auto px-4 sm:px-6 py-8",
+      "relative pb-24 max-w-3xl mx-auto px-4 sm:px-6 pt-5 pb-8",
     )}>
       {/* Header */}
       <div className="mb-8">
