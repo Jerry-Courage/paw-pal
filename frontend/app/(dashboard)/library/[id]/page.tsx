@@ -204,7 +204,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   })
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] -m-4 md:-m-6 bg-[#0d0d0d] overflow-hidden">
+    <div className="flex h-[calc(100dvh-56px)] bg-[#0d0d0d] overflow-hidden -mx-4 md:-mx-6 -mb-8">
 
       {/* ── Left sidebar ─────────────────────────────────────────── */}
       <div className="hidden lg:flex flex-col w-48 shrink-0 bg-[#0d0d0d] border-r border-white/5 overflow-y-auto">
