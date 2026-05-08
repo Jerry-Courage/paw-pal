@@ -116,6 +116,40 @@ FALLBACK_MODELS = [
     'openrouter/auto',
 ]
 
+# ─── PROVIDER ENDPOINTS ────────────────────────────────────────────────────────
+CEREBRAS_API_URL  = "https://api.cerebras.ai/v1/chat/completions"
+SAMBANOVA_API_URL = "https://api.sambanova.ai/v1/chat/completions"
+GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
+
+# ─── MODEL ROUTING STRATEGY ────────────────────────────────────────────────────
+#
+#  CHAT (fast, conversational — needs speed, not depth)
+#    1. Groq gpt-oss-20b       1000 t/s  — absolute fastest
+#    2. Groq llama-3.1-8b      560 t/s   — reliable fast
+#    3. SambaNova Llama-3.3-70B 12K RPD  — smart fallback
+#    4. Cerebras llama3.1-8b   14.4K RPD — high-quota fallback
+#    5. Google Gemma-4-26b               — last resort
+#
+#  STUDY KIT (smart, high output — needs quality + high daily quota)
+#    1. Cerebras gpt-oss-120b  14.4K RPD — smart + highest quota
+#    2. SambaNova gpt-oss-120b 12K RPD   — smart fallback
+#    3. Groq llama-3.3-70b     280 t/s   — capable fallback
+#    4. Google Gemma-4-31b               — last resort
+#
+#  STREAMING CHAT (needs speed + streaming support)
+#    1. Groq gpt-oss-20b       1000 t/s  — fastest streamer
+#    2. Groq llama-3.1-8b      560 t/s   — reliable
+#    3. Groq gpt-oss-120b      500 t/s   — smarter
+#    4. Groq llama-3.3-70b     280 t/s   — most capable
+#    5. Google Gemma-4-26b               — last resort
+#
+#  VISION (needs multimodal support)
+#    1. Google Gemini-2.5-Flash          — best vision
+#    2. Groq llama-4-scout-17b           — fast vision
+#    3. OpenRouter vision models         — fallback
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
 FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the funny, cool, and absolutely awesome AI study partner built into FlowState.
 
 Your identity:
@@ -246,34 +280,53 @@ class AIService:
         return contents, system_instruction.strip()
 
     async def chat(self, messages: list, target_model: str = None, max_tokens: int = 4096, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30) -> str:
-        """Hyper-Resilient 3-Stage non-streaming Chat: Google -> Groq -> OpenRouter."""
+        """
+        Hyper-Resilient Chat — optimised for SPEED (conversational use).
+        Chain: Groq (1000 t/s) → SambaNova (12K RPD) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
+        """
         if not self.api_key: return "API Key missing."
         
         messages = self._sanitize_messages(messages)
         target_model = forced_model or target_model or self.model
         
-        # Detect if this is a Multi-Modal request
-        has_images = False
-        for msg in messages:
-            if isinstance(msg.get('content'), list):
-                if any(p.get('type') == 'image_url' for p in msg['content']):
-                    has_images = True
-                    break
+        # Detect Multi-Modal request
+        has_images = any(
+            isinstance(msg.get('content'), list) and
+            any(p.get('type') == 'image_url' for p in msg['content'])
+            for msg in messages
+        )
 
-        # --- STAGE 0: HYPER-FAST GROQ (Primary — 560-1000 t/s, sub-second responses) ---
+        # ── VISION FAST PATH ──────────────────────────────────────────────────
+        if has_images:
+            groq_key = os.getenv('GROQ_API_KEY')
+            if groq_key:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            GROQ_API_URL,
+                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                            json={'model': 'meta-llama/llama-4-scout-17b-16e-instruct', 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=15,
+                        )
+                        if resp.status_code == 200:
+                            return self._extract_content(resp.json())
+                except Exception as e:
+                    logger.error(f"[Groq Vision Chat Error] {e}")
+            # Fall through to OpenRouter vision fallback below
+
+        # ── STAGE 0: GROQ — fastest inference on the planet ──────────────────
         groq_key = os.getenv('GROQ_API_KEY')
         if groq_key and not has_images:
-            # Speed order: gpt-oss-20b (1000 t/s) > llama-3.1-8b (560 t/s) > gpt-oss-120b (500 t/s) > llama-3.3-70b (280 t/s)
             for groq_model, groq_timeout in [
                 ('openai/gpt-oss-20b', 6),         # 1000 t/s — absolute fastest
-                ('llama-3.1-8b-instant', 6),       # 560 t/s — fast + reliable
-                ('openai/gpt-oss-120b', 8),        # 500 t/s — smarter
-                ('llama-3.3-70b-versatile', 10),   # 280 t/s — most capable
+                ('llama-3.1-8b-instant', 6),       # 560 t/s  — reliable fast
+                ('openai/gpt-oss-120b', 8),        # 500 t/s  — smarter
+                ('llama-3.3-70b-versatile', 10),   # 280 t/s  — most capable
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
                         resp = await client.post(
-                            "https://api.groq.com/openai/v1/chat/completions",
+                            GROQ_API_URL,
                             headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
                             json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
                             timeout=groq_timeout,
@@ -281,79 +334,89 @@ class AIService:
                         if resp.status_code == 200:
                             result = self._extract_content(resp.json())
                             if result and result.strip():
-                                logger.info(f"[Groq Chat] Success via {groq_model}")
+                                logger.info(f"[Groq Chat] ✓ {groq_model}")
                                 return result
                         elif resp.status_code == 429:
-                            await asyncio.sleep(0.5)
-                            continue
+                            await asyncio.sleep(0.3)
                 except Exception as e:
                     logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
-                    continue
 
-        # --- STAGE 1: DIRECT GOOGLE GENAI SDK (Gemma 4 Fleet — confirmed working) ---
-        if self.google_client_beta:
-            # Only Gemma 4 models are available on the Gemini API (Gemma 3 is Vertex AI only)
-            for g_model in [
-                'models/gemma-4-26b-a4b-it',  # Fast: 3-6s (confirmed working)
-                'models/gemma-4-31b-it',      # Slower: 8-15s (confirmed working)
+        # ── STAGE 1: SAMBANOVA — 12K RPD, OpenAI-compatible ──────────────────
+        samba_key = os.getenv('SAMBANOVA_API_KEY')
+        if samba_key and not has_images:
+            for samba_model, samba_timeout in [
+                ('Meta-Llama-3.3-70B-Instruct', 12),  # 12K RPD — smart
+                ('DeepSeek-V3.1', 12),                 # 12K RPD — reasoning
             ]:
                 try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            SAMBANOVA_API_URL,
+                            headers={"Authorization": f"Bearer {samba_key}", "Content-Type": "application/json"},
+                            json={'model': samba_model, 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=samba_timeout,
+                        )
+                        if resp.status_code == 200:
+                            result = self._extract_content(resp.json())
+                            if result and result.strip():
+                                logger.info(f"[SambaNova Chat] ✓ {samba_model}")
+                                return result
+                        elif resp.status_code == 429:
+                            await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"[SambaNova Chat] {samba_model} failed: {e}")
+
+        # ── STAGE 2: CEREBRAS — 14.4K RPD, high-quota safety net ─────────────
+        cerebras_key = os.getenv('CEREBRAS_API_KEY')
+        if cerebras_key and not has_images:
+            for cerebras_model, cerebras_timeout in [
+                ('llama3.1-8b', 8),    # 14.4K RPD — fast
+                ('gpt-oss-120b', 12),  # 14.4K RPD — smart
+            ]:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            CEREBRAS_API_URL,
+                            headers={"Authorization": f"Bearer {cerebras_key}", "Content-Type": "application/json"},
+                            json={'model': cerebras_model, 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=cerebras_timeout,
+                        )
+                        if resp.status_code == 200:
+                            result = self._extract_content(resp.json())
+                            if result and result.strip():
+                                logger.info(f"[Cerebras Chat] ✓ {cerebras_model}")
+                                return result
+                        elif resp.status_code == 429:
+                            await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"[Cerebras Chat] {cerebras_model} failed: {e}")
+
+        # ── STAGE 3: GOOGLE GEMMA 4 — confirmed working on v1beta ────────────
+        if self.google_client_beta and not has_images:
+            for g_model in ['models/gemma-4-26b-a4b-it', 'models/gemma-4-31b-it']:
+                try:
                     contents, sys_instr = self._to_gemini_format(messages)
-
-                    if 'gemma' in g_model.lower():
-                        if sys_instr:
-                            if contents and contents[0].get('role') == 'user':
-                                contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        config = {'max_output_tokens': max_tokens}
-                    else:
-                        config = {'system_instruction': sys_instr, 'max_output_tokens': max_tokens}
-
+                    if sys_instr and contents and contents[0].get('role') == 'user':
+                        contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
                     response = await asyncio.wait_for(
                         self.google_client.aio.models.generate_content(
-                            model=g_model,
-                            contents=contents,
-                            config=config
-                        ),
-                        timeout=25
+                            model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                        ), timeout=25
                     )
                     if response.text:
-                        logger.info(f"[Google SDK Chat] Success via {g_model}")
+                        logger.info(f"[Google SDK Chat] ✓ {g_model}")
                         return response.text
                 except asyncio.TimeoutError:
-                    logger.warning(f"[Google SDK Chat Fallback] {g_model} timed out, trying next model")
-                    continue
+                    logger.warning(f"[Google SDK Chat] {g_model} timed out")
                 except Exception as e:
-                    logger.warning(f"[Google SDK Chat Fallback] {g_model} failed: {e}")
-                    if "503" in str(e) or "UNAVAILABLE" in str(e):
-                        await asyncio.sleep(1)
-                    elif "429" in str(e):
-                        await asyncio.sleep(1)
+                    logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
 
-        # --- STAGE 1b: GROQ VISION (for image requests) ---
-        if groq_key and has_images:
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                        json={'model': 'meta-llama/llama-4-scout-17b-16e-instruct', 'messages': messages, 'max_tokens': max_tokens},
-                        timeout=15,
-                    )
-                    if resp.status_code == 200:
-                        return self._extract_content(resp.json())
-            except Exception as e:
-                logger.error(f"[Groq Vision Chat Error] {e}")
-
-        # --- STAGE 2: OPENROUTER FREE TIER CYCLE (The Safety Net) ---
+        # ── STAGE 4: OPENROUTER — last resort ────────────────────────────────
         models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
-        for i, model in enumerate(models_to_try):
-            if i >= max_fallbacks: break
-            
-            # Skip text-only models in fallback loop if we have images
-            is_vision_model = 'vision' in model.lower() or 'gemini' in model.lower() or 'claude' in model.lower() or 'gpt-4o' in model.lower()
+        for i, model in enumerate(models_to_try[:max_fallbacks]):
+            is_vision_model = any(k in model.lower() for k in ['vision', 'gemini', 'claude', 'gpt-4o'])
             if has_images and not is_vision_model:
                 continue
-
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
@@ -364,13 +427,121 @@ class AIService:
                     )
                     if response.status_code == 200:
                         content = self._extract_content(response.json())
-                        if content.strip() and "error" not in content.lower()[:50]: 
+                        if content.strip():
                             return content
             except:
                 continue
 
-        logger.error(f"[AI Final Failure]: No engines responded. Check API keys and network. Trace: {errors}")
-        return f"Intelligence Signal Interrupted. All engines failed. Primary Snack: {errors[0] if errors else 'Unknown Error'}"
+        logger.error("[AI Final Failure]: All engines exhausted.")
+        return "FlowAI is temporarily overloaded. Please try again in a moment."
+
+    async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
+        """
+        Study Kit Chat — optimised for QUALITY + HIGH DAILY QUOTA (generation tasks).
+        Chain: Cerebras gpt-oss-120b (14.4K RPD) → SambaNova gpt-oss-120b (12K RPD)
+               → Groq llama-3.3-70b → Google Gemma-4-31b → OpenRouter
+        """
+        # ── STAGE 0: CEREBRAS — smartest + highest daily quota ───────────────
+        cerebras_key = os.getenv('CEREBRAS_API_KEY')
+        if cerebras_key:
+            for cerebras_model, cerebras_timeout in [
+                ('gpt-oss-120b', 90),              # 14.4K RPD — smart, high quota
+                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — biggest free model
+            ]:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            CEREBRAS_API_URL,
+                            headers={"Authorization": f"Bearer {cerebras_key}", "Content-Type": "application/json"},
+                            json={'model': cerebras_model, 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=cerebras_timeout,
+                        )
+                        if resp.status_code == 200:
+                            result = self._extract_content(resp.json())
+                            if result and result.strip():
+                                logger.info(f"[Cerebras Kit] ✓ {cerebras_model}")
+                                return result
+                        elif resp.status_code == 429:
+                            await asyncio.sleep(1)
+                except Exception as e:
+                    logger.warning(f"[Cerebras Kit] {cerebras_model} failed: {e}")
+
+        # ── STAGE 1: SAMBANOVA — 12K RPD smart fallback ──────────────────────
+        samba_key = os.getenv('SAMBANOVA_API_KEY')
+        if samba_key:
+            for samba_model, samba_timeout in [
+                ('gpt-oss-120b', 90),                  # 12K RPD — smart
+                ('Meta-Llama-3.3-70B-Instruct', 90),   # 12K RPD — capable
+            ]:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            SAMBANOVA_API_URL,
+                            headers={"Authorization": f"Bearer {samba_key}", "Content-Type": "application/json"},
+                            json={'model': samba_model, 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=samba_timeout,
+                        )
+                        if resp.status_code == 200:
+                            result = self._extract_content(resp.json())
+                            if result and result.strip():
+                                logger.info(f"[SambaNova Kit] ✓ {samba_model}")
+                                return result
+                        elif resp.status_code == 429:
+                            await asyncio.sleep(1)
+                except Exception as e:
+                    logger.warning(f"[SambaNova Kit] {samba_model} failed: {e}")
+
+        # ── STAGE 2: GROQ — capable fallback ─────────────────────────────────
+        groq_key = os.getenv('GROQ_API_KEY')
+        if groq_key:
+            for groq_model, groq_timeout in [
+                ('llama-3.3-70b-versatile', 60),   # most capable on Groq
+                ('openai/gpt-oss-120b', 60),       # smart
+            ]:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            GROQ_API_URL,
+                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                            json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                            timeout=groq_timeout,
+                        )
+                        if resp.status_code == 200:
+                            result = self._extract_content(resp.json())
+                            if result and result.strip():
+                                logger.info(f"[Groq Kit] ✓ {groq_model}")
+                                return result
+                        elif resp.status_code == 429:
+                            await asyncio.sleep(1)
+                except Exception as e:
+                    logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
+
+        # ── STAGE 3: GOOGLE GEMMA 4 — last resort ────────────────────────────
+        if self.google_client_beta:
+            for g_model in ['models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
+                try:
+                    contents, sys_instr = self._to_gemini_format(messages)
+                    if sys_instr and contents and contents[0].get('role') == 'user':
+                        contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                    response = await asyncio.wait_for(
+                        self.google_client.aio.models.generate_content(
+                            model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                        ), timeout=60
+                    )
+                    if response.text:
+                        logger.info(f"[Google SDK Kit] ✓ {g_model}")
+                        return response.text
+                except asyncio.TimeoutError:
+                    logger.warning(f"[Google SDK Kit] {g_model} timed out")
+                except Exception as e:
+                    logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+
+        logger.error("[Kit Chat Final Failure]: All engines exhausted.")
+        return ""
+
+    def kit_chat_sync(self, messages: list, **kwargs) -> str:
+        """Synchronous wrapper for kit_chat. Used by generate_study_kit."""
+        return async_to_sync(self.kit_chat)(messages, **kwargs)
 
     def chat_sync(self, messages: list, **kwargs) -> str:
         """Synchronous wrapper for the Triple-Engine Chat. CRITICAL for background tasks."""
@@ -475,9 +646,9 @@ class AIService:
             if groq_key:
                 for groq_model in [
                     'openai/gpt-oss-20b',          # 1000 t/s — absolute fastest
-                    'llama-3.1-8b-instant',        # 560 t/s — fast + reliable
-                    'openai/gpt-oss-120b',         # 500 t/s — smarter
-                    'llama-3.3-70b-versatile',     # 280 t/s — most capable
+                    'llama-3.1-8b-instant',        # 560 t/s  — fast + reliable
+                    'openai/gpt-oss-120b',         # 500 t/s  — smarter
+                    'llama-3.3-70b-versatile',     # 280 t/s  — most capable
                 ]:
                     try:
                         async with httpx.AsyncClient() as client:
@@ -1271,7 +1442,9 @@ class AIService:
         if images:
             user_content += images # Inject base64 video frames/slides
             
-        future = watchdog.submit(self.chat_sync, [{'role': 'user', 'content': user_content}], max_tokens=8192)
+        # Study kit uses kit_chat_sync (Cerebras → SambaNova → Groq 70B → Google)
+        # for quality + high daily quota. Falls back to chat_sync if kit_chat returns empty.
+        future = watchdog.submit(self.kit_chat_sync, [{'role': 'user', 'content': user_content}], max_tokens=8192)
         try:
             # [IMPERIAL SCALE] Upgraded timeout to 500s for 20-section depth
             res = future.result(timeout=500)
