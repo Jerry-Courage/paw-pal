@@ -953,52 +953,84 @@ export default function WorkspaceCollaborationStudio() {
 function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [error, setError] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const togglePlay = () => {
-    if (!audioRef.current) return
-    if (isPlaying) audioRef.current.pause()
-    else audioRef.current.play()
-    setIsPlaying(!isPlaying)
+    if (!audioRef.current || error) return
+    if (isPlaying) {
+      audioRef.current.pause()
+      setIsPlaying(false)
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(e => {
+        console.error('[AudioPlayer] play() failed:', e)
+        setError(true)
+      })
+    }
   }
 
-  // Ensure absolute URL
-  const audioUrl = url.startsWith('http') || url.startsWith('blob') 
-    ? url 
-    : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000'}${url}`
+  // Resolve URL:
+  // - blob: URLs → use as-is (optimistic user VN)
+  // - data: URIs → use as-is (AI base64 voice note)
+  // - http/https → use as-is (already absolute)
+  // - relative /media/... → prepend backend origin
+  const audioUrl = (() => {
+    if (!url) return ''
+    if (url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('http')) return url
+    const base = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000'
+    return `${base}${url.startsWith('/') ? '' : '/'}${url}`
+  })()
+
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
   return (
     <div className={cn(
       "mt-2 flex items-center gap-3 p-3 rounded-2xl min-w-[200px] sm:min-w-[240px]",
       isMe ? "bg-black/20" : "bg-zinc-800/40 border border-white/5"
     )}>
-      <audio 
-        ref={audioRef} 
-        src={audioUrl} 
-        onTimeUpdate={(e) => setProgress((e.currentTarget.currentTime / e.currentTarget.duration) * 100)}
-        onEnded={() => { setIsPlaying(false); setProgress(0); }}
-        className="hidden" 
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
+        onTimeUpdate={e => {
+          const el = e.currentTarget
+          if (el.duration) setProgress((el.currentTime / el.duration) * 100)
+        }}
+        onEnded={() => { setIsPlaying(false); setProgress(0) }}
+        onError={e => { console.error('[AudioPlayer] load error:', audioUrl, e); setError(true) }}
+        preload="metadata"
+        className="hidden"
       />
-      <button 
+      <button
         onClick={togglePlay}
+        disabled={error}
         className={cn(
-          "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-          isMe ? "bg-white/20 text-white hover:bg-white/30" : "bg-violet-500 text-white hover:bg-violet-600"
+          "w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0",
+          error ? "bg-red-500/20 text-red-400 cursor-not-allowed" :
+          isMe ? "bg-white/20 text-white hover:bg-white/30" : "bg-orange-500 text-white hover:bg-orange-400"
         )}
       >
-        {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+        {error ? <span className="text-[9px] font-black">ERR</span> :
+         isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
       </button>
 
-      <div className="flex-1">
-        <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-          <motion.div 
-            className={cn("h-full", isMe ? "bg-white" : "bg-violet-500")}
-            style={{ width: `${progress}%` }}
-          />
+      <div className="flex-1 min-w-0">
+        <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden cursor-pointer"
+          onClick={e => {
+            if (!audioRef.current || error) return
+            const rect = e.currentTarget.getBoundingClientRect()
+            const pct = (e.clientX - rect.left) / rect.width
+            audioRef.current.currentTime = pct * audioRef.current.duration
+          }}>
+          <div className={cn("h-full rounded-full transition-all", isMe ? "bg-white" : "bg-orange-500")}
+            style={{ width: `${progress}%` }} />
         </div>
-        <div className="mt-2 flex justify-between items-center">
-          <span className="text-[8px] font-black uppercase tracking-widest opacity-40">Neural Voice Note</span>
-          <Volume2 className="w-3 h-3 opacity-20" />
+        <div className="mt-1.5 flex justify-between items-center">
+          <span className="text-[8px] font-black uppercase tracking-widest opacity-40">
+            {error ? 'Load failed' : 'Voice Note'}
+          </span>
+          {duration > 0 && <span className="text-[8px] opacity-30 font-mono">{formatTime(duration)}</span>}
         </div>
       </div>
     </div>
