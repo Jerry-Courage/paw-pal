@@ -855,11 +855,27 @@ class AIService:
                                 else:
                                     vectors.append(None)
                             except Exception as item_err:
+                                err_str = str(item_err)
+                                if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
+                                    # Hit rate limit — wait and retry once
+                                    logger.warning(f"[RAG Cloud] Embedding 429 — sleeping 65s then retrying")
+                                    _time.sleep(65)
+                                    try:
+                                        r = self.google_client_v1.models.embed_content(
+                                            model=model_id,
+                                            contents=item,
+                                            config={'task_type': task_type}
+                                        )
+                                        if r.embeddings and len(r.embeddings) > 0:
+                                            vectors.append(r.embeddings[0].values)
+                                            continue
+                                    except Exception:
+                                        pass
                                 logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
                                 vectors.append(None)
-                        # Small pause between batches to avoid rate limits
+                        # Pause between batches to stay under 100 RPM
                         if i + BATCH < len(content):
-                            _time.sleep(0.3)
+                            _time.sleep(0.6)  # 0.6s = ~8 req/s = ~500 RPM — well under 100 RPM limit
                     valid = [v for v in vectors if v is not None]
                     if valid:
                         return valid
@@ -1075,7 +1091,7 @@ class AIService:
         # Use Hyper-Speed models for instant interactivity
         prompt = (
             f"Generate exactly {count} professional high-yield flashcards {base} based on this content:\n\n"
-            f"{content[:20000]}\n\n"
+            f"{content[:8000]}\n\n"
             'Return ONLY a RAW JSON array of objects with exactly these keys: "question", "answer", "difficulty" (easy/medium/hard). '
             f"{latex_rule} No markdown formatting, just the raw array."
         )
@@ -1093,7 +1109,7 @@ class AIService:
             'short': 'short answer with "question" and "expected_answer"',
             'mixed': 'mix of MCQ and short answer',
         }
-        content_part = f"\n\nBased on:\n{context[:15000]}" if context else ""
+        content_part = f"\n\nBased on:\n{context[:8000]}" if context else ""
         prompt = (
             f"Generate {count} {fmt_map.get(fmt, 'questions')} for '{resource.title}' at {level} level{content_part}. "
             "Return ONLY a JSON array. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry."
@@ -1657,7 +1673,7 @@ class AIService:
         context = self._get_resource_context(resource)
         prompt = (
             f"Create a detailed mind map structure for '{resource.title}' (Subject: {resource.subject or 'General'}).\n\n"
-            f"Content:\n{context[:15000] if context else resource.title}\n\n"
+            f"Content:\n{context[:8000] if context else resource.title}\n\n"
             "Return ONLY a JSON object:\n"
             '{"center": "Main Topic", "branches": [{"topic": "Branch 1", "subtopics": ["sub1", "sub2"]}, ...]}\n'
             "Include 5-8 main branches with 3-5 subtopics each. Use emojis in topics. No extra text."
@@ -1669,7 +1685,7 @@ class AIService:
         context = self._get_resource_context(resource)
         prompt = (
             f"Generate {count} {difficulty}-difficulty exam practice questions for '{resource.title}'.\n\n"
-            f"Content:\n{context[:15000] if context else resource.title}\n\n"
+            f"Content:\n{context[:8000] if context else resource.title}\n\n"
             "Return ONLY a JSON array of objects:\n"
             '[{"question": "...", "type": "short_answer|essay|analysis", "hint": "...", "model_answer": "..."}]\n'
             "Ensure the model_answer is detailed (2-3 paragraphs). Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. No extra text."
