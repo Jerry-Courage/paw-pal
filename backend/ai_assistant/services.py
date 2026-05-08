@@ -1109,7 +1109,15 @@ class AIService:
             "Sound like a supportive friend, not a robot. No emojis. No quotes around the response."
         )
         result = self.chat_sync([{'role': 'user', 'content': prompt}], max_tokens=80)
-        return result.strip() if result else ''
+        if not result:
+            return ''
+        result = result.strip()
+        # Sanity check: if the result looks like the prompt leaked back, discard it
+        leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive']
+        if any(sig.lower() in result.lower() for sig in leak_signals):
+            logger.warning("[StudyNudge] Prompt leaked into response — discarding.")
+            return ''
+        return result
 
     def group_chat_assist(self, group_name: str, context: str, question: str) -> str:
         system = (

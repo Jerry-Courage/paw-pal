@@ -244,7 +244,7 @@ class StudyNudgeView(APIView):
                 future = executor.submit(ai.generate_study_nudge, request.user, recent)
                 # Increased to 12s — cold AI starts can take 8-10s
                 nudge = future.result(timeout=12.0)
-                if not nudge or len(nudge.strip()) < 10:
+                if not nudge or len(nudge.strip()) < 10 or len(nudge.strip()) > 400:
                     nudge = fallback
         except (TimeoutError, Exception) as e:
             logger.warning(f"[StudyNudge] Timeout or Error: {e}. Using fallback.")
