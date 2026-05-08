@@ -38,6 +38,12 @@ export default function RichNotesViewer({
     setZoomedImage(src)
   }
 
+  const cleanTitle = (title: string) => {
+    if (!title) return ''
+    // Strip markdown bold/italic markers from titles
+    return title.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#+\s*/, '').trim()
+  }
+
   const cleanContent = (text: string) => {
     if (!text) return ''
     return text.replace(/ACTION:\s*\{.*?\}/gi, '').trim()
@@ -103,7 +109,7 @@ export default function RichNotesViewer({
                     {idx + 1}
                   </div>
                   <span className="text-xs font-medium text-slate-500 group-hover:text-slate-300 transition-colors truncate">
-                    {section.title}
+                    {cleanTitle(section.title)}
                   </span>
                 </button>
               )
@@ -137,7 +143,7 @@ export default function RichNotesViewer({
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-sm font-black text-white leading-tight truncate">
-                    {section.title}
+                    {cleanTitle(section.title)}
                   </h2>
                 </div>
                 <ChevronRight className={cn(
@@ -199,6 +205,15 @@ export default function RichNotesViewer({
                         ),
                         hr: () => <div className="my-4 h-px bg-white/5" />,
                         img: ({ src, alt }: any) => {
+                          // Skip text placeholders like "Illustration on page 1"
+                          if (!src || src.startsWith('Illustration') || src.startsWith('illustration') || !src.includes('/')) {
+                            return alt ? (
+                              <div className="my-3 px-3 py-2 bg-white/3 border border-white/5 rounded-xl flex items-center gap-2">
+                                <span className="text-lg">🖼️</span>
+                                <p className="text-xs text-slate-500 italic">{cleanContent(alt || src)}</p>
+                              </div>
+                            ) : null
+                          }
                           const fullUrl = src?.startsWith('http') ? src : `${API_BASE?.replace(/\/api\/?$/, '')}${src}`
                           return (
                             <div className="my-4 rounded-xl overflow-hidden cursor-pointer" onClick={() => handleImageClick(fullUrl)}>

@@ -450,7 +450,7 @@ class AIService:
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key:
             for cerebras_model, cerebras_timeout in [
-                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — 235B, 1400 t/s
+                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — 235B, smartest
                 ('llama3.1-8b', 30),                      # 14.4K RPD — fast fallback
             ]:
                 try:
@@ -1351,7 +1351,7 @@ class AIService:
                 "1. MICRO-PARAGRAPHING: Limit every paragraph to a maximum of 3-4 sentences. NEVER return a wall of text.\n"
                 "2. SEMANTIC BOLDING: **Bold** high-impact keywords and concepts the first time they appear.\n"
                 "3. BULLET POINTS: Use bullet points religiousy for any lists or complex breakdowns.\n"
-                "4. ACADEMIC DEPTH: Provide 10-15 detailed 'sections' per chunk. Focus on quality and depth, not quantity. \n\n"
+                "4. ACADEMIC DEPTH: Provide 15-20 detailed 'sections' per chunk. Each section must be thorough with multiple paragraphs, bullet points, and examples.\n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
                 "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Deep 3-paragraph summary\"},\n"
@@ -1469,7 +1469,7 @@ class AIService:
 
         kit = {
             'overview': overview,
-            'sections': all_sections[:50],
+            'sections': all_sections[:60],
             'vocabulary': all_vocabulary[:200],
             'exam_tips': list(dict.fromkeys(all_tips))[:50],
         }

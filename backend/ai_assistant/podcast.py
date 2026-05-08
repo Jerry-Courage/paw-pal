@@ -83,56 +83,51 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
 
 def generate_tts_file(text, voice, output_path):
     """
-    Safely invokes edge-tts via subprocess to render an MP3 file locally.
+    TTS engine: gTTS (Google) primary — edge-tts is blocked on Render's IP.
+    Falls back to edge-tts if gTTS fails.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    # 1. Humanoid Cleanup: Strip artifacts and handle organic pauses
     clean_text = VoiceSanitizer.clean(text)
-    
-    # 2. Render via edge-tts with voice-specific prosody tuning
-    # Andrew (Multilingual) sounds best slightly slower (-5%) for humanoid naturalism
-    rate = "+0%"
-    if 'AndrewNeural' in voice:
-        rate = "-5%"
-    
-    cmd = [
-        sys.executable, "-m", "edge_tts", 
-        "--voice", voice, 
-        "--text", clean_text, 
-        f"--rate={rate}",
-        "--write-media", output_path
-    ]
-    
-    for attempt in range(3):
-        try:
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-            if result.returncode == 0: 
-                return True
-            else:
-                print(f"TTS Error [Attempt {attempt+1}]: {result.stderr}")
-            time.sleep(1)
-        except Exception as e:
-            print(f"TTS Exception: {str(e)}")
-            time.sleep(1)
-            
-    # FINAL FALLBACK: If edge-tts (Microsoft) is down/busy (503), use gTTS (Google)
+    if not clean_text.strip():
+        clean_text = "..."
+
+    # --- PRIMARY: gTTS (Google Text-to-Speech) — works on Render ---
     try:
         from gtts import gTTS
-        print(f"[TTS-FALLBACK] edge-tts failed. Engaged Google (gTTS) for path: {output_path}")
-        
-        # Mapping: Use 'en' as default for most humanoid voices
         lang = 'en'
         if 'fr-' in voice.lower(): lang = 'fr'
         elif 'es-' in voice.lower(): lang = 'es'
         elif 'de-' in voice.lower(): lang = 'de'
-        
-        tts = gTTS(text=clean_text, lang=lang)
+        tts = gTTS(text=clean_text, lang=lang, slow=False)
         tts.save(output_path)
+        print(f"[TTS] gTTS success for voice={voice}")
         return True
     except Exception as e:
-        print(f"[TTS-FATAL] gTTS fallback also failed: {str(e)}")
-        
+        print(f"[TTS] gTTS failed: {e}. Trying edge-tts...")
+
+    # --- FALLBACK: edge-tts (Microsoft) ---
+    rate = "+0%"
+    if 'AndrewNeural' in voice:
+        rate = "-5%"
+    cmd = [
+        sys.executable, "-m", "edge_tts",
+        "--voice", voice,
+        "--text", clean_text,
+        f"--rate={rate}",
+        "--write-media", output_path
+    ]
+    for attempt in range(2):
+        try:
+            result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                return True
+            print(f"TTS Error [Attempt {attempt+1}]: {result.stderr[:200]}")
+            time.sleep(2)
+        except Exception as e:
+            print(f"TTS Exception: {str(e)}")
+            time.sleep(2)
+
+    print(f"[TTS-FATAL] All TTS engines failed for path: {output_path}")
     return False
 
 def generate_podcast_script(notes_json, length_pref=15, available_images=None, name_a="Host A", name_b="Host B", system_instruction=None):
