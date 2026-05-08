@@ -1106,14 +1106,62 @@ class AIService:
         prompt = (
             f"Write a short, warm, motivating study nudge (1-2 sentences max) for a student named {name} "
             f"who has been studying: {topics}. Be specific to their subject if possible. "
-            "Sound like a supportive friend, not a robot. No emojis. No quotes around the response."
+            "Sound like a supportive friend, not a robot. No emojis. No quotes around the response. "
+            "Output ONLY the nudge text, nothing else."
         )
-        result = self.chat_sync([{'role': 'user', 'content': prompt}], max_tokens=80)
+        messages = [{'role': 'user', 'content': prompt}]
+
+        # Use reliable instruction-following models — skip gpt-oss-20b which echoes prompts
+        import httpx, asyncio as _asyncio
+
+        async def _call():
+            groq_key = os.getenv('GROQ_API_KEY', '')
+            groq_key2 = os.getenv('GROQ_API_KEY_2', '')
+            for key in [k for k in [groq_key, groq_key2] if k]:
+                for model in ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']:
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(
+                                GROQ_API_URL,
+                                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                                json={'model': model, 'messages': messages, 'max_tokens': 80},
+                                timeout=8,
+                            )
+                            if resp.status_code == 200:
+                                result = resp.json()["choices"][0]["message"]["content"].strip()
+                                if result and len(result) > 10:
+                                    logger.info(f"[StudyNudge] ✓ {model}")
+                                    return result
+                    except Exception as e:
+                        logger.warning(f"[StudyNudge] {model} failed: {e}")
+            # Fallback to SambaNova
+            samba_key = os.getenv('SAMBANOVA_API_KEY', '')
+            if samba_key:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            SAMBANOVA_API_URL,
+                            headers={"Authorization": f"Bearer {samba_key}", "Content-Type": "application/json"},
+                            json={'model': 'Meta-Llama-3.3-70B-Instruct', 'messages': messages, 'max_tokens': 80},
+                            timeout=10,
+                        )
+                        if resp.status_code == 200:
+                            return resp.json()["choices"][0]["message"]["content"].strip()
+                except Exception as e:
+                    logger.warning(f"[StudyNudge] SambaNova failed: {e}")
+            return ''
+
+        try:
+            result = async_to_sync(_call)()
+        except Exception as e:
+            logger.warning(f"[StudyNudge] async call failed: {e}")
+            result = ''
+
         if not result:
             return ''
         result = result.strip()
         # Sanity check: if the result looks like the prompt leaked back, discard it
-        leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive']
+        leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive', 'Output ONLY']
         if any(sig.lower() in result.lower() for sig in leak_signals):
             logger.warning("[StudyNudge] Prompt leaked into response — discarding.")
             return ''
