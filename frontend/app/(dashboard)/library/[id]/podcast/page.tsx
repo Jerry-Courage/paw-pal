@@ -103,14 +103,26 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       const res = await podcastApi.createSession(resourceId, voiceA, voiceB, 15)
       const resObj = await libraryApi.getResource(resourceId)
       startPodcast(resourceId, resObj.data.title, res.data.session_id, res.data.script)
-      if (res.data.status === 'ready') setStatus('ready')
+      if (res.data.status === 'ready') {
+        setStatus('ready')
+        // Trigger play immediately within the user gesture context
+        setTimeout(() => globalResume(), 300)
+      } else {
+        setStatus('ready')
+      }
     } catch {
       toast.error('Failed to start podcast')
       setStatus('error')
     }
   }
 
-  const togglePlay = () => audio.isPlaying ? globalPause() : globalResume()
+  const togglePlay = () => {
+    if (audio.isPlaying) {
+      globalPause()
+    } else {
+      globalResume()
+    }
+  }
 
   const handleInterrupt = async () => {
     if (!audio.sessionId) return

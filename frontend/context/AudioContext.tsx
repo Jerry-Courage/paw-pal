@@ -179,7 +179,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resume = async () => {
-    if (audioRef.current && audioRef.current.readyState > 0) {
+    // If audio is already loaded and just paused, resume it
+    if (audioRef.current && audioRef.current.src && audioRef.current.readyState > 0) {
       try {
         await audioRef.current.play()
         setState(prev => ({ ...prev, isPlaying: true }))
@@ -188,7 +189,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         console.warn('Resume play() failed:', e)
       }
     }
-    // Force-load the current chunk
+    // Otherwise load + play the current chunk (handles first play after load)
     if (sessionIdRef.current && totalChunksRef.current > 0) {
       handleNextChunk(currentIndexRef.current, true)
     }
@@ -264,9 +265,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
     audio.onended = handleEnded
 
+    // Only auto-kickstart if script is loaded but NOT yet started
+    // We no longer auto-play here — play is triggered by user gesture via resume()
     if (state.script.length > 0 && !state.isChunkLoaded && !hasKickstarted.current) {
       hasKickstarted.current = true
-      handleNextChunk(0, true)
+      // Load chunk 0 but don't autoplay — wait for user to press play
+      handleNextChunk(0, false)
     }
 
     return () => { audio.onended = null }
