@@ -3,13 +3,17 @@ import { useAudio } from '@/context/AudioContext'
 import { Play, Pause, X, Radio, ArrowUpRight, GripHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { useRef } from 'react'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 export default function FloatingMiniPlayer() {
   const { state, pause, resume, stop } = useAudio()
   const constraintsRef = useRef(null)
+  const pathname = usePathname()
 
-  const isVisible = !!(state.sessionId && state.isMiniPlayerVisible)
+  // Hide on the podcast page itself — the full player is already there
+  const isOnPodcastPage = /\/library\/\d+\/podcast/.test(pathname || '')
+  const isVisible = !!(state.sessionId && state.isMiniPlayerVisible && !isOnPodcastPage)
 
   return (
     <>
