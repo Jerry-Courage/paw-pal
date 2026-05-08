@@ -395,10 +395,13 @@ export default function LibraryPage() {
       {/* Delete Confirmation */}
       {confirmModal.isOpen && (
         <ConfirmationModal
+          isOpen={confirmModal.isOpen}
           title="Delete Resource"
           message={`Are you sure you want to delete "${confirmModal.title}"? This cannot be undone.`}
+          confirmText="Delete"
+          type="danger"
           onConfirm={() => confirmModal.resourceId && deleteMutation.mutate(confirmModal.resourceId)}
-          onCancel={() => setConfirmModal({ isOpen: false, resourceId: null, title: '' })}
+          onClose={() => setConfirmModal({ isOpen: false, resourceId: null, title: '' })}
           isLoading={deleteMutation.isPending}
         />
       )}
