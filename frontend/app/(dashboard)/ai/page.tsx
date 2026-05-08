@@ -535,7 +535,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] -m-4 md:-m-6 bg-[#0d0d0d] relative overflow-hidden text-white">
+    <div className="fixed inset-0 top-14 flex bg-[#0d0d0d] overflow-hidden text-white">
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -701,22 +701,22 @@ function AIChat() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-hide">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center min-h-full px-4 sm:px-6 py-16 text-center">
-              <div className="w-20 h-20 bg-orange-500/10 border border-orange-500/20 rounded-[2rem] flex items-center justify-center mb-6">
-                <Sparkles className="w-10 h-10 text-orange-400" />
+            <div className="flex flex-col items-center justify-center min-h-full px-4 py-8 text-center">
+              <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
+                <Sparkles className="w-7 h-7 text-orange-400" />
               </div>
-              <h1 className="text-3xl font-black text-white mb-3 tracking-tight">Hi, I'm FlowAI</h1>
-              <p className="text-slate-500 text-sm max-w-sm mb-10 leading-relaxed">
+              <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Hi, I'm FlowAI</h1>
+              <p className="text-slate-500 text-sm max-w-xs mb-8 leading-relaxed">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-2xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 w-full max-w-xl">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
-                    className={cn('flex items-start gap-3 p-4 bg-[#1a1a1a] border border-white/6 rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f1f] group',
+                    className={cn('flex items-start gap-2.5 p-3.5 bg-[#1a1a1a] border border-white/6 rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f1f] group',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
                     )}>
-                    <div className="text-xl shrink-0 bg-white/5 p-2 rounded-xl group-hover:scale-110 transition-transform">{s.icon}</div>
-                    <span className="text-xs font-bold text-slate-400 group-hover:text-orange-400 transition-colors leading-relaxed mt-0.5">{s.text}</span>
+                    <div className="text-base shrink-0 bg-white/5 p-1.5 rounded-lg group-hover:scale-110 transition-transform">{s.icon}</div>
+                    <span className="text-xs font-bold text-slate-400 group-hover:text-orange-400 transition-colors leading-relaxed">{s.text}</span>
                   </button>
                 ))}
               </div>
