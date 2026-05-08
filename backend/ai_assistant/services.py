@@ -345,8 +345,9 @@ class AIService:
         samba_key = os.getenv('SAMBANOVA_API_KEY')
         if samba_key and not has_images:
             for samba_model, samba_timeout in [
-                ('Meta-Llama-3.3-70B-Instruct', 12),  # 12K RPD — smart
-                ('DeepSeek-V3.1', 12),                 # 12K RPD — reasoning
+                ('Meta-Llama-3.3-70B-Instruct', 12),       # 12K RPD — smart
+                ('Llama-4-Maverick-17B-128E-Instruct', 10),# 12K RPD — fast
+                ('DeepSeek-V3.1', 12),                     # 12K RPD — reasoning
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -370,8 +371,8 @@ class AIService:
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key and not has_images:
             for cerebras_model, cerebras_timeout in [
-                ('llama3.1-8b', 8),    # 14.4K RPD — fast
-                ('gpt-oss-120b', 12),  # 14.4K RPD — smart
+                ('llama3.1-8b', 8),                       # 14.4K RPD — fast
+                ('qwen-3-235b-a22b-instruct-2507', 15),   # 14.4K RPD — smart
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -445,8 +446,8 @@ class AIService:
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key:
             for cerebras_model, cerebras_timeout in [
-                ('gpt-oss-120b', 90),              # 14.4K RPD — smart, high quota
-                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — biggest free model
+                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — 235B, 1400 t/s
+                ('llama3.1-8b', 30),                      # 14.4K RPD — fast fallback
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -470,8 +471,9 @@ class AIService:
         samba_key = os.getenv('SAMBANOVA_API_KEY')
         if samba_key:
             for samba_model, samba_timeout in [
-                ('gpt-oss-120b', 90),                  # 12K RPD — smart
-                ('Meta-Llama-3.3-70B-Instruct', 90),   # 12K RPD — capable
+                ('Meta-Llama-3.3-70B-Instruct', 90),       # 12K RPD — capable
+                ('DeepSeek-V3.1', 90),                     # 12K RPD — strong reasoning
+                ('Llama-4-Maverick-17B-128E-Instruct', 90),# 12K RPD — fast
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
