@@ -1,32 +1,47 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAudio } from '@/context/AudioContext'
-import { Play, Pause, X, Radio, ArrowUpRight } from 'lucide-react'
+import { Play, Pause, X, Radio, ArrowUpRight, GripHorizontal } from 'lucide-react'
 import Link from 'next/link'
+import { useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 export default function FloatingMiniPlayer() {
   const { state, pause, resume, stop } = useAudio()
+  const constraintsRef = useRef(null)
 
-  // Show the mini-player if there's an active podcast session
   const isVisible = !!(state.sessionId && state.isMiniPlayerVisible)
 
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
-          key="floating-mini-player"
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className={cn(
-            "fixed z-[200] font-outfit",
-            "bottom-6 left-4 right-4 sm:bottom-8 sm:right-8 sm:left-auto sm:w-[380px]"
-          )}
-        >
+    <>
+      {/* Full-screen drag boundary — invisible, pointer-events-none */}
+      <div ref={constraintsRef} className="fixed inset-0 z-[199] pointer-events-none" />
+
+      <AnimatePresence>
+        {isVisible && (
+          <motion.div
+            key="floating-mini-player"
+            drag
+            dragMomentum={false}
+            dragElastic={0.08}
+            dragConstraints={constraintsRef}
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className={cn(
+              "fixed z-[200] font-outfit cursor-grab active:cursor-grabbing",
+              "bottom-6 left-4 right-4 sm:bottom-8 sm:right-8 sm:left-auto sm:w-[380px]"
+            )}
+            style={{ touchAction: 'none' }}
+          >
           <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-3 relative overflow-hidden group">
             {/* Active Glow */}
             <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-violet-500/10 to-primary/10 animate-[shimmer_3s_infinite] pointer-events-none" />
+
+            {/* Drag handle indicator */}
+            <div className="absolute top-1.5 left-1/2 -translate-x-1/2">
+              <GripHorizontal className="w-4 h-4 text-white/20" />
+            </div>
 
             {/* Icon/Art */}
             <div className="relative w-14 h-14 shrink-0">
@@ -79,6 +94,7 @@ export default function FloatingMiniPlayer() {
                   href={`/library/${state.activeResourceId}?podcast=open`}
                   className="p-1.5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors"
                   title="Open Podcast"
+                  onClick={e => e.stopPropagation()}
                 >
                   <ArrowUpRight className="w-4 h-4" />
                 </Link>
@@ -95,5 +111,6 @@ export default function FloatingMiniPlayer() {
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   )
 }
