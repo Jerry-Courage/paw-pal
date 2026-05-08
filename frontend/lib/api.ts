@@ -220,6 +220,8 @@ export const aiApi = {
 
 // Podcast
 export const podcastApi = {
+  getExistingSession: (resourceId: number) =>
+    api.get(`/ai/resources/${resourceId}/podcast/`),
   createSession: (resourceId: number, voice_a: string, voice_b: string, length: number) =>
     api.post(`/ai/resources/${resourceId}/podcast/`, { voice_a, voice_b, length }),
   getStatus: (sessionId: number) =>

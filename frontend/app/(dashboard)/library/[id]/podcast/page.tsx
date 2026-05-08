@@ -59,13 +59,28 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     libraryApi.getResource(resourceId).then(res => {
       setVisuals(res.data.extracted_images || [])
     })
+
+    // If already active in AudioContext, restore that session
     if (audio.activeResourceId === resourceId && audio.sessionId) {
       setStatus(audio.script?.length ? 'ready' : 'generating')
       podcastApi.getStatus(audio.sessionId).then(res => {
         if (res.data.interjection_urls) setInterjectionUrls(res.data.interjection_urls)
       })
+      return
     }
-  }, [resourceId, audio.activeResourceId, audio.sessionId, audio.script?.length])
+
+    // Check backend for a pre-generated session (auto-generated during upload)
+    podcastApi.getExistingSession(resourceId).then(res => {
+      const data = res.data
+      if (data.exists && data.script?.length) {
+        startPodcast(resourceId, resource?.title || '', data.session_id, data.script)
+        setStatus('ready')
+        podcastApi.getStatus(data.session_id).then(r => {
+          if (r.data.interjection_urls) setInterjectionUrls(r.data.interjection_urls)
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+  }, [resourceId])
 
   // Polling
   useEffect(() => {

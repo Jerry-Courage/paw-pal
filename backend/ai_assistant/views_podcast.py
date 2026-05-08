@@ -221,6 +221,32 @@ def bg_generate_script(session_id, notes):
 
 
 class PodcastInitView(APIView):
+    def get(self, request, resource_id):
+        """Return the most recent ready podcast session for this resource, if any."""
+        try:
+            resource = Resource.objects.get(Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
+        except Resource.DoesNotExist:
+            return Response({'error': 'Resource not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        session = PodcastSession.objects.filter(
+            resource=resource,
+            owner=request.user,
+            status='ready'
+        ).order_by('-id').first()
+
+        if not session:
+            return Response({'exists': False}, status=status.HTTP_200_OK)
+
+        return Response({
+            'exists': True,
+            'session_id': session.id,
+            'status': session.status,
+            'script': session.script_chunks,
+            'chunks_total': len(session.script_chunks),
+            'voice_a': session.voice_a,
+            'voice_b': session.voice_b,
+        })
+
     def post(self, request, resource_id):
         # Create the podcast session
         try:
