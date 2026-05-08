@@ -120,7 +120,6 @@ FALLBACK_MODELS = [
 CEREBRAS_API_URL  = "https://api.cerebras.ai/v1/chat/completions"
 SAMBANOVA_API_URL = "https://api.sambanova.ai/v1/chat/completions"
 GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
-TOGETHER_API_URL  = "https://api.together.xyz/v1/chat/completions"
 
 # ─── MODEL ROUTING STRATEGY ────────────────────────────────────────────────────
 #
@@ -131,17 +130,15 @@ TOGETHER_API_URL  = "https://api.together.xyz/v1/chat/completions"
 #    4. Groq key2 llama-3.1-8b      560 t/s  — second key fallback
 #    5. SambaNova Llama-3.3-70B    12K RPD   — smart fallback
 #    6. SambaNova Llama-4-Maverick 12K RPD   — fast fallback
-#    7. Together  Llama-3.3-70B    dynamic   — extra capacity
-#    8. Cerebras  llama3.1-8b      14.4K RPD — high-quota fallback
-#    9. Google    Gemma-4-26b                — last resort
+#    7. Cerebras  llama3.1-8b      14.4K RPD — high-quota fallback
+#    8. Google    Gemma-4-26b                — last resort
 #
 #  STUDY KIT (smart, high output — needs quality + high daily quota)
 #    1. Cerebras  qwen-3-235b      14.4K RPD — 235B, smartest free model
 #    2. SambaNova Llama-3.3-70B    12K RPD   — capable fallback
 #    3. SambaNova DeepSeek-V3.1    12K RPD   — strong reasoning
-#    4. Together  Llama-3.3-70B    dynamic   — extra capacity
-#    5. Groq key1 llama-3.3-70b    280 t/s   — capable fallback
-#    6. Groq key2 llama-3.3-70b    280 t/s   — second key fallback
+#    4. Groq key1 llama-3.3-70b    280 t/s   — capable fallback
+#    5. Groq key2 llama-3.3-70b    280 t/s   — second key fallback
 #    7. Google    Gemma-4-31b                — last resort
 #
 #  STREAMING CHAT (needs speed + streaming support)
@@ -399,31 +396,6 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Cerebras Chat] {cerebras_model} failed: {e}")
 
-        # ── STAGE 3: TOGETHER AI — dynamic rate limits, scales with usage ────
-        together_key = os.getenv('TOGETHER_API_KEY')
-        if together_key and not has_images:
-            for together_model, together_timeout in [
-                ('meta-llama/Llama-3.3-70B-Instruct-Turbo', 12),  # fast + smart
-                ('meta-llama/Llama-3.1-8B-Instruct-Turbo', 8),   # fast fallback
-            ]:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            TOGETHER_API_URL,
-                            headers={"Authorization": f"Bearer {together_key}", "Content-Type": "application/json"},
-                            json={'model': together_model, 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=together_timeout,
-                        )
-                        if resp.status_code == 200:
-                            result = self._extract_content(resp.json())
-                            if result and result.strip():
-                                logger.info(f"[Together Chat] ✓ {together_model}")
-                                return result
-                        elif resp.status_code == 429:
-                            await asyncio.sleep(0.3)
-                except Exception as e:
-                    logger.warning(f"[Together Chat] {together_model} failed: {e}")
-
         # ── STAGE 3: GOOGLE GEMMA 4 — confirmed working on v1beta ────────────
         if self.google_client_beta and not has_images:
             for g_model in ['models/gemma-4-26b-a4b-it', 'models/gemma-4-31b-it']:
@@ -525,32 +497,7 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[SambaNova Kit] {samba_model} failed: {e}")
 
-        # ── STAGE 2: TOGETHER AI — dynamic limits, scales with usage ────────
-        together_key = os.getenv('TOGETHER_API_KEY')
-        if together_key:
-            for together_model, together_timeout in [
-                ('meta-llama/Llama-3.3-70B-Instruct-Turbo', 90),  # smart + capable
-                ('Qwen/Qwen2.5-72B-Instruct-Turbo', 90),          # strong reasoning
-            ]:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            TOGETHER_API_URL,
-                            headers={"Authorization": f"Bearer {together_key}", "Content-Type": "application/json"},
-                            json={'model': together_model, 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=together_timeout,
-                        )
-                        if resp.status_code == 200:
-                            result = self._extract_content(resp.json())
-                            if result and result.strip():
-                                logger.info(f"[Together Kit] ✓ {together_model}")
-                                return result
-                        elif resp.status_code == 429:
-                            await asyncio.sleep(1)
-                except Exception as e:
-                    logger.warning(f"[Together Kit] {together_model} failed: {e}")
-
-        # ── STAGE 3: GROQ (both keys) — capable fallback ─────────────────────
+        # ── STAGE 2: GROQ (both keys) — capable fallback ─────────────────────
         groq_key  = os.getenv('GROQ_API_KEY', '')
         groq_key2 = os.getenv('GROQ_API_KEY_2', '')
         groq_keys = [k for k in [groq_key, groq_key2] if k]
