@@ -219,6 +219,24 @@ class AIService:
             )
         else:
             self.google_client2 = None
+
+    def _google_clients(self):
+        """Return all available Google clients for rotation."""
+        clients = []
+        if self.google_client:
+            clients.append(self.google_client)
+        if self.google_client2:
+            clients.append(self.google_client2)
+        return clients
+
+    def _groq_keys(self):
+        """Return all available Groq API keys."""
+        keys = [
+            os.getenv('GROQ_API_KEY', ''),
+            os.getenv('GROQ_API_KEY_2', ''),
+            os.getenv('GROQ_API_KEY_3', ''),
+        ]
+        return [k for k in keys if k]
         local_llm_path = getattr(settings, 'LOCAL_LLM_PATH', None)
         if local_llm_path:
             self.tokenizer = None
@@ -309,8 +327,7 @@ class AIService:
 
         # ── VISION FAST PATH ──────────────────────────────────────────────────
         if has_images:
-            groq_key = os.getenv('GROQ_API_KEY')
-            if groq_key:
+            for groq_key in self._groq_keys():
                 try:
                     async with httpx.AsyncClient() as client:
                         resp = await client.post(
@@ -325,10 +342,8 @@ class AIService:
                     logger.error(f"[Groq Vision Chat Error] {e}")
             # Fall through to OpenRouter vision fallback below
 
-        # ── STAGE 0: GROQ (both keys) — fastest inference on the planet ─────
-        groq_key  = os.getenv('GROQ_API_KEY', '')
-        groq_key2 = os.getenv('GROQ_API_KEY_2', '')
-        groq_keys = [k for k in [groq_key, groq_key2] if k]
+        # ── STAGE 0: GROQ (all keys) — fastest inference on the planet ─────
+        groq_keys = self._groq_keys()
 
         if groq_keys and not has_images:
             for key in groq_keys:
@@ -405,15 +420,16 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Cerebras Chat] {cerebras_model} failed: {e}")
 
-        # ── STAGE 3: GOOGLE GEMMA 4 — confirmed working on v1beta ────────────
-        if self.google_client_beta and not has_images:
+        # ── STAGE 3: GOOGLE GEMMA 4 — rotate between both keys ──────────────
+        for g_client in self._google_clients():
+            if has_images: continue
             for g_model in ['models/gemma-4-26b-a4b-it', 'models/gemma-4-31b-it']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     if sys_instr and contents and contents[0].get('role') == 'user':
                         contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
                     response = await asyncio.wait_for(
-                        self.google_client.aio.models.generate_content(
+                        g_client.aio.models.generate_content(
                             model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
                         ), timeout=25
                     )
@@ -506,10 +522,8 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[SambaNova Kit] {samba_model} failed: {e}")
 
-        # ── STAGE 2: GROQ (both keys) — capable fallback ─────────────────────
-        groq_key  = os.getenv('GROQ_API_KEY', '')
-        groq_key2 = os.getenv('GROQ_API_KEY_2', '')
-        groq_keys = [k for k in [groq_key, groq_key2] if k]
+        # ── STAGE 2: GROQ (all keys) — capable fallback ─────────────────────
+        groq_keys = self._groq_keys()
         if groq_keys:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
@@ -534,15 +548,15 @@ class AIService:
                     except Exception as e:
                         logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
 
-        # ── STAGE 3: GOOGLE GEMMA 4 — last resort ────────────────────────────
-        if self.google_client_beta:
+        # ── STAGE 3: GOOGLE GEMMA 4 — rotate between both keys ──────────────
+        for g_client in self._google_clients():
             for g_model in ['models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     if sys_instr and contents and contents[0].get('role') == 'user':
                         contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
                     response = await asyncio.wait_for(
-                        self.google_client.aio.models.generate_content(
+                        g_client.aio.models.generate_content(
                             model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
                         ), timeout=60
                     )
@@ -580,32 +594,33 @@ class AIService:
 
     async def groq_chat(self, messages: list, max_tokens: int = 1024) -> str:
         """Sub-second chat bridge using Groq directly for interruptions."""
-        groq_key = os.getenv('GROQ_API_KEY')
-        if not groq_key: return "Groq Key missing."
+        groq_keys = self._groq_keys()
+        if not groq_keys: return "Groq Key missing."
         target_model = 'llama-3.3-70b-versatile'
         
-        try:
-            async with httpx.AsyncClient() as client:
-                url = "https://api.groq.com/openai/v1/chat/completions"
-                response = await client.post(
-                    url,
-                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                    json={'model': target_model, 'messages': messages, 'max_tokens': max_tokens},
-                    timeout=8,
-                )
-                if response.status_code == 200:
-                    return self._extract_content(response.json())
-        except Exception as e:
-            logger.error(f"[Groq Error] {e}")
+        for groq_key in groq_keys:
+            try:
+                async with httpx.AsyncClient() as client:
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    response = await client.post(
+                        url,
+                        headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                        json={'model': target_model, 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=8,
+                    )
+                    if response.status_code == 200:
+                        return self._extract_content(response.json())
+            except Exception as e:
+                logger.error(f"[Groq Error] {e}")
         
         return await self.fast_chat(messages)
 
     def transcribe_audio(self, audio_file) -> str:
         """Hyper-Resilient STT: Groq Whisper-v3 -> Google Gemini 2.5 Multi-modal."""
-        groq_key = os.getenv('GROQ_API_KEY')
+        groq_keys = self._groq_keys()
         
-        # 1. OPTION A: GROQ WHISPER (Sub-second)
-        if groq_key:
+        # 1. OPTION A: GROQ WHISPER (Sub-second) — try all keys
+        for groq_key in groq_keys:
             try:
                 url = "https://api.groq.com/openai/v1/audio/transcriptions"
                 # Handle both file paths and file-like objects (Django UploadedFile)
@@ -659,10 +674,8 @@ class AIService:
         messages = self._sanitize_messages(messages)
         
         try:
-            # --- STAGE 0: GROQ STREAMING (both keys — fastest responses) ------
-            groq_key  = os.getenv('GROQ_API_KEY', '')
-            groq_key2 = os.getenv('GROQ_API_KEY_2', '')
-            groq_keys = [k for k in [groq_key, groq_key2] if k]
+            # --- STAGE 0: GROQ STREAMING (all keys — fastest responses) ------
+            groq_keys = self._groq_keys()
             if groq_keys:
                 for key in groq_keys:
                     for groq_model in [
@@ -715,31 +728,23 @@ class AIService:
                             logger.warning(f"[Groq Stream] {groq_model} failed: {e}")
                             continue
 
-            # --- STAGE 1: DIRECT GOOGLE GENAI SDK (Gemma 4 Fleet) ---
-            if self.google_client_beta:
-                # Only Gemma 4 models are available on the Gemini API
+            # --- STAGE 1: DIRECT GOOGLE GENAI SDK (Gemma 4 Fleet — rotate both keys) ---
+            for g_client in self._google_clients():
                 for g_model in [
-                    'models/gemma-4-26b-a4b-it',  # Fast: 3-6s (confirmed working)
-                    'models/gemma-4-31b-it',      # Slower: 8-15s (confirmed working)
+                    'models/gemma-4-26b-a4b-it',
+                    'models/gemma-4-31b-it',
                 ]:
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
-                        
-                        # Intelligence Routing: Gemma vs Gemini protocol
                         if 'gemma' in g_model.lower():
-                            if sys_instr:
-                                # Prepend instruction to first user message for Gemma
-                                if contents and contents[0].get('role') == 'user':
-                                    contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                            if sys_instr and contents and contents[0].get('role') == 'user':
+                                contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
                             config = {'max_output_tokens': 4096}
                         else:
-                            # Standard native system instructions for Gemini
                             config = {'system_instruction': sys_instr, 'max_output_tokens': 4096}
 
-                        async for chunk in await self.google_client_beta.aio.models.generate_content_stream(
-                            model=g_model,
-                            contents=contents,
-                            config=config
+                        async for chunk in await g_client.aio.models.generate_content_stream(
+                            model=g_model, contents=contents, config=config
                         ):
                             text = ""
                             try:
@@ -748,10 +753,9 @@ class AIService:
                                 elif hasattr(chunk, 'candidates') and chunk.candidates:
                                     text = chunk.candidates[0].content.parts[0].text
                             except: pass
-                            
                             if text:
                                 yield text
-                        return # SUCCESS
+                        return  # SUCCESS
                     except Exception as e:
                         logger.warning(f"[Google SDK Fallback] {g_model} failed: {e}")
                         if "429" in str(e):
@@ -1172,9 +1176,7 @@ class AIService:
         import httpx, asyncio as _asyncio
 
         async def _call():
-            groq_key = os.getenv('GROQ_API_KEY', '')
-            groq_key2 = os.getenv('GROQ_API_KEY_2', '')
-            for key in [k for k in [groq_key, groq_key2] if k]:
+            for key in self._groq_keys():
                 for model in ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']:
                     try:
                         async with httpx.AsyncClient() as client:
@@ -1817,46 +1819,33 @@ class AIService:
         """
         log_path = os.path.join(settings.BASE_DIR, 'vision_debug.log')
         
-        # ── 1. Google Gemini (Dedicated Key) ──────────────────────────────────
-        if self.google_key:
-            # ADVANCED VISION SCOUTS: Gemini 2.5 and 3.0 Flash
-            for model_attempt in ['models/gemini-2.5-flash', 'models/gemini-2.5-flash-lite']:
+        # ── 1. Google Gemini (rotate both keys) ───────────────────────────────
+        for g_client in self._google_clients():
+            for model_attempt in ['models/gemini-2.5-flash', 'models/gemini-2.5-flash-lite', 'gemini-2.0-flash']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
-                    result = self._call_google_studio_vision(messages, model_name=model_attempt)
+                    result = self._call_google_studio_vision(messages, model_name=model_attempt, client=g_client)
                     if result and "Vision analysis returned no text" not in result:
-                        with open(log_path, 'a') as f:
-                            f.write(f"[VISION-SIGNAL] Success via Direct Google Studio ({model_attempt})\n")
+                        with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Success via {model_attempt}\n")
                         return result
                 except Exception as e:
-                    with open(log_path, 'a') as f:
-                        f.write(f"[VISION-SIGNAL] Direct Google Studio ({model_attempt}) Failed: {str(e)[:200]}\n")
+                    with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] {model_attempt} Failed: {str(e)[:200]}\n")
                     continue
 
-            # Then try 2.0 (often has lower free quotas)
-            try:
-                model_attempt = 'gemini-2.0-flash'
-                with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
-                result = self._call_google_studio_vision(messages, model_name=model_attempt)
-                if result:
-                    return result
-            except Exception as e:
-                with open(log_path, 'a') as f:
-                    f.write(f"[VISION-SIGNAL] Direct Google Studio (2.0) Failed: {str(e)[:200]}\n")
-
         # ── 2. Groq vision ────────────────────────────────────────────────────
-        groq_key = os.environ.get('GROQ_API_KEY', '').strip()
-        if groq_key:
+        for groq_key in self._groq_keys():
             try:
                 result = self._call_groq_vision(messages, groq_key)
                 if result:
-                    with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Success via Groq Llama-3.2\n")
+                    with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Success via Groq\n")
                     return result
             except Exception as e:
                 import time
                 if "429" in str(e):
                     time.sleep(2)
-                    try: return self._call_groq_vision(messages, groq_key)
+                    try:
+                        r = self._call_groq_vision(messages, groq_key)
+                        if r: return r
                     except: pass
                 logger.warning(f'Groq vision failed: {e}')
                 with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Groq failed: {str(e)}\n")
@@ -1932,9 +1921,10 @@ class AIService:
             logger.warning(f'Groq vision error {response.status_code}: {response.text[:200]}')
             return ''
 
-    def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-2.0-flash') -> str:
+    def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-2.0-flash', client=None) -> str:
         """Helper to call Google AI Studio directly using the NEW SDK."""
-        if not self.google_client:
+        g_client = client or self.google_client
+        if not g_client:
             return ""
 
         user_msg = messages[-1]
@@ -1960,7 +1950,7 @@ class AIService:
 
         try:
             # New SDK call format
-            response = self.google_client.models.generate_content(
+            response = g_client.models.generate_content(
                 model=model_name,
                 contents=prompt_parts
             )
