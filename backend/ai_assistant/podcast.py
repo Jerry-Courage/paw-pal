@@ -83,29 +83,13 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
 
 def generate_tts_file(text, voice, output_path):
     """
-    TTS engine: gTTS (Google) primary — edge-tts is blocked on Render's IP.
-    Falls back to edge-tts if gTTS fails.
+    TTS engine: edge-tts (Microsoft Neural) — Ava, Andrew, etc. sound human.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     clean_text = VoiceSanitizer.clean(text)
     if not clean_text.strip():
         clean_text = "..."
 
-    # --- PRIMARY: gTTS (Google Text-to-Speech) — works on Render ---
-    try:
-        from gtts import gTTS
-        lang = 'en'
-        if 'fr-' in voice.lower(): lang = 'fr'
-        elif 'es-' in voice.lower(): lang = 'es'
-        elif 'de-' in voice.lower(): lang = 'de'
-        tts = gTTS(text=clean_text, lang=lang, slow=False)
-        tts.save(output_path)
-        print(f"[TTS] gTTS success for voice={voice}")
-        return True
-    except Exception as e:
-        print(f"[TTS] gTTS failed: {e}. Trying edge-tts...")
-
-    # --- FALLBACK: edge-tts (Microsoft) ---
     rate = "+0%"
     if 'AndrewNeural' in voice:
         rate = "-5%"
@@ -116,10 +100,11 @@ def generate_tts_file(text, voice, output_path):
         f"--rate={rate}",
         "--write-media", output_path
     ]
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
+                print(f"[TTS] edge-tts success for voice={voice}")
                 return True
             print(f"TTS Error [Attempt {attempt+1}]: {result.stderr[:200]}")
             time.sleep(2)
@@ -127,7 +112,7 @@ def generate_tts_file(text, voice, output_path):
             print(f"TTS Exception: {str(e)}")
             time.sleep(2)
 
-    print(f"[TTS-FATAL] All TTS engines failed for path: {output_path}")
+    print(f"[TTS-FATAL] edge-tts failed for path: {output_path}")
     return False
 
 def generate_podcast_script(notes_json, length_pref=15, available_images=None, name_a="Host A", name_b="Host B", system_instruction=None):
