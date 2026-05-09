@@ -1354,7 +1354,7 @@ class AIService:
                 "4. ACADEMIC DEPTH: Provide 15-20 detailed 'sections' per chunk. Each section must be thorough with multiple paragraphs, bullet points, and examples.\n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
-                "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Deep 3-paragraph summary\"},\n"
+                "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Concise 2-3 sentence overview of the material. No markdown, no asterisks, plain text only.\"},\n"
                 "  \"sections\": [\n"
                 "    {\"icon\": \"Emoji\", \"title\": \"Module Title\", \"content\": \"**Key Question:** [question]?\\n\\n[MINIMUM 4 detailed paragraphs of content here — explanations, mechanisms, examples, clinical relevance, etc. Each paragraph must be 3-5 sentences. Use bullet points for lists. Use **bold** for key terms.]\", \"page_refs\": [], \"mermaid_diagram\": \"graph TD;...\"}\n"
                 "  ],\n"
@@ -1517,24 +1517,21 @@ class AIService:
         if not page_image_map:
             return kit
 
+        sections = kit.get('sections', [])
         used_image_urls = set()
-        for sec in kit.get('sections', []):
+
+        # Pass 1: Attach images using page_refs where available
+        for sec in sections:
             refs = sec.pop('page_refs', []) or []
             sec_images = []
             for page_num in refs:
                 images_on_page = page_image_map.get(page_num, [])
-                if isinstance(images_on_page, str):  # Legacy compatibility
+                if isinstance(images_on_page, str):
                     images_on_page = [{'url': images_on_page, 'description': f'Figure — Page {page_num}'}]
-                
                 for img in images_on_page:
                     if img['url'] not in used_image_urls:
-                        sec_images.append({
-                            'url': img['url'],
-                            'caption': img['description'],
-                            'page': page_num,
-                        })
+                        sec_images.append({'url': img['url'], 'caption': img['description'], 'page': page_num})
                         used_image_urls.add(img['url'])
-            
             if sec_images:
                 sec['images'] = sec_images
                 sec.pop('mermaid_diagram', None)
@@ -1542,7 +1539,28 @@ class AIService:
                 mermaid = (sec.get('mermaid_diagram') or '').strip()
                 if not mermaid:
                     sec.pop('mermaid_diagram', None)
-        
+
+        # Pass 2: Distribute remaining unused images evenly across sections
+        all_images = []
+        for page_num in sorted(page_image_map.keys()):
+            imgs = page_image_map[page_num]
+            if isinstance(imgs, str):
+                imgs = [{'url': imgs, 'description': f'Figure — Page {page_num}'}]
+            for img in imgs:
+                if img['url'] not in used_image_urls:
+                    all_images.append({'url': img['url'], 'caption': img['description'], 'page': page_num})
+                    used_image_urls.add(img['url'])
+
+        if all_images and sections:
+            # Spread remaining images: one per section, spaced evenly
+            step = max(1, len(sections) // len(all_images))
+            for i, img in enumerate(all_images):
+                target_idx = min(i * step, len(sections) - 1)
+                sec = sections[target_idx]
+                if 'images' not in sec:
+                    sec['images'] = []
+                sec['images'].append(img)
+
         return kit
 
         return {

@@ -83,7 +83,7 @@ export default function RichNotesViewer({
         {notes.overview?.summary && (
           <div className="p-4 rounded-2xl bg-white/3 border-l-2 border-orange-500/40">
             <p className="text-sm text-slate-400 leading-relaxed">
-              {notes.overview.summary}
+              {cleanTitle(notes.overview.summary).split('.').slice(0, 3).join('.').trim() + '.'}
             </p>
           </div>
         )}
