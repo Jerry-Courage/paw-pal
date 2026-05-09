@@ -450,8 +450,8 @@ class AIService:
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key:
             for cerebras_model, cerebras_timeout in [
-                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — 235B, smartest
-                ('llama3.1-8b', 30),                      # 14.4K RPD — fast fallback
+                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — 235B, best quality
+                # llama3.1-8b removed — generates invalid JSON for complex kit prompts
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -2381,19 +2381,30 @@ class AIService:
             content = text[start_index : end_index + 1].strip()
             if not content: return default
 
-            # Phase 2: Try direct parse first (no regex mangling)
+            # Phase 2: Try direct parse first
             try:
                 return json.loads(content)
-            except Exception as e:
+            except Exception:
                 pass
 
-            # Phase 3: Truncation Recovery — close open braces/brackets
+            # Phase 3: Repair unquoted string values (llama3.1-8b pattern)
+            # e.g. {"title": Digestion,"icon": 🤔} → {"title": "Digestion","icon": "🤔"}
+            try:
+                # Add quotes around unquoted values after colons
+                repaired = re.sub(
+                    r':\s*([^"\[\]{},\n][^,\n}\]]*?)(\s*[,}\]])',
+                    lambda m: ': "' + m.group(1).strip().replace('"', '\\"') + '"' + m.group(2),
+                    content
+                )
+                return json.loads(repaired)
+            except Exception:
+                pass
+
+            # Phase 4: Truncation Recovery — close open braces/brackets
             try:
                 temp = content
-                # Close unclosed string
                 if temp.count('"') % 2 != 0:
                     temp += '"'
-                # Remove trailing comma before closing
                 temp = re.sub(r',\s*$', '', temp)
                 open_braces = temp.count('{') - temp.count('}')
                 open_brackets = temp.count('[') - temp.count(']')
@@ -2407,13 +2418,13 @@ class AIService:
                     except: pass
             except: pass
 
-            # Phase 4: ast.literal_eval
+            # Phase 5: ast.literal_eval
             try:
                 import ast
                 return ast.literal_eval(content)
             except: pass
 
-            # Phase 5: Find largest JSON block
+            # Phase 6: Find largest JSON block
             try:
                 cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
                 json_blocks = re.findall(r'\{[\s\S]*\}', cleaned)
