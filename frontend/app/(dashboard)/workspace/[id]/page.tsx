@@ -413,10 +413,10 @@ export default function WorkspaceCollaborationStudio() {
   )
 
   return (
-    <div className="flex h-full bg-[#0d0d0d] text-white overflow-hidden relative pb-20 md:pb-0">
+    <div className="flex h-full bg-[#0d0d0d] text-white overflow-hidden relative">
       
       {/* --- Main Chat Stage --- */}
-      <div className="relative flex-1 flex flex-col min-w-0">
+      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
         
         {/* Header */}
         <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-white/5 bg-[#0d0d0d] z-20 flex-shrink-0">
