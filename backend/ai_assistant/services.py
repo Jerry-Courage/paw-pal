@@ -627,11 +627,11 @@ class AIService:
                 if isinstance(audio_file, str):
                     with open(audio_file, 'rb') as f:
                         files = {'file': (os.path.basename(audio_file), f)}
-                        response = req.post(url, headers={"Authorization": f"Bearer {groq_key}"}, files=files, data={'model': 'whisper-large-v3'}, timeout=15)
+                        response = requests.post(url, headers={"Authorization": f"Bearer {groq_key}"}, files=files, data={'model': 'whisper-large-v3'}, timeout=15)
                 else:
                     audio_file.seek(0)
                     files = {'file': (audio_file.name, audio_file)}
-                    response = req.post(url, headers={"Authorization": f"Bearer {groq_key}"}, files=files, data={'model': 'whisper-large-v3'}, timeout=15)
+                    response = requests.post(url, headers={"Authorization": f"Bearer {groq_key}"}, files=files, data={'model': 'whisper-large-v3'}, timeout=15)
                 
                 if response.status_code == 200:
                     return response.json().get('text', '')

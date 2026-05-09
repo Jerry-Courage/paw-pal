@@ -157,24 +157,58 @@ function MermaidChart({ chart }: { chart: string }) {
 }
 
 // ─── RICH MARKDOWN RENDERER ───────────────────────────────────────────────────
-// Intercepts ```mermaid blocks and renders them as diagrams
+// Intercepts ```mermaid blocks AND bare diagram type blocks (graph, flowchart, etc.)
+// and renders them as MermaidChart instead of plain code blocks
+
+const MERMAID_STARTERS = [
+  'graph ', 'graph\n', 'flowchart ', 'flowchart\n',
+  'sequenceDiagram', 'classDiagram', 'erDiagram',
+  'stateDiagram', 'gantt', 'pie ', 'pie\n',
+  'mindmap', 'timeline', 'gitGraph', 'journey',
+  'quadrantChart', 'requirementDiagram', 'C4Context',
+]
+
+function isMermaidCode(lang: string | undefined, code: string): boolean {
+  if (lang === 'mermaid') return true
+  if (!lang || lang === '') {
+    // Check if the code content looks like mermaid
+    const trimmed = code.trim()
+    return MERMAID_STARTERS.some(s => trimmed.startsWith(s))
+  }
+  // Also catch when lang IS the diagram type (e.g. ```graph LR)
+  const langLower = (lang || '').toLowerCase()
+  return ['graph', 'flowchart', 'sequencediagram', 'classdiagram', 'erdiagram',
+    'statediagram', 'gantt', 'pie', 'mindmap', 'timeline', 'gitgraph'].includes(langLower)
+}
+
 function RichContent({ content }: { content: string }) {
-  // Split content into text segments and mermaid blocks
+  // Split content into text segments and mermaid blocks (```mermaid ... ```)
   const parts: Array<{ type: 'text' | 'mermaid'; content: string }> = []
-  const mermaidRegex = /```mermaid\s*([\s\S]*?)```/gi
+  // Match ```mermaid, ```graph, ```flowchart, etc.
+  const mermaidRegex = /```(mermaid|graph|flowchart|sequenceDiagram|classDiagram|erDiagram|stateDiagram|gantt|pie|mindmap|timeline|gitGraph)?\s*([\s\S]*?)```/gi
   let lastIndex = 0
   let match
 
   while ((match = mermaidRegex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
+    const lang = match[1] || ''
+    const code = match[2].trim()
+    const isMermaid = isMermaidCode(lang, code)
+
+    if (isMermaid) {
+      if (match.index > lastIndex) {
+        parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
+      }
+      // Reconstruct with the lang prefix so MermaidChart can parse it
+      parts.push({ type: 'mermaid', content: lang ? `${lang}\n${code}` : code })
+      lastIndex = match.index + match[0].length
     }
-    parts.push({ type: 'mermaid', content: match[1].trim() })
-    lastIndex = match.index + match[0].length
   }
   if (lastIndex < content.length) {
     parts.push({ type: 'text', content: content.slice(lastIndex) })
   }
+
+  // If no mermaid blocks found, just render as markdown
+  if (parts.length === 0) parts.push({ type: 'text', content })
 
   return (
     <div className="space-y-3">
@@ -194,15 +228,20 @@ function RichContent({ content }: { content: string }) {
               p: ({ children }) => <p className="text-slate-200 leading-relaxed mb-3 last:mb-0">{children}</p>,
               // Lists
               ul: ({ children }) => <ul className="my-3 space-y-1.5 pl-0">{children}</ul>,
-              ol: ({ children }) => <ol className="my-3 space-y-1.5 pl-0 list-none counter-reset-[item]">{children}</ol>,
-              li: ({ children, ...props }) => (
+              ol: ({ children }) => <ol className="my-3 space-y-1.5 pl-0 list-none">{children}</ol>,
+              li: ({ children }) => (
                 <li className="flex gap-2.5 items-start text-slate-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 shrink-0" />
                   <span className="flex-1 leading-relaxed">{children}</span>
                 </li>
               ),
-              // Code
+              // Code — intercept mermaid code blocks here too
               code: ({ className, children, ...props }: any) => {
+                const lang = className?.replace('language-', '') || ''
+                const codeStr = String(children).replace(/\n$/, '')
+                if (isMermaidCode(lang, codeStr)) {
+                  return <MermaidChart chart={lang ? `${lang}\n${codeStr}` : codeStr} />
+                }
                 const isInline = !className
                 if (isInline) return (
                   <code className="px-1.5 py-0.5 bg-white/10 text-orange-300 rounded-md text-[0.85em] font-mono">{children}</code>
@@ -211,10 +250,10 @@ function RichContent({ content }: { content: string }) {
                   <div className="my-3 rounded-xl overflow-hidden border border-white/8">
                     <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                        {className?.replace('language-', '') || 'code'}
+                        {lang || 'code'}
                       </span>
                       <button
-                        onClick={() => { navigator.clipboard.writeText(String(children)); toast.success('Copied') }}
+                        onClick={() => { navigator.clipboard.writeText(codeStr); toast.success('Copied') }}
                         className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors flex items-center gap-1"
                       >
                         <Copy className="w-3 h-3" /> Copy
@@ -240,12 +279,9 @@ function RichContent({ content }: { content: string }) {
               thead: ({ children }) => <thead className="bg-white/5 border-b border-white/8">{children}</thead>,
               th: ({ children }) => <th className="px-4 py-2.5 text-left text-xs font-black text-slate-300 uppercase tracking-wider">{children}</th>,
               td: ({ children }) => <td className="px-4 py-2.5 text-slate-300 border-t border-white/5">{children}</td>,
-              // Strong / em
               strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
               em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
-              // HR
               hr: () => <hr className="my-4 border-white/8" />,
-              // Links
               a: ({ children, href }) => (
                 <a href={href} target="_blank" rel="noopener noreferrer"
                   className="text-orange-400 underline decoration-orange-400/30 underline-offset-2 hover:decoration-orange-400 transition-all">

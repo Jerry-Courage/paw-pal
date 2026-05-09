@@ -175,7 +175,10 @@ else:
         },
     }
     MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
+    # On Render (and other cloud platforms), use /tmp for media storage
+    # since the app directory may not be writable. /tmp persists within a session.
+    _render_media = os.getenv('RENDER_MEDIA_ROOT', '')
+    MEDIA_ROOT = Path(_render_media) if _render_media else (Path('/tmp/flowstate_media') if os.getenv('RENDER') else BASE_DIR / 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
