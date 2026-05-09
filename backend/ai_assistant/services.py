@@ -2361,18 +2361,19 @@ class AIService:
 
 
     def _parse_json(self, text: str, default):
-        """Robust JSON parser: finds largest JSON block, handles truncation."""
+        """Robust JSON parser: finds best JSON block, handles truncation."""
         if not text:
             return default
         import re as _re, json as _json
         try:
-            # Strip markdown fences
-            t = _re.sub(r'`{3}(?:json)?\s*', '', text.strip())
+            # Strip markdown fences (backtick blocks)
+            t = text.strip()
+            t = _re.sub(r'`{3}(?:json)?\s*', '', t)
+            t = _re.sub(r'`{3}', '', t)
             t = t.strip()
 
-            # Find the LARGEST complete JSON object by brace-matching
-            # (avoids picking up JSON fragments from prompt text)
-            best = None
+            # Collect ALL complete JSON objects via brace-matching
+            candidates = []
             for m in _re.finditer(r'\{', t):
                 start = m.start()
                 depth = 0
@@ -2382,28 +2383,30 @@ class AIService:
                     elif c == '}':
                         depth -= 1
                         if depth == 0:
-                            candidate = t[start:start + i + 1]
-                            if best is None or len(candidate) > len(best):
-                                best = candidate
+                            candidates.append(t[start:start + i + 1])
                             break
 
-            if not best:
-                for m in _re.finditer(r'\[', t):
-                    start = m.start()
-                    depth = 0
-                    for i, c in enumerate(t[start:]):
-                        if c == '[':
-                            depth += 1
-                        elif c == ']':
-                            depth -= 1
-                            if depth == 0:
-                                candidate = t[start:start + i + 1]
-                                if best is None or len(candidate) > len(best):
-                                    best = candidate
-                                break
+            # Also collect arrays
+            for m in _re.finditer(r'\[', t):
+                start = m.start()
+                depth = 0
+                for i, c in enumerate(t[start:]):
+                    if c == '[':
+                        depth += 1
+                    elif c == ']':
+                        depth -= 1
+                        if depth == 0:
+                            candidates.append(t[start:start + i + 1])
+                            break
 
-            if not best:
+            if not candidates:
                 return default
+
+            # Prefer candidates that contain kit-level keys
+            kit_keys = ['"sections"', '"overview"', '"vocabulary"', '"exam_tips"']
+            kit_candidates = [c for c in candidates if any(k in c for k in kit_keys)]
+            # Among kit candidates, pick the longest; fallback to longest overall
+            best = max(kit_candidates, key=len) if kit_candidates else max(candidates, key=len)
 
             # Try direct parse
             try:

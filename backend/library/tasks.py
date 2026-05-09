@@ -372,7 +372,7 @@ def _generate_selected_features(resource, features: list):
             resource.status_text = "🃏 Generating flashcards..."
             resource.save(update_fields=['status_text'])
             cards = ai.generate_flashcards(resource, count=30, level='undergrad')
-            if cards:
+            if cards and isinstance(cards, list):
                 deck, _ = Deck.objects.get_or_create(
                     owner=resource.owner,
                     title=f"{resource.title} — Flashcards",
@@ -399,7 +399,7 @@ def _generate_selected_features(resource, features: list):
             resource.status_text = "❓ Generating quiz..."
             resource.save(update_fields=['status_text'])
             questions = ai.generate_quiz(resource, fmt='multiple_choice', level='undergrad', count=30)
-            if questions:
+            if questions and isinstance(questions, list):
                 Quiz.objects.create(
                     resource=resource,
                     owner=resource.owner,
@@ -417,7 +417,7 @@ def _generate_selected_features(resource, features: list):
             resource.status_text = "📝 Generating practice test..."
             resource.save(update_fields=['status_text'])
             questions = ai.generate_practice_questions(resource, difficulty='medium', count=30)
-            if questions:
+            if questions and isinstance(questions, list):
                 # Store in ai_concepts as practice_questions
                 existing = [c for c in (resource.ai_concepts or []) if 'practice_questions' not in c]
                 resource.ai_concepts = existing + [{'practice_questions': questions[:40]}]
