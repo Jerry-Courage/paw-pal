@@ -870,7 +870,6 @@ class AIService:
                             except Exception as item_err:
                                 err_str = str(item_err)
                                 if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
-                                    # Distinguish daily limit (RPD) from per-minute limit (RPM)
                                     is_daily_limit = (
                                         'PerDay' in err_str or
                                         'per_day' in err_str.lower() or
@@ -878,8 +877,8 @@ class AIService:
                                         'EmbedContentRequestsPerDay' in err_str
                                     )
                                     if is_daily_limit:
-                                        # Try second Google key if available
-                                        if self.google_client2 and self.google_client2 != self.google_client_v1:
+                                        # Daily quota — try key2 first
+                                        if self.google_client2:
                                             logger.warning(f"[RAG Cloud] Daily quota on key1 — switching to key2")
                                             try:
                                                 r2 = self.google_client2.models.embed_content(
@@ -896,25 +895,32 @@ class AIService:
                                         vectors.append(None)
                                         raise StopIteration("daily_quota_exhausted")
                                     else:
-                                        # RPM limit — wait and retry once
+                                        # RPM limit — wait 65s and retry with key2 if available
                                         logger.warning(f"[RAG Cloud] Embedding RPM 429 — sleeping 65s then retrying")
                                         _time.sleep(65)
-                                        try:
-                                            r = self.google_client_v1.models.embed_content(
-                                                model=model_id,
-                                                contents=item,
-                                                config={'task_type': task_type, 'output_dimensionality': 384}
-                                            )
-                                            if r.embeddings and len(r.embeddings) > 0:
-                                                vectors.append(r.embeddings[0].values)
+                                        for retry_client in [self.google_client_v1, self.google_client2]:
+                                            if not retry_client: continue
+                                            try:
+                                                r = retry_client.models.embed_content(
+                                                    model=model_id,
+                                                    contents=item,
+                                                    config={'task_type': task_type, 'output_dimensionality': 384}
+                                                )
+                                                if r.embeddings and len(r.embeddings) > 0:
+                                                    vectors.append(r.embeddings[0].values)
+                                                    break
+                                            except Exception:
                                                 continue
-                                        except Exception:
-                                            pass
+                                        else:
+                                            vectors.append(None)
+                                        continue
                                 logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
                                 vectors.append(None)
-                        # Pause between batches to stay under 100 RPM
+                                logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
+                                vectors.append(None)
+                        # Pause between batches — 1.2s = ~50 req/min, well under 100 RPM per key
                         if i + BATCH < len(content):
-                            _time.sleep(0.6)
+                            _time.sleep(1.2)
                     valid = [v for v in vectors if v is not None]
                     if valid:
                         return valid
@@ -2397,10 +2403,10 @@ class AIService:
             return default
         import re as _re, json as _json
         try:
-            # Strip markdown fences (backtick blocks)
+            # Strip markdown fences (backtick blocks) — handle leading spaces too
             t = text.strip()
-            t = _re.sub(r'`{3}(?:json)?\s*', '', t)
-            t = _re.sub(r'`{3}', '', t)
+            t = _re.sub(r'\s*`{3}(?:json)?\s*', '', t)
+            t = _re.sub(r'\s*`{3}\s*', '', t)
             t = t.strip()
 
             # Collect ALL complete JSON objects via brace-matching
