@@ -24,6 +24,16 @@ function normalizeOptions(opts: any): string[] {
   return []
 }
 
+// Normalize question objects from various AI model output formats
+function normalizeQuestion(q: any): MCQQuestion {
+  return {
+    question: q.question || q.text || q.question_text || q.stem || q.prompt || '',
+    options: q.options || q.choices || q.answers || q.alternatives || [],
+    correct_answer: q.correct_answer || q.answer || q.correct || q.correctAnswer || q.correct_option || '',
+    explanation: q.explanation || q.rationale || q.reason || q.feedback || '',
+  }
+}
+
 export default function QuizPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   const [phase, setPhase] = useState<'loading' | 'config' | 'quiz' | 'results'>('loading')
@@ -49,7 +59,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
     const quizzes = existingQuizzes?.results || existingQuizzes || []
     const best = quizzes.find((q: any) => q.questions?.length >= 10) || quizzes[0]
     if (best?.questions?.length) {
-      setQuestions(best.questions)
+      setQuestions(best.questions.map(normalizeQuestion))
     }
     setPhase('config')
   }, [existingQuizzes, loadingQuizzes])
@@ -65,7 +75,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
       const res = await libraryApi.generateQuiz(resourceId, 'mcq', 'undergrad', count)
       const qs = res.data.questions || res.data || []
       if (!qs.length) throw new Error('No questions')
-      setQuestions(qs); setCurrent(0); setSelected({}); setRevealed({})
+      setQuestions(qs.map(normalizeQuestion)); setCurrent(0); setSelected({}); setRevealed({})
       setPhase('quiz')
     } catch { toast.error('Failed to generate quiz. Try again.') }
     finally { setGenerating(false) }

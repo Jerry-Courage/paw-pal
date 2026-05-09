@@ -55,10 +55,16 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     stop: globalStop,
   } = useAudio()
 
+  const hasLoadedSession = useRef(false)
+
   useEffect(() => {
     libraryApi.getResource(resourceId).then(res => {
       setVisuals(res.data.extracted_images || [])
     })
+
+    // Only run session detection once
+    if (hasLoadedSession.current) return
+    hasLoadedSession.current = true
 
     // If already active in AudioContext, restore that session
     if (audio.activeResourceId === resourceId && audio.sessionId) {
@@ -73,7 +79,12 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     podcastApi.getExistingSession(resourceId).then(res => {
       const data = res.data
       if (data.exists && data.script?.length) {
-        startPodcast(resourceId, resource?.title || '', data.session_id, data.script)
+        // Get resource title for the mini player
+        libraryApi.getResource(resourceId).then(r => {
+          startPodcast(resourceId, r.data.title || '', data.session_id, data.script)
+        }).catch(() => {
+          startPodcast(resourceId, '', data.session_id, data.script)
+        })
         setStatus('ready')
         podcastApi.getStatus(data.session_id).then(r => {
           if (r.data.interjection_urls) setInterjectionUrls(r.data.interjection_urls)
