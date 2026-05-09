@@ -1320,10 +1320,9 @@ class AIService:
         resource.save(update_fields=['processing_progress', 'status_text'])
 
         # ─── MACRO-CHUNKING (Hyper-Speed Mode) ───
-        # Modern models (Gemini 2.5) have massive context windows. 
-        # Using 20k chunks reduces the number of AI calls 5x, vastly improving speed/stability.
-        chunk_size = 20000
-        overlap = 1000
+        # 15K chunks — balances context quality vs token budget for response
+        chunk_size = 15000
+        overlap = 500
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         # [NEW] Multi-Modal Vision Context
@@ -1351,7 +1350,7 @@ class AIService:
                 "1. MICRO-PARAGRAPHING: Limit every paragraph to a maximum of 3-4 sentences. NEVER return a wall of text.\n"
                 "2. SEMANTIC BOLDING: **Bold** high-impact keywords and concepts the first time they appear.\n"
                 "3. BULLET POINTS: Use bullet points religiousy for any lists or complex breakdowns.\n"
-                "4. ACADEMIC DEPTH: Provide 15-20 detailed 'sections' per chunk. Each section must be thorough with multiple paragraphs, bullet points, and examples.\n\n"
+                "4. ACADEMIC DEPTH: Provide 12-15 detailed 'sections' per chunk. Each section must be thorough with multiple paragraphs, bullet points, and examples.\n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
                 "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Concise 2-3 sentence overview of the material. No markdown, no asterisks, plain text only.\"},\n"
