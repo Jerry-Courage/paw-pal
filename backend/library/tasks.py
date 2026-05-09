@@ -410,17 +410,24 @@ def _generate_selected_features(resource, features: list):
             resource.save(update_fields=['status_text'])
             questions = ai.generate_quiz(resource, fmt='multiple_choice', level='undergrad', count=30)
             if questions and isinstance(questions, list):
+                # Filter out questions missing required fields
+                valid_qs = [q for q in questions if isinstance(q, dict) and q.get('question') and q.get('options')]
+                if not valid_qs:
+                    logger.warning(f'[AutoGen] Quiz for {resource.id}: {len(questions)} raw questions but 0 valid after filter. Sample: {str(questions[0])[:200]}')
+                    valid_qs = questions  # save anyway so we can debug
                 Quiz.objects.create(
                     resource=resource,
                     owner=resource.owner,
                     title=f"{resource.title} — Quiz",
-                    format='multiple_choice',
-                    questions=questions[:40],
+                    format='mcq',
+                    questions=valid_qs[:40],
                     academic_level='undergrad',
                 )
-                logger.info(f'[AutoGen] Quiz done for {resource.id} ({len(questions)} questions)')
+                logger.info(f'[AutoGen] Quiz done for {resource.id} ({len(valid_qs)} valid questions)')
+            else:
+                logger.warning(f'[AutoGen] Quiz for {resource.id} returned empty/invalid: {type(questions)} len={len(questions) if isinstance(questions, list) else "N/A"}')
         except Exception as e:
-            logger.error(f'[AutoGen] Quiz failed for {resource.id}: {e}')
+            logger.error(f'[AutoGen] Quiz failed for {resource.id}: {e}', exc_info=True)
 
     def gen_practice():
         try:
@@ -441,14 +448,16 @@ def _generate_selected_features(resource, features: list):
             resource.status_text = "🗺️ Generating mind map..."
             resource.save(update_fields=['status_text'])
             mindmap = ai.generate_mind_map(resource)
-            if mindmap:
+            if mindmap and isinstance(mindmap, dict) and mindmap.get('center'):
                 notes = resource.ai_notes_json or {}
                 notes['mind_map'] = mindmap
                 resource.ai_notes_json = notes
                 resource.save(update_fields=['ai_notes_json'])
                 logger.info(f'[AutoGen] Mind map done for {resource.id}')
+            else:
+                logger.warning(f'[AutoGen] Mind map for {resource.id} returned invalid structure: {str(mindmap)[:200]}')
         except Exception as e:
-            logger.error(f'[AutoGen] Mind map failed for {resource.id}: {e}')
+            logger.error(f'[AutoGen] Mind map failed for {resource.id}: {e}', exc_info=True)
 
     def gen_podcast():
         try:

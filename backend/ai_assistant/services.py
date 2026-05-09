@@ -1813,24 +1813,43 @@ class AIService:
         prompt = (
             f"Create a detailed mind map structure for '{resource.title}' (Subject: {resource.subject or 'General'}).\n\n"
             f"Content:\n{context[:8000] if context else resource.title}\n\n"
-            "Return ONLY a JSON object:\n"
+            "Return ONLY a raw JSON object (no markdown, no code blocks):\n"
             '{"center": "Main Topic", "branches": [{"topic": "Branch 1", "subtopics": ["sub1", "sub2"]}, ...]}\n'
-            "Include 5-8 main branches with 3-5 subtopics each. Use emojis in topics. No extra text."
+            "Include 5-8 main branches with 3-5 subtopics each. Use emojis in topics. Start with { and end with }."
         )
-        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), {})
+        result = self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), {})
+        # Validate structure
+        if isinstance(result, dict) and result.get('center') and result.get('branches'):
+            return result
+        # Try to build a minimal valid structure from whatever came back
+        if isinstance(result, dict) and result:
+            return {'center': resource.title, 'branches': [
+                {'topic': k, 'subtopics': v if isinstance(v, list) else [str(v)]}
+                for k, v in list(result.items())[:8]
+            ]}
+        return {}
 
     def generate_practice_questions(self, resource, difficulty: str = 'medium', count: int = 5) -> list:
         """Generate exam-style practice questions with detailed model answers."""
         context = self._get_resource_context(resource)
         prompt = (
-            f"Generate {count} {difficulty}-difficulty exam practice questions for '{resource.title}'.\n\n"
+            f"Generate exactly {count} {difficulty}-difficulty exam practice questions for '{resource.title}'.\n\n"
             f"Content:\n{context[:8000] if context else resource.title}\n\n"
-            "Return ONLY a JSON array of objects:\n"
-            '[{"question": "...", "type": "short_answer|essay|analysis", "hint": "...", "model_answer": "..."}]\n'
-            "Ensure the model_answer is detailed (2-3 paragraphs). Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. No extra text."
+            f"IMPORTANT: You MUST return exactly {count} questions. No more, no less.\n"
+            "Return ONLY a raw JSON array (no markdown, no code blocks). Each object must have:\n"
+            '  \"question\": the full question text,\n'
+            '  \"type\": one of \"short_answer\", \"essay\", or \"analysis\",\n'
+            '  \"hint\": a brief hint to guide the student,\n'
+            '  \"model_answer\": a detailed 2-3 paragraph model answer.\n'
+            "Start your response with [ and end with ]."
         )
-        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
-
+        result = self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
+        # If model returned a dict instead of list, try to extract the list
+        if isinstance(result, dict):
+            for k, v in result.items():
+                if isinstance(v, list) and len(v) > 0:
+                    return v
+        return result if isinstance(result, list) else []
     def grade_answer(self, question: str, user_answer: str, model_answer: str, resource_context: str = '') -> dict:
         """Grade a student's answer and provide detailed feedback."""
         context_part = f"\n\nResource content for reference:\n{resource_context[:10000]}" if resource_context else ""
