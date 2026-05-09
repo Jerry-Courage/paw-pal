@@ -270,7 +270,7 @@ if not DEBUG:
 # ─── File Upload Security ─────────────────────────────────────────────────────
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.pptx', '.txt', '.py', '.js', '.ts', '.jpg', '.jpeg', '.png', '.mp4']
-API_URL = os.getenv('API_URL', 'http://localhost:8000')
+API_URL = os.getenv('API_URL', os.getenv('RENDER_EXTERNAL_URL', 'http://localhost:8000'))
 
 # ─── OpenRouter ───────────────────────────────────────────────────────────────
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')

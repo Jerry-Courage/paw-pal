@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import threading
 from django.shortcuts import get_object_or_404
@@ -195,7 +196,14 @@ class WorkspaceMessageView(APIView):
         # Manually serialize to ensure absolute URLs in broadcast
         data = WorkspaceMessageSerializer(msg).data
         if msg.audio_file:
-            data['audio_file'] = f"{settings.API_URL}{msg.audio_file.url}"
+            # Build absolute URL using the configured backend URL
+            # Fall back to BACKEND_URL → API_URL → relative path
+            backend_url = (
+                os.environ.get('BACKEND_URL') or
+                os.environ.get('RENDER_EXTERNAL_URL') or
+                getattr(settings, 'API_URL', 'http://localhost:8000')
+            ).rstrip('/')
+            data['audio_file'] = f"{backend_url}{msg.audio_file.url}"
         
         try:
             async_to_sync(layer.group_send)(

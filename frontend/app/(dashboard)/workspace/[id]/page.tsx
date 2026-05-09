@@ -185,7 +185,14 @@ export default function WorkspaceCollaborationStudio() {
               
               if (optimisticIndex !== -1) {
                 const next = [...prev]
-                next[optimisticIndex] = msg 
+                const optimistic = prev[optimisticIndex]
+                // Preserve the blob: URL from the optimistic message so audio keeps playing
+                // The server message may have a relative URL that fails to resolve
+                const mergedMsg = { ...msg }
+                if (optimistic.audio_file?.startsWith('blob:') && !msg.audio_file?.startsWith('http')) {
+                  mergedMsg.audio_file = optimistic.audio_file
+                }
+                next[optimisticIndex] = mergedMsg
                 return next
               }
 
@@ -978,8 +985,10 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
   const audioUrl = (() => {
     if (!url) return ''
     if (url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('http')) return url
-    const base = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000'
-    return `${base}${url.startsWith('/') ? '' : '/'}${url}`
+    // Derive backend base from NEXT_PUBLIC_API_URL (strip /api suffix)
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+    const backendBase = apiBase.replace(/\/api\/?$/, '')
+    return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`
   })()
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
