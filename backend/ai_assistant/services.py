@@ -2361,77 +2361,79 @@ class AIService:
 
 
     def _parse_json(self, text: str, default):
-        """Greedy & Truncation-Aware JSON Parser: Extracts and repairs valid JSON from AI responses."""
-        if not text: return default
+        """Robust JSON parser: finds largest JSON block, handles truncation."""
+        if not text:
+            return default
+        import re as _re, json as _json
         try:
-            text = text.strip()
-            import re
+            # Strip markdown fences
+            t = _re.sub(r'`{3}(?:json)?\s*', '', text.strip())
+            t = t.strip()
 
-            # Strip markdown code fences
-            text = re.sub(r'```(?:json)?\s*', '', text)
-            text = re.sub(r'\s*```', '', text)
-            text = text.strip()
+            # Find the LARGEST complete JSON object by brace-matching
+            # (avoids picking up JSON fragments from prompt text)
+            best = None
+            for m in _re.finditer(r'\{', t):
+                start = m.start()
+                depth = 0
+                for i, c in enumerate(t[start:]):
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            candidate = t[start:start + i + 1]
+                            if best is None or len(candidate) > len(best):
+                                best = candidate
+                            break
 
-            # Phase 1: Find outermost JSON enclosure
-            start_indices = [text.find('{'), text.find('[')]
-            start_index = min([i for i in start_indices if i != -1] or [0])
-            end_indices = [text.rfind('}'), text.rfind(']')]
-            end_index = max([i for i in end_indices if i != -1] or [len(text)])
-            content = text[start_index : end_index + 1].strip()
-            if not content: return default
+            if not best:
+                for m in _re.finditer(r'\[', t):
+                    start = m.start()
+                    depth = 0
+                    for i, c in enumerate(t[start:]):
+                        if c == '[':
+                            depth += 1
+                        elif c == ']':
+                            depth -= 1
+                            if depth == 0:
+                                candidate = t[start:start + i + 1]
+                                if best is None or len(candidate) > len(best):
+                                    best = candidate
+                                break
 
-            # Phase 2: Try direct parse first
+            if not best:
+                return default
+
+            # Try direct parse
             try:
-                return json.loads(content)
+                return _json.loads(best)
             except Exception:
                 pass
 
-            # Phase 3: Repair unquoted string values (llama3.1-8b pattern)
-            # e.g. {"title": Digestion,"icon": 🤔} → {"title": "Digestion","icon": "🤔"}
+            # Truncation repair: close open braces/brackets
             try:
-                # Add quotes around unquoted values after colons
-                repaired = re.sub(
-                    r':\s*([^"\[\]{},\n][^,\n}\]]*?)(\s*[,}\]])',
-                    lambda m: ': "' + m.group(1).strip().replace('"', '\\"') + '"' + m.group(2),
-                    content
-                )
-                return json.loads(repaired)
-            except Exception:
-                pass
-
-            # Phase 4: Truncation Recovery — close open braces/brackets
-            try:
-                temp = content
-                if temp.count('"') % 2 != 0:
-                    temp += '"'
-                temp = re.sub(r',\s*$', '', temp)
-                open_braces = temp.count('{') - temp.count('}')
-                open_brackets = temp.count('[') - temp.count(']')
-                if open_braces > 0 or open_brackets > 0:
-                    repair = temp
-                    if repair.endswith(','): repair = repair[:-1]
-                    repair += '}' * open_braces
-                    repair += ']' * open_brackets
+                tmp = best
+                if tmp.count('"') % 2 != 0:
+                    tmp += '"'
+                tmp = tmp.rstrip(',')
+                ob = tmp.count('{') - tmp.count('}')
+                ob2 = tmp.count('[') - tmp.count(']')
+                if ob > 0 or ob2 > 0:
+                    fixed = tmp + '}' * ob + ']' * ob2
                     try:
-                        return json.loads(repair)
-                    except: pass
-            except: pass
+                        return _json.loads(fixed)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
-            # Phase 5: ast.literal_eval
+            # ast fallback
             try:
                 import ast
-                return ast.literal_eval(content)
-            except: pass
-
-            # Phase 6: Find largest JSON block
-            try:
-                cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
-                json_blocks = re.findall(r'\{[\s\S]*\}', cleaned)
-                if json_blocks:
-                    candidate = max(json_blocks, key=len)
-                    try: return json.loads(candidate)
-                    except: pass
-            except: pass
+                return ast.literal_eval(best)
+            except Exception:
+                pass
 
             return default
         except Exception:

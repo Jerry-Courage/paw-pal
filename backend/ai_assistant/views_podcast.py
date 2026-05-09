@@ -135,7 +135,7 @@ def bg_generate_script(session_id, notes):
         
         # 1. IDENTIFY THE TARGETS (Max 4 visuals to generate)
         ai_gen_count = 0
-        max_ai_gen = 2  # Limit to 2 AI-generated images to keep generation fast
+        max_ai_gen = 0  # Disabled — podcast images slow down generation and add little value
         targets = [] # List of (index, prompt)
         
         last_url = None
