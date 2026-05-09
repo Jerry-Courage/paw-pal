@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import {
-  ArrowLeft, Sparkles, Loader2, X, RotateCcw, BookOpen,
+  ArrowLeft, Loader2, X, RotateCcw, BookOpen,
   HelpCircle, Map, Wand2, Radio, Calculator, Layers,
   PanelRight, PanelRightClose, Plus, Send
 } from 'lucide-react'
@@ -18,6 +18,7 @@ import { aiApi } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 
 import RichNotesViewer from '@/components/library/RichNotesViewer'
+import ProcessingView from '@/components/library/ProcessingView'
 import MusicGeneratorModal from '@/components/library/MusicGeneratorModal'
 import ExpandableMobileHUD from '@/components/ui/ExpandableMobileHUD'
 
@@ -274,23 +275,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         <div className="flex-1 overflow-y-auto bg-[#0d0d0d] scrollbar-hide scroll-pt-4">
           {activeTool === 'notes' && (
             !hasNotes ? (
-              <div className="flex flex-col items-center justify-center h-full p-12 text-center gap-5">
-                <div className="w-16 h-16 bg-orange-500/10 rounded-[2rem] flex items-center justify-center animate-pulse">
-                  <Sparkles className="w-8 h-8 text-orange-400" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-white tracking-tight">Generating Notes</h2>
-                  <p className="text-slate-500 mt-1.5 text-sm">FlowAI is building your study kit...</p>
-                </div>
-                {resource.processing_progress > 0 && (
-                  <div className="w-full max-w-xs space-y-2">
-                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                      <div className="h-full bg-orange-500 rounded-full transition-all duration-700" style={{ width: `${resource.processing_progress}%` }} />
-                    </div>
-                    <p className="text-[11px] text-slate-600 italic">{resource.status_text}</p>
-                  </div>
-                )}
-              </div>
+              <ProcessingView resource={resource} />
             ) : (
               <RichNotesViewer
                 notes={resource.ai_notes_json}

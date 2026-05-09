@@ -6,13 +6,13 @@ import { useSession } from 'next-auth/react'
 import { libraryApi, getAuthToken, SERVER_URL } from '@/lib/api'
 import {
   Upload, Link2, Mic, Search, Sparkles, Trash2, BookOpen,
-  FileText, Video, Code2, Layers, Loader2, Brain, Zap,
-  AlertTriangle, Image as ImageIcon, ArrowRight, Radio,
-  Folder, ChevronRight, Clock, MoreHorizontal
+  FileText, Video, Code2, Layers, Brain, Zap,
+  Folder, ChevronRight, MoreHorizontal
 } from 'lucide-react'
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
 import UploadModal from '@/components/library/UploadModal'
+import ProcessingView from '@/components/library/ProcessingView'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
@@ -52,39 +52,32 @@ function getGradient(subject: string, title: string) {
 function ProcessingCard({ resource, onDelete }: { resource: any; onDelete: () => void }) {
   const Icon = TYPE_ICONS[resource.resource_type] || FileText
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-[#1a1a1a] border border-white/5 p-5 flex flex-col gap-4">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-            <Icon className="w-5 h-5 text-slate-400" />
+    <Link href={`/library/${resource.id}`} className="block">
+      <div className="relative overflow-hidden rounded-2xl bg-[#1a1a1a] border border-orange-500/20 p-5 flex flex-col gap-4 hover:border-orange-500/40 transition-all cursor-pointer">
+        {/* Subtle animated top border */}
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500/60 to-transparent animate-shine" />
+
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+              <Icon className="w-5 h-5 text-orange-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-white truncate max-w-[160px]">{resource.title}</p>
+              <p className="text-[10px] text-slate-500 font-medium">{formatBytes(resource.file_size)}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-white truncate max-w-[180px]">{resource.title}</p>
-            <p className="text-[10px] text-slate-500 font-medium">{formatBytes(resource.file_size)}</p>
-          </div>
+          <button
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
+            className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded-lg hover:bg-rose-400/10"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
-        <button onClick={onDelete} className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded-lg hover:bg-rose-400/10">
-          <Trash2 className="w-4 h-4" />
-        </button>
+
+        <ProcessingView resource={resource} compact />
       </div>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-0.5">
-            {[0,1,2].map(i => (
-              <span key={i} className="w-1 h-1 rounded-full bg-orange-500 animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
-            ))}
-          </div>
-          <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Processing</span>
-        </div>
-        <p className="text-xs text-slate-500 italic truncate">{resource.status_text || 'Ingesting content...'}</p>
-        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-700 rounded-full"
-            style={{ width: `${Math.max(resource.processing_progress || 0, 5)}%` }}
-          />
-        </div>
-      </div>
-    </div>
+    </Link>
   )
 }
 
