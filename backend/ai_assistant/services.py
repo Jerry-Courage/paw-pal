@@ -853,6 +853,7 @@ class AIService:
                     # List — embed in small batches of 5 to balance speed vs API limits
                     import time as _time
                     vectors = []
+                    rpm_exhausted_clients = set()  # Track RPM-limited clients within this batch
                     BATCH = 5
                     for i in range(0, len(content), BATCH):
                         batch = content[i:i + BATCH]
@@ -895,11 +896,19 @@ class AIService:
                                         vectors.append(None)
                                         raise StopIteration("daily_quota_exhausted")
                                     else:
-                                        # RPM limit — wait 65s and retry with key2 if available
-                                        logger.warning(f"[RAG Cloud] Embedding RPM 429 — sleeping 65s then retrying")
-                                        _time.sleep(65)
-                                        for retry_client in [self.google_client_v1, self.google_client2]:
-                                            if not retry_client: continue
+                                        # RPM limit — mark this client as temporarily exhausted
+                                        # and immediately try key2 without sleeping
+                                        logger.warning(f"[RAG Cloud] Embedding RPM 429 — switching to alternate key")
+                                        rpm_exhausted_clients.add(id(self.google_client_v1))
+                                        alt_clients = [c for c in [self.google_client2, self.google_client_v1] if c and id(c) not in rpm_exhausted_clients]
+                                        if not alt_clients:
+                                            # All keys exhausted — sleep once then retry
+                                            logger.warning(f"[RAG Cloud] All embedding keys RPM-limited — sleeping 65s")
+                                            _time.sleep(65)
+                                            rpm_exhausted_clients.clear()
+                                            alt_clients = [c for c in [self.google_client_v1, self.google_client2] if c]
+                                        success = False
+                                        for retry_client in alt_clients:
                                             try:
                                                 r = retry_client.models.embed_content(
                                                     model=model_id,
@@ -908,10 +917,14 @@ class AIService:
                                                 )
                                                 if r.embeddings and len(r.embeddings) > 0:
                                                     vectors.append(r.embeddings[0].values)
+                                                    success = True
                                                     break
-                                            except Exception:
+                                            except Exception as retry_err:
+                                                err2 = str(retry_err)
+                                                if '429' in err2 or 'RESOURCE_EXHAUSTED' in err2:
+                                                    rpm_exhausted_clients.add(id(retry_client))
                                                 continue
-                                        else:
+                                        if not success:
                                             vectors.append(None)
                                         continue
                                 logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
@@ -1399,7 +1412,7 @@ class AIService:
                 "1. MICRO-PARAGRAPHING: Limit every paragraph to a maximum of 3-4 sentences. NEVER return a wall of text.\n"
                 "2. SEMANTIC BOLDING: **Bold** high-impact keywords and concepts the first time they appear.\n"
                 "3. BULLET POINTS: Use bullet points religiousy for any lists or complex breakdowns.\n"
-                "4. ACADEMIC DEPTH: Provide 12-15 detailed 'sections' per chunk. Each section must be thorough with multiple paragraphs, bullet points, and examples.\n\n"
+                "4. ACADEMIC DEPTH: Provide 8-10 detailed 'sections' per chunk. Each section must be thorough with multiple paragraphs, bullet points, and examples.\n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
                 "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"Concise 2-3 sentence overview of the material. No markdown, no asterisks, plain text only.\"},\n"
@@ -1628,7 +1641,7 @@ class AIService:
             
         # Study kit uses kit_chat_sync (Cerebras → SambaNova → Groq 70B → Google)
         # for quality + high daily quota. Falls back to chat_sync if kit_chat returns empty.
-        future = watchdog.submit(self.kit_chat_sync, [{'role': 'user', 'content': user_content}], max_tokens=8192)
+        future = watchdog.submit(self.kit_chat_sync, [{'role': 'user', 'content': user_content}], max_tokens=16384)
         try:
             # [IMPERIAL SCALE] Upgraded timeout to 500s for 20-section depth
             res = future.result(timeout=500)
@@ -2398,7 +2411,7 @@ class AIService:
 
 
     def _parse_json(self, text: str, default):
-        """Robust JSON parser: finds best JSON block, handles truncation."""
+        """Robust JSON parser: finds best JSON block, handles truncation including mid-string cuts."""
         if not text:
             return default
         import re as _re, json as _json
@@ -2414,57 +2427,119 @@ class AIService:
             for m in _re.finditer(r'\{', t):
                 start = m.start()
                 depth = 0
+                in_str = False
+                escape = False
                 for i, c in enumerate(t[start:]):
-                    if c == '{':
-                        depth += 1
-                    elif c == '}':
-                        depth -= 1
-                        if depth == 0:
-                            candidates.append(t[start:start + i + 1])
-                            break
+                    if escape:
+                        escape = False
+                        continue
+                    if c == '\\':
+                        escape = True
+                        continue
+                    if c == '"' and not escape:
+                        in_str = not in_str
+                    if not in_str:
+                        if c == '{':
+                            depth += 1
+                        elif c == '}':
+                            depth -= 1
+                            if depth == 0:
+                                candidates.append(t[start:start + i + 1])
+                                break
 
             # Also collect arrays
             for m in _re.finditer(r'\[', t):
                 start = m.start()
                 depth = 0
+                in_str = False
+                escape = False
                 for i, c in enumerate(t[start:]):
-                    if c == '[':
-                        depth += 1
-                    elif c == ']':
-                        depth -= 1
-                        if depth == 0:
-                            candidates.append(t[start:start + i + 1])
-                            break
+                    if escape:
+                        escape = False
+                        continue
+                    if c == '\\':
+                        escape = True
+                        continue
+                    if c == '"' and not escape:
+                        in_str = not in_str
+                    if not in_str:
+                        if c == '[':
+                            depth += 1
+                        elif c == ']':
+                            depth -= 1
+                            if depth == 0:
+                                candidates.append(t[start:start + i + 1])
+                                break
 
+            # If no complete block found, use the whole text as a truncated candidate
             if not candidates:
-                return default
+                candidates = [t]
 
             # Prefer candidates that contain kit-level keys
             kit_keys = ['"sections"', '"overview"', '"vocabulary"', '"exam_tips"']
             kit_candidates = [c for c in candidates if any(k in c for k in kit_keys)]
-            # Among kit candidates, pick the longest; fallback to longest overall
             best = max(kit_candidates, key=len) if kit_candidates else max(candidates, key=len)
 
-            # Try direct parse
+            # Try direct parse first
             try:
                 return _json.loads(best)
             except Exception:
                 pass
 
-            # Truncation repair: close open braces/brackets
+            # ── Truncation repair ────────────────────────────────────────────
+            # Strategy: scan char-by-char tracking string/brace state,
+            # then close whatever is open.
+            def repair_truncated(s):
+                """Close any open strings, arrays, and objects."""
+                in_str = False
+                escape_next = False
+                depth_brace = 0
+                depth_bracket = 0
+                result = []
+                for ch in s:
+                    result.append(ch)
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if ch == '\\':
+                        escape_next = True
+                        continue
+                    if ch == '"':
+                        in_str = not in_str
+                        continue
+                    if not in_str:
+                        if ch == '{':
+                            depth_brace += 1
+                        elif ch == '}':
+                            depth_brace -= 1
+                        elif ch == '[':
+                            depth_bracket += 1
+                        elif ch == ']':
+                            depth_bracket -= 1
+                # Close open string first
+                if in_str:
+                    result.append('"')
+                # Remove trailing comma before closing
+                joined = ''.join(result).rstrip()
+                if joined.endswith(','):
+                    joined = joined[:-1]
+                # Close open brackets then braces
+                joined += ']' * max(0, depth_bracket)
+                joined += '}' * max(0, depth_brace)
+                return joined
+
             try:
-                tmp = best
-                if tmp.count('"') % 2 != 0:
-                    tmp += '"'
-                tmp = tmp.rstrip(',')
-                ob = tmp.count('{') - tmp.count('}')
-                ob2 = tmp.count('[') - tmp.count(']')
-                if ob > 0 or ob2 > 0:
-                    fixed = tmp + '}' * ob + ']' * ob2
-                    try:
-                        return _json.loads(fixed)
-                    except Exception:
-                        pass
+                fixed = repair_truncated(best)
+                return _json.loads(fixed)
+            except Exception:
+                pass
+
+            # Also try repairing the full raw text (in case best was a bad candidate)
+            try:
+                fixed2 = repair_truncated(t)
+                parsed = _json.loads(fixed2)
+                if isinstance(parsed, dict) and any(k in parsed for k in ['sections', 'overview']):
+                    return parsed
             except Exception:
                 pass
 
@@ -2478,3 +2553,4 @@ class AIService:
             return default
         except Exception:
             return default
+
