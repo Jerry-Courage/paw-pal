@@ -258,10 +258,13 @@ def process_resource_task(res_id):
                 res.processing_progress = 30
                 res.save()
 
-                # Trigger Vectorization for RAG
+                # Trigger Vectorization for RAG (non-blocking — embedding failures don't stop kit generation)
                 res.status = 'vectorizing'
                 res.save()
-                create_vector_embeddings(res, text)
+                try:
+                    create_vector_embeddings(res, text)
+                except Exception as embed_err:
+                    logger.warning(f"[RAG] Embedding failed for {res.id}, skipping: {embed_err}")
                 
                 # Save after vectorization
                 res.processing_progress = 40

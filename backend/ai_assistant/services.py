@@ -857,7 +857,13 @@ class AIService:
                             except Exception as item_err:
                                 err_str = str(item_err)
                                 if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
-                                    # Hit rate limit — wait and retry once
+                                    # Check if it's a daily limit (not just RPM) — if so, give up immediately
+                                    if 'PerDay' in err_str or 'per_day' in err_str.lower() or 'limit: 1000' in err_str:
+                                        logger.warning(f"[RAG Cloud] Daily embedding quota exhausted — skipping remaining chunks")
+                                        vectors.append(None)
+                                        # Signal to break out of all loops
+                                        raise StopIteration("daily_quota_exhausted")
+                                    # RPM limit — wait and retry once
                                     logger.warning(f"[RAG Cloud] Embedding 429 — sleeping 65s then retrying")
                                     _time.sleep(65)
                                     try:
@@ -875,11 +881,17 @@ class AIService:
                                 vectors.append(None)
                         # Pause between batches to stay under 100 RPM
                         if i + BATCH < len(content):
-                            _time.sleep(0.6)  # 0.6s = ~8 req/s = ~500 RPM — well under 100 RPM limit
+                            _time.sleep(0.6)
                     valid = [v for v in vectors if v is not None]
                     if valid:
                         return valid
                     return None
+            except StopIteration as si:
+                if 'daily_quota_exhausted' in str(si):
+                    logger.warning("[RAG Cloud] Daily quota hit — returning partial vectors")
+                    valid = [v for v in vectors if v is not None]
+                    return valid if valid else None
+                raise
             except Exception as e:
                 logger.warning(f"[RAG Cloud] {model_id} failed: {e}. Falling back...")
                 continue
