@@ -855,18 +855,22 @@ class AgentView(APIView):
         if not query:
             return Response({'error': 'Query required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Handle Session Persistence (Sync Protocol for DRF Auth compatibility)
+        # 1. Handle Session Persistence
         session = None
-        is_academic = any(kw in query.lower() for kw in ['pdf', 'note', 'resource', 'material', 'study', 'kit'])
-        
-        if session_id and (is_academic or is_tutor):
-            session = get_object_or_404(ChatSession, id=session_id, user=request.user)
-        else:
-            # Dedicated lane for general platform assistance
-            session, created = ChatSession.objects.get_or_create(
-                user=request.user, 
-                context_type='global', 
-                title='FlowAI Platform Assistant'
+        if session_id:
+            # Resume existing session
+            try:
+                session = ChatSession.objects.get(id=session_id, user=request.user)
+            except ChatSession.DoesNotExist:
+                pass
+
+        if not session:
+            # Create a new session with a title derived from the first message
+            title = query[:60].strip() or 'New Chat'
+            session = ChatSession.objects.create(
+                user=request.user,
+                context_type='global',
+                title=title,
             )
 
         # 2. Process with Agent (High-Performance Async Bridge)
@@ -918,6 +922,13 @@ class AgentView(APIView):
                 diagram_code=execution_result if action and action.get('tool') == 'generate_diagram' else None
             )
 
+            msg_data = ChatMessageSerializer(assistant_msg, context={'request': request}).data
+            # Expose diagram under both keys for frontend compatibility
+            diagram_val = execution_result if action and action.get('tool') == 'generate_diagram' else None
+            if diagram_val:
+                msg_data['diagram'] = diagram_val
+                msg_data['diagram_code'] = diagram_val
+
             return Response({
                 'done': True,
                 'message_id': assistant_msg.id,
@@ -927,7 +938,8 @@ class AgentView(APIView):
                 'audio_url': audio_url,
                 'action': action,
                 'execution_result': execution_result,
-                'message': ChatMessageSerializer(assistant_msg, context={'request': request}).data
+                'diagram': diagram_val,
+                'message': msg_data,
             })
         except Exception as e:
             err_details = f"Atomic Agent Error: {str(e)}"

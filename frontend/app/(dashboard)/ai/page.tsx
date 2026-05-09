@@ -46,67 +46,121 @@ const SUGGESTIONS = [
 function MermaidChart({ chart }: { chart: string }) {
   const [svg, setSvg] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const [rawCode, setRawCode] = useState<string>('')
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setError(null)
     setSvg('')
-    
-    // Clean the chart code
-    let cleanChart = chart.replace(/^```mermaid\n?/, '').replace(/\n?```$/, '').trim()
-    if (cleanChart.startsWith('mermaid')) cleanChart = cleanChart.substring(7).trim()
-    
-    // Frontend sanitization as extra defense
-    cleanChart = cleanChart
-      .replace(/\|([^|]+)\|>/g, '|$1|')        // Fix |text|> arrows
-      .replace(/-->\|([^|]+)\|>/g, '-->|$1|')   // Fix -->|text|> arrows
-    
-    if (!cleanChart || cleanChart.length < 5) {
-      setError('Empty or invalid diagram code.')
+
+    // Strip markdown fences
+    let clean = chart
+      .replace(/^```mermaid\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim()
+    // Strip leading "mermaid" keyword if model echoed it
+    if (/^mermaid\s/i.test(clean)) clean = clean.replace(/^mermaid\s+/i, '')
+    // Fix |text|> arrow syntax
+    clean = clean.replace(/\|([^|]+)\|>/g, '|$1|')
+
+    if (!clean || clean.length < 5) {
+      setError('Empty diagram — ask FlowAI to regenerate it.')
       return
     }
-    
-    import('mermaid').then(async (mermaid) => {
+    setRawCode(clean)
+
+    import('mermaid').then(async (mod) => {
+      const mermaid = mod.default
       try {
-        mermaid.default.initialize({ 
+        mermaid.initialize({
           startOnLoad: false,
-          theme: 'neutral',
-          securityLevel: 'strict',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          suppressErrorRendering: true
+          theme: 'dark',
+          darkMode: true,
+          securityLevel: 'loose',   // 'strict' blocks some valid diagrams
+          fontFamily: 'Outfit, Inter, system-ui, sans-serif',
+          suppressErrorRendering: true,
+          themeVariables: {
+            background: '#111111',
+            primaryColor: '#f97316',
+            primaryTextColor: '#ffffff',
+            primaryBorderColor: '#f97316',
+            lineColor: '#6b7280',
+            secondaryColor: '#1a1a1a',
+            tertiaryColor: '#1f1f1f',
+            edgeLabelBackground: '#1a1a1a',
+            clusterBkg: '#1a1a1a',
+            titleColor: '#ffffff',
+            nodeTextColor: '#ffffff',
+          },
         })
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`
-        const { svg: renderedSvg } = await mermaid.default.render(id, cleanChart)
-        setSvg(renderedSvg)
+        const { svg: rendered } = await mermaid.render(id, clean)
+        setSvg(rendered)
       } catch (err: any) {
         console.error('Mermaid render error:', err)
-        setError('Diagram syntax error. Try asking FlowAI to regenerate it.')
-        // Clean up any error elements mermaid injected into the DOM
+        // Try a simplified fallback — strip all labels and re-render
+        try {
+          const simplified = clean
+            .split('\n')
+            .filter(l => !l.trim().startsWith('%%'))
+            .join('\n')
+          const id2 = `mermaid-fb-${Math.random().toString(36).substr(2, 9)}`
+          const { svg: rendered2 } = await mermaid.render(id2, simplified)
+          setSvg(rendered2)
+        } catch {
+          setError('Diagram syntax error — ask FlowAI to regenerate it.')
+        }
         document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
-        document.querySelectorAll('.mermaid-error').forEach(el => el.remove())
       }
     })
-    
+
     return () => {
-      // Cleanup on unmount
       document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
     }
   }, [chart])
 
-  if (error) {
-    return (
-      <div className="p-6 bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-2xl flex flex-col items-center gap-3 text-center">
-        <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/20 text-red-500 flex items-center justify-center">
-          <Paperclip className="w-5 h-5" />
-        </div>
-        <div className="text-sm font-bold text-red-600 dark:text-red-400">{error}</div>
-        <div className="text-[10px] font-mono opacity-50 max-w-full overflow-hidden truncate px-4">{chart.substring(0, 50)}...</div>
-      </div>
-    )
-  }
+  if (error) return (
+    <div className="p-5 bg-red-500/8 border border-red-500/20 rounded-2xl flex flex-col items-center gap-3 text-center">
+      <p className="text-sm font-bold text-red-400">{error}</p>
+      <details className="text-left w-full">
+        <summary className="text-[10px] text-slate-600 cursor-pointer hover:text-slate-400">Show raw code</summary>
+        <pre className="mt-2 text-[10px] font-mono text-slate-500 overflow-x-auto whitespace-pre-wrap break-all">{rawCode}</pre>
+      </details>
+    </div>
+  )
 
-  if (!svg) return <div className="p-8 text-center animate-pulse text-slate-400 font-bold tracking-widest text-xs uppercase">Rendering diagram...</div>
-  return <div ref={containerRef} className="overflow-x-auto p-4 bg-[#111] rounded-2xl border border-white/8" dangerouslySetInnerHTML={{ __html: svg }} />
+  if (!svg) return (
+    <div className="p-6 flex items-center justify-center gap-2">
+      {[0,1,2].map(i => (
+        <span key={i} className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+      ))}
+      <span className="text-xs text-slate-500 font-medium ml-1">Rendering diagram...</span>
+    </div>
+  )
+
+  return (
+    <div className="rounded-2xl border border-white/8 overflow-hidden bg-[#111]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
+        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Diagram</span>
+        <button
+          onClick={() => {
+            const el = containerRef.current?.querySelector('svg')
+            if (el) {
+              const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a'); a.href = url; a.download = 'diagram.svg'; a.click()
+              URL.revokeObjectURL(url)
+            }
+          }}
+          className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
+        >
+          <Download className="w-3 h-3" /> SVG
+        </button>
+      </div>
+      <div ref={containerRef} className="overflow-x-auto p-4" dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
+  )
 }
 
 // ─── TYPEWRITER EFFECT ───────────────────────────────────────────────────────
@@ -346,24 +400,22 @@ function AIChat() {
     setSidebarOpen(false)
 
     try {
-      // Fetch full session with images from the detail endpoint
       const res = await aiApi.getSession(session.id)
       const fullSession = res.data
       const mappedMessages = (fullSession.messages || []).map((m: any) => ({
         role: m.role,
         content: m.content || '',
         diagram: m.diagram_code || m.diagram || undefined,
-        image: m.image || undefined
+        image: m.image || undefined,
       }))
       setMessages(mappedMessages)
       setActiveSession(fullSession)
     } catch {
-      // Fallback to cached data if fetch fails
       const mappedMessages = (session.messages || []).map((m: any) => ({
         role: m.role,
         content: m.content || '',
         diagram: m.diagram_code || m.diagram || undefined,
-        image: m.image || undefined
+        image: m.image || undefined,
       }))
       setMessages(mappedMessages)
     }
@@ -485,24 +537,55 @@ function AIChat() {
             undefined, // voice_id
             messages.map(m => ({ role: m.role, content: m.content })),
             false, // tutor mode
-            activeId // session_id
+            activeSession?.id // session_id — pass existing session to persist history
           );
 
           if (response.data && response.data.reply) {
+            // Grab diagram from multiple possible locations in response
+            const diagramCode =
+              response.data.diagram ||
+              response.data.message?.diagram ||
+              response.data.message?.diagram_code ||
+              response.data.execution_result ||
+              null
+
             const assistantMsg: Message = {
               id: Date.now(),
               role: 'assistant',
               content: response.data.reply,
               image: response.data.message?.image,
-              diagram: response.data.message?.diagram
+              diagram: diagramCode || undefined,
             };
 
             setMessages(prev => [...prev, assistantMsg]);
 
-            if (response.data.session_id && !activeSession) {
-              const newSession = { id: response.data.session_id, title: currentInput.slice(0, 30) || 'New Chat' };
-              setActiveSession(newSession);
-              queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+            // Update active session from response (backend always returns session_id now)
+            if (response.data.session_id) {
+              if (!activeSession || activeSession.id !== response.data.session_id) {
+                setActiveSession({ id: response.data.session_id, title: currentInput.slice(0, 60) || 'New Chat' });
+                queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+              }
+            }
+
+            // If user asked for a diagram but agent didn't return one, call diagram endpoint directly
+            const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(currentInput)
+            if (wantsDiagram && !diagramCode) {
+              const msgIdx = messages.length // index of the assistant message we just added
+              aiApi.generateDiagram(currentInput, 'auto', response.data.message_id).then(res => {
+                if (res.data.mermaid) {
+                  setMessages(prev => {
+                    const updated = [...prev]
+                    // Find the last assistant message and attach diagram
+                    for (let i = updated.length - 1; i >= 0; i--) {
+                      if (updated[i].role === 'assistant') {
+                        updated[i] = { ...updated[i], diagram: res.data.mermaid }
+                        break
+                      }
+                    }
+                    return updated
+                  })
+                }
+              }).catch(() => {}) // silent fail — diagram is bonus
             }
           }
         } catch (err: any) {
