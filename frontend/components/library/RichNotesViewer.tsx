@@ -250,7 +250,11 @@ export default function RichNotesViewer({
                       <div className="mt-4 space-y-4">
                         {section.images.map((img: any, i: number) => {
                           const mediaBase = API_BASE?.replace(/\/api\/?$/, '')?.replace(/\/$/, '')
-                          const fullUrl = img.url?.startsWith('http') ? img.url : `${mediaBase}${img.url}`
+                          // Handle data: URIs, blob:, http:, and relative /media/ paths
+                          const fullUrl = !img.url ? '' :
+                            (img.url.startsWith('data:') || img.url.startsWith('blob:') || img.url.startsWith('http'))
+                              ? img.url
+                              : `${mediaBase}${img.url.startsWith('/') ? '' : '/'}${img.url}`
                           return (
                             <div key={i} className="rounded-xl overflow-hidden cursor-pointer" onClick={() => handleImageClick(fullUrl)}>
                               <img src={fullUrl} alt={img.caption} className="w-full h-auto rounded-xl" />
