@@ -2350,75 +2350,61 @@ class AIService:
             text = text.strip()
             import re
 
-            # Strip markdown code fences early (Gemma often wraps in ```json ... ```)
-            text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
-            text = re.sub(r'\s*```$', '', text, flags=re.MULTILINE)
+            # Strip markdown code fences
+            text = re.sub(r'```(?:json)?\s*', '', text)
+            text = re.sub(r'\s*```', '', text)
             text = text.strip()
-            
-            # Phase 1: Identifying the outermost JSON enclosure
+
+            # Phase 1: Find outermost JSON enclosure
             start_indices = [text.find('{'), text.find('[')]
             start_index = min([i for i in start_indices if i != -1] or [0])
-            
             end_indices = [text.rfind('}'), text.rfind(']')]
             end_index = max([i for i in end_indices if i != -1] or [len(text)])
-            
             content = text[start_index : end_index + 1].strip()
             if not content: return default
 
-            # Phase 2: Sanitize - Repair common 'un-safe' artifacts
-            def cleanse_json_string(match):
-                s = match.group(0)
-                return s.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-            
-            # Escape actual newlines inside quotes
-            processed_content = re.sub(r'":\s*"([\s\S]*?)"(?=\s*[,}])', cleanse_json_string, content)
-
+            # Phase 2: Try direct parse first (no regex mangling)
             try:
-                return json.loads(processed_content)
+                return json.loads(content)
             except Exception as e:
-                # Phase 3: Truncation Recovery - Force-close cut-off JSON
-                if "Expecting" in str(e) or "Unterminated" in str(e) or "EOF" in str(e):
+                pass
+
+            # Phase 3: Truncation Recovery — close open braces/brackets
+            try:
+                temp = content
+                # Close unclosed string
+                if temp.count('"') % 2 != 0:
+                    temp += '"'
+                # Remove trailing comma before closing
+                temp = re.sub(r',\s*$', '', temp)
+                open_braces = temp.count('{') - temp.count('}')
+                open_brackets = temp.count('[') - temp.count(']')
+                if open_braces > 0 or open_brackets > 0:
+                    repair = temp
+                    if repair.endswith(','): repair = repair[:-1]
+                    repair += '}' * open_braces
+                    repair += ']' * open_brackets
                     try:
-                        temp_content = processed_content.strip()
-                        
-                        # Fix Unterminated String Shield
-                        # If the last character isn't a closure but we are inside a string
-                        if temp_content.count('"') % 2 != 0:
-                            # We are inside an unclosed string. Close it.
-                            temp_content += '"'
-                        
-                        # Count braces/brackets
-                        open_braces = temp_content.count('{') - temp_content.count('}')
-                        open_brackets = temp_content.count('[') - temp_content.count(']')
-                        
-                        if open_braces > 0 or open_brackets > 0:
-                            repair = temp_content
-                            if temp_content.endswith(','): repair = repair[:-1]
-                            repair += '}' * open_braces
-                            repair += ']' * open_brackets
-                            try:
-                                return json.loads(repair)
-                            except: pass
+                        return json.loads(repair)
                     except: pass
-                
-                # Fallback to the original extracted block or emergency eval
-                try:
-                    return json.loads(content)
-                except:
-                    try:
-                        import ast
-                        return ast.literal_eval(content)
-                    except:
-                        # Final resort: Clean markdown artifacts and find the largest JSON block
-                        try:
-                            cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
-                            json_blocks = re.findall(r'\{[\s\S]*\}', cleaned)
-                            if json_blocks:
-                                candidate = max(json_blocks, key=len)
-                                try: return json.loads(candidate)
-                                except: pass
-                            return default
-                        except:
-                            return default
+            except: pass
+
+            # Phase 4: ast.literal_eval
+            try:
+                import ast
+                return ast.literal_eval(content)
+            except: pass
+
+            # Phase 5: Find largest JSON block
+            try:
+                cleaned = re.sub(r'```(?:json|mermaid)?', '', content).strip()
+                json_blocks = re.findall(r'\{[\s\S]*\}', cleaned)
+                if json_blocks:
+                    candidate = max(json_blocks, key=len)
+                    try: return json.loads(candidate)
+                    except: pass
+            except: pass
+
+            return default
         except Exception:
             return default
