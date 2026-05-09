@@ -1167,16 +1167,17 @@ class AIService:
 
     def generate_quiz(self, resource, fmt: str, level: str, count: int) -> list:
         context = self._get_resource_context(resource)
-        fmt_map = {
-            'mcq': 'multiple choice with "options": ["option1", "option2", "option3", "option4"] and "correct_answer" (one of the strings in options)',
-            'flashcard': 'Q&A pairs with "question" and "answer"',
-            'short': 'short answer with "question" and "expected_answer"',
-            'mixed': 'mix of MCQ and short answer',
-        }
+        # Normalize format aliases
+        fmt = fmt.replace('multiple_choice', 'mcq').replace('multiple-choice', 'mcq')
         content_part = f"\n\nBased on:\n{context[:8000]}" if context else ""
         prompt = (
-            f"Generate {count} {fmt_map.get(fmt, 'questions')} for '{resource.title}' at {level} level{content_part}. "
-            "Return ONLY a JSON array. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry."
+            f"Generate {count} multiple choice questions for '{resource.title}' at {level} level{content_part}.\n"
+            "Return ONLY a JSON array. Each object MUST have exactly these keys:\n"
+            '  \"question\": the question text,\n'
+            '  \"options\": array of exactly 4 answer strings,\n'
+            '  \"correct_answer\": the exact string from options that is correct,\n'
+            '  \"explanation\": brief explanation of why the answer is correct.\n'
+            "Use LaTeX for all math/chemistry. No markdown, just the raw JSON array."
         )
         return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 

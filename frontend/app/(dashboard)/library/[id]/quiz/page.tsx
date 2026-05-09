@@ -25,13 +25,38 @@ function normalizeOptions(opts: any): string[] {
 }
 
 // Normalize question objects from various AI model output formats
-function normalizeQuestion(q: any): MCQQuestion {
-  return {
-    question: q.question || q.text || q.question_text || q.stem || q.prompt || '',
-    options: q.options || q.choices || q.answers || q.alternatives || [],
-    correct_answer: q.correct_answer || q.answer || q.correct || q.correctAnswer || q.correct_option || '',
-    explanation: q.explanation || q.rationale || q.reason || q.feedback || '',
-  }
+function normalizeQuestion(q: any): MCQQuestion | null {
+  if (!q || typeof q !== 'object') return null
+
+  // Find question text — try every known field name
+  const questionText = (
+    q.question || q.text || q.question_text || q.stem || q.prompt ||
+    q.Question || q.Text || q.Stem || q.Prompt || ''
+  ).toString().trim()
+
+  // Find options — try every known field name, handle object maps too
+  const rawOpts = q.options || q.choices || q.answers || q.alternatives ||
+    q.Options || q.Choices || q.Answers || []
+  const options = Array.isArray(rawOpts)
+    ? rawOpts
+    : typeof rawOpts === 'object' ? Object.values(rawOpts) : []
+
+  // Find correct answer
+  const correctAnswer = (
+    q.correct_answer || q.answer || q.correct || q.correctAnswer ||
+    q.correct_option || q.CorrectAnswer || q.Correct || ''
+  ).toString().trim()
+
+  // Find explanation
+  const explanation = (
+    q.explanation || q.rationale || q.reason || q.feedback ||
+    q.Explanation || q.Rationale || ''
+  ).toString().trim()
+
+  // Skip questions with no text or no options
+  if (!questionText || options.length < 2) return null
+
+  return { question: questionText, options, correct_answer: correctAnswer, explanation }
 }
 
 export default function QuizPage({ params }: { params: { id: string } }) {
@@ -59,7 +84,10 @@ export default function QuizPage({ params }: { params: { id: string } }) {
     const quizzes = existingQuizzes?.results || existingQuizzes || []
     const best = quizzes.find((q: any) => q.questions?.length >= 10) || quizzes[0]
     if (best?.questions?.length) {
-      setQuestions(best.questions.map(normalizeQuestion))
+      const normalized = best.questions
+        .map(normalizeQuestion)
+        .filter((q): q is MCQQuestion => q !== null)
+      setQuestions(normalized)
     }
     setPhase('config')
   }, [existingQuizzes, loadingQuizzes])
@@ -69,13 +97,14 @@ export default function QuizPage({ params }: { params: { id: string } }) {
       setQuestions(questions.slice(0, count))
       setCurrent(0); setSelected({}); setRevealed({})
       setPhase('quiz'); return
-    }
-    setGenerating(true)
+    }    setGenerating(true)
     try {
       const res = await libraryApi.generateQuiz(resourceId, 'mcq', 'undergrad', count)
       const qs = res.data.questions || res.data || []
       if (!qs.length) throw new Error('No questions')
-      setQuestions(qs.map(normalizeQuestion)); setCurrent(0); setSelected({}); setRevealed({})
+      const normalized = qs.map(normalizeQuestion).filter((q): q is MCQQuestion => q !== null)
+      if (!normalized.length) throw new Error('No valid questions after normalization')
+      setQuestions(normalized); setCurrent(0); setSelected({}); setRevealed({})
       setPhase('quiz')
     } catch { toast.error('Failed to generate quiz. Try again.') }
     finally { setGenerating(false) }

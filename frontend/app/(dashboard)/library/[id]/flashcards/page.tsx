@@ -41,8 +41,17 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (isLoading) return
     const fetched: Flashcard[] = flashcardData?.results || flashcardData || []
-    if (fetched.length) { setCards(fetched); setPhase('review') }
-    else handleGenerate()
+    if (fetched.length) {
+      // Normalize field names — some models return 'front'/'back' instead of 'question'/'answer'
+      const normalized = fetched.map((c: any) => ({
+        id: c.id,
+        question: (c.question || c.front || c.term || c.prompt || '').toString().trim(),
+        answer: (c.answer || c.back || c.definition || c.response || '').toString().trim(),
+        difficulty: c.difficulty || 'medium',
+      })).filter(c => c.question && c.answer)
+      if (normalized.length) { setCards(normalized); setPhase('review'); return }
+    }
+    handleGenerate()
   }, [flashcardData, isLoading])
 
   const reviewMutation = useMutation({
