@@ -610,20 +610,8 @@ class VisionMessageView(APIView):
 
 
 def sanitize_mermaid(code: str) -> str:
-    """Aggressively fix common AI-generated Mermaid syntax errors and clean up reasoning leakage."""
+    """Fix common AI-generated Mermaid syntax errors."""
     import re
-    
-    # 0. CLEANUP REASONING LEAKAGE (Heuristic)
-    # If the response starts with "Okay," or "The user wants" - common planning prefixes
-    # only strip if it looks like a planning block (e.g. multiple lines of planning)
-    planning_patterns = [
-        r"^Okay, the user asked for.*?\.",
-        r"^First, I need to.*?\.",
-        r"^Then, I will.*?\.",
-        r"^After that, I'll.*?\.",
-    ]
-    for pattern in planning_patterns:
-        code = re.sub(pattern, "", code, flags=re.IGNORECASE | re.MULTILINE)
     
     # Strip smart quotes
     code = code.replace('\u201c', '"').replace('\u201d', '"').replace('\u2018', "'").replace('\u2019', "'")
@@ -631,34 +619,6 @@ def sanitize_mermaid(code: str) -> str:
     # Fix |text|> arrows (invalid) -> |text| arrows  
     code = re.sub(r'\|([^|]+)\|>', r'|\1|', code)
     
-    # Quote ALL bracket labels that aren't already quoted
-    # Handles chemical formulas well: A[Acetyl-CoA] -> A["Acetyl-CoA"]
-    # We expand the allowed characters to catch + and -> inside labels
-    def quote_label(m):
-        prefix = m.group(1)
-        bracket_type = m.group(2)
-        label = m.group(3)
-        end_bracket = m.group(4)
-        
-        # Don't double quote
-        if label.startswith('"') and label.endswith('"'):
-            return m.group(0)
-            
-        return f'{prefix}{bracket_type}"{label}"{end_bracket}'
-
-    # Catch [], (), {} and also handle the case where they have special chemistry chars
-    code = re.sub(r'(\w+)(\[|\(|\{)([^\]\)\}"\n]+)(\]|\)|\})', quote_label, code)
-    
-    # Fix common chemical syntax issues in transitions: -->|A + B|
-    # Ensure transition labels are always quoted if they have + or ->
-    def quote_transition(m):
-        arrow = m.group(1)
-        label = m.group(2)
-        if '+' in label or '->' in label or '-' in label:
-            return f'{arrow}|"{label}"|'
-        return m.group(0)
-    code = re.sub(r'(-->|==>|-.->)\|([^|]+)\|', quote_transition, code)
-
     # Remove blank lines
     code = '\n'.join(line for line in code.split('\n') if line.strip())
     

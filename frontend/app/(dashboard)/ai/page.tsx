@@ -47,15 +47,17 @@ function MermaidChart({ chart }: { chart: string }) {
     setError(null)
     setSvg('')
 
-    // Strip ALL possible markdown fences
+    // The chart prop is already clean mermaid code (e.g. "graph LR\nA-->B")
+    // Just strip any accidental markdown fences if present
     let clean = chart
-      .replace(/^```mermaid\s*/im, '')
-      .replace(/^```\s*/im, '')
+      .replace(/^```(?:mermaid)?\s*/im, '')
       .replace(/\s*```\s*$/im, '')
       .trim()
-    if (/^mermaid\s/i.test(clean)) clean = clean.replace(/^mermaid\s+/i, '')
+
     // Fix |text|> arrow syntax
     clean = clean.replace(/\|([^|]+)\|>/g, '|$1|')
+    // Strip over-quoted labels: A["text"] is fine, but A[""text""] is not
+    clean = clean.replace(/\[""/g, '["').replace(/""\]/g, '"]')
 
     if (!clean || clean.length < 5) {
       setError('Empty diagram — ask FlowAI to regenerate it.')
@@ -92,18 +94,30 @@ function MermaidChart({ chart }: { chart: string }) {
         const { svg: rendered } = await mermaid.render(id, clean)
         setSvg(rendered)
       } catch (err: any) {
-        // Fallback: strip classDef lines which often cause parse errors
+        // Fallback: strip lines that commonly cause parse errors
         try {
           const stripped = clean
             .split('\n')
-            .filter(l => !l.trim().startsWith('classDef') && !l.trim().startsWith('%%') && !l.trim().startsWith('class '))
+            .filter(l => {
+              const t = l.trim()
+              return !t.startsWith('classDef') &&
+                     !t.startsWith('%%') &&
+                     !t.startsWith('class ') &&
+                     !t.startsWith('style ') &&
+                     !t.startsWith('linkStyle ')
+            })
             .join('\n')
-          const id2 = `mermaid-fb-${Math.random().toString(36).substr(2, 9)}`
-          const { svg: rendered2 } = await mermaid.render(id2, stripped)
-          setSvg(rendered2)
-        } catch {
-          setError('Diagram syntax error — ask FlowAI to regenerate it.')
+            .trim()
+          if (stripped && stripped.length > 5) {
+            const id2 = `mermaid-fb-${Math.random().toString(36).substr(2, 9)}`
+            const { svg: rendered2 } = await mermaid.render(id2, stripped)
+            setSvg(rendered2)
+            return
+          }
+        } catch (e2: any) {
+          // both attempts failed
         }
+        setError('Diagram syntax error — ask FlowAI to regenerate it.')
         document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
       }
     })
@@ -184,24 +198,23 @@ function isMermaidCode(lang: string | undefined, code: string): boolean {
 function RichContent({ content }: { content: string }) {
   // Split content into text segments and mermaid blocks (```mermaid ... ```)
   const parts: Array<{ type: 'text' | 'mermaid'; content: string }> = []
-  // Match ```mermaid, ```graph, ```flowchart, etc.
-  const mermaidRegex = /```(mermaid|graph|flowchart|sequenceDiagram|classDiagram|erDiagram|stateDiagram|gantt|pie|mindmap|timeline|gitGraph)?\s*([\s\S]*?)```/gi
+  // Match ```mermaid, ```graph LR, ```flowchart TD, etc. — capture the FULL first line as part of code
+  const mermaidRegex = /```(mermaid|graph(?:\s+\w+)?|flowchart(?:\s+\w+)?|sequenceDiagram|classDiagram|erDiagram|stateDiagram(?:-v2)?|gantt|pie(?:\s+title)?|mindmap|timeline|gitGraph|journey|quadrantChart|requirementDiagram)([^\n]*)\n([\s\S]*?)```/gi
   let lastIndex = 0
   let match
 
   while ((match = mermaidRegex.exec(content)) !== null) {
-    const lang = match[1] || ''
-    const code = match[2].trim()
-    const isMermaid = isMermaidCode(lang, code)
-
-    if (isMermaid) {
-      if (match.index > lastIndex) {
-        parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
-      }
-      // Reconstruct with the lang prefix so MermaidChart can parse it
-      parts.push({ type: 'mermaid', content: lang ? `${lang}\n${code}` : code })
-      lastIndex = match.index + match[0].length
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
     }
+    // Reconstruct: lang + rest of first line + newline + body
+    // e.g. lang='graph', rest=' LR', body='A-->B\n...'
+    const lang = match[1]
+    const restOfFirstLine = match[2] || ''
+    const body = match[3] || ''
+    const fullCode = `${lang}${restOfFirstLine}\n${body}`.trim()
+    parts.push({ type: 'mermaid', content: fullCode })
+    lastIndex = match.index + match[0].length
   }
   if (lastIndex < content.length) {
     parts.push({ type: 'text', content: content.slice(lastIndex) })
