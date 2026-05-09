@@ -196,20 +196,29 @@ class AIService:
         # --- DUAL-ENGINE ARCHITECTURE (2026 RECOVERY) ---
         # Both engines are now synchronized to v1beta for total endpoint compatibility.
         self.google_key = getattr(settings, 'GOOGLE_STUDIO_API_KEY', '')
+        self.google_key2 = os.getenv('GOOGLE_STUDIO_API_KEY_2', '')
         if self.google_key:
             from google.genai.types import HttpOptions
-            # We use v1beta for both as it is the only signal responding to both Gemma 4 and Embeddings
             self.google_client_beta = genai.Client(
                 api_key=self.google_key,
                 http_options=HttpOptions(api_version="v1beta")
             )
-            # Aliases for logic routing
-            self.google_client_v1 = self.google_client_beta 
+            self.google_client_v1 = self.google_client_beta
             self.google_client = self.google_client_beta
         else:
             self.google_client_v1 = None
             self.google_client_beta = None
             self.google_client = None
+
+        # Second Google key for embedding fallback (separate quota)
+        if self.google_key2:
+            from google.genai.types import HttpOptions as HttpOptions2
+            self.google_client2 = genai.Client(
+                api_key=self.google_key2,
+                http_options=HttpOptions2(api_version="v1beta")
+            )
+        else:
+            self.google_client2 = None
         local_llm_path = getattr(settings, 'LOCAL_LLM_PATH', None)
         if local_llm_path:
             self.tokenizer = None
@@ -857,26 +866,46 @@ class AIService:
                             except Exception as item_err:
                                 err_str = str(item_err)
                                 if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
-                                    # Check if it's a daily limit (not just RPM) — if so, give up immediately
-                                    if 'PerDay' in err_str or 'per_day' in err_str.lower() or 'limit: 1000' in err_str:
+                                    # Distinguish daily limit (RPD) from per-minute limit (RPM)
+                                    is_daily_limit = (
+                                        'PerDay' in err_str or
+                                        'per_day' in err_str.lower() or
+                                        'limit: 1000' in err_str or
+                                        'EmbedContentRequestsPerDay' in err_str
+                                    )
+                                    if is_daily_limit:
+                                        # Try second Google key if available
+                                        if self.google_client2 and self.google_client2 != self.google_client_v1:
+                                            logger.warning(f"[RAG Cloud] Daily quota on key1 — switching to key2")
+                                            try:
+                                                r2 = self.google_client2.models.embed_content(
+                                                    model=model_id,
+                                                    contents=item,
+                                                    config={'task_type': task_type, 'output_dimensionality': 384}
+                                                )
+                                                if r2.embeddings and len(r2.embeddings) > 0:
+                                                    vectors.append(r2.embeddings[0].values)
+                                                    continue
+                                            except Exception as e2:
+                                                logger.warning(f"[RAG Cloud] Key2 also failed: {e2}")
                                         logger.warning(f"[RAG Cloud] Daily embedding quota exhausted — skipping remaining chunks")
                                         vectors.append(None)
-                                        # Signal to break out of all loops
                                         raise StopIteration("daily_quota_exhausted")
-                                    # RPM limit — wait and retry once
-                                    logger.warning(f"[RAG Cloud] Embedding 429 — sleeping 65s then retrying")
-                                    _time.sleep(65)
-                                    try:
-                                        r = self.google_client_v1.models.embed_content(
-                                            model=model_id,
-                                            contents=item,
-                                            config={'task_type': task_type, 'output_dimensionality': 384}
-                                        )
-                                        if r.embeddings and len(r.embeddings) > 0:
-                                            vectors.append(r.embeddings[0].values)
-                                            continue
-                                    except Exception:
-                                        pass
+                                    else:
+                                        # RPM limit — wait and retry once
+                                        logger.warning(f"[RAG Cloud] Embedding RPM 429 — sleeping 65s then retrying")
+                                        _time.sleep(65)
+                                        try:
+                                            r = self.google_client_v1.models.embed_content(
+                                                model=model_id,
+                                                contents=item,
+                                                config={'task_type': task_type, 'output_dimensionality': 384}
+                                            )
+                                            if r.embeddings and len(r.embeddings) > 0:
+                                                vectors.append(r.embeddings[0].values)
+                                                continue
+                                        except Exception:
+                                            pass
                                 logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
                                 vectors.append(None)
                         # Pause between batches to stay under 100 RPM
