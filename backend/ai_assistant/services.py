@@ -831,7 +831,7 @@ class AIService:
                     result = self.google_client_v1.models.embed_content(
                         model=model_id,
                         contents=content,
-                        config={'task_type': task_type}
+                        config={'task_type': task_type, 'output_dimensionality': 384}
                     )
                     if result.embeddings and len(result.embeddings) > 0:
                         return result.embeddings[0].values
@@ -848,7 +848,7 @@ class AIService:
                                 r = self.google_client_v1.models.embed_content(
                                     model=model_id,
                                     contents=item,
-                                    config={'task_type': task_type}
+                                    config={'task_type': task_type, 'output_dimensionality': 384}
                                 )
                                 if r.embeddings and len(r.embeddings) > 0:
                                     vectors.append(r.embeddings[0].values)
@@ -864,7 +864,7 @@ class AIService:
                                         r = self.google_client_v1.models.embed_content(
                                             model=model_id,
                                             contents=item,
-                                            config={'task_type': task_type}
+                                            config={'task_type': task_type, 'output_dimensionality': 384}
                                         )
                                         if r.embeddings and len(r.embeddings) > 0:
                                             vectors.append(r.embeddings[0].values)
@@ -1402,8 +1402,17 @@ class AIService:
                         # Merge sections with internal type-safety (handle case variations)
                         sections_added = 0
                         # Fuzzy Key Normalization (Handle variations: sections, Sections, modules, Modules, study_modules)
-                        possible_keys = ['sections', 'Sections', 'modules', 'Modules', 'study_modules', 'StudyModules']
+                        possible_keys = ['sections', 'Sections', 'modules', 'Modules', 'study_modules', 'StudyModules',
+                                         'topics', 'Topics', 'chapters', 'Chapters', 'content', 'units', 'Units',
+                                         'lessons', 'Lessons', 'parts', 'Parts']
                         s_key = next((k for k in possible_keys if k in chunk_kit and isinstance(chunk_kit[k], list)), None)
+
+                        # Last resort: find any list value that contains dicts with a 'title' key
+                        if not s_key:
+                            for k, v in chunk_kit.items():
+                                if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and v[0].get('title'):
+                                    s_key = k
+                                    break
                         
                         if s_key:
                             for sec in chunk_kit[s_key]:
@@ -1421,6 +1430,11 @@ class AIService:
                                 if retry_content:
                                     retry_kit = self._parse_json(retry_content, {})
                                     s_key_retry = next((k for k in possible_keys if k in retry_kit and isinstance(retry_kit[k], list)), None)
+                                    if not s_key_retry:
+                                        for k, v in retry_kit.items():
+                                            if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and v[0].get('title'):
+                                                s_key_retry = k
+                                                break
                                     if s_key_retry:
                                         for sec in retry_kit[s_key_retry]:
                                             if isinstance(sec, dict) and sec.get('title'):

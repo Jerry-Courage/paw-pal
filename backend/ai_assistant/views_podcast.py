@@ -157,8 +157,14 @@ def bg_generate_script(session_id, notes):
             if has_specific_prompt or not current_url or is_stagnated:
                 gen_prompt = chunk.get('visual_prompt')
                 if not gen_prompt:
+                    # Build a clean educational prompt from the dialogue — strip filler words
                     dialogue = chunk.get('text', '')
-                    gen_prompt = f"Educational illustration related to: {dialogue[:120]}..."
+                    # Extract key nouns/concepts (first 80 chars of cleaned text)
+                    import re as _re
+                    clean_dialogue = _re.sub(r'\b(hmm|uh|um|well|so|yeah|right|okay|like|you know|i mean|actually|basically|literally)\b', '', dialogue, flags=_re.IGNORECASE)
+                    clean_dialogue = _re.sub(r'\s+', ' ', clean_dialogue).strip()[:80]
+                    resource_title = session.resource.title if session.resource else 'educational topic'
+                    gen_prompt = f"Detailed educational diagram or illustration about {resource_title}: {clean_dialogue}"
                 
                 targets.append((idx, gen_prompt))
                 ai_gen_count += 1
