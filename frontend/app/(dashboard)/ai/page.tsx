@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { aiApi, libraryApi } from '@/lib/api'
 import {
-  Sparkles, Send, Plus, Loader2, Image, Paperclip, X,
-  ChevronRight, BookOpen, Network, GitBranch, Menu,
-  BarChart2, Clock, Wand2, MessageSquare, Eye,
-  Copy, Check, Download, RefreshCw, Zap, Brain, Trash2
+  Sparkles, Send, Plus, Loader2, Paperclip, X,
+  Network, GitBranch, Menu, BarChart2, Wand2,
+  MessageSquare, Copy, Check, Download, Zap, Trash2,
+  Image as ImageIcon, GitMerge
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -22,25 +21,356 @@ type Message = {
   id?: string | number
   role: 'user' | 'assistant'
   content: string
-  image?: string   // base64 preview for user-uploaded images
-  diagram?: string // mermaid code
-  is_streaming?: boolean // true while chunking
+  image?: string
+  diagram?: string
+  is_streaming?: boolean
+  // what the AI is currently doing (for loading indicator)
+  pending_action?: 'diagram' | 'image' | null
 }
-
-const DIAGRAM_TYPES = [
-  { id: 'auto',      label: 'Auto',      icon: Wand2,       desc: 'AI picks the best type' },
-  { id: 'flowchart', label: 'Flowchart', icon: GitBranch,   desc: 'Processes & workflows' },
-  { id: 'mindmap',   label: 'Mind Map',  icon: Network,     desc: 'Concepts & ideas' },
-  { id: 'sequence',  label: 'Sequence',  icon: BarChart2,   desc: 'System interactions' },
-]
 
 const SUGGESTIONS = [
   { icon: '🧠', text: 'Explain backpropagation in simple terms' },
-  { icon: '📝', text: 'Generate 5 quiz questions on thermodynamics' },
+  { icon: '📊', text: 'Draw a roadmap for learning machine learning' },
   { icon: '🔢', text: 'What are the key concepts in linear algebra?' },
   { icon: '🌿', text: 'Help me understand the Krebs cycle' },
   { icon: '💻', text: 'Explain Big O notation with examples' },
 ]
+
+// ─── MERMAID RENDERER ────────────────────────────────────────────────────────
+function MermaidChart({ chart }: { chart: string }) {
+  const [svg, setSvg] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
+  const [rawCode, setRawCode] = useState<string>('')
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setError(null)
+    setSvg('')
+
+    // Strip ALL possible markdown fences
+    let clean = chart
+      .replace(/^```mermaid\s*/im, '')
+      .replace(/^```\s*/im, '')
+      .replace(/\s*```\s*$/im, '')
+      .trim()
+    if (/^mermaid\s/i.test(clean)) clean = clean.replace(/^mermaid\s+/i, '')
+    // Fix |text|> arrow syntax
+    clean = clean.replace(/\|([^|]+)\|>/g, '|$1|')
+
+    if (!clean || clean.length < 5) {
+      setError('Empty diagram — ask FlowAI to regenerate it.')
+      return
+    }
+    setRawCode(clean)
+
+    import('mermaid').then(async (mod) => {
+      const mermaid = mod.default
+      try {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          darkMode: true,
+          securityLevel: 'loose',
+          fontFamily: 'Outfit, Inter, system-ui, sans-serif',
+          suppressErrorRendering: true,
+          themeVariables: {
+            background: '#0d0d0d',
+            primaryColor: '#f97316',
+            primaryTextColor: '#f1f5f9',
+            primaryBorderColor: '#f97316',
+            lineColor: '#475569',
+            secondaryColor: '#1a1a1a',
+            tertiaryColor: '#1f1f1f',
+            edgeLabelBackground: '#1a1a1a',
+            clusterBkg: '#1a1a1a',
+            titleColor: '#f1f5f9',
+            nodeTextColor: '#f1f5f9',
+            fontFamily: 'Outfit, Inter, system-ui, sans-serif',
+          },
+        })
+        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`
+        const { svg: rendered } = await mermaid.render(id, clean)
+        setSvg(rendered)
+      } catch (err: any) {
+        // Fallback: strip classDef lines which often cause parse errors
+        try {
+          const stripped = clean
+            .split('\n')
+            .filter(l => !l.trim().startsWith('classDef') && !l.trim().startsWith('%%') && !l.trim().startsWith('class '))
+            .join('\n')
+          const id2 = `mermaid-fb-${Math.random().toString(36).substr(2, 9)}`
+          const { svg: rendered2 } = await mermaid.render(id2, stripped)
+          setSvg(rendered2)
+        } catch {
+          setError('Diagram syntax error — ask FlowAI to regenerate it.')
+        }
+        document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
+      }
+    })
+
+    return () => { document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove()) }
+  }, [chart])
+
+  if (error) return (
+    <div className="p-4 bg-red-500/8 border border-red-500/20 rounded-2xl space-y-2">
+      <p className="text-sm font-bold text-red-400">{error}</p>
+      <details>
+        <summary className="text-[10px] text-slate-600 cursor-pointer hover:text-slate-400 select-none">Show raw code</summary>
+        <pre className="mt-2 text-[10px] font-mono text-slate-500 overflow-x-auto whitespace-pre-wrap break-all bg-black/20 p-3 rounded-xl">{rawCode}</pre>
+      </details>
+    </div>
+  )
+
+  if (!svg) return (
+    <div className="p-5 flex items-center gap-2.5 bg-[#111] border border-white/5 rounded-2xl">
+      <GitMerge className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
+      <span className="text-xs text-slate-400 font-medium">Rendering diagram...</span>
+    </div>
+  )
+
+  return (
+    <div className="rounded-2xl border border-white/8 overflow-hidden bg-[#0d0d0d] my-2">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#111]">
+        <div className="flex items-center gap-2">
+          <GitMerge className="w-3.5 h-3.5 text-violet-400" />
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Diagram</span>
+        </div>
+        <button
+          onClick={() => {
+            const el = containerRef.current?.querySelector('svg')
+            if (el) {
+              const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a'); a.href = url; a.download = 'diagram.svg'; a.click()
+              URL.revokeObjectURL(url)
+              toast.success('Diagram downloaded')
+            }
+          }}
+          className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
+        >
+          <Download className="w-3 h-3" /> SVG
+        </button>
+      </div>
+      <div ref={containerRef} className="overflow-x-auto p-4 [&_svg]:max-w-full [&_svg]:h-auto" dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
+  )
+}
+
+// ─── RICH MARKDOWN RENDERER ───────────────────────────────────────────────────
+// Intercepts ```mermaid blocks and renders them as diagrams
+function RichContent({ content }: { content: string }) {
+  // Split content into text segments and mermaid blocks
+  const parts: Array<{ type: 'text' | 'mermaid'; content: string }> = []
+  const mermaidRegex = /```mermaid\s*([\s\S]*?)```/gi
+  let lastIndex = 0
+  let match
+
+  while ((match = mermaidRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
+    }
+    parts.push({ type: 'mermaid', content: match[1].trim() })
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: 'text', content: content.slice(lastIndex) })
+  }
+
+  return (
+    <div className="space-y-3">
+      {parts.map((part, i) =>
+        part.type === 'mermaid' ? (
+          <MermaidChart key={i} chart={part.content} />
+        ) : (
+          <ReactMarkdown
+            key={i}
+            remarkPlugins={[remarkGfm]}
+            components={{
+              // Headings
+              h1: ({ children }) => <h1 className="text-xl font-black text-white mt-5 mb-2 tracking-tight">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-lg font-black text-white mt-4 mb-2 tracking-tight">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-base font-bold text-white mt-3 mb-1.5">{children}</h3>,
+              // Paragraphs
+              p: ({ children }) => <p className="text-slate-200 leading-relaxed mb-3 last:mb-0">{children}</p>,
+              // Lists
+              ul: ({ children }) => <ul className="my-3 space-y-1.5 pl-0">{children}</ul>,
+              ol: ({ children }) => <ol className="my-3 space-y-1.5 pl-0 list-none counter-reset-[item]">{children}</ol>,
+              li: ({ children, ...props }) => (
+                <li className="flex gap-2.5 items-start text-slate-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 shrink-0" />
+                  <span className="flex-1 leading-relaxed">{children}</span>
+                </li>
+              ),
+              // Code
+              code: ({ className, children, ...props }: any) => {
+                const isInline = !className
+                if (isInline) return (
+                  <code className="px-1.5 py-0.5 bg-white/10 text-orange-300 rounded-md text-[0.85em] font-mono">{children}</code>
+                )
+                return (
+                  <div className="my-3 rounded-xl overflow-hidden border border-white/8">
+                    <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        {className?.replace('language-', '') || 'code'}
+                      </span>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(String(children)); toast.success('Copied') }}
+                        className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3" /> Copy
+                      </button>
+                    </div>
+                    <pre className="p-4 overflow-x-auto bg-[#0a0a0a]">
+                      <code className="text-sm font-mono text-slate-300 leading-relaxed">{children}</code>
+                    </pre>
+                  </div>
+                )
+              },
+              pre: ({ children }) => <>{children}</>,
+              // Blockquote
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-2 border-orange-500/50 pl-4 my-3 text-slate-400 italic">{children}</blockquote>
+              ),
+              // Table
+              table: ({ children }) => (
+                <div className="my-3 overflow-x-auto rounded-xl border border-white/8">
+                  <table className="w-full text-sm">{children}</table>
+                </div>
+              ),
+              thead: ({ children }) => <thead className="bg-white/5 border-b border-white/8">{children}</thead>,
+              th: ({ children }) => <th className="px-4 py-2.5 text-left text-xs font-black text-slate-300 uppercase tracking-wider">{children}</th>,
+              td: ({ children }) => <td className="px-4 py-2.5 text-slate-300 border-t border-white/5">{children}</td>,
+              // Strong / em
+              strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+              em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
+              // HR
+              hr: () => <hr className="my-4 border-white/8" />,
+              // Links
+              a: ({ children, href }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer"
+                  className="text-orange-400 underline decoration-orange-400/30 underline-offset-2 hover:decoration-orange-400 transition-all">
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {part.content}
+          </ReactMarkdown>
+        )
+      )}
+    </div>
+  )
+}
+
+// ─── THINKING INDICATOR ───────────────────────────────────────────────────────
+function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) {
+  const states = action === 'diagram'
+    ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/10', label: 'Generating diagram...' }
+    : action === 'image'
+    ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/10', label: 'Generating image...' }
+    : { icon: Sparkles, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Thinking...' }
+
+  const Icon = states.icon
+
+  return (
+    <div className="flex items-start gap-3">
+      <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', states.bg)}>
+        <Icon className={cn('w-4 h-4', states.color, 'animate-pulse')} />
+      </div>
+      <div className={cn('px-4 py-3 rounded-2xl rounded-tl-none border', states.bg, 'border-white/5')}>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            {[0,1,2].map(i => (
+              <span key={i} className={cn('w-1.5 h-1.5 rounded-full animate-bounce', states.color.replace('text-', 'bg-'))}
+                style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
+          </div>
+          <span className={cn('text-xs font-medium', states.color)}>{states.label}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MESSAGE COMPONENT ───────────────────────────────────────────────────────
+function MessageBubble({ msg, index }: { msg: Message; index: number }) {
+  const [copied, setCopied] = useState(false)
+  const isUser = msg.role === 'user'
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    toast.success('Copied')
+  }
+
+  return (
+    <div className={cn('flex gap-3 group', isUser ? 'flex-row-reverse' : 'flex-row')}>
+      {/* Avatar */}
+      <div className={cn(
+        'w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 mt-1',
+        isUser ? 'bg-orange-500 text-white' : 'bg-white/8 text-slate-400'
+      )}>
+        {isUser ? 'ME' : <Sparkles className="w-4 h-4" />}
+      </div>
+
+      {/* Bubble */}
+      <div className={cn('flex flex-col gap-1 min-w-0', isUser ? 'items-end' : 'items-start', 'max-w-[82%] sm:max-w-[75%]')}>
+        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">
+          {isUser ? 'You' : 'FlowAI'}
+        </span>
+
+        <div className={cn(
+          'rounded-2xl px-4 py-3 w-full relative',
+          isUser
+            ? 'bg-[#1e1e1e] border border-white/8 text-slate-100 rounded-tr-none'
+            : 'bg-[#111] border border-white/6 text-slate-200 rounded-tl-none'
+        )}>
+          {/* User image attachment */}
+          {msg.image && isUser && (
+            <div className="mb-3 rounded-xl overflow-hidden border border-white/10">
+              <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-64 object-contain" />
+            </div>
+          )}
+
+          {/* Content */}
+          {isUser ? (
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+          ) : (
+            <div className="text-sm">
+              <RichContent content={msg.content} />
+            </div>
+          )}
+
+          {/* AI-generated image */}
+          {msg.image && !isUser && (
+            <div className="mt-3 rounded-xl overflow-hidden border border-white/10">
+              <img src={msg.image} alt="generated" className="max-w-full h-auto" />
+            </div>
+          )}
+
+          {/* Standalone diagram (from diagram field, not inline in text) */}
+          {msg.diagram && (
+            <div className="mt-3">
+              <MermaidChart chart={msg.diagram} />
+            </div>
+          )}
+        </div>
+
+        {/* Actions row */}
+        {!isUser && (
+          <div className="flex items-center gap-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={handleCopy}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all text-[10px] font-medium">
+              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ─── MERMAID RENDERER ────────────────────────────────────────────────────────
 function MermaidChart({ chart }: { chart: string }) {
@@ -163,185 +493,6 @@ function MermaidChart({ chart }: { chart: string }) {
   )
 }
 
-// ─── TYPEWRITER EFFECT ───────────────────────────────────────────────────────
-function Typewriter({ text, speed = 10, onComplete }: { text: string, speed?: number, onComplete?: () => void }) {
-  const [displayedText, setDisplayedText] = useState('')
-  const [index, setIndex] = useState(0)
-
-  useEffect(() => {
-    if (index < text.length) {
-      const timeout = setTimeout(() => {
-        setDisplayedText(prev => prev + text[index])
-        setIndex(prev => prev + 1)
-      }, speed)
-      return () => clearTimeout(timeout)
-    } else if (onComplete) {
-      onComplete()
-    }
-  }, [index, text, speed, onComplete])
-
-  return (
-    <div className="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
-      <ReactMarkdown
-        components={{
-          ul: ({ children }) => <ul className="space-y-4 my-4 list-none pl-0">{children}</ul>,
-          li: ({ children }) => (
-            <li className="flex gap-3 items-start group">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
-              <span className="text-slate-700 dark:text-slate-200">{children}</span>
-            </li>
-          ),
-          a: ({ children, href }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary font-black underline decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all">
-              {children}
-            </a>
-          )
-        }}
-      >
-        {displayedText + (index < text.length ? '▊' : '')}
-      </ReactMarkdown>
-    </div>
-  )
-}
-
-// ─── MESSAGE COMPONENT ───────────────────────────────────────────────────────
-function MessageBubble({ msg, index, isLast, isNew }: { msg: Message, index: number, isLast: boolean, isNew?: boolean }) {
-  const [copied, setCopied] = useState(false)
-  const [typingComplete, setTypingComplete] = useState(!isNew || msg.is_streaming)
-  const isUser = msg.role === 'user'
-
-  // PREVENT "BLACK BOX" SYNDROME: 
-  // If the message is assistant, empty, and streaming, show nothing here.
-  // The external "Thinking..." indicator handles the initial feedback.
-  if (!isUser && !msg.content && !msg.image && !msg.diagram && msg.is_streaming) {
-    return null;
-  }
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(msg.content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-    toast.success('Copied to clipboard')
-  }
-
-  const handleDownload = async () => {
-    if (msg.image) {
-      try {
-        const downloadAction = async () => {
-          const response = await fetch(msg.image!);
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `flowai-image-${Date.now()}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        };
-
-        toast.promise(downloadAction(), {
-          loading: 'Preparing download...',
-          success: 'Image downloaded!',
-          error: 'Download failed. Try right-clicking the image.'
-        });
-      } catch (err) {
-        // Fallback for base64 or simpler cases
-        const link = document.createElement('a');
-        link.href = msg.image;
-        link.download = `flowai-image-${Date.now()}.png`;
-        link.click();
-      }
-    } else if (msg.diagram) {
-      // Find the specific SVG associated with this message index/content
-      // We look for any SVG inside the current message bubble container
-      const container = document.getElementById(`msg-${index}`);
-      const svg = container?.querySelector('svg');
-      
-      if (svg) {
-        const svgData = new XMLSerializer().serializeToString(svg);
-        const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `flowai-diagram-${Date.now()}.svg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        toast.success('Diagram downloaded as SVG');
-      } else {
-        toast.error('Could not find diagram to download');
-      }
-    }
-  }
-
-  return (
-    <div id={`msg-${index}`} className={cn('flex flex-col gap-3 group/msg', isUser ? 'items-end' : 'items-start')}>
-      <div className={cn('flex items-center gap-2 mb-1', isUser ? 'flex-row-reverse' : 'flex-row')}>
-        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shadow-sm',
-          isUser ? 'bg-orange-500 text-white' : 'bg-white/5 text-slate-400')}>
-          {isUser ? 'ME' : 'AI'}
-        </div>
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isUser ? 'You' : 'FlowAI'}</span>
-      </div>
-
-      <div className={cn('max-w-[85%] sm:max-w-[75%] rounded-[1.5rem] p-4 sm:p-5 shadow-sm relative group',
-        isUser 
-          ? 'bg-[#1a1a1a] text-white rounded-tr-none border border-white/8' 
-          : 'bg-[#111] border border-white/6 text-slate-200 rounded-tl-none')}>
-        
-        {msg.image && (
-          <div className="mb-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
-            <img src={msg.image} alt="uploaded" className="max-w-full h-auto" />
-          </div>
-        )}
-
-        <div className="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              ul: ({ children }) => <ul className="space-y-4 my-4 list-none pl-0">{children}</ul>,
-              li: ({ children }) => (
-                <li className="flex gap-3 items-start group">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
-                  <span className="text-slate-700 dark:text-slate-200 font-medium">{children}</span>
-                </li>
-              ),
-              a: ({ children, href }) => (
-                <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary font-black underline decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all">
-                  {children}
-                </a>
-              )
-            }}
-          >
-            {msg.content + (msg.is_streaming ? '▊' : '')}
-          </ReactMarkdown>
-        </div>
-
-        {(typingComplete || isUser) && msg.diagram && (
-          <div className="mt-6">
-            <MermaidChart chart={msg.diagram} />
-          </div>
-        )}
-
-        {!isUser && (
-          <div className="absolute -right-12 top-0 flex flex-col gap-1 transition-opacity opacity-0 group-hover:opacity-100">
-            <button onClick={handleCopy} className="p-2 bg-[#1a1a1a] rounded-xl border border-white/8 text-slate-500 hover:text-orange-400 transition-all active:scale-95" title="Copy text">
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </button>
-            {(msg.image || msg.diagram) && (
-              <button onClick={handleDownload} className="p-2 bg-[#1a1a1a] rounded-xl border border-white/8 text-slate-500 hover:text-emerald-400 transition-all active:scale-95" title="Download visual">
-                <Download className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ─── MAIN CHAT ───────────────────────────────────────────────────────────────
 function AIChat() {
   const searchParams = useSearchParams()
@@ -350,21 +501,18 @@ function AIChat() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'diagram' | 'image' | null>(null)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [contextType, setContextType] = useState<'global' | 'resource'>('global')
   const [selectedResource, setSelectedResource] = useState<number | null>(null)
   const [activeSession, setActiveSession] = useState<any>(null)
-
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false)
   
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Fetch historic data
   const { data: sessions = [] } = useQuery({ 
     queryKey: ['ai-sessions'], 
     queryFn: () => aiApi.getSessions().then(res => Array.isArray(res.data) ? res.data : (res.data.results || [])) 
@@ -526,40 +674,47 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT: Atomic Agent Implementation (Sidebar Verified Standard)
-        setIsLoading(true); // Global loading state ensures user knows it is thinking
-
+        // CHAT: Atomic Agent Implementation
         try {
+          // Detect what kind of action the user wants for the loading indicator
+          const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(currentInput)
+          const wantsImage = /generate.*image|image.*of|show.*me|picture.*of|illustrat/i.test(currentInput)
+          if (wantsDiagram) setPendingAction('diagram')
+          else if (wantsImage) setPendingAction('image')
+
           const response = await aiApi.askAgent(
             currentInput,
             contextType === 'resource' ? `resource_id:${selectedResource}` : '',
-            false, // voice_enabled
-            undefined, // voice_id
+            false,
+            undefined,
             messages.map(m => ({ role: m.role, content: m.content })),
-            false, // tutor mode
-            activeSession?.id // session_id — pass existing session to persist history
+            false,
+            activeSession?.id
           );
 
           if (response.data && response.data.reply) {
-            // Grab diagram from multiple possible locations in response
             const diagramCode =
               response.data.diagram ||
               response.data.message?.diagram ||
               response.data.message?.diagram_code ||
-              response.data.execution_result ||
+              (response.data.action?.tool === 'generate_diagram' ? response.data.execution_result : null) ||
+              null
+
+            const imageUrl =
+              response.data.message?.image ||
+              (response.data.action?.tool === 'generate_image' ? response.data.execution_result : null) ||
               null
 
             const assistantMsg: Message = {
               id: Date.now(),
               role: 'assistant',
               content: response.data.reply,
-              image: response.data.message?.image,
+              image: imageUrl || undefined,
               diagram: diagramCode || undefined,
             };
 
             setMessages(prev => [...prev, assistantMsg]);
 
-            // Update active session from response (backend always returns session_id now)
             if (response.data.session_id) {
               if (!activeSession || activeSession.id !== response.data.session_id) {
                 setActiveSession({ id: response.data.session_id, title: currentInput.slice(0, 60) || 'New Chat' });
@@ -567,15 +722,13 @@ function AIChat() {
               }
             }
 
-            // If user asked for a diagram but agent didn't return one, call diagram endpoint directly
-            const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(currentInput)
+            // If user asked for a diagram but agent didn't return one, call diagram endpoint
             if (wantsDiagram && !diagramCode) {
-              const msgIdx = messages.length // index of the assistant message we just added
+              setPendingAction('diagram')
               aiApi.generateDiagram(currentInput, 'auto', response.data.message_id).then(res => {
                 if (res.data.mermaid) {
                   setMessages(prev => {
                     const updated = [...prev]
-                    // Find the last assistant message and attach diagram
                     for (let i = updated.length - 1; i >= 0; i--) {
                       if (updated[i].role === 'assistant') {
                         updated[i] = { ...updated[i], diagram: res.data.mermaid }
@@ -585,15 +738,15 @@ function AIChat() {
                     return updated
                   })
                 }
-              }).catch(() => {}) // silent fail — diagram is bonus
+              }).catch(() => {}).finally(() => setPendingAction(null))
             }
           }
         } catch (err: any) {
           console.error('Agent Error:', err);
-          const errMsg = err.response?.data?.error || err.response?.data?.reply || err.message || 'Intelligence Signal Interrupted';
+          const errMsg = err.response?.data?.error || err.message || 'Intelligence Signal Interrupted';
           toast.error(errMsg);
         } finally {
-          setIsLoading(false);
+          setPendingAction(null)
         }
       }
 
@@ -807,22 +960,9 @@ function AIChat() {
           ) : (
             <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
               {messages.map((msg, i) => (
-                <MessageBubble 
-                  key={i} 
-                  msg={msg} 
-                  index={i}
-                  isLast={i === messages.length - 1} 
-                  isNew={!sending && i === messages.length - 1} 
-                />
+                <MessageBubble key={i} msg={msg} index={i} />
               ))}
-              {sending && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
-                      <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Thinking...</span>
-                  </div>
-              )}
+              {sending && <ThinkingIndicator action={pendingAction} />}
               <div ref={bottomRef} className="h-4" />
             </div>
           )}
