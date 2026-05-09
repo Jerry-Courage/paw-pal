@@ -40,21 +40,28 @@ def create_vector_embeddings(resource, text):
             batch_vectors = ai.embed_text_cloud(batch, is_query=False)
             if not batch_vectors:
                 logger.error(f"[RAG Error] Batch {batch_start}-{batch_start+len(batch)} failed for {resource.id}")
-                return
+                # Pad with None so indices stay aligned with chunks
+                all_vectors.extend([None] * len(batch))
+                continue
+            # Pad with None if fewer vectors returned than chunks (partial failure)
+            if len(batch_vectors) < len(batch):
+                batch_vectors = list(batch_vectors) + [None] * (len(batch) - len(batch_vectors))
             all_vectors.extend(batch_vectors)
-            logger.info(f'[RAG] Embedded {len(all_vectors)}/{len(chunks)} chunks...')        
-        vector_data = all_vectors
-        if not vector_data:
+            valid_count = sum(1 for v in all_vectors if v is not None)
+            logger.info(f'[RAG] Embedded {valid_count}/{len(all_vectors)} chunks...')
+        if not any(v is not None for v in all_vectors):
             logger.error(f"[RAG Error] Failed to generate cloud vectors for {resource.id}")
             return
 
+        # Build doc_chunks — skip any chunk whose vector is None
         doc_chunks = []
-        for i, chunk_text in enumerate(chunks):
-            doc_chunks.append(DocumentChunk(
-                resource=resource,
-                text_content=chunk_text,
-                embedding=vector_data[i]
-            ))
+        for chunk_text, vec in zip(chunks, all_vectors):
+            if vec is not None:
+                doc_chunks.append(DocumentChunk(
+                    resource=resource,
+                    text_content=chunk_text,
+                    embedding=vec
+                ))
             
         DocumentChunk.objects.bulk_create(doc_chunks)
         logger.info(f'[RAG] Successfully saved {len(doc_chunks)} cloud vectors to Database.')

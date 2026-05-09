@@ -850,16 +850,19 @@ class AIService:
                         return result.embeddings[0].values
                     return None
                 else:
-                    # List — embed in small batches of 5 to balance speed vs API limits
+                    # List — embed in small batches of 1 to maximize key rotation flexibility
                     import time as _time
                     vectors = []
+                    key1_daily_exhausted = False   # Permanently skip key1 if daily quota hit
                     rpm_exhausted_clients = set()  # Track RPM-limited clients within this batch
-                    BATCH = 5
+                    BATCH = 1
                     for i in range(0, len(content), BATCH):
                         batch = content[i:i + BATCH]
                         for item in batch:
+                            # If key1 is daily-exhausted, go straight to key2
+                            primary_client = self.google_client2 if key1_daily_exhausted else self.google_client_v1
                             try:
-                                r = self.google_client_v1.models.embed_content(
+                                r = primary_client.models.embed_content(
                                     model=model_id,
                                     contents=item,
                                     config={'task_type': task_type, 'output_dimensionality': 384}
@@ -878,9 +881,10 @@ class AIService:
                                         'EmbedContentRequestsPerDay' in err_str
                                     )
                                     if is_daily_limit:
-                                        # Daily quota — try key2 first
+                                        # Mark key1 as permanently exhausted for this batch
+                                        key1_daily_exhausted = True
+                                        logger.warning(f"[RAG Cloud] Daily quota on key1 — switching to key2 for all remaining chunks")
                                         if self.google_client2:
-                                            logger.warning(f"[RAG Cloud] Daily quota on key1 — switching to key2")
                                             try:
                                                 r2 = self.google_client2.models.embed_content(
                                                     model=model_id,
@@ -891,58 +895,77 @@ class AIService:
                                                     vectors.append(r2.embeddings[0].values)
                                                     continue
                                             except Exception as e2:
-                                                logger.warning(f"[RAG Cloud] Key2 also failed: {e2}")
-                                        logger.warning(f"[RAG Cloud] Daily embedding quota exhausted — skipping remaining chunks")
+                                                err2 = str(e2)
+                                                if '429' in err2 or 'RESOURCE_EXHAUSTED' in err2:
+                                                    logger.warning(f"[RAG Cloud] Key2 also rate-limited — sleeping 65s")
+                                                    _time.sleep(65)
+                                                    try:
+                                                        r2 = self.google_client2.models.embed_content(
+                                                            model=model_id,
+                                                            contents=item,
+                                                            config={'task_type': task_type, 'output_dimensionality': 384}
+                                                        )
+                                                        if r2.embeddings and len(r2.embeddings) > 0:
+                                                            vectors.append(r2.embeddings[0].values)
+                                                            continue
+                                                    except Exception:
+                                                        pass
+                                                else:
+                                                    logger.warning(f"[RAG Cloud] Key2 also failed: {e2}")
+                                        # Both keys exhausted — stop embedding
+                                        logger.warning(f"[RAG Cloud] Both keys exhausted — returning partial vectors")
                                         vectors.append(None)
                                         raise StopIteration("daily_quota_exhausted")
                                     else:
-                                        # RPM limit — mark this client as temporarily exhausted
-                                        # and immediately try key2 without sleeping
-                                        logger.warning(f"[RAG Cloud] Embedding RPM 429 — switching to alternate key")
-                                        rpm_exhausted_clients.add(id(self.google_client_v1))
-                                        alt_clients = [c for c in [self.google_client2, self.google_client_v1] if c and id(c) not in rpm_exhausted_clients]
-                                        if not alt_clients:
-                                            # All keys exhausted — sleep once then retry
-                                            logger.warning(f"[RAG Cloud] All embedding keys RPM-limited — sleeping 65s")
-                                            _time.sleep(65)
-                                            rpm_exhausted_clients.clear()
-                                            alt_clients = [c for c in [self.google_client_v1, self.google_client2] if c]
-                                        success = False
-                                        for retry_client in alt_clients:
+                                        # RPM limit — try the other key immediately
+                                        other_client = self.google_client2 if not key1_daily_exhausted else None
+                                        if other_client and id(other_client) not in rpm_exhausted_clients:
                                             try:
-                                                r = retry_client.models.embed_content(
+                                                r = other_client.models.embed_content(
                                                     model=model_id,
                                                     contents=item,
                                                     config={'task_type': task_type, 'output_dimensionality': 384}
                                                 )
                                                 if r.embeddings and len(r.embeddings) > 0:
                                                     vectors.append(r.embeddings[0].values)
-                                                    success = True
-                                                    break
+                                                    continue
                                             except Exception as retry_err:
                                                 err2 = str(retry_err)
                                                 if '429' in err2 or 'RESOURCE_EXHAUSTED' in err2:
-                                                    rpm_exhausted_clients.add(id(retry_client))
+                                                    rpm_exhausted_clients.add(id(other_client))
+                                        # Both RPM-limited — sleep and retry
+                                        logger.warning(f"[RAG Cloud] All keys RPM-limited — sleeping 65s")
+                                        _time.sleep(65)
+                                        rpm_exhausted_clients.clear()
+                                        try:
+                                            active = self.google_client2 if key1_daily_exhausted else self.google_client_v1
+                                            r = active.models.embed_content(
+                                                model=model_id,
+                                                contents=item,
+                                                config={'task_type': task_type, 'output_dimensionality': 384}
+                                            )
+                                            if r.embeddings and len(r.embeddings) > 0:
+                                                vectors.append(r.embeddings[0].values)
                                                 continue
-                                        if not success:
-                                            vectors.append(None)
+                                        except Exception:
+                                            pass
+                                        vectors.append(None)
                                         continue
-                                logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
-                                vectors.append(None)
-                                logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
-                                vectors.append(None)
-                        # Pause between batches — 1.2s = ~50 req/min, well under 100 RPM per key
+                                else:
+                                    logger.warning(f"[RAG Cloud] Item embed failed: {item_err}")
+                                    vectors.append(None)
+                        # Small pause between items to stay under RPM
                         if i + BATCH < len(content):
-                            _time.sleep(1.2)
-                    valid = [v for v in vectors if v is not None]
-                    if valid:
-                        return valid
+                            _time.sleep(0.7)
+                    # Return length-aligned list (None for failed items) so callers can zip with chunks
+                    if any(v is not None for v in vectors):
+                        return vectors
                     return None
             except StopIteration as si:
                 if 'daily_quota_exhausted' in str(si):
                     logger.warning("[RAG Cloud] Daily quota hit — returning partial vectors")
-                    valid = [v for v in vectors if v is not None]
-                    return valid if valid else None
+                    # Return length-aligned list so callers can zip with chunks
+                    return vectors if any(v is not None for v in vectors) else None
                 raise
             except Exception as e:
                 logger.warning(f"[RAG Cloud] {model_id} failed: {e}. Falling back...")
