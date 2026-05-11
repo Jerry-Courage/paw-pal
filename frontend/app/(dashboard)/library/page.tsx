@@ -14,9 +14,10 @@ import { toast } from 'sonner'
 import UploadModal from '@/components/library/UploadModal'
 import ProcessingView from '@/components/library/ProcessingView'
 
-// Ensure Sparkles is never tree-shaken — it's used across shared chunks
-// that depend on this module providing it
+// v2 - Sparkles anchor: ensures icon is in bundle
 export const _sparklesRef = Sparkles
+// Ensure Sparkles is never tree-shaken — it's used across shared chunks
+const _SPARKLES_ANCHOR = Sparkles.displayName || 'Sparkles'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
