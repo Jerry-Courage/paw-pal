@@ -507,6 +507,16 @@ function AIChat() {
   useEffect(() => {
     const q = searchParams.get('q')
     if (q) { setInput(q); textareaRef.current?.focus() }
+    // Auto-set resource context when coming from library page
+    const resourceParam = searchParams.get('resource')
+    if (resourceParam) {
+      const rid = parseInt(resourceParam)
+      if (!isNaN(rid)) {
+        setContextType('resource')
+        setSelectedResource(rid)
+        setSidebarOpen(true) // open sidebar so user sees the context is set
+      }
+    }
   }, [searchParams])
 
   useEffect(() => {

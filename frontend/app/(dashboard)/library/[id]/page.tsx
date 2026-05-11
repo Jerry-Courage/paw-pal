@@ -330,7 +330,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         onOpenPodcast={() => router.push(`/library/${id}/podcast`)}
         onOpenFlashcards={() => router.push(`/library/${id}/flashcards`)}
         onOpenPractice={() => router.push(`/library/${id}/practice`)}
-        onOpenChat={() => {}}
+        onOpenChat={() => router.push(`/ai?resource=${id}`)}
         onOpenMath={() => router.push(`/library/${id}/solver`)}
       />
     </div>
