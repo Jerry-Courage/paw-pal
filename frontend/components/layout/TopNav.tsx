@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   Brain, LayoutDashboard, Calendar, BookOpen, FileText,
-  LayoutGrid, Users, Zap, Settings, LogOut,
+  LayoutGrid, Users, Sparkles, Zap, Settings, LogOut,
   Menu, X, Bell, Search, ChevronDown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,7 @@ const NAV_ITEMS = [
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab' },
   { href: '/community',   icon: Users,           label: 'Community' },
-  { href: '/ai',          icon: Zap,             label: 'AI' },
+  { href: '/ai',          icon: Sparkles,        label: 'AI' },
 ]
 
 export default function TopNav() {
