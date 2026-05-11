@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
-import { motion } from 'framer-motion'
-import { 
-  X, Brain, HelpCircle, GitGraph, Wand2, 
+import React, { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import {
+  X, Brain, HelpCircle, GitGraph, Wand2,
   BookOpen, Music2, Sparkles, Radio,
   Loader2, MessageSquare, ChevronRight, Edit3,
-  Calculator
+  Calculator, Layers, ChevronUp
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -35,10 +35,10 @@ interface ExpandableMobileHUDProps {
   className?: string
 }
 
-export default function ExpandableMobileHUD({ 
+export default function ExpandableMobileHUD({
   resourceId,
-  onOpenQuiz, 
-  onOpenMindmap, 
+  onOpenQuiz,
+  onOpenMindmap,
   onOpenMusic,
   onOpenFlashcards,
   onOpenPractice,
@@ -47,147 +47,162 @@ export default function ExpandableMobileHUD({
   onOpenMath,
   onEdit,
   isGenerating,
-  className 
+  className,
 }: ExpandableMobileHUDProps) {
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
-  const constraintsRef = useRef(null)
 
   const tools: ToolItem[] = [
-    ...(onEdit ? [{ id: 'edit', icon: Edit3, label: 'Edit Material', desc: 'Modify Notes', color: 'bg-slate-700' }] : []),
-    { id: 'quiz',       icon: HelpCircle, label: 'Quiz',        desc: 'Mastery MCQ',   color: 'bg-orange-500', href: resourceId ? `/library/${resourceId}/quiz`       : undefined },
-    { id: 'podcast',    icon: Radio,      label: 'Podcast',     desc: 'FlowCast AI',   color: 'bg-pink-500',   href: resourceId ? `/library/${resourceId}/podcast`    : undefined },
-    { id: 'flashcards', icon: BookOpen,   label: 'Flashcards',  desc: 'Recall Boost',  color: 'bg-sky-500',    href: resourceId ? `/library/${resourceId}/flashcards` : undefined },
-    { id: 'mindmap',    icon: GitGraph,   label: 'Mind Map',    desc: 'Visual Flow',   color: 'bg-indigo-500', href: resourceId ? `/library/${resourceId}/mindmap`    : undefined },
-    { id: 'practice',   icon: Wand2,      label: 'Practice',    desc: 'AI Grading',    color: 'bg-emerald-500',href: resourceId ? `/library/${resourceId}/practice`   : undefined },
-    { id: 'examprep',   icon: Brain,      label: 'Exam Prep',   desc: 'Feynman + Exam',color: 'bg-violet-500', href: resourceId ? `/library/${resourceId}/examprep`   : undefined },
-    { id: 'math',       icon: Calculator, label: 'Math Solver', desc: 'Step-by-Step',  color: 'bg-teal-500',   href: resourceId ? `/library/${resourceId}/solver`     : undefined },
-    { id: 'music',      icon: Music2,     label: 'Music',       desc: 'Focus Audio',   color: 'bg-indigo-400' },
+    ...(onEdit ? [{ id: 'edit', icon: Edit3, label: 'Edit Notes', desc: 'Modify content', color: 'bg-slate-600' }] : []),
+    { id: 'quiz',       icon: HelpCircle, label: 'Quiz',        desc: 'Mastery MCQ',    color: 'bg-orange-500', href: resourceId ? `/library/${resourceId}/quiz`       : undefined },
+    { id: 'flashcards', icon: Layers,     label: 'Flashcards',  desc: 'Recall boost',   color: 'bg-sky-500',    href: resourceId ? `/library/${resourceId}/flashcards` : undefined },
+    { id: 'podcast',    icon: Radio,      label: 'Podcast',     desc: 'AI conversation',color: 'bg-pink-500',   href: resourceId ? `/library/${resourceId}/podcast`    : undefined },
+    { id: 'mindmap',    icon: GitGraph,   label: 'Mind Map',    desc: 'Visual flow',    color: 'bg-indigo-500', href: resourceId ? `/library/${resourceId}/mindmap`    : undefined },
+    { id: 'practice',   icon: Wand2,      label: 'Written Test',desc: 'AI grading',     color: 'bg-emerald-500',href: resourceId ? `/library/${resourceId}/practice`   : undefined },
+    { id: 'examprep',   icon: Brain,      label: 'Exam Prep',   desc: 'Feynman + exam', color: 'bg-violet-500', href: resourceId ? `/library/${resourceId}/examprep`   : undefined },
+    { id: 'math',       icon: Calculator, label: 'Math Solver', desc: 'Step-by-step',   color: 'bg-teal-500',   href: resourceId ? `/library/${resourceId}/solver`     : undefined },
+    { id: 'music',      icon: Music2,     label: 'Focus Music', desc: 'Study audio',    color: 'bg-purple-500' },
   ]
 
   const handleToolClick = (tool: ToolItem) => {
     setIsOpen(false)
-    if (tool.href) {
-      router.push(tool.href)
-      return
-    }
+    if (tool.href) { router.push(tool.href); return }
     const actions: Record<string, () => void> = {
-      edit:       onEdit!,
-      quiz:       onOpenQuiz,
+      edit: onEdit!,
+      quiz: onOpenQuiz,
       flashcards: onOpenFlashcards,
-      mindmap:    onOpenMindmap,
-      math:       onOpenMath,
-      practice:   onOpenPractice,
-      podcast:    onOpenPodcast,
-      music:      onOpenMusic,
+      mindmap: onOpenMindmap,
+      math: onOpenMath,
+      practice: onOpenPractice,
+      podcast: onOpenPodcast,
+      music: onOpenMusic,
     }
     actions[tool.id]?.()
   }
 
   return (
     <>
-      <div className="fixed inset-4 pointer-events-none z-[110] lg:hidden" ref={constraintsRef} />
-
       {/* Loading overlay */}
       {isGenerating && (
-        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-2xl animate-in fade-in duration-500">
-          <div className="relative">
-            <div className="absolute inset-0 bg-primary/20 blur-3xl animate-pulse rounded-full" />
-            <div className="relative w-24 h-24 bg-gradient-to-br from-primary to-violet-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-primary/40 animate-bounce">
-              <Sparkles className="w-12 h-12 text-white animate-pulse" />
-            </div>
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0d0d0d]/90 backdrop-blur-xl">
+          <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
+            <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
           </div>
-          <div className="mt-8 text-center space-y-2">
-            <h3 className="text-xl font-black text-white uppercase tracking-tighter">FlowAI is Thinking...</h3>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Generating your {isGenerating} kit</p>
-          </div>
-          <div className="absolute bottom-12 flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="w-2 h-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+          <p className="text-white font-black text-base">FlowAI is thinking...</p>
+          <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest font-medium">Generating {isGenerating}</p>
+          <div className="flex gap-1.5 mt-4">
+            {[0,1,2].map(i => (
+              <div key={i} className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-[115] lg:hidden bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300 pointer-events-auto"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      {/* ── Bottom sheet trigger pill — always visible at bottom ── */}
+      <div className={cn('fixed bottom-20 left-0 right-0 flex justify-center z-[120] lg:hidden pointer-events-none', className)}>
+        <button
+          onClick={() => setIsOpen(true)}
+          className="pointer-events-auto flex items-center gap-2.5 px-5 py-3 rounded-full bg-[#1a1a1a] border border-white/10 shadow-2xl shadow-black/60 active:scale-95 transition-all"
+        >
+          <div className="flex -space-x-1.5">
+            {tools.slice(0, 4).map(t => (
+              <div key={t.id} className={cn('w-5 h-5 rounded-full border-2 border-[#1a1a1a] flex items-center justify-center', t.color)}>
+                <t.icon className="w-2.5 h-2.5 text-white" />
+              </div>
+            ))}
+          </div>
+          <span className="text-xs font-black text-white">Study Tools</span>
+          <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+        </button>
+      </div>
 
-      {/* Draggable HUD */}
-      <motion.div
-        drag
-        dragConstraints={constraintsRef}
-        dragMomentum={false}
-        className={cn('fixed bottom-24 right-6 z-[120] lg:hidden', className)}
-      >
-        {/* Expanded panel */}
+      {/* ── Bottom sheet ── */}
+      <AnimatePresence>
         {isOpen && (
-          <div className="absolute bottom-20 right-0 w-[85vw] max-w-sm flex flex-col gap-4 animate-in slide-in-from-bottom-10 zoom-in-95 duration-300 max-h-[70vh] overflow-y-auto pb-2">
-            {/* Chat button */}
-            <button
-              onClick={() => { setIsOpen(false); onOpenChat() }}
-              className="flex items-center justify-between p-4 rounded-3xl bg-primary text-white shadow-2xl shadow-primary/30"
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[125] lg:hidden bg-black/70 backdrop-blur-sm"
+              onClick={() => setIsOpen(false)}
+            />
+
+            {/* Sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-[130] lg:hidden bg-[#111] rounded-t-3xl border-t border-white/8 shadow-2xl"
+              style={{ maxHeight: '80vh' }}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 fill-current" />
+              {/* Handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-white/15" />
+              </div>
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <p className="text-sm font-black text-white">Study Tools</p>
+                  <p className="text-[10px] text-slate-500">Choose a tool to open</p>
                 </div>
-                <div className="text-left">
-                  <div className="font-black text-sm uppercase tracking-tight">Ask FlowAI</div>
-                  <div className="text-[10px] opacity-70 font-bold">Document Brain Assistant</div>
+                <button onClick={() => setIsOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center">
+                  <X className="w-4 h-4 text-slate-400" />
+                </button>
+              </div>
+
+              {/* Ask FlowAI */}
+              <div className="px-4 pb-3">
+                <button
+                  onClick={() => { setIsOpen(false); onOpenChat() }}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-orange-500 text-white active:scale-[0.98] transition-all"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className="text-sm font-black">Ask FlowAI</p>
+                    <p className="text-[10px] opacity-70">Chat about this material</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 opacity-60" />
+                </button>
+              </div>
+
+              {/* Tools list */}
+              <div className="overflow-y-auto px-4 pb-8" style={{ maxHeight: 'calc(80vh - 180px)' }}>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {tools.map(tool => (
+                    <button
+                      key={tool.id}
+                      onClick={() => handleToolClick(tool)}
+                      disabled={!!isGenerating}
+                      className={cn(
+                        'flex items-center gap-3 p-3.5 rounded-2xl bg-[#1a1a1a] border border-white/5 text-left active:scale-[0.97] transition-all',
+                        isGenerating && isGenerating !== tool.id ? 'opacity-40' : ''
+                      )}
+                    >
+                      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', tool.color)}>
+                        {isGenerating === tool.id
+                          ? <Loader2 className="w-4 h-4 text-white animate-spin" />
+                          : <tool.icon className="w-4 h-4 text-white" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-white truncate">{tool.label}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{tool.desc}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 opacity-40" />
-            </button>
-
-            {/* Tools grid */}
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-white/10 shadow-2xl overflow-hidden">
-              {tools.map(tool => (
-                <button
-                  key={tool.id}
-                  onClick={() => handleToolClick(tool)}
-                  disabled={!!isGenerating}
-                  className={cn(
-                    'relative group flex flex-col p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-left transition-all active:scale-95',
-                    isGenerating === tool.id ? 'ring-2 ring-primary border-transparent' : '',
-                    isGenerating && isGenerating !== tool.id ? 'opacity-40' : ''
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-lg', tool.color)}>
-                      {isGenerating === tool.id
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <tool.icon className="w-4 h-4" />}
-                    </div>
-                    {tool.href && <ChevronRight className="w-3 h-3 text-slate-400" />}
-                  </div>
-                  <div className="font-black text-[11px] text-slate-900 dark:text-white uppercase tracking-tight leading-none mb-1">{tool.label}</div>
-                  <div className="text-[9px] text-slate-500 font-bold opacity-60">{tool.desc}</div>
-                </button>
-              ))}
-            </div>
-
-            <div className="text-center px-4 py-2">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest opacity-40">FlowState Intelligent Study HUD</p>
-            </div>
-          </div>
+            </motion.div>
+          </>
         )}
-
-        {/* Trigger button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={cn(
-            'w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90',
-            isOpen ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rotate-90' : 'bg-primary text-white'
-          )}
-        >
-          {isOpen ? <X className="w-7 h-7" /> : <Brain className="w-8 h-8" />}
-        </button>
-      </motion.div>
+      </AnimatePresence>
     </>
   )
 }

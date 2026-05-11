@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { aiApi, libraryApi } from '@/lib/api'
@@ -8,12 +8,45 @@ import {
   Sparkles, Send, Plus, Loader2, Paperclip, X,
   Network, GitBranch, Menu, BarChart2, Wand2,
   MessageSquare, Copy, Check, Download, Zap, Trash2,
-  Image as ImageIcon, GitMerge
+  Image as ImageIcon, GitMerge, Maximize2
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+
+// ─── LIGHTBOX ────────────────────────────────────────────────────────────────
+function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+      >
+        <X className="w-5 h-5 text-white" />
+      </button>
+      <div
+        className="max-w-[95vw] max-h-[90vh] overflow-auto rounded-2xl bg-[#111] border border-white/10"
+        onClick={e => e.stopPropagation()}
+      >
+        {type === 'image' ? (
+          <img src={src} alt="preview" className="max-w-full max-h-[85vh] object-contain" />
+        ) : (
+          <div className="p-6 [&_svg]:max-w-full [&_svg]:h-auto" dangerouslySetInnerHTML={{ __html: src }} />
+        )}
+      </div>
+    </div>
+  )
+}
 
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -41,6 +74,7 @@ function MermaidChart({ chart }: { chart: string }) {
   const [svg, setSvg] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [rawCode, setRawCode] = useState<string>('')
+  const [lightboxSvg, setLightboxSvg] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -149,23 +183,37 @@ function MermaidChart({ chart }: { chart: string }) {
           <GitMerge className="w-3.5 h-3.5 text-violet-400" />
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Diagram</span>
         </div>
-        <button
-          onClick={() => {
-            const el = containerRef.current?.querySelector('svg')
-            if (el) {
-              const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a'); a.href = url; a.download = 'diagram.svg'; a.click()
-              URL.revokeObjectURL(url)
-              toast.success('Diagram downloaded')
-            }
-          }}
-          className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
-        >
-          <Download className="w-3 h-3" /> SVG
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setLightboxSvg(svg)}
+            className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
+          >
+            <Maximize2 className="w-3 h-3" /> Expand
+          </button>
+          <button
+            onClick={() => {
+              const el = containerRef.current?.querySelector('svg')
+              if (el) {
+                const blob = new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a'); a.href = url; a.download = 'diagram.svg'; a.click()
+                URL.revokeObjectURL(url)
+                toast.success('Diagram downloaded')
+              }
+            }}
+            className="text-[10px] text-slate-600 hover:text-orange-400 transition-colors font-medium flex items-center gap-1"
+          >
+            <Download className="w-3 h-3" /> SVG
+          </button>
+        </div>
       </div>
-      <div ref={containerRef} className="overflow-x-auto p-4 [&_svg]:max-w-full [&_svg]:h-auto" dangerouslySetInnerHTML={{ __html: svg }} />
+      <div
+        ref={containerRef}
+        className="overflow-x-auto p-4 [&_svg]:max-w-full [&_svg]:h-auto cursor-zoom-in"
+        dangerouslySetInnerHTML={{ __html: svg }}
+        onClick={() => setLightboxSvg(svg)}
+      />
+      {lightboxSvg && <Lightbox src={lightboxSvg} type="svg" onClose={() => setLightboxSvg(null)} />}
     </div>
   )
 }
@@ -344,6 +392,7 @@ function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) 
 // ─── MESSAGE COMPONENT ───────────────────────────────────────────────────────
 function MessageBubble({ msg, index }: { msg: Message; index: number }) {
   const [copied, setCopied] = useState(false)
+  const [imgLightbox, setImgLightbox] = useState<string | null>(null)
   const isUser = msg.role === 'user'
 
   const handleCopy = () => {
@@ -393,8 +442,12 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
 
           {/* AI-generated image */}
           {msg.image && !isUser && (
-            <div className="mt-3 rounded-xl overflow-hidden border border-white/10">
+            <div className="mt-3 rounded-xl overflow-hidden border border-white/10 cursor-zoom-in relative group/img"
+              onClick={() => setImgLightbox(msg.image!)}>
               <img src={msg.image} alt="generated" className="max-w-full h-auto" />
+              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-all flex items-center justify-center">
+                <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover/img:opacity-100 transition-all drop-shadow-lg" />
+              </div>
             </div>
           )}
 
@@ -417,6 +470,7 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
           </div>
         )}
       </div>
+      {imgLightbox && <Lightbox src={imgLightbox} type="image" onClose={() => setImgLightbox(null)} />}
     </div>
   )
 }
