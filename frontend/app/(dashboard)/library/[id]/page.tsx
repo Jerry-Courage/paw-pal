@@ -6,7 +6,7 @@ import { libraryApi } from '@/lib/api'
 import {
   ArrowLeft, Loader2, X, RotateCcw, BookOpen,
   HelpCircle, Map, Wand2, Radio, Calculator, Layers,
-  PanelRight, PanelRightClose, Plus, Send
+  PanelRight, PanelRightClose, Plus, Send, Sparkles
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
