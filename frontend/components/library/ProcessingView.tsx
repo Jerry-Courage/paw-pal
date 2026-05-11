@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  Brain, Sparkles, BookOpen, Zap, CheckCircle2,
-  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2
+  Brain, BookOpen, Zap, CheckCircle2,
+  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2, Sparkles
 } from 'lucide-react'
 
 // ── Stage definitions ────────────────────────────────────────────────────────
