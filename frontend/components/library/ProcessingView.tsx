@@ -24,9 +24,6 @@ const FEATURE_ICONS: Record<string, any> = {
   practice:   Wand2,
 }
 
-// Sparkles used as JSX below to ensure it stays in the bundle
-const _SparklesMark = () => <Sparkles size={0} aria-hidden />
-
 // ── Rotating tips ────────────────────────────────────────────────────────────
 const TIPS = [
   { emoji: '🧠', text: 'FlowAI reads your entire document before writing a single word — that\'s why it\'s so accurate.' },
@@ -301,8 +298,9 @@ export default function ProcessingView({ resource, compact = false }: Props) {
         </div>
 
         {/* ── Leave notice ── */}
-        <p className="text-center text-[11px] text-slate-600 font-medium">
-          🔔 You'll see a notification when your kit is ready — feel free to explore other materials.
+        <p className="text-center text-[11px] text-slate-600 font-medium flex items-center justify-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-orange-500/50" />
+          You'll see a notification when your kit is ready — feel free to explore other materials.
         </p>
       </div>
     </div>
