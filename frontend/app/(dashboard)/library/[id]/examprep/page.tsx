@@ -6,7 +6,8 @@ import { libraryApi, getAuthToken, API_BASE } from '@/lib/api'
 import {
   ArrowLeft, Mic, MicOff, Square, Brain, Zap,
   MessageSquare, CheckCircle2, XCircle, AlertCircle,
-  ChevronRight, RotateCcw, Loader2, Volume2
+  ChevronRight, RotateCcw, Loader2, Volume2,
+  Clock, FileText, ChevronLeft, Award, Target
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,34 @@ interface SessionReport {
   gaps: string[]
   score: number
   recommendation: string
+}
+
+// Exam types
+type ExamQuestionType = 'mcq' | 'written'
+
+interface MCQQuestion {
+  type: 'mcq'
+  question: string
+  options: string[]
+  correct_answer: string
+  explanation: string
+}
+
+interface WrittenQuestion {
+  type: 'written'
+  question: string
+  hint?: string
+  model_answer: string
+}
+
+type ExamQuestion = MCQQuestion | WrittenQuestion
+
+interface ExamResult {
+  index: number
+  question: ExamQuestion
+  answer: string
+  correct: boolean | null   // null = written (self-graded)
+  selfGrade?: 'got_it' | 'needs_work'
 }
 
 const TECHNIQUES: { id: Technique; label: string; icon: any; desc: string; color: string }[] = [
@@ -106,6 +135,19 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [report, setReport] = useState<SessionReport | null>(null)
   const [sessionDuration, setSessionDuration] = useState(0)
+
+  // Exam state
+  const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([])
+  const [examAnswers, setExamAnswers] = useState<Record<number, string>>({})
+  const [examRevealed, setExamRevealed] = useState<Record<number, boolean>>({})
+  const [examTimeLeft, setExamTimeLeft] = useState(0)
+  const [examDuration, setExamDuration] = useState(30 * 60) // default 30 min
+  const [examStarted, setExamStarted] = useState(false)
+  const [examFinished, setExamFinished] = useState(false)
+  const [examResults, setExamResults] = useState<ExamResult[]>([])
+  const [examCurrentQ, setExamCurrentQ] = useState(0)
+  const [examLoading, setExamLoading] = useState(false)
+  const examTimerRef = useRef<any>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -289,6 +331,128 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     clearTimeout(isSpeakingTimeoutRef.current)
   }
 
+  // ── Exam logic ─────────────────────────────────────────────────────────────
+
+  const loadExamQuestions = async () => {
+    setExamLoading(true)
+    try {
+      const [quizRes, practiceRes] = await Promise.all([
+        libraryApi.generateQuiz(resourceId, 'mcq', 'undergrad', 10),
+        libraryApi.generatePracticeQuestions(resourceId, 'medium', 5),
+      ])
+
+      const mcqRaw: any[] = quizRes.data?.questions || []
+      const writtenRaw: any[] = Array.isArray(practiceRes.data) ? practiceRes.data : []
+
+      const mcqs: MCQQuestion[] = mcqRaw.map((q: any) => ({
+        type: 'mcq',
+        question: q.question,
+        options: q.options || [],
+        correct_answer: q.correct_answer,
+        explanation: q.explanation || '',
+      }))
+
+      const written: WrittenQuestion[] = writtenRaw.map((q: any) => ({
+        type: 'written',
+        question: q.question,
+        hint: q.hint,
+        model_answer: q.model_answer || '',
+      }))
+
+      // Interleave: spread written questions evenly among MCQs
+      const combined: ExamQuestion[] = []
+      const writtenStep = mcqs.length > 0 ? Math.floor(mcqs.length / (written.length + 1)) : 1
+      let wi = 0
+      for (let i = 0; i < mcqs.length; i++) {
+        if (wi < written.length && i > 0 && i % writtenStep === 0) {
+          combined.push(written[wi++])
+        }
+        combined.push(mcqs[i])
+      }
+      while (wi < written.length) combined.push(written[wi++])
+
+      setExamQuestions(combined)
+    } catch (e) {
+      toast.error('Failed to load exam questions')
+    } finally {
+      setExamLoading(false)
+    }
+  }
+
+  const startExam = () => {
+    setExamStarted(true)
+    setExamTimeLeft(examDuration)
+    setExamCurrentQ(0)
+    setExamAnswers({})
+    setExamRevealed({})
+    setExamFinished(false)
+    setExamResults([])
+  }
+
+  // Countdown timer
+  useEffect(() => {
+    if (examStarted && !examFinished && examTimeLeft > 0) {
+      examTimerRef.current = setInterval(() => {
+        setExamTimeLeft(t => {
+          if (t <= 1) {
+            clearInterval(examTimerRef.current)
+            finishExam()
+            return 0
+          }
+          return t - 1
+        })
+      }, 1000)
+    }
+    return () => clearInterval(examTimerRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examStarted, examFinished])
+
+  const finishExam = useCallback(() => {
+    clearInterval(examTimerRef.current)
+    setExamFinished(true)
+    // Reveal all written questions
+    const allRevealed: Record<number, boolean> = {}
+    examQuestions.forEach((_, i) => { allRevealed[i] = true })
+    setExamRevealed(allRevealed)
+  }, [examQuestions])
+
+  const gradeExam = useCallback((answers: Record<number, string>, selfGrades: Record<number, 'got_it' | 'needs_work'>) => {
+    const results: ExamResult[] = examQuestions.map((q, i) => {
+      const answer = answers[i] || ''
+      if (q.type === 'mcq') {
+        return {
+          index: i,
+          question: q,
+          answer,
+          correct: answer === q.correct_answer,
+        }
+      } else {
+        return {
+          index: i,
+          question: q,
+          answer,
+          correct: null,
+          selfGrade: selfGrades[i],
+        }
+      }
+    })
+    setExamResults(results)
+  }, [examQuestions])
+
+  const submitExam = () => {
+    clearInterval(examTimerRef.current)
+    setExamFinished(true)
+    const allRevealed: Record<number, boolean> = {}
+    examQuestions.forEach((_, i) => { allRevealed[i] = true })
+    setExamRevealed(allRevealed)
+  }
+
+  const formatExamTime = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${String(sec).padStart(2, '0')}`
+  }
+
   // ── RENDER ─────────────────────────────────────────────────────────────────
 
   // Setup phase
@@ -409,7 +573,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
       {/* Transcript */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scrollbar-hide">
-        {transcript.length === 0 ? (
+        {transcript.filter(e => e.role === 'ai').length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
             <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center animate-pulse">
               <Mic className="w-7 h-7 text-red-400" />
@@ -420,20 +584,12 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             </div>
           </div>
         ) : (
-          transcript.map((entry, i) => (
-            <div key={i} className={cn('flex gap-3', entry.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
-              <div className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5',
-                entry.role === 'user' ? 'bg-orange-500 text-white' : 'bg-violet-600 text-white'
-              )}>
-                {entry.role === 'user' ? 'ME' : 'AI'}
+          transcript.filter(entry => entry.role === 'ai').map((entry, i) => (
+            <div key={i} className="flex gap-3 flex-row">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5 bg-violet-600 text-white">
+                AI
               </div>
-              <div className={cn(
-                'max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
-                entry.role === 'user'
-                  ? 'bg-[#1e1e1e] border border-white/8 text-slate-100 rounded-tr-sm'
-                  : 'bg-violet-500/10 border border-violet-500/20 text-violet-100 rounded-tl-sm'
-              )}>
+              <div className="max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed bg-violet-500/10 border border-violet-500/20 text-violet-100 rounded-tl-sm">
                 {entry.text}
               </div>
             </div>
@@ -566,22 +722,491 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     </div>
   )
 
-  // Exam phase — coming soon placeholder (will be built next)
-  if (phase === 'exam') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col items-center justify-center gap-5 px-6">
-      <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-        <Zap className="w-8 h-8 text-orange-400" />
+  // ── Exam phase ─────────────────────────────────────────────────────────────
+  if (phase === 'exam') {
+    // Loading questions
+    if (examLoading) return (
+      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+        <p className="text-slate-400 text-sm font-medium">Generating exam questions...</p>
       </div>
-      <div className="text-center">
-        <h2 className="text-2xl font-black text-white">Timed Exam</h2>
-        <p className="text-slate-500 mt-2 text-sm">Coming in the next update — mixed MCQ + written questions with a timer.</p>
+    )
+
+    // Setup screen
+    if (!examStarted) return (
+      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
+          <button onClick={() => setPhase('report')}
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
+            <ArrowLeft className="w-4 h-4 text-slate-400" />
+          </button>
+          <div>
+            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Timed Exam</p>
+            <h1 className="text-sm font-black text-white truncate">{resource?.title || '...'}</h1>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-8">
+          <div className="max-w-lg mx-auto space-y-8">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mx-auto">
+                <FileText className="w-8 h-8 text-orange-400" />
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">Timed Exam</h2>
+              <p className="text-slate-500 text-sm">
+                {examQuestions.length > 0
+                  ? `${examQuestions.length} questions — ${examQuestions.filter(q => q.type === 'mcq').length} MCQ + ${examQuestions.filter(q => q.type === 'written').length} written`
+                  : 'Mixed MCQ + written questions'}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Choose duration</p>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: '15 min', value: 15 * 60 },
+                  { label: '30 min', value: 30 * 60 },
+                  { label: '45 min', value: 45 * 60 },
+                ].map(opt => (
+                  <button key={opt.value} onClick={() => setExamDuration(opt.value)}
+                    className={cn(
+                      'py-4 rounded-2xl border font-black text-sm transition-all flex flex-col items-center gap-1',
+                      examDuration === opt.value
+                        ? 'border-orange-500/40 bg-orange-500/10 text-orange-400'
+                        : 'border-white/8 bg-white/3 text-slate-400 hover:border-white/15'
+                    )}>
+                    <Clock className={cn('w-5 h-5', examDuration === opt.value ? 'text-orange-400' : 'text-slate-500')} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="bg-[#111] border border-white/5 rounded-2xl p-4 space-y-2">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">What to expect</p>
+              {[
+                'MCQ questions are auto-graded',
+                'Written questions: review model answer, self-grade',
+                'Timer counts down — submit before it hits zero',
+                'Results show score + improvement plan',
+              ].map((step, i) => (
+                <div key={i} className="flex items-center gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                  <span className="text-xs text-slate-400">{step}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={async () => {
+                if (examQuestions.length === 0) await loadExamQuestions()
+                startExam()
+              }}
+              disabled={examLoading}
+              className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2.5 disabled:opacity-50">
+              {examLoading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading questions...</>
+                : <><Zap className="w-4 h-4" /> Start Exam</>}
+            </button>
+          </div>
+        </div>
       </div>
-      <button onClick={() => setPhase('report')}
-        className="px-6 py-3 rounded-2xl bg-white/5 border border-white/8 text-white font-black text-sm hover:bg-white/8 transition-all">
-        ← Back to Report
-      </button>
-    </div>
-  )
+    )
+
+    // Results screen
+    if (examFinished && examResults.length > 0) {
+      const mcqResults = examResults.filter(r => r.question.type === 'mcq')
+      const writtenResults = examResults.filter(r => r.question.type === 'written')
+      const mcqCorrect = mcqResults.filter(r => r.correct === true).length
+      const writtenGotIt = writtenResults.filter(r => r.selfGrade === 'got_it').length
+      const totalScore = examResults.length > 0
+        ? Math.round(((mcqCorrect + writtenGotIt) / examResults.length) * 100)
+        : 0
+      const gaps = examResults.filter(r => r.correct === false || r.selfGrade === 'needs_work')
+
+      return (
+        <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
+            <div>
+              <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Exam Results</p>
+              <h1 className="text-sm font-black text-white truncate">{resource?.title || '...'}</h1>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-6">
+            <div className="max-w-lg mx-auto space-y-5">
+              <div className="flex items-center gap-5 p-5 bg-[#111] border border-white/5 rounded-2xl">
+                <div className="relative w-20 h-20 shrink-0">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="8" className="text-white/5" />
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 38}`}
+                      strokeDashoffset={`${2 * Math.PI * 38 * (1 - totalScore / 100)}`}
+                      className={totalScore >= 70 ? 'text-emerald-400' : totalScore >= 40 ? 'text-orange-400' : 'text-red-400'}
+                      style={{ transition: 'stroke-dashoffset 1s ease' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-black text-white">{totalScore}%</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white mb-1">
+                    {totalScore >= 70 ? '🎉 Excellent work!' : totalScore >= 40 ? '💪 Good effort!' : '📚 Keep studying!'}
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    MCQ: {mcqCorrect}/{mcqResults.length} correct
+                    {writtenResults.length > 0 && ` · Written: ${writtenGotIt}/${writtenResults.length} got it`}
+                  </p>
+                </div>
+              </div>
+              {gaps.length > 0 && (
+                <div className="bg-red-500/8 border border-red-500/20 rounded-2xl p-4 space-y-3">
+                  <p className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5" /> Improvement Plan
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {report?.gaps?.length
+                      ? `Based on your session gaps and exam results, focus on: ${report.gaps.slice(0, 2).join(', ')}.`
+                      : 'Review the questions you missed and revisit those topics in your notes.'}
+                  </p>
+                  <div className="space-y-2">
+                    {gaps.slice(0, 5).map((r, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                        <span className="text-xs text-red-200 leading-relaxed">{r.question.question}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Question Breakdown</p>
+                {examResults.map((r, i) => {
+                  const isCorrect = r.question.type === 'mcq' ? r.correct : r.selfGrade === 'got_it'
+                  const isPending = r.question.type === 'written' && !r.selfGrade
+                  return (
+                    <div key={i} className={cn(
+                      'p-4 rounded-2xl border space-y-2',
+                      isCorrect ? 'bg-emerald-500/5 border-emerald-500/20'
+                        : isPending ? 'bg-white/3 border-white/8'
+                        : 'bg-red-500/5 border-red-500/20'
+                    )}>
+                      <div className="flex items-start gap-2">
+                        <span className={cn(
+                          'w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5',
+                          isCorrect ? 'bg-emerald-500/20 text-emerald-400'
+                            : isPending ? 'bg-white/10 text-slate-400'
+                            : 'bg-red-500/20 text-red-400'
+                        )}>{i + 1}</span>
+                        <p className="text-xs text-slate-300 leading-relaxed flex-1">{r.question.question}</p>
+                        {!isPending && (
+                          isCorrect
+                            ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            : <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        )}
+                      </div>
+                      {r.question.type === 'mcq' && !r.correct && (
+                        <div className="ml-7 space-y-1">
+                          <p className="text-[10px] text-red-400">Your answer: <span className="font-medium">{r.answer || '(none)'}</span></p>
+                          <p className="text-[10px] text-emerald-400">Correct: <span className="font-medium">{(r.question as MCQQuestion).correct_answer}</span></p>
+                          {(r.question as MCQQuestion).explanation && (
+                            <p className="text-[10px] text-slate-500 leading-relaxed">{(r.question as MCQQuestion).explanation}</p>
+                          )}
+                        </div>
+                      )}
+                      {r.question.type === 'written' && r.selfGrade === 'needs_work' && (
+                        <div className="ml-7">
+                          <p className="text-[10px] text-slate-500 leading-relaxed">Model: {(r.question as WrittenQuestion).model_answer}</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-3 pb-6">
+                <button onClick={() => {
+                  setExamStarted(false)
+                  setExamFinished(false)
+                  setExamResults([])
+                  setExamAnswers({})
+                  setExamRevealed({})
+                  setExamCurrentQ(0)
+                  setExamQuestions([])
+                }}
+                  className="py-3.5 rounded-2xl bg-white/5 border border-white/8 text-white font-black text-sm hover:bg-white/8 transition-all flex items-center justify-center gap-2">
+                  <RotateCcw className="w-4 h-4" /> Retake
+                </button>
+                <Link href={`/library/${resourceId}`}
+                  className="py-3.5 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2">
+                  <Award className="w-4 h-4" /> Done
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Active exam — questions one at a time
+    return <ExamActiveView
+      examQuestions={examQuestions}
+      examCurrentQ={examCurrentQ}
+      setExamCurrentQ={setExamCurrentQ}
+      examAnswers={examAnswers}
+      setExamAnswers={setExamAnswers}
+      examRevealed={examRevealed}
+      setExamRevealed={setExamRevealed}
+      examTimeLeft={examTimeLeft}
+      examFinished={examFinished}
+      submitExam={submitExam}
+      gradeExam={gradeExam}
+      formatExamTime={formatExamTime}
+    />
+  }
 
   return null
+}
+
+// ── Active exam sub-component (avoids hooks-in-conditional issue) ─────────────
+type SetState<T> = (fn: (prev: T) => T) => void
+
+interface ExamActiveViewProps {
+  examQuestions: ExamQuestion[]
+  examCurrentQ: number
+  setExamCurrentQ: (fn: (q: number) => number) => void
+  examAnswers: Record<number, string>
+  setExamAnswers: SetState<Record<number, string>>
+  examRevealed: Record<number, boolean>
+  setExamRevealed: SetState<Record<number, boolean>>
+  examTimeLeft: number
+  examFinished: boolean
+  submitExam: () => void
+  gradeExam: (answers: Record<number, string>, selfGrades: Record<number, 'got_it' | 'needs_work'>) => void
+  formatExamTime: (s: number) => string
+}
+
+function ExamActiveView({
+  examQuestions, examCurrentQ, setExamCurrentQ,
+  examAnswers, setExamAnswers,
+  examRevealed, setExamRevealed,
+  examTimeLeft, examFinished,
+  submitExam, gradeExam, formatExamTime,
+}: ExamActiveViewProps) {
+  const [selfGrades, setSelfGrades] = useState<Record<number, 'got_it' | 'needs_work'>>({})
+
+  const currentQ = examQuestions[examCurrentQ]
+  const isLast = examCurrentQ === examQuestions.length - 1
+  const isTimeLow = examTimeLeft < 5 * 60 && examTimeLeft > 0
+  const currentAnswer = examAnswers[examCurrentQ] || ''
+  const isRevealed = examRevealed[examCurrentQ]
+
+  if (!currentQ) return null
+
+  return (
+    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      {/* Timer bar */}
+      <div className={cn(
+        'flex items-center justify-between px-5 py-3 border-b shrink-0 transition-colors',
+        isTimeLow ? 'border-red-500/30 bg-red-500/5' : 'border-white/5'
+      )}>
+        <div className="flex items-center gap-2">
+          <Clock className={cn('w-4 h-4', isTimeLow ? 'text-red-400 animate-pulse' : 'text-slate-500')} />
+          <span className={cn('text-sm font-black tabular-nums', isTimeLow ? 'text-red-400' : 'text-slate-300')}>
+            {formatExamTime(examTimeLeft)}
+          </span>
+          {isTimeLow && (
+            <span className="text-[10px] text-red-400 font-black uppercase tracking-widest animate-pulse">Low time!</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500 font-medium">
+            {examCurrentQ + 1} / {examQuestions.length}
+          </span>
+          <button
+            onClick={() => {
+              submitExam()
+              gradeExam(examAnswers, selfGrades)
+            }}
+            className="px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-black hover:bg-orange-500/15 transition-all">
+            Submit
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-0.5 bg-white/5 shrink-0">
+        <div
+          className="h-full bg-orange-500 transition-all duration-300"
+          style={{ width: `${((examCurrentQ + 1) / examQuestions.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Question */}
+      <div className="flex-1 overflow-y-auto px-5 py-6">
+        <div className="max-w-lg mx-auto space-y-5">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest',
+                currentQ.type === 'mcq'
+                  ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+              )}>
+                {currentQ.type === 'mcq' ? 'Multiple Choice' : 'Written'}
+              </span>
+              <span className="text-[10px] text-slate-600 font-medium">Q{examCurrentQ + 1}</span>
+            </div>
+            <p className="text-base font-bold text-white leading-relaxed">{currentQ.question}</p>
+            {currentQ.type === 'written' && currentQ.hint && (
+              <p className="text-xs text-slate-500 italic">Hint: {currentQ.hint}</p>
+            )}
+          </div>
+
+          {/* MCQ options */}
+          {currentQ.type === 'mcq' && (
+            <div className="space-y-2.5">
+              {currentQ.options.map((opt, oi) => {
+                const isSelected = currentAnswer === opt
+                const isCorrectOpt = isRevealed && opt === currentQ.correct_answer
+                const isWrongSelected = isRevealed && isSelected && opt !== currentQ.correct_answer
+                return (
+                  <button key={oi}
+                    onClick={() => {
+                      if (isRevealed) return
+                      setExamAnswers(prev => ({ ...prev, [examCurrentQ]: opt }))
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left text-sm transition-all',
+                      isCorrectOpt
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                        : isWrongSelected
+                        ? 'border-red-500/40 bg-red-500/10 text-red-200'
+                        : isSelected
+                        ? 'border-orange-500/40 bg-orange-500/10 text-orange-200'
+                        : 'border-white/8 bg-white/3 text-slate-300 hover:border-white/15 hover:bg-white/5'
+                    )}>
+                    <span className={cn(
+                      'w-6 h-6 rounded-full border text-[10px] font-black flex items-center justify-center shrink-0',
+                      isCorrectOpt ? 'border-emerald-400 text-emerald-400'
+                        : isWrongSelected ? 'border-red-400 text-red-400'
+                        : isSelected ? 'border-orange-400 text-orange-400'
+                        : 'border-white/20 text-slate-500'
+                    )}>
+                      {String.fromCharCode(65 + oi)}
+                    </span>
+                    <span className="flex-1 leading-relaxed">{opt}</span>
+                    {isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    {isWrongSelected && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                  </button>
+                )
+              })}
+              {isRevealed && currentQ.explanation && (
+                <div className="p-3 rounded-xl bg-white/3 border border-white/8">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Explanation</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">{currentQ.explanation}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Written answer */}
+          {currentQ.type === 'written' && (
+            <div className="space-y-3">
+              <textarea
+                value={currentAnswer}
+                onChange={e => {
+                  if (isRevealed) return
+                  setExamAnswers(prev => ({ ...prev, [examCurrentQ]: e.target.value }))
+                }}
+                readOnly={isRevealed}
+                placeholder="Write your answer here..."
+                rows={5}
+                className="w-full bg-[#111] border border-white/8 rounded-2xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-orange-500/40 transition-colors"
+              />
+              {!isRevealed && (
+                <button
+                  onClick={() => setExamRevealed(prev => ({ ...prev, [examCurrentQ]: true }))}
+                  className="w-full py-3 rounded-2xl bg-white/5 border border-white/8 text-slate-300 font-black text-sm hover:bg-white/8 transition-all">
+                  Reveal Model Answer
+                </button>
+              )}
+              {isRevealed && (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-violet-500/8 border border-violet-500/20">
+                    <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-2">Model Answer</p>
+                    <p className="text-xs text-violet-200 leading-relaxed">{(currentQ as WrittenQuestion).model_answer}</p>
+                  </div>
+                  {!selfGrades[examCurrentQ] ? (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">How did you do?</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => setSelfGrades(prev => ({ ...prev, [examCurrentQ]: 'got_it' }))}
+                          className="py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-sm hover:bg-emerald-500/15 transition-all flex items-center justify-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" /> Got it
+                        </button>
+                        <button
+                          onClick={() => setSelfGrades(prev => ({ ...prev, [examCurrentQ]: 'needs_work' }))}
+                          className="py-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 font-black text-sm hover:bg-red-500/15 transition-all flex items-center justify-center gap-2">
+                          <XCircle className="w-4 h-4" /> Needs work
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      'py-2.5 rounded-xl text-center text-xs font-black uppercase tracking-widest',
+                      selfGrades[examCurrentQ] === 'got_it'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : 'bg-red-500/10 text-red-400'
+                    )}>
+                      {selfGrades[examCurrentQ] === 'got_it' ? '✓ Marked as got it' : '✗ Marked as needs work'}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="px-5 py-4 border-t border-white/5 shrink-0">
+        <div className="max-w-lg mx-auto flex items-center gap-3">
+          <button
+            onClick={() => setExamCurrentQ(q => Math.max(0, q - 1))}
+            disabled={examCurrentQ === 0}
+            className="p-3 rounded-2xl bg-white/5 border border-white/8 text-slate-400 hover:bg-white/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="flex-1 flex gap-1.5 justify-center flex-wrap">
+            {examQuestions.map((_, qi) => (
+              <button key={qi} onClick={() => setExamCurrentQ(() => qi)}
+                className={cn(
+                  'w-6 h-6 rounded-full text-[10px] font-black transition-all',
+                  qi === examCurrentQ
+                    ? 'bg-orange-500 text-white'
+                    : examAnswers[qi]
+                    ? 'bg-white/15 text-slate-300'
+                    : 'bg-white/5 text-slate-600 hover:bg-white/10'
+                )}>
+                {qi + 1}
+              </button>
+            ))}
+          </div>
+          {isLast ? (
+            <button
+              onClick={() => {
+                submitExam()
+                gradeExam(examAnswers, selfGrades)
+              }}
+              className="px-4 py-3 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20">
+              Submit
+            </button>
+          ) : (
+            <button
+              onClick={() => setExamCurrentQ(q => Math.min(examQuestions.length - 1, q + 1))}
+              className="p-3 rounded-2xl bg-white/5 border border-white/8 text-slate-400 hover:bg-white/8 transition-all">
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
