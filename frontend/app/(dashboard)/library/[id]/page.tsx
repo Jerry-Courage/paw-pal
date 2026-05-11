@@ -17,12 +17,11 @@ import { useRef } from 'react'
 import { aiApi } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 
-import RichNotesViewer from '@/components/library/RichNotesViewer'
-import ProcessingView from '@/components/library/ProcessingView'
-
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
 const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGeneratorModal'), { ssr: false })
 const ExpandableMobileHUD = dynamic(() => import('@/components/ui/ExpandableMobileHUD'), { ssr: false })
+const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
+const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
 
 const TOOLS = [
   { id: 'notes',      label: 'Notes',           icon: BookOpen,   href: (id: number) => `/library/${id}` },
