@@ -46,7 +46,14 @@ export default function RichNotesViewer({
 
   const cleanContent = (text: string) => {
     if (!text) return ''
-    return text.replace(/ACTION:\s*\{.*?\}/gi, '').trim()
+    return text
+      .replace(/ACTION:\s*\{.*?\}/gi, '')
+      // Unescape literal \n\n that AI returns as escaped strings
+      .replace(/\\n\\n/g, '\n\n')
+      .replace(/\\n/g, '\n')
+      // Fix **Key Question:** and similar bold markers that appear inline
+      .replace(/\*\*(Key Question:|Memory Trick:|Quick Summary:|Deep Dive:)\*\*/g, '\n\n**$1**')
+      .trim()
   }
 
   const toggleSection = (idx: number) => {

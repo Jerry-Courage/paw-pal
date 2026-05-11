@@ -60,6 +60,7 @@ export default function ExpandableMobileHUD({
     { id: 'flashcards', icon: BookOpen,   label: 'Flashcards',  desc: 'Recall Boost',  color: 'bg-sky-500',    href: resourceId ? `/library/${resourceId}/flashcards` : undefined },
     { id: 'mindmap',    icon: GitGraph,   label: 'Mind Map',    desc: 'Visual Flow',   color: 'bg-indigo-500', href: resourceId ? `/library/${resourceId}/mindmap`    : undefined },
     { id: 'practice',   icon: Wand2,      label: 'Practice',    desc: 'AI Grading',    color: 'bg-emerald-500',href: resourceId ? `/library/${resourceId}/practice`   : undefined },
+    { id: 'examprep',   icon: Brain,      label: 'Exam Prep',   desc: 'Feynman + Exam',color: 'bg-violet-500', href: resourceId ? `/library/${resourceId}/examprep`   : undefined },
     { id: 'math',       icon: Calculator, label: 'Math Solver', desc: 'Step-by-Step',  color: 'bg-teal-500',   href: resourceId ? `/library/${resourceId}/solver`     : undefined },
     { id: 'music',      icon: Music2,     label: 'Music',       desc: 'Focus Audio',   color: 'bg-indigo-400' },
   ]
