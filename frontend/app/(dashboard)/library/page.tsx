@@ -12,12 +12,12 @@ import {
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
 import UploadModal from '@/components/library/UploadModal'
-import ProcessingView from '@/components/library/ProcessingView'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
+const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
 
 const SUBJECT_FILTERS = [
   'All', 'Biology', 'Physics', 'History', 'Mathematics',
