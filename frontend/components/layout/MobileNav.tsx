@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, BookOpen, Users, Zap } from 'lucide-react'
+import { LayoutDashboard, Calendar, BookOpen, Sparkles, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -10,7 +10,7 @@ const navItems = [
   { href: '/library',   icon: BookOpen,        label: 'Library' },
   { href: '/planner',   icon: Calendar,        label: 'Planner' },
   { href: '/ai',        icon: Zap,             label: 'AI' },
-  { href: '/community', icon: Users,           label: 'Community' },
+  { href: '/community', icon: Sparkles,        label: 'Community' },
 ]
 
 export default function MobileNav() {
