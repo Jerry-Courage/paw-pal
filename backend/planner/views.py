@@ -291,7 +291,7 @@ class InterpretScheduleView(APIView):
         
         ai = AIService()
         try:
-            response_text = ai.chat([
+            response_text = ai.chat_sync([
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': prompt}
             ])

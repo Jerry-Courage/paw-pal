@@ -323,35 +323,34 @@ class FlowAgent:
                 if not description:
                     return None
                 logger.info(f"[Agent] Generating diagram | type={diagram_type} desc={description[:60]!r}")
-                if diagram_type == 'auto':
-                    prompt = (
-                        f"You are an expert at creating Mermaid.js diagrams for educational purposes.\n\n"
-                        f"The user wants a diagram for: {description}\n\n"
-                        f"Choose the MOST appropriate Mermaid.js diagram type and generate it.\n"
-                        f"Rules:\n"
-                        f"- Return ONLY the raw Mermaid code\n"
-                        f"- Do NOT wrap in ```mermaid``` or any code blocks\n"
-                        f"- Do NOT add any explanation before or after\n"
-                        f"- Use proper Mermaid syntax with simple arrows: --> or -->|label|\n"
-                        f"- ALWAYS quote node labels containing special chars: A[\"Label (info)\"]\n"
-                    )
-                else:
-                    prompt = (
-                        f"Generate a Mermaid.js {diagram_type} diagram for: {description}\n\n"
-                        f"Rules:\n"
-                        f"- Use valid Mermaid.js syntax only\n"
-                        f"- Make it detailed and educational\n"
-                        f"- Return ONLY the raw Mermaid code, no markdown blocks, no explanation"
-                    )
+                prompt = (
+                    f"Generate a Mermaid.js diagram for: {description}\n\n"
+                    f"STRICT RULES — follow exactly:\n"
+                    f"- Return ONLY the raw Mermaid code, nothing else\n"
+                    f"- Do NOT wrap in ```mermaid``` or any code blocks\n"
+                    f"- Do NOT add any explanation, comments, or text before/after\n"
+                    f"- Use flowchart TD for processes, mindmap for concepts, sequenceDiagram for interactions\n"
+                    f"- Keep node IDs simple: A, B, C or step1, step2\n"
+                    f"- Quote ALL node labels: A[\"Label text here\"]\n"
+                    f"- Use simple arrows only: --> or -->|label text|\n"
+                    f"- Do NOT use classDef, style, or click statements\n"
+                    f"- Keep it under 20 nodes for clarity\n"
+                    f"- Start with the diagram type keyword (e.g. 'flowchart TD' or 'mindmap')\n"
+                )
                 mermaid_code = await self.ai.chat([{'role': 'user', 'content': prompt}])
                 if mermaid_code:
                     mermaid_code = mermaid_code.strip()
-                    for prefix in ['```mermaid', '```']:
-                        if mermaid_code.startswith(prefix):
-                            mermaid_code = mermaid_code[len(prefix):]
-                    if mermaid_code.endswith('```'):
-                        mermaid_code = mermaid_code[:-3]
-                    mermaid_code = mermaid_code.strip()
+                    # Strip any markdown fences
+                    import re as _re
+                    mermaid_code = _re.sub(r'^```(?:mermaid)?\s*', '', mermaid_code, flags=_re.IGNORECASE)
+                    mermaid_code = _re.sub(r'\s*```\s*$', '', mermaid_code)
+                    # Strip classDef lines that often cause parse errors
+                    lines = [l for l in mermaid_code.split('\n')
+                             if not l.strip().startswith('classDef')
+                             and not l.strip().startswith('class ')
+                             and not l.strip().startswith('style ')
+                             and not l.strip().startswith('%%')]
+                    mermaid_code = '\n'.join(lines).strip()
                     logger.info(f"[Agent] Diagram generation SUCCESS | length={len(mermaid_code)}")
                 return mermaid_code
 
