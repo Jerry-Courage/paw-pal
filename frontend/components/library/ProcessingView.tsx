@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  Brain, BookOpen, Zap, CheckCircle2,
+  Brain, Sparkles, BookOpen, Zap, CheckCircle2,
   Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2
 } from 'lucide-react'
 
@@ -23,6 +23,9 @@ const FEATURE_ICONS: Record<string, any> = {
   mindmap:    Map,
   practice:   Wand2,
 }
+
+// Sparkles used as JSX below to ensure it stays in the bundle
+const _SparklesMark = () => <Sparkles size={0} aria-hidden />
 
 // ── Rotating tips ────────────────────────────────────────────────────────────
 const TIPS = [
