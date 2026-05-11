@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { Bell, X, Sparkles, Users, Calendar, BookOpen, Flame, Info, Zap, CheckCheck } from 'lucide-react'
+import { Bell, X, Users, Calendar, BookOpen, Flame, Info, Zap, CheckCheck } from 'lucide-react'
 import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string }> = {
-  ai_nudge:  { icon: Sparkles, color: 'bg-sky-500/10 text-sky-400' },
+  ai_nudge:  { icon: Zap,      color: 'bg-sky-500/10 text-sky-400' },
   streak:    { icon: Flame,    color: 'bg-orange-500/10 text-orange-400' },
   deadline:  { icon: Calendar, color: 'bg-red-500/10 text-red-400' },
   flashcard: { icon: BookOpen, color: 'bg-violet-500/10 text-violet-400' },
