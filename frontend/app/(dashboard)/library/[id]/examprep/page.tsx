@@ -50,21 +50,29 @@ const TECHNIQUES: { id: Technique; label: string; icon: any; desc: string; color
 ]
 
 // ── Audio helpers ─────────────────────────────────────────────────────────────
-// Downsample Float32 audio to 16kHz PCM Int16
-function downsampleBuffer(buffer: Float32Array, inputRate: number, outputRate = 16000): Int16Array {
-  if (inputRate === outputRate) {
-    const out = new Int16Array(buffer.length)
-    for (let i = 0; i < buffer.length; i++) {
-      out[i] = Math.max(-32768, Math.min(32767, buffer[i] * 32768))
+
+// Proper resampling using OfflineAudioContext (much better quality than linear interpolation)
+async function resampleTo16k(float32: Float32Array, inputRate: number): Promise<Int16Array> {
+  if (inputRate === 16000) {
+    const out = new Int16Array(float32.length)
+    for (let i = 0; i < float32.length; i++) {
+      out[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
     }
     return out
   }
-  const ratio = inputRate / outputRate
-  const outLen = Math.round(buffer.length / ratio)
-  const out = new Int16Array(outLen)
-  for (let i = 0; i < outLen; i++) {
-    const idx = Math.round(i * ratio)
-    out[i] = Math.max(-32768, Math.min(32767, buffer[Math.min(idx, buffer.length - 1)] * 32768))
+  const outputLen = Math.round(float32.length * 16000 / inputRate)
+  const offlineCtx = new OfflineAudioContext(1, outputLen, 16000)
+  const buffer = offlineCtx.createBuffer(1, float32.length, inputRate)
+  buffer.copyToChannel(float32, 0)
+  const source = offlineCtx.createBufferSource()
+  source.buffer = buffer
+  source.connect(offlineCtx.destination)
+  source.start()
+  const rendered = await offlineCtx.startRendering()
+  const resampled = rendered.getChannelData(0)
+  const out = new Int16Array(resampled.length)
+  for (let i = 0; i < resampled.length; i++) {
+    out[i] = Math.max(-32768, Math.min(32767, resampled[i] * 32768))
   }
   return out
 }
@@ -76,7 +84,8 @@ function int16ToBase64(pcm: Int16Array): string {
   return btoa(binary)
 }
 
-function base64ToPcm(b64: string): Float32Array {
+// Gemini Native Audio outputs PCM16 at 24kHz
+function base64ToPcmFloat(b64: string): Float32Array {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
@@ -102,10 +111,10 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const audioQueueRef = useRef<Float32Array[]>([])
-  const isPlayingRef = useRef(false)
+  const nextPlayTimeRef = useRef(0)  // scheduled end time of last chunk
   const timerRef = useRef<any>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
+  const isSpeakingTimeoutRef = useRef<any>(null)
 
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],
@@ -127,30 +136,28 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
-  // ── Play AI audio ──────────────────────────────────────────────────────────
+  // ── Play AI audio — scheduled for gapless playback ───────────────────────
   const playAudioChunk = useCallback((pcm: Float32Array) => {
-    audioQueueRef.current.push(pcm)
-    if (!isPlayingRef.current) processAudioQueue()
-  }, [])
-
-  const processAudioQueue = useCallback(() => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false
-      setIsAiSpeaking(false)
-      return
-    }
-    isPlayingRef.current = true
-    setIsAiSpeaking(true)
     const ctx = audioCtxRef.current || new AudioContext({ sampleRate: 24000 })
     audioCtxRef.current = ctx
-    const chunk = audioQueueRef.current.shift()!
-    const buffer = ctx.createBuffer(1, chunk.length, 24000)
-    buffer.copyToChannel(chunk, 0)
+
+    const buffer = ctx.createBuffer(1, pcm.length, 24000)
+    buffer.copyToChannel(pcm, 0)
     const source = ctx.createBufferSource()
     source.buffer = buffer
     source.connect(ctx.destination)
-    source.onended = processAudioQueue
-    source.start()
+
+    // Schedule chunk to start exactly when the previous one ends — no gaps
+    const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
+    source.start(startAt)
+    nextPlayTimeRef.current = startAt + buffer.duration
+
+    setIsAiSpeaking(true)
+    // Clear speaking indicator 500ms after last chunk ends
+    clearTimeout(isSpeakingTimeoutRef.current)
+    isSpeakingTimeoutRef.current = setTimeout(() => {
+      setIsAiSpeaking(false)
+    }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
   }, [])
 
   // ── Connect WebSocket ──────────────────────────────────────────────────────
@@ -189,7 +196,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           setPhase('session')
           startMic()
         } else if (msg.type === 'audio') {
-          const pcm = base64ToPcm(msg.data)
+          const pcm = base64ToPcmFloat(msg.data)
           playAudioChunk(pcm)
         } else if (msg.type === 'transcript_user') {
           setTranscript(prev => [...prev, { role: 'user', text: msg.text, ts: Date.now() }])
@@ -223,20 +230,30 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   // ── Mic capture ────────────────────────────────────────────────────────────
   const startMic = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      })
       streamRef.current = stream
+
+      // Use AudioContext at native rate, resample properly
       const ctx = new AudioContext()
-      audioCtxRef.current = ctx
       const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(4096, 1, 1)
+      // Use smaller buffer for lower latency
+      const processor = ctx.createScriptProcessor(2048, 1, 1)
       processorRef.current = processor
 
-      processor.onaudioprocess = (e) => {
+      processor.onaudioprocess = async (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        const float32 = e.inputBuffer.getChannelData(0)
-        const pcm16 = downsampleBuffer(float32, ctx.sampleRate, 16000)
-        const b64 = int16ToBase64(pcm16)
-        wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+        const float32 = e.inputBuffer.getChannelData(0).slice() // copy buffer
+        try {
+          const pcm16 = await resampleTo16k(float32, ctx.sampleRate)
+          const b64 = int16ToBase64(pcm16)
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+          }
+        } catch (err) {
+          // Resampling failed, skip this chunk
+        }
       }
 
       source.connect(processor)
@@ -268,7 +285,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     setTranscript([])
     setReport(null)
     setSessionDuration(0)
-    audioQueueRef.current = []
+    nextPlayTimeRef.current = 0
+    clearTimeout(isSpeakingTimeoutRef.current)
   }
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
