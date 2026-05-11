@@ -284,6 +284,8 @@ export default function LibraryPage() {
 
         {/* Upload cards */}
         <div className="grid grid-cols-3 gap-3 mt-10 max-w-2xl mx-auto">
+          {/* Hidden Sparkles anchor - ensures icon stays in bundle */}
+          <span style={{ display: 'none' }}><Sparkles size={0} /></span>
           {[
             { mode: 'file' as const, icon: Upload, label: 'Upload', sub: 'Image, file, audio, video' },
             { mode: 'paste' as const, icon: Link2, label: 'Paste', sub: 'YouTube, website, text' },
