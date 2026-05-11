@@ -3,10 +3,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { communityApi } from '@/lib/api'
-import { 
-  Plus, Calendar, Users, X, Clock, MapPin, 
-  ChevronRight, Sparkles 
-} from 'lucide-react'
+import { Plus, Calendar, Users, X, Clock, MapPin, 
+  ChevronRight, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, getInitials } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -53,7 +51,7 @@ export default function EventsSection() {
         <div>
           <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
             Upcoming Events
-            <Sparkles className="w-4 h-4 text-amber-400" />
+            <Zap className="w-4 h-4 text-amber-400" />
           </h2>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Don't miss out on the action</p>
         </div>

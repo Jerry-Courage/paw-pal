@@ -1,10 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { 
-  X, Calculator, Sparkles, Brain, CheckCircle2, 
-  ArrowRight, Info, AlertCircle, Loader2
-} from 'lucide-react'
+import { X, Calculator, Brain, CheckCircle2, 
+  ArrowRight, Info, AlertCircle, Loader2, Zap } from 'lucide-react'
 import { libraryApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -120,17 +118,17 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
                   isSolving ? "bg-slate-700 pointer-events-none" : "bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
                 )}
               >
-                {isSolving ? (
+                { isSolving ? (
                   <>
                     <Loader2 className="w-6 h-6 animate-spin" />
                     Calculating...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-6 h-6" />
+                    <className="w-6 h-6" />
                     Solve Step-by-Step
                   </>
-                )}
+                ), Zap }
               </button>
             </div>
           ) : (
@@ -179,7 +177,7 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
 
               {/* Final Result */}
               <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-2xl shadow-emerald-500/20 relative overflow-hidden">
-                <Sparkles className="absolute -top-4 -right-4 w-24 h-24 text-white/10 rotate-12" />
+                <Zap className="absolute -top-4 -right-4 w-24 h-24 text-white/10 rotate-12" />
                 <div className="relative space-y-4">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-6 h-6" />

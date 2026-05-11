@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { communityApi } from '@/lib/api'
-import { Heart, MessageCircle, BookOpen, Sparkles, Loader2, Send, MoreHorizontal, Flag, Share2, CheckCircle2 } from 'lucide-react'
+import { Heart, MessageCircle, BookOpen, Loader2, Send, MoreHorizontal, Flag, Share2, CheckCircle2, Zap } from 'lucide-react'
 import { timeAgo, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -155,7 +155,7 @@ export default function PostCard({ post, onLike }: { post: any; onLike: () => vo
           {post.post_type === 'question' && !post.is_answered && (
             <button onClick={getAIAnswer} disabled={aiLoading}
               className="flex items-center gap-1.5 px-3 py-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-orange-500/15 disabled:opacity-50 transition-all">
-              {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              { aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <className="w-3 h-3" />, Zap }
               Ask AI
             </button>
           )}
@@ -172,7 +172,7 @@ export default function PostCard({ post, onLike }: { post: any; onLike: () => vo
                     c.is_ai_answer ? 'bg-violet-500/5 border border-violet-500/10' : 'hover:bg-white/3')}>
                     <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-black shrink-0',
                       c.is_ai_answer ? 'bg-violet-500/20 text-violet-400' : 'bg-white/10 text-slate-400')}>
-                      {c.is_ai_answer ? <Sparkles className="w-3.5 h-3.5" /> : getInitials(c.author?.username || 'U')}
+                      { c.is_ai_answer ? <className="w-3.5 h-3.5" /> : getInitials(c.author?.username || 'U'), Zap }
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">

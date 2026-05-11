@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, aiApi } from '@/lib/api'
-import { Users, Sparkles, Send, Calendar, ArrowRight, MessageCircle, Pin } from 'lucide-react'
+import { Users, Send, Calendar, ArrowRight, MessageCircle, Pin, Zap } from 'lucide-react'
 import { timeAgo, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -44,11 +44,11 @@ export default function GroupPage({ params }: { params: { id: string } }) {
             <div className="flex-1 pb-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">{group?.name}</h1>
-                {group?.is_verified && (
+                { group?.is_verified && (
                   <span className="text-xs bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Verified Group
+                    <className="w-3 h-3" /> Verified Group
                   </span>
-                )}
+                ), Zap }
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{group?.description}</p>
             </div>
@@ -61,7 +61,7 @@ export default function GroupPage({ params }: { params: { id: string } }) {
           <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">
             <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {group?.member_count || 0} Members</span>
             <span>{group?.is_public ? '🌐 Public Group' : '🔒 Private Group'}</span>
-            {group?.is_verified && <span className="text-sky-500 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI Moderated</span>}
+            { group?.is_verified && <span className="text-sky-500 flex items-center gap-1"><className="w-3 h-3" /> AI Moderated</span>, Zap }
           </div>
         </div>
       </div>
@@ -169,7 +169,7 @@ function GroupOverview({ groupId }: { groupId: number }) {
                       <MessageCircle className="w-3 h-3" /> {d.replies} replies
                     </span>
                     <span className="text-xs text-sky-500 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> AI Summary Available
+                      <Zap className="w-3 h-3" /> AI Summary Available
                     </span>
                   </div>
                 </div>
@@ -249,7 +249,7 @@ function GroupOverview({ groupId }: { groupId: number }) {
         {/* Group Stats & AI Insight */}
         <div className="card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-sky-500" /> Group Stats & AI Insight
+            <Zap className="w-4 h-4 text-sky-500" /> Group Stats & AI Insight
           </h3>
           <div className="bg-sky-50 dark:bg-sky-950/50 rounded-xl p-3 text-xs text-gray-600 dark:text-gray-400 italic mb-3">
             "This week, your group focused most on <strong>Algorithmic Transparency</strong>. Activity is 22% compared to last week.
@@ -295,7 +295,7 @@ function GroupChat({ groupId }: { groupId: number }) {
         {messages.map((m: any) => (
           <div key={m.id} className="flex gap-3">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${m.is_ai ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
-              {m.is_ai ? <Sparkles className="w-4 h-4" /> : getInitials(m.sender_name || 'U')}
+              { m.is_ai ? <className="w-4 h-4" /> : getInitials(m.sender_name || 'U'), Zap }
             </div>
             <div>
               <div className="flex items-center gap-2 mb-0.5">

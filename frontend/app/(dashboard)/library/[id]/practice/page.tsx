@@ -3,11 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi, aiApi } from '@/lib/api'
-import {
-  ArrowLeft, Loader2, Send, Lightbulb,
+import { ArrowLeft, Loader2, Send, Lightbulb,
   CheckCircle2, XCircle, TrendingUp, Award, Target,
-  RotateCcw, BookOpen, Sparkles, ChevronRight
-} from 'lucide-react'
+  RotateCcw, BookOpen, ChevronRight, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -84,7 +82,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
         <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-          <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
+          <Zap className="w-8 h-8 text-orange-400 animate-pulse" />
         </div>
         <div>
           <h2 className="text-xl font-black text-white tracking-tight">Preparing Drill</h2>
@@ -259,10 +257,10 @@ export default function PracticePage({ params }: { params: { id: string } }) {
                 <ul className="space-y-1">{grade.improvements.map((s, i) => <li key={i} className="text-xs text-orange-300 flex items-start gap-1.5"><span className="mt-0.5 shrink-0">•</span>{s}</li>)}</ul>
               </div>
             )}
-            {grade.tip && (
+            { grade.tip && (
               <div className="bg-sky-500/8 border border-sky-500/20 rounded-2xl p-4 flex items-start gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-sky-300"><span className="font-black">Study tip:</span> {grade.tip}</p>
+                <className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-sky-300"><span className="font-black">Study tip:</span> {grade.tip, Zap }</p>
               </div>
             )}
           </div>

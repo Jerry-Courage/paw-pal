@@ -1,15 +1,14 @@
 'use client'
 
-import { Sparkles, Search } from 'lucide-react'
+import { Search, Zap } from 'lucide-react'
 
-export default function CommunityHeader() {
-  return (
+export default function CommunityHeader() { return (
     <div className="mb-6 pb-4 border-b border-white/5">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
             Student <span className="text-orange-400">Nexus</span>
-            <Sparkles className="w-4 h-4 text-orange-400 animate-pulse" />
+            <className="w-4 h-4 text-orange-400 animate-pulse" />
           </h1>
           <p className="text-slate-500 text-sm">Connect, collaborate, and conquer your goals together.</p>
         </div>
@@ -23,5 +22,4 @@ export default function CommunityHeader() {
         </div>
       </div>
     </div>
-  )
-}
+  ), Zap }

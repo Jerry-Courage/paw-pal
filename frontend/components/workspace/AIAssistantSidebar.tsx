@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workspaceApi } from '@/lib/api'
-import { 
-  Sparkles, Send, Wand2, Plus, Loader2, 
+import { Send, Wand2, Plus, Loader2, 
   MessageSquare, History, Users, Settings,
-  Zap, Lightbulb, Brain
-} from 'lucide-react'
+  Zap, Lightbulb, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import ReactMarkdown from 'react-markdown'
@@ -74,7 +72,7 @@ export default function AIAssistantSidebar({ workspaceId, onInsertToCanvas, sock
             <div className="relative">
               <div className="absolute inset-0 bg-violet-600/30 blur-xl rounded-full animate-pulse" />
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-2xl relative z-10 border border-white/20">
-                <Sparkles className="w-5 h-5 text-white" />
+                <Zap className="w-5 h-5 text-white" />
               </div>
             </div>
             <div>
@@ -109,7 +107,7 @@ export default function AIAssistantSidebar({ workspaceId, onInsertToCanvas, sock
             <div className="flex items-center gap-3 mb-3">
                <div className={cn("w-7 h-7 rounded-xl flex items-center justify-center text-[10px] font-black text-white shadow-2xl border border-white/10",
                  m.is_ai ? "bg-gradient-to-br from-violet-600 to-indigo-700" : "bg-white/10")}>
-                 {m.is_ai ? <Sparkles className="w-3.5 h-3.5" /> : (m.author_name?.[0] || 'U')}
+                 { m.is_ai ? <className="w-3.5 h-3.5" /> : (m.author_name?.[0] || 'U'), Zap }
                </div>
                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{m.is_ai ? 'FlowAI Core' : m.author_name}</span>
                <span className="text-[10px] text-white/10 font-black ml-auto">{format(new Date(m.created_at), 'HH:mm')}</span>

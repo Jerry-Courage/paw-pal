@@ -1,11 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { 
-  Sparkles, Send, BookOpen, HelpCircle, 
+import { Send, BookOpen, HelpCircle, 
   MessageSquare, Wand2, X, Loader2,
-  ChevronRight, Radio, Mic2, Calculator, Map, ArrowUpRight
-} from 'lucide-react'
+  ChevronRight, Radio, Mic2, Calculator, Map, ArrowUpRight, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { aiApi } from '@/lib/api'
@@ -130,14 +128,14 @@ export default function StudyCompanionSidebar({
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-white/5 shadow-[0_0_50px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden relative transition-all duration-700 w-full">
       
-      {!hideTools && (
+      { !hideTools && (
         <div className="p-4 flex-shrink-0 bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-white/5 transition-all">
           <div className="flex items-center gap-2 mb-3 px-1">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <className="w-3.5 h-3.5 text-primary" />
             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/60">Study Toolkit</span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            <ToolCard id="quiz" icon={HelpCircle} title="Quiz" desc="Mastery MCQ" href={`/library/${resourceId}/quiz`} color="bg-orange-500/10 text-orange-500" badge="HOT" />
+            <ToolCard id="quiz" icon={HelpCircle, Zap } title="Quiz" desc="Mastery MCQ" href={`/library/${resourceId}/quiz`} color="bg-orange-500/10 text-orange-500" badge="HOT" />
             <ToolCard id="flashcards" icon={BookOpen} title="Flash" desc="Recall Boost" href={`/library/${resourceId}/flashcards`} color="bg-sky-500/10 text-sky-500" />
             <ToolCard id="mindmap" icon={Map} title="Map" desc="Neural Web" href={`/library/${resourceId}/mindmap`} color="bg-violet-500/10 text-violet-500" />
             <ToolCard id="podcast" icon={Radio} title="Podcast" desc="FlowCast AI" href={`/library/${resourceId}/podcast`} color="bg-pink-500/10 text-pink-500" badge="AI" />
@@ -149,11 +147,11 @@ export default function StudyCompanionSidebar({
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-8 scrollbar-hide bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:32px_32px]">
-        {messages.length === 0 ? (
+        { messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
             <div className="relative">
               <div className="w-24 h-24 bg-gradient-to-br from-primary via-violet-500 to-indigo-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-primary/30 transform rotate-6 animate-pulse">
-                <Sparkles className="w-12 h-12 text-white" />
+                <className="w-12 h-12 text-white" />
               </div>
               <div className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-lg border border-slate-100 dark:border-slate-700">
                 <MessageSquare className="w-4 h-4 text-primary" />
@@ -174,7 +172,7 @@ export default function StudyCompanionSidebar({
                 <div className="flex flex-col gap-2 mt-4">
                   {['Explain core concepts', 'Key diagrams?', 'High-yield questions'].map((q) => (
                     <button
-                      key={q}
+                      key={q, Zap }
                       onClick={() => setInput(q)}
                       className="text-[11px] text-left px-4 py-3 rounded-2xl bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-primary hover:text-white transition-all font-black uppercase tracking-tight shadow-sm border border-slate-100 dark:border-white/5"
                     >
@@ -195,7 +193,7 @@ export default function StudyCompanionSidebar({
                 "flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transition-transform hover:scale-110",
                 msg.role === 'user' ? "bg-slate-100 dark:bg-slate-800" : "bg-gradient-to-br from-primary to-violet-600 text-white"
               )}>
-                {msg.role === 'user' ? <span className="text-[10px] font-black">ME</span> : <Sparkles className="w-5 h-5" />}
+                { msg.role === 'user' ? <span className="text-[10px] font-black">ME</span> : <className="w-5 h-5" />, Zap }
               </div>
               <div className={cn(
                 "max-w-[85%] rounded-[1.5rem] px-5 py-4 text-sm shadow-xl",
@@ -212,10 +210,10 @@ export default function StudyCompanionSidebar({
             </div>
           ))
         )}
-        {sending && (
+        { sending && (
           <div className="flex gap-4 animate-pulse">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center shadow-lg">
-              <Sparkles className="w-5 h-5 text-white" />
+              <className="w-5 h-5 text-white" />
             </div>
             <div className="h-14 w-32 bg-slate-100 dark:bg-slate-800 rounded-[1.5rem] flex items-center justify-center gap-2 border border-slate-100 dark:border-white/5">
               <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce" />
@@ -223,7 +221,7 @@ export default function StudyCompanionSidebar({
               <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.4s]" />
             </div>
           </div>
-        )}
+        ), Zap }
       </div>
 
       <div className="p-5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-white/5 relative z-10 flex-shrink-0"

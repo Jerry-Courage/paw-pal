@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Mic, MicOff, Hand, MessageSquare, BookOpen, Volume2, VolumeX, Sparkles } from 'lucide-react'
+import { X, Mic, MicOff, Hand, MessageSquare, BookOpen, Volume2, VolumeX, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSpeechExchange, SpeechState } from '@/hooks/useSpeechExchange'
 import { aiApi } from '@/lib/api'
@@ -228,12 +228,12 @@ export default function StudyCall({ resourceId, resourceTitle, notes, onClose }:
                   </p>
                 </div>
               ))}
-              {transcripts.length === 0 && (
+              { transcripts.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full opacity-20">
-                  <Sparkles className="w-8 h-8 text-white mb-2" />
+                  <className="w-8 h-8 text-white mb-2" />
                   <p className="text-xs font-black uppercase text-white tracking-widest">Transcript Empty</p>
                 </div>
-              )}
+              ), Zap }
             </div>
           </motion.div>
         )}

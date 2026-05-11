@@ -4,11 +4,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import {
-  Brain, LayoutDashboard, Calendar, BookOpen, FileText,
-  LayoutGrid, Users, Sparkles, Zap, Settings, LogOut,
-  Menu, X, Bell, Search, ChevronDown
-} from 'lucide-react'
+import { Brain, LayoutDashboard, Calendar, BookOpen, FileText,
+  LayoutGrid, Users, Zap, Settings, LogOut,
+  Menu, X, Bell, Search, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getInitials } from '@/lib/utils'
 import NotificationsPanel from '@/components/layout/NotificationsPanel'
@@ -21,7 +19,7 @@ const NAV_ITEMS = [
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab' },
   { href: '/community',   icon: Users,           label: 'Community' },
-  { href: '/ai',          icon: Sparkles,        label: 'AI' },
+  { href: '/ai',          icon:        label: 'AI', Zap },
 ]
 
 export default function TopNav() {

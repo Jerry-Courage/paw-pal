@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { plannerApi, libraryApi, aiApi, authApi, groupsApi } from '@/lib/api'
-import { Plus, Users, Upload, Sparkles, Clock, Flame, ArrowRight, Play, BookOpen, Brain, Target, BarChart2, Zap, Pencil, Check, Headphones, TrendingUp } from 'lucide-react'
+import { Plus, Users, Upload, Clock, Flame, ArrowRight, Play, BookOpen, Brain, Target, BarChart2, Zap, Pencil, Check, Headphones, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -51,7 +51,7 @@ export default function DashboardPage() {
     { icon: Plus,     label: 'New Session',  sub: 'Start a focused block',   href: '/planner?new=1', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
     { icon: Users,    label: 'Start Group',  sub: 'Collaborate with peers',  href: '/groups',        color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
     { icon: Upload,   label: 'Upload Files', sub: 'PDF, Video, or Notes',    href: '/library',       color: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
-    { icon: Sparkles, label: 'Ask AI',       sub: 'Instant study help',      href: '/ai',            color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
+    { icon: label: 'Ask AI',       sub: 'Instant study help',      href: '/ai',            color: 'bg-pink-500/10 text-pink-400 border-pink-500/20', Zap },
   ]
 
   return (
@@ -146,7 +146,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-orange-500" /> Recommended For You
+                <Zap className="w-3.5 h-3.5 text-orange-500" /> Recommended For You
               </h2>
               <Link href="/library" className="text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1">
                 View Library <ArrowRight className="w-3.5 h-3.5" />
@@ -375,7 +375,7 @@ function AIMastery({ analytics }: { analytics?: any }) {
 
   const items = [
     { label: 'Podcasts',    value: stats.podcasts,            icon: Headphones, color: 'text-pink-400 bg-pink-500/10' },
-    { label: 'AI Chats',    value: stats.chats,               icon: Sparkles,   color: 'text-violet-400 bg-violet-500/10' },
+    { label: 'AI Chats',    value: stats.chats,               icon:   color: 'text-violet-400 bg-violet-500/10', Zap },
     { label: 'Flashcards',  value: stats.mastered_flashcards, icon: Brain,      color: 'text-emerald-400 bg-emerald-500/10' },
     { label: 'Analyses',    value: stats.vision,              icon: Zap,        color: 'text-sky-400 bg-sky-500/10' },
   ]
@@ -383,7 +383,7 @@ function AIMastery({ analytics }: { analytics?: any }) {
   return (
     <div className="rounded-2xl bg-[#1a1a1a] p-5">
       <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 text-orange-400" /> AI Mastery
+        <Zap className="w-3.5 h-3.5 text-orange-400" /> AI Mastery
       </h3>
       <div className="grid grid-cols-2 gap-2">
         {items.map((item, i) => (

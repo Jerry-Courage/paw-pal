@@ -1,11 +1,9 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Database, PencilRuler, GraduationCap, 
-  ChevronRight, Library, Sparkles, 
-  Zap, Trophy 
-} from 'lucide-react'
+import { Database, PencilRuler, GraduationCap, 
+  ChevronRight, Library, 
+  Zap, Trophy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface StageNavigatorProps {
@@ -22,14 +20,12 @@ const stages = [
     color: 'text-sky-400',
     bg: 'bg-sky-500/10'
   },
-  { 
-    id: 'synthesize', 
+  { id: 'synthesize', 
     label: 'Drafting', 
-    icon: Sparkles, 
+    icon: 
     desc: 'Neural synthesis process',
     color: 'text-violet-400',
-    bg: 'bg-violet-500/10'
-  },
+    bg: 'bg-violet-500/10', Zap },
   { 
     id: 'master', 
     label: 'Mastery', 

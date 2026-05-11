@@ -3,11 +3,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { assignmentsApi } from '@/lib/api'
-import {
-  Plus, Sparkles, FileText, Trash2, Loader2,
+import { Plus, FileText, Trash2, Loader2,
   CheckCircle2, Clock, AlertCircle, ArrowRight, Zap,
-  Calendar, Search, Grid, List
-} from 'lucide-react'
+  Calendar, Search, Grid, List } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'

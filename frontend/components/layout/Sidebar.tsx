@@ -4,10 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  LayoutDashboard, Calendar, BookOpen, Users, Sparkles,
-  Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain
-} from 'lucide-react'
+import { LayoutDashboard, Calendar, BookOpen, Users,
+  Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { groupsApi } from '@/lib/api'
 
@@ -23,7 +21,7 @@ const navItems = [
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab Space' },
   { href: '/community',   icon: Users,           label: 'Community' },
-  { href: '/ai',          icon: Sparkles,        label: 'AI Assistant' },
+  { href: '/ai',          icon:        label: 'AI Assistant', Zap },
 ]
 
 const GROUP_COLORS = ['bg-emerald-400', 'bg-sky-400', 'bg-violet-400', 'bg-orange-400', 'bg-pink-400']

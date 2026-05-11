@@ -3,7 +3,7 @@
 import React from 'react'
 import { TooltipRenderProps } from 'react-joyride'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react'
+import { ChevronRight, ChevronLeft, X, Zap } from 'lucide-react'
 
 export const PremiumTooltip = ({
   continuous,
@@ -32,7 +32,7 @@ export const PremiumTooltip = ({
       {/* Header */}
       <div className="flex items-center justify-between mb-4 relative z-10">
         <div className="flex items-center gap-2 px-3 py-1 bg-sky-500/10 rounded-full border border-sky-500/20">
-          <Sparkles className="w-3 h-3 text-sky-500" />
+          <Zap className="w-3 h-3 text-sky-500" />
           <span className="text-[10px] uppercase tracking-wider font-bold text-sky-600 dark:text-sky-400">
             Feature Walkthrough
           </span>

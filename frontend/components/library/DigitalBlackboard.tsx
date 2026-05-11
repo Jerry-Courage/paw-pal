@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Sparkles, Cpu, MousePointer2 } from 'lucide-react'
+import { Cpu, MousePointer2, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface DigitalBlackboardProps {
@@ -61,7 +61,7 @@ export default function DigitalBlackboard({
                 onClick={onSolve}
                 className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-slate-800 active:scale-95 transition-all shadow-xl shadow-slate-200"
               >
-                <Sparkles className="w-4 h-4" />
+                <Zap className="w-4 h-4" />
                 Solve Step
               </button>
             )}

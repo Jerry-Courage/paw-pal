@@ -1,11 +1,9 @@
 import Link from 'next/link'
-import {
-  ArrowRight, Brain, Layers, Map,
+import { ArrowRight, Brain, Layers, Map,
   HelpCircle, Wand2, Radio, Calculator, Upload, Link2, Mic,
-  CheckCircle2, Star, Zap, Users, Calendar, Sparkles,
+  CheckCircle2, Star, Zap, Users, Calendar,
   FileText, ChevronRight, Play, BarChart3,
-  Clock, MessageSquare, TrendingUp, Award
-} from 'lucide-react'
+  Clock, MessageSquare, TrendingUp, Award } from 'lucide-react'
 
 // ─── Navbar ────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -147,16 +145,14 @@ function HowItWorks() {
       title: 'Upload anything',
       desc: 'Drop a PDF, paste a YouTube URL, type a topic, or record your lecture live. We handle files up to 50 MB across all formats.',
     },
-    {
-      step: '02',
-      icon: Sparkles,
+    { step: '02',
+      icon:
       accent: 'text-violet-400',
       bg: 'bg-violet-500/10',
       border: 'border-violet-500/20',
       glow: 'bg-violet-500/5',
       title: 'AI generates your study kit',
-      desc: 'In seconds, get AI-written notes, auto-generated flashcards, a quiz, a podcast episode, and an interactive mind map.',
-    },
+      desc: 'In seconds, get AI-written notes, auto-generated flashcards, a quiz, a podcast episode, and an interactive mind map.', Zap },
     {
       step: '03',
       icon: TrendingUp,

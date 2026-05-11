@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workspaceApi } from '@/lib/api'
 import BlockItem from './BlockItem'
-import { Plus, Loader2, Wand2, Sparkles } from 'lucide-react'
+import { Plus, Loader2, Wand2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { 
   DndContext, 

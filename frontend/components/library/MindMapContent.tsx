@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import { Sparkles, Brain, Cpu, Database, Network } from 'lucide-react'
+import { Brain, Cpu, Database, Network, Zap } from 'lucide-react'
 
 interface MindMapContentProps {
   data: {
@@ -34,7 +34,7 @@ export default function MindMapContent({ data }: MindMapContentProps) {
           <div className="absolute -inset-4 bg-primary/20 rounded-[3rem] blur-xl opacity-40 group-hover:opacity-60 transition-opacity animate-pulse" />
           <div className="relative px-10 py-6 bg-slate-900 border-2 border-primary rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-2 transform hover:scale-105 transition-transform duration-500 cursor-default">
             <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/40 -mt-12 group-hover:rotate-12 transition-transform">
-              <Sparkles className="w-6 h-6 text-white" />
+              <Zap className="w-6 h-6 text-white" />
             </div>
             <div className="text-[10px] font-black text-primary/60 uppercase tracking-[0.4em] mb-1">Central Matrix</div>
             <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tighter text-center uppercase">

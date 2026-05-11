@@ -4,12 +4,10 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { aiApi, libraryApi } from '@/lib/api'
-import {
-  Sparkles, Send, Plus, Loader2, Paperclip, X,
+import { Send, Plus, Loader2, Paperclip, X,
   Network, GitBranch, Menu, BarChart2, Wand2,
   MessageSquare, Copy, Check, Download, Zap, Trash2,
-  Image as ImageIcon, GitMerge
-} from 'lucide-react'
+  Image as ImageIcon, GitMerge } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -317,7 +315,7 @@ function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) 
     ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/10', label: 'Generating diagram...' }
     : action === 'image'
     ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/10', label: 'Generating image...' }
-    : { icon: Sparkles, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Thinking...' }
+    : { icon: color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Thinking...', Zap }
 
   const Icon = states.icon
 
@@ -360,7 +358,7 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
         'w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 mt-1',
         isUser ? 'bg-orange-500 text-white' : 'bg-white/8 text-slate-400'
       )}>
-        {isUser ? 'ME' : <Sparkles className="w-4 h-4" />}
+        { isUser ? 'ME' : <className="w-4 h-4" />, Zap }
       </div>
 
       {/* Bubble */}
@@ -864,10 +862,10 @@ function AIChat() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-hide">
-          {isEmpty ? (
+          { isEmpty ? (
             <div className="flex flex-col items-center justify-center min-h-full px-4 py-8 text-center">
               <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
-                <Sparkles className="w-7 h-7 text-orange-400" />
+                <className="w-7 h-7 text-orange-400" />
               </div>
               <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Hi, I'm FlowAI</h1>
               <p className="text-slate-500 text-sm max-w-xs mb-8 leading-relaxed">
@@ -875,7 +873,7 @@ function AIChat() {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 w-full max-w-xl">
                 {SUGGESTIONS.map((s, i) => (
-                  <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
+                  <button key={s.text, Zap } onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
                     className={cn('flex items-start gap-2.5 p-3.5 bg-[#1a1a1a] border border-white/6 rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f1f] group',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
                     )}>
@@ -962,7 +960,7 @@ function AIChat() {
             {/* Footer tags */}
             <div className="flex items-center justify-center md:justify-center gap-4 mt-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest flex-wrap pr-16 md:pr-0">
               <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> High-Speed Inference</span>
-              <span className="hidden sm:flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Context Aware</span>
+              <span className="hidden sm:flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Context Aware</span>
             </div>
           </div>
         </div>

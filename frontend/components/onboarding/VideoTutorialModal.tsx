@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, X, Zap, Sparkles, BookOpen, Users, Brain, MousePointer2, Loader2 } from 'lucide-react'
+import { Play, X, Zap, BookOpen, Users, Brain, MousePointer2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import axios from 'axios'
 
@@ -20,12 +20,10 @@ const FEATURES: Feature[] = [
     description: 'Upload PDFs, YouTube links, or notes to generate instant study kits.',
     color: 'text-sky-500 bg-sky-500/10'
   },
-  {
-    icon: Sparkles,
+  { icon:
     title: 'AI Personal Tutor',
     description: 'Chat with an AI that knows your specific materials inside and out.',
-    color: 'text-violet-500 bg-violet-500/10'
-  },
+    color: 'text-violet-500 bg-violet-500/10', Zap },
   {
     icon: Users,
     title: 'Collab Spaces',

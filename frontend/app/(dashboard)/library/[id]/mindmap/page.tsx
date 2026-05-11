@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
-import { ArrowLeft, Sparkles, Loader2, RotateCcw, Brain, Cpu, Database, Network } from 'lucide-react'
+import { ArrowLeft, Loader2, RotateCcw, Brain, Cpu, Database, Network, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -71,12 +71,11 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
   }
 
   // ── Loading ──────────────────────────────────────────────────────
-  if (loading) {
-    return (
+  if (loading) { return (
       <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
         <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
           <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-            <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
+            <className="w-8 h-8 text-orange-400 animate-pulse" />
           </div>
           <div>
             <h2 className="text-xl font-black text-white tracking-tight">Building Mind Map</h2>
@@ -84,7 +83,7 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
           </div>
           <div className="flex gap-1.5">
             {[0, 1, 2].map(i => (
-              <div key={i} className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              <div key={i, Zap } className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
         </div>
@@ -130,7 +129,7 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
           <div className="flex justify-center mb-16 relative z-20">
             <div className="relative px-8 py-5 bg-[#1a1a1a] border border-orange-500/30 rounded-3xl shadow-xl flex flex-col items-center gap-2">
               <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/30 -mt-10">
-                <Sparkles className="w-5 h-5 text-white" />
+                <Zap className="w-5 h-5 text-white" />
               </div>
               <div className="text-[9px] font-black text-orange-500/60 uppercase tracking-widest">Central Topic</div>
               <h1 className="text-xl sm:text-3xl font-black text-white tracking-tight text-center">{mapData.center}</h1>

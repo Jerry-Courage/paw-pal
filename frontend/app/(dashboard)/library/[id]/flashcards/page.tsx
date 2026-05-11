@@ -3,10 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi, spacedRepetitionApi } from '@/lib/api'
-import {
-  ArrowLeft, BookOpen, Loader2, RotateCcw,
-  Zap, CheckCircle, XCircle, Sparkles
-} from 'lucide-react'
+import { ArrowLeft, BookOpen, Loader2, RotateCcw,
+  Zap, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -109,7 +107,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
         <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-          <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
+          <Zap className="w-8 h-8 text-orange-400 animate-pulse" />
         </div>
         <div>
           <h2 className="text-xl font-black text-white tracking-tight">Forging Flashcards</h2>

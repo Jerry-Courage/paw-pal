@@ -3,10 +3,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
-import { 
-  X, Sparkles, BookOpen, ChevronRight, Loader2, Layers, 
-  ThumbsUp, ThumbsDown, Trophy, ArrowRight, BrainCircuit
-} from 'lucide-react'
+import { X, BookOpen, ChevronRight, Loader2, Layers, 
+  ThumbsUp, ThumbsDown, Trophy, ArrowRight, BrainCircuit, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -186,7 +184,7 @@ export default function FlashcardGeneratorModal({ resourceId, onClose, onGenerat
                 <div className="absolute inset-2 bg-violet-500 rounded-full animate-ping opacity-40" style={{ animationDelay: '0.2s' }} />
                 {/* Core */}
                 <div className="absolute inset-4 bg-gradient-to-tr from-violet-600 to-fuchsia-500 rounded-full shadow-[0_0_40px_rgba(139,92,246,0.6)] flex items-center justify-center animate-pulse">
-                  <Sparkles className="w-8 h-8 text-white" />
+                  <Zap className="w-8 h-8 text-white" />
                 </div>
               </div>
               
@@ -275,7 +273,7 @@ function PreviewSaveCarousel({ cards, resourceId, onClose, onRegenerate, onSaved
         <div className="flex items-center justify-between mb-8 relative z-10">
           <div>
              <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-violet-500" /> Matrix Preview
+                <Zap className="w-5 h-5 text-violet-500" /> Matrix Preview
              </h2>
              <p className="text-sm font-medium text-gray-500 mt-1">{cards.length} cards extracted</p>
           </div>

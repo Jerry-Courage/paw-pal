@@ -3,10 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
-import {
-  ArrowLeft, Calculator, Sparkles, Brain, CheckCircle2,
-  Loader2, Info, RotateCcw
-} from 'lucide-react'
+import { ArrowLeft, Calculator, Brain, CheckCircle2,
+  Loader2, Info, RotateCcw, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -109,7 +107,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
             </div>
             <button onClick={handleSolve} disabled={!problem.trim() || solving}
               className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2.5">
-              {solving ? <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</> : <><Sparkles className="w-4 h-4" /> Solve Step-by-Step</>}
+              { solving ? <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</> : <><className="w-4 h-4" /> Solve Step-by-Step</>, Zap }
             </button>
           </>
         ) : (
@@ -143,7 +141,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
               ))}
             </div>
             <div className="relative overflow-hidden rounded-2xl bg-orange-500 p-6 shadow-xl shadow-orange-500/20">
-              <Sparkles className="absolute -top-3 -right-3 w-20 h-20 text-white/10 rotate-12" />
+              <Zap className="absolute -top-3 -right-3 w-20 h-20 text-white/10 rotate-12" />
               <div className="relative space-y-3">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white" />
