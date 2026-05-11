@@ -12,6 +12,14 @@ const nextConfig = {
       { protocol: 'https', hostname: '**' },
     ],
   },
+  // Modularize lucide-react imports to prevent tree-shaking issues
+  // where icons used as object values get stripped from shared chunks
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+      skipDefaultConversion: true,
+    },
+  },
 }
 
 module.exports = nextConfig
