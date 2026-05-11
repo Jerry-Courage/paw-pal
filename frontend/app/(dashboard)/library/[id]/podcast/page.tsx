@@ -200,7 +200,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   // ── Setup ────────────────────────────────────────────────────────
   if (status === 'idle') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
         <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -251,7 +251,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   // ── Generating ───────────────────────────────────────────────────
   if (status === 'generating') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
         <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
           <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
@@ -271,7 +271,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   // ── Error ────────────────────────────────────────────────────────
   if (status === 'error') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-5 text-center">
         <XCircle className="w-12 h-12 text-red-500" />
         <h2 className="text-xl font-black text-white">Connection Failed</h2>
@@ -287,7 +287,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const speakerName = currentChunk?.speaker === 'A' ? voiceA : voiceB
 
   return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0 z-10">

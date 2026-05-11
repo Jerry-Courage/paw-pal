@@ -32,9 +32,13 @@ export default function TopNav() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-[#111]/95 backdrop-blur-xl border-b border-white/5 flex items-center px-4 md:px-6 gap-4"
-        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      <header
+        className="fixed top-0 left-0 right-0 z-50 bg-[#111]/95 backdrop-blur-xl border-b border-white/5"
       >
+        {/* Safe area spacer — fills the status bar height on iOS/Android PWA */}
+        <div style={{ height: 'env(safe-area-inset-top)' }} />
+        {/* Actual nav content — always 56px tall */}
+        <div className="h-14 flex items-center px-4 md:px-6 gap-4">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0 mr-2">
           <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
@@ -106,6 +110,7 @@ export default function TopNav() {
             <Menu className="w-5 h-5" />
           </button>
         </div>
+        </div>{/* end nav content */}
       </header>
 
       {/* Mobile drawer */}
@@ -113,7 +118,9 @@ export default function TopNav() {
         <>
           <div className="fixed inset-0 bg-black/60 z-[60] md:hidden" onClick={() => setMobileOpen(false)} />
           <div className="fixed top-0 left-0 h-full w-72 bg-[#111] border-r border-white/5 z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-200">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+            <div className="flex items-center justify-between px-5 border-b border-white/5"
+              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)', paddingBottom: '16px' }}
+            >
               <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
                 <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
                   <Brain className="w-3.5 h-3.5 text-orange-400" />

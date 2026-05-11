@@ -94,7 +94,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
 
   // ── Loading ──────────────────────────────────────────────────────
   if (phase === 'loading' || isLoading) return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center animate-pulse">
           <BookOpen className="w-6 h-6 text-orange-500" />
@@ -106,7 +106,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
 
   // ── Generating ───────────────────────────────────────────────────
   if (phase === 'generating') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
         <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
           <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
@@ -128,7 +128,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
   if (phase === 'results') {
     const passed = pct >= 60
     return (
-      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
           <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
             <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -200,7 +200,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
   const card = cards[current]
 
   return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden select-none">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden select-none">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0">

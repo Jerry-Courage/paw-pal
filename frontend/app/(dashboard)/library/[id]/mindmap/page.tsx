@@ -73,7 +73,7 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
   // ── Loading ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
         <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
           <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
             <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
@@ -94,7 +94,7 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
 
   if (!mapData) {
     return (
-      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-slate-500 text-sm">Could not load mind map.</p>
           <button onClick={handleRegenerate} className="px-6 py-3 bg-orange-500 text-white font-black text-sm rounded-2xl hover:bg-orange-400 transition-all">
@@ -106,7 +106,7 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0 bg-[#0d0d0d] z-20">
         <div className="flex items-center gap-3">

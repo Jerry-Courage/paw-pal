@@ -68,7 +68,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
         <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">

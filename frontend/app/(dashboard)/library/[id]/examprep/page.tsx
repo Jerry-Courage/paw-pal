@@ -457,7 +457,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // Setup phase
   if (phase === 'setup') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
         <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -539,7 +539,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // Session phase
   if (phase === 'session') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0">
         <div className="flex items-center gap-3">
@@ -629,7 +629,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // Report phase
   if (phase === 'report' && report) return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
         <div>
           <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Session Report</p>
@@ -726,7 +726,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   if (phase === 'exam') {
     // Loading questions
     if (examLoading) return (
-      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col items-center justify-center gap-4">
+      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
         <p className="text-slate-400 text-sm font-medium">Generating exam questions...</p>
       </div>
@@ -734,7 +734,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
     // Setup screen
     if (!examStarted) return (
-      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
           <button onClick={() => setPhase('report')}
             className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
@@ -821,7 +821,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       const gaps = examResults.filter(r => r.correct === false || r.selfGrade === 'needs_work')
 
       return (
-        <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
             <div>
               <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Exam Results</p>
@@ -999,7 +999,7 @@ function ExamActiveView({
   if (!currentQ) return null
 
   return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       {/* Timer bar */}
       <div className={cn(
         'flex items-center justify-between px-5 py-3 border-b shrink-0 transition-colors',

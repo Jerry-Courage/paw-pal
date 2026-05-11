@@ -121,7 +121,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
 
   // ── Loading ──────────────────────────────────────────────────────
   if (phase === 'loading') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex items-center justify-center">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center animate-pulse">
           <HelpCircle className="w-6 h-6 text-orange-500" />
@@ -135,7 +135,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
   if (phase === 'config') {
     const hasPrebuilt = questions.length > 0
     return (
-      <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
           <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
@@ -205,7 +205,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
 
   // ── Results ──────────────────────────────────────────────────────
   if (phase === 'results') return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
         <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -289,7 +289,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
   const correctCount = Object.entries(revealed).filter(([i]) => selected[parseInt(i)] === questions[parseInt(i)]?.correct_answer).length
 
   return (
-    <div className="fixed inset-0 top-14 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0">
