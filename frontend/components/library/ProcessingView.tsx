@@ -12,7 +12,7 @@ const STAGES = [
   { id: 'ingest',    label: 'Reading your material',     icon: FileText,   range: [0, 20],  color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/20' },
   { id: 'analyze',   label: 'Analyzing content',          icon: Brain,      range: [20, 40], color: 'text-violet-400',  bg: 'bg-violet-500/10',  border: 'border-violet-500/20' },
   { id: 'sections',  label: 'Building study sections',    icon: BookOpen,   range: [40, 75], color: 'text-orange-400',  bg: 'bg-orange-500/10',  border: 'border-orange-500/20' },
-  { id: 'features',  label: 'Generating tools',           icon: Sparkles,   range: [75, 95], color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+  { id: 'features',  label: 'Generating tools',           icon: Wand2,      range: [75, 95], color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
   { id: 'done',      label: 'Finalizing your kit',        icon: Zap,        range: [95, 100],color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20' },
 ]
 
