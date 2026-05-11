@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  Brain, Sparkles, BookOpen, Zap, CheckCircle2,
+  Brain, BookOpen, Zap, CheckCircle2,
   Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2
 } from 'lucide-react'
 
@@ -256,7 +256,7 @@ export default function ProcessingView({ resource, compact = false }: Props) {
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Generating your tools</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {selectedFeatures.filter(f => f !== 'notes').map(f => {
-                const Icon = FEATURE_ICONS[f] || Sparkles
+                const Icon = FEATURE_ICONS[f] || BookOpen
                 return (
                   <div key={f} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/8 rounded-xl">
                     <Icon className="w-3 h-3 text-orange-400" />
