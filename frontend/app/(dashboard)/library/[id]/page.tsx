@@ -6,7 +6,7 @@ import { libraryApi } from '@/lib/api'
 import {
   ArrowLeft, Loader2, X, RotateCcw, BookOpen,
   HelpCircle, Map, Wand2, Radio, Calculator, Layers,
-  PanelRight, PanelRightClose, Plus, Send, Sparkles
+  PanelRight, PanelRightClose, Plus, Send, Sparkles, Brain
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -29,6 +29,7 @@ const TOOLS = [
   { id: 'podcast',    label: 'Podcast',         icon: Radio,      href: (id: number) => `/library/${id}/podcast` },
   { id: 'practice',   label: 'Written Test',    icon: Wand2,      href: (id: number) => `/library/${id}/practice` },
   { id: 'mindmap',    label: 'Mind Map',        icon: Map,        href: (id: number) => `/library/${id}/mindmap` },
+  { id: 'examprep',   label: 'Exam Prep',       icon: Brain,      href: (id: number) => `/library/${id}/examprep` },
   { id: 'solver',     label: 'Math Solver',     icon: Calculator, href: (id: number) => `/library/${id}/solver` },
   { id: 'content',    label: 'Content',         icon: BookOpen,   href: null },
 ]
