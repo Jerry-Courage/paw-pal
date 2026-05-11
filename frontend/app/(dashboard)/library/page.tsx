@@ -11,14 +11,13 @@ import {
 } from 'lucide-react'
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
+import UploadModal from '@/components/library/UploadModal'
+import ProcessingView from '@/components/library/ProcessingView'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 
-// All heavy components loaded dynamically to prevent Sparkles tree-shaking in shared chunks
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
-const UploadModal = dynamic(() => import('@/components/library/UploadModal'), { ssr: false })
-const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
 
 const SUBJECT_FILTERS = [
   'All', 'Biology', 'Physics', 'History', 'Mathematics',

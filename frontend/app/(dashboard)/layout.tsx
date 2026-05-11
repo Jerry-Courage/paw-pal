@@ -6,8 +6,6 @@ import { useRouter, usePathname } from 'next/navigation'
 import TopNav from '@/components/layout/TopNav'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-// Static import — ensures Sparkles is in the layout chunk (loaded on every page)
-import SparklesAnchor from '@/components/SparklesAnchor'
 
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 
@@ -36,7 +34,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
-      <SparklesAnchor />
       <TopNav />
       <main className={cn(
         isFullViewport
