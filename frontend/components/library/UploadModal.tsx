@@ -4,9 +4,12 @@ import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi, API_BASE, getAuthToken } from '@/lib/api'
-import { X, Upload, FileText, Youtube, Code, Presentation, Plus, Loader2, CheckCircle2, Brain, HelpCircle, Map,
+import {
+  X, Upload, FileText, Youtube, Code, Presentation, Plus, Loader2,
+  Sparkles, CheckCircle2, Brain, HelpCircle, Map,
   Wand2, Radio, ArrowLeft, Check, Headphones,
-  FlaskConical, Layers, Link2, Mic, BookOpen, Calculator, Zap } from 'lucide-react'
+  FlaskConical, Layers, Link2, Mic, BookOpen, Calculator
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -211,7 +214,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
                 onClick={handleSubmit}
                 className="px-8 py-3 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-95 transition-all shadow-lg shadow-orange-500/20 flex items-center gap-2"
               >
-                <Zap className="w-4 h-4" /> Generate
+                <Sparkles className="w-4 h-4" /> Generate
               </button>
             </div>
           </div>
@@ -221,7 +224,8 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
   }
 
   // ── Progress overlay (uploading / building / complete) ────────────
-  if (stage !== 'idle') { return (
+  if (stage !== 'idle') {
+    return (
       <div className="fixed inset-0 bg-[#0d0d0d] z-[100] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
         <div className="w-full max-w-md space-y-8">
           <div className="relative mx-auto w-24 h-24">
@@ -229,7 +233,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
             <div className="relative bg-[#1a1a1a] rounded-full w-full h-full flex items-center justify-center border border-white/10">
               {stage === 'complete'
                 ? <CheckCircle2 className="w-12 h-12 text-emerald-400 animate-in zoom-in duration-300" />
-                : <className="w-10 h-10 text-orange-400 animate-pulse" />, Zap }
+                : <Sparkles className="w-10 h-10 text-orange-400 animate-pulse" />}
             </div>
           </div>
           <div className="space-y-2">

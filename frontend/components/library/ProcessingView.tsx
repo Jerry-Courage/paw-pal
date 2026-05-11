@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
-import { Brain, BookOpen, Zap, CheckCircle2,
-  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2 } from 'lucide-react'
+import {
+  Brain, Sparkles, BookOpen, Zap, CheckCircle2,
+  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2
+} from 'lucide-react'
 
 // ── Stage definitions ────────────────────────────────────────────────────────
 const STAGES = [
@@ -297,7 +299,7 @@ export default function ProcessingView({ resource, compact = false }: Props) {
 
         {/* ── Leave notice ── */}
         <p className="text-center text-[11px] text-slate-600 font-medium flex items-center justify-center gap-1.5">
-          <Zap className="w-3 h-3 text-orange-500/50" />
+          <Sparkles className="w-3 h-3 text-orange-500/50" />
           You'll see a notification when your kit is ready — feel free to explore other materials.
         </p>
       </div>

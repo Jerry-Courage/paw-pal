@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, communityApi } from '@/lib/api'
-import { Users, Plus, Trophy, Hash, ChevronRight, Zap } from 'lucide-react'
+import { Users, Plus, Trophy, Hash, ChevronRight, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -115,7 +115,7 @@ function QuickStats() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-2 p-3 bg-white/3 rounded-xl">
-          <Zap className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
           <div className="text-[10px] font-bold text-slate-400">
             You're in the top <span className="text-white">15%</span> of learners this week.
           </div>

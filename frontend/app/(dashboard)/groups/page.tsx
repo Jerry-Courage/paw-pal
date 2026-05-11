@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi } from '@/lib/api'
-import { Plus, Users, ArrowRight, Zap } from 'lucide-react'
+import { Plus, Users, Sparkles, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -47,11 +47,11 @@ export default function GroupsPage() {
                 <div className="w-12 h-12 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-lg">
                   {g.name[0]}
                 </div>
-                { g.is_verified && (
+                {g.is_verified && (
                   <span className="text-xs bg-sky-100 text-sky-600 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <className="w-3 h-3" /> Verified
+                    <Sparkles className="w-3 h-3" /> Verified
                   </span>
-                ), Zap }
+                )}
               </div>
               <h3 className="font-semibold mb-1">{g.name}</h3>
               <p className="text-sm text-gray-500 line-clamp-2 mb-3">{g.description}</p>

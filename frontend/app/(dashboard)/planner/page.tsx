@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { plannerApi, libraryApi, assignmentsApi } from '@/lib/api'
-import { ChevronLeft, ChevronRight, Plus, Clock, AlertCircle,
+import {
+  ChevronLeft, ChevronRight, Plus, Sparkles, Clock, AlertCircle,
   CheckCircle2, Trash2, Pencil, X, BookOpen, Zap, Calendar, Play, FileText, ArrowRight,
-  Hash, Target, GraduationCap } from 'lucide-react'
+  Hash, Target, GraduationCap
+} from 'lucide-react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -279,7 +281,7 @@ export default function PlannerPage() {
                                   {s.status === 'active' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
                                 </div>
                                 <div className="font-black text-xs truncate pr-3">{s.title}</div>
-                                { s.is_ai_suggested && <div className="absolute top-0 right-1 p-0.5"><className="w-2.5 h-2.5 text-sky-400/80" /></div>, Zap }
+                                {s.is_ai_suggested && <div className="absolute top-0 right-1 p-0.5"><Sparkles className="w-2.5 h-2.5 text-sky-400/80" /></div>}
                                 <div className="opacity-70 flex items-center gap-1 mt-1 text-[9px] font-bold">
                                   <Clock className="w-2.5 h-2.5" />{format(new Date(s.start_time), 'HH:mm')}
                                 </div>
@@ -453,7 +455,7 @@ function AICommandBar({ onInterpret }: { onInterpret: (data: any) => void }) {
             prompt.trim() ? "bg-sky-500 text-white shadow-xl shadow-sky-500/20" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
           )}
         >
-          { interpreting ? <Loader2 className="w-5 h-5 animate-spin" /> : <className="w-5 h-5" />, Zap }
+          {interpreting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
           <span className="text-xs font-black uppercase tracking-widest hidden lg:inline-block">Draft Mission</span>
         </button>
       </div>
@@ -480,7 +482,7 @@ function SessionCard({ session: s, onClick }: { session: any; onClick: () => voi
         <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">
           {s.session_type}
         </span>
-        { s.is_ai_suggested && <className="w-4 h-4 text-sky-400 ml-auto" />, Zap }
+        {s.is_ai_suggested && <Sparkles className="w-4 h-4 text-sky-400 ml-auto" />}
       </div>
       <div className="font-black text-base text-slate-900 dark:text-white leading-tight mb-3 group-hover:translate-x-1 transition-transform">{s.title}</div>
       <div className="text-[11px] font-extrabold text-slate-500 flex items-center gap-2">
@@ -514,7 +516,7 @@ function SlideDetailPanel({ session: s, onClose, onEdit, onDelete, onComplete, c
         </div>
         
         <div className="flex items-center gap-2 mb-3 relative z-10">
-          { s.is_ai_suggested && <className="w-4 h-4 text-sky-500" />, Zap }
+          {s.is_ai_suggested && <Sparkles className="w-4 h-4 text-sky-500" />}
           <span className={cn("text-[11px] font-black uppercase tracking-[0.3em]", typeStyle.text)}>
             {s.session_type} Phase
           </span>

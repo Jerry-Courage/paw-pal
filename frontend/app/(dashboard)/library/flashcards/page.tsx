@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { libraryApi, spacedRepetitionApi } from '@/lib/api'
-import { ArrowLeft, ArrowRight, RotateCcw, ThumbsUp, ThumbsDown, BookOpen, Trophy, Download, Brain, Layers, Zap } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RotateCcw, ThumbsUp, ThumbsDown, Sparkles, BookOpen, Trophy, Download, Brain, Layers } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -318,7 +318,7 @@ export default function FlashcardReviewPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
           <span className="flex items-center gap-1.5">
-            <Zap className="w-3 h-3 text-sky-500" /> Flashcard Review
+            <Sparkles className="w-3 h-3 text-sky-500" /> Flashcard Review
           </span>
           <span>{current} / {cards.length} cards</span>
         </div>
@@ -370,7 +370,7 @@ export default function FlashcardReviewPage() {
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >
               <div className="text-xs font-black tracking-widest text-emerald-500 mb-6 uppercase flex items-center gap-2">
-                <Zap className="w-4 h-4" /> ANSWER
+                <Sparkles className="w-4 h-4" /> ANSWER
               </div>
               <p className="text-xl font-medium text-gray-800 dark:text-gray-200 leading-relaxed max-w-lg">{card.answer}</p>
               {/* SM-2 stats on the back for transparency */}

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workspaceApi, assignmentsApi } from '@/lib/api'
-import { X, Search, Share2, Users, 
-  ChevronRight, Loader2,
-  CheckCircle2, AlertCircle, Zap } from 'lucide-react'
+import { 
+  X, Search, Share2, Users, 
+  ChevronRight, Loader2, Sparkles,
+  CheckCircle2, AlertCircle
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -159,7 +161,7 @@ export default function ShareAssignmentModal({
         {/* Footer HUD */}
         <div className="p-8 border-t border-white/5 bg-white/[0.01]">
            <div className="flex items-center gap-3 justify-center">
-              <Zap className="w-3.5 h-3.5 text-violet-400/40" />
+              <Sparkles className="w-3.5 h-3.5 text-violet-400/40" />
               <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.3em]">Neural Link Context Authorized</p>
            </div>
         </div>

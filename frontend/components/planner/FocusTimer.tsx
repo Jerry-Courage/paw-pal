@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Play, Pause, RotateCcw, X, Coffee, CheckCircle, Zap } from 'lucide-react'
+import { Play, Pause, RotateCcw, X, Sparkles, Coffee, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { authApi } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
@@ -120,7 +120,7 @@ export default function FocusTimer({ session, onClose }: Props) {
                 onClick={() => switchMode('focus')}
                 className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors', mode === 'focus' ? 'bg-sky-500 text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300')}
               >
-                <Zap className="w-3 h-3 inline mr-1" />Focus
+                <Sparkles className="w-3 h-3 inline mr-1" />Focus
               </button>
               <button
                 onClick={() => switchMode('break')}

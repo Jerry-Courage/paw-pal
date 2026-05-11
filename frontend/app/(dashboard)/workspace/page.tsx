@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workspaceApi } from '@/lib/api'
-import { Plus, Users, BookOpen, X, Loader2, Link2, ArrowRight, Clock, MessageSquare, LayoutGrid, Zap } from 'lucide-react'
+import { Plus, Users, BookOpen, Sparkles, X, Loader2, Link2, ArrowRight, Clock, MessageSquare, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -196,7 +196,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
             disabled={!form.name || mutation.isPending}
             className="order-1 sm:order-2 flex-1 py-4 bg-violet-600 hover:bg-violet-500 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs rounded-2xl transition-all shadow-lg shadow-violet-600/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
           >
-            { mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <className="w-4 h-4" />, Zap }
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             Initialize
           </button>
         </div>

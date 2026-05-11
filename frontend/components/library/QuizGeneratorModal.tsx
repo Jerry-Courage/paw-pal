@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
-import { X, BookOpen, CheckSquare, AlignLeft,
-  Shuffle, ChevronRight, Loader2, Zap } from 'lucide-react'
+import {
+  X, Sparkles, BookOpen, CheckSquare, AlignLeft,
+  Shuffle, ChevronRight, Loader2, Zap
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -64,7 +66,7 @@ export default function QuizGeneratorModal({ resourceId, onClose, onGenerated }:
           <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-sky-50 dark:bg-sky-950 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-sky-500" />
+                <Sparkles className="w-5 h-5 text-sky-500" />
               </div>
               <div>
                 <h2 className="font-bold text-gray-900 dark:text-white">Quiz & Flashcard Generator</h2>
@@ -310,7 +312,7 @@ export default function QuizGeneratorModal({ resourceId, onClose, onGenerated }:
 
             <div className="bg-sky-50 dark:bg-sky-950/50 rounded-xl p-3 text-xs text-sky-600 dark:text-sky-400">
               <div className="flex items-center gap-1.5 mb-1">
-                <Zap className="w-3 h-3" />
+                <Sparkles className="w-3 h-3" />
                 <span className="font-semibold">AI POWERED</span>
               </div>
               Our "Third Member" AI will refine these questions based on your past performance.

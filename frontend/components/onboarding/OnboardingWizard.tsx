@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import { authApi } from '@/lib/api'
-import { Zap, BookOpen, Users, Upload,
-  ArrowRight, Check, ChevronRight, GraduationCap, Brain } from 'lucide-react'
+import {
+  Zap, BookOpen, Users, Sparkles, Upload,
+  ArrowRight, Check, ChevronRight, GraduationCap, Brain
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -132,7 +134,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                   {[
                     { icon: BookOpen, label: 'Smart Library', color: 'text-primary bg-primary/10' },
                     { icon: Users, label: 'Study Groups', color: 'text-emerald-400 bg-emerald-500/10' },
-                    { icon: label: 'AI Tutor', color: 'text-violet-400 bg-violet-500/10', Zap },
+                    { icon: Sparkles, label: 'AI Tutor', color: 'text-violet-400 bg-violet-500/10' },
                   ].map(f => (
                     <div key={f.label} className="flex flex-col items-center p-4 rounded-2xl bg-white/5 border border-white/10">
                       <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-2', f.color)}>
@@ -214,9 +216,9 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
             )}
 
             {/* ── GOALS ── */}
-            { step === 3 && (
+            {step === 3 && (
               <div>
-                <StepHeader icon={, Zap } title="What are your goals?" subtitle="We'll optimise FlowState for you" />
+                <StepHeader icon={Sparkles} title="What are your goals?" subtitle="We'll optimise FlowState for you" />
                 <div className="grid grid-cols-2 gap-3">
                   {GOALS.map(g => (
                     <button key={g.id} onClick={() => toggleGoal(g.id)}

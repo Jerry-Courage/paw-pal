@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workspaceApi, libraryApi } from '@/lib/api'
-import { BookOpen, FileText, File, Video, 
+import { 
+  BookOpen, FileText, File, Video, 
   Search, Plus, X, ExternalLink, 
   ChevronDown, Library, PlusCircle,
-  FileSearch, Archive,
+  FileSearch, Archive, Sparkles,
   History, RotateCcw, Save, Loader2,
-  Clock, Zap } from 'lucide-react'
+  Clock
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -193,7 +195,7 @@ export default function ResourceShelf({ workspaceId }: ResourceShelfProps) {
                         className="p-2 text-violet-400 hover:bg-violet-500/10 rounded-xl"
                         title="Synthesize into Block"
                       >
-                        <Zap className="w-4 h-4" />
+                        <Sparkles className="w-4 h-4" />
                       </button>
                       <button onClick={() => unlinkMutation.mutate(r.id)} 
                         className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-xl">
@@ -270,7 +272,7 @@ export default function ResourceShelf({ workspaceId }: ResourceShelfProps) {
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm animate-pulse">
-               <Zap className="w-4 h-4 text-white" />
+               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <span className="text-[10px] font-black uppercase tracking-[0.3em]">Cerebral Matrix</span>
           </div>

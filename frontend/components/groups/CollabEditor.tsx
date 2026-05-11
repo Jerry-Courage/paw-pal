@@ -4,10 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, aiApi } from '@/lib/api'
 import { useSession } from 'next-auth/react'
-import { Bold, Italic, List, Plus, Check, FileText,
+import {
+  Bold, Italic, List, Sparkles, Plus, Check, FileText,
   Save, Users, Loader2, X, Heading1, Heading2, Code,
   Quote, Link2, Image, Pin, MoreHorizontal, Hash,
-  ChevronDown, Trash2, Eye, Lightbulb, Zap } from 'lucide-react'
+  ChevronDown, Trash2, Eye, Lightbulb
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { timeAgo, getInitials, cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
@@ -240,7 +242,7 @@ export default function CollabEditor({ groupId }: Props) {
                 onClick={getAiSuggestion}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 text-xs font-medium hover:bg-sky-100 dark:hover:bg-sky-900 transition-colors"
               >
-                <Zap className="w-3 h-3" /> AI Continue
+                <Sparkles className="w-3 h-3" /> AI Continue
               </button>
 
               <div className="ml-auto flex items-center gap-2">
@@ -254,7 +256,7 @@ export default function CollabEditor({ groupId }: Props) {
 
                 {/* AI panel toggle */}
                 <button onClick={() => setShowAiPanel(!showAiPanel)} className={cn('p-1.5 rounded-lg text-xs transition-colors', showAiPanel ? 'bg-sky-50 dark:bg-sky-950 text-sky-500' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800')}>
-                  <Zap className="w-3.5 h-3.5" />
+                  <Sparkles className="w-3.5 h-3.5" />
                 </button>
 
                 {/* Save status */}
@@ -292,13 +294,13 @@ export default function CollabEditor({ groupId }: Props) {
             </div>
 
             {/* AI suggestion banner */}
-            { aiSuggestion && (
+            {aiSuggestion && (
               <div className="mx-6 mb-3 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-xl p-3 flex-shrink-0">
                 <div className="flex items-center gap-2 mb-2">
-                  <className="w-3.5 h-3.5 text-sky-500" />
+                  <Sparkles className="w-3.5 h-3.5 text-sky-500" />
                   <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">AI SUGGESTION</span>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-300 italic mb-3">"{aiSuggestion, Zap }"</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 italic mb-3">"{aiSuggestion}"</p>
                 <div className="flex gap-2">
                   <button onClick={() => setAiSuggestion(null)} className="btn-secondary text-xs py-1 px-3">Ignore</button>
                   <button onClick={() => { handleContentChange(content + ' ' + aiSuggestion); setAiSuggestion(null) }} className="btn-primary text-xs py-1 px-3 flex items-center gap-1">
@@ -445,7 +447,7 @@ function AISidePanel({ groupId, docContent, docTitle, onClose }: { groupId: numb
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-sky-500" />
+          <Sparkles className="w-4 h-4 text-sky-500" />
           <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">AI INSIGHTS</span>
         </div>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
@@ -458,7 +460,7 @@ function AISidePanel({ groupId, docContent, docTitle, onClose }: { groupId: numb
         <div className="bg-sky-50 dark:bg-sky-950/50 rounded-xl p-3">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center">
-              <Zap className="w-3 h-3 text-white" />
+              <Sparkles className="w-3 h-3 text-white" />
             </div>
             <div>
               <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">FlowAI</div>
@@ -470,7 +472,7 @@ function AISidePanel({ groupId, docContent, docTitle, onClose }: { groupId: numb
           </p>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={generateSummary} disabled={aiLoading} className="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1 flex items-center gap-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <Zap className="w-3 h-3 text-sky-500" /> Summarize
+              <Sparkles className="w-3 h-3 text-sky-500" /> Summarize
             </button>
             <button onClick={generateSuggestions} disabled={aiLoading} className="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1 flex items-center gap-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
               <Lightbulb className="w-3 h-3 text-amber-500" /> Suggest Topics

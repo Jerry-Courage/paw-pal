@@ -4,9 +4,11 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { libraryApi, getAuthToken, SERVER_URL } from '@/lib/api'
-import { Upload, Link2, Mic, Search, Trash2, BookOpen,
+import {
+  Upload, Link2, Mic, Search, Sparkles, Trash2, BookOpen,
   FileText, Video, Code2, Layers, Brain, Zap,
-  Folder, ChevronRight, MoreHorizontal } from 'lucide-react'
+  Folder, ChevronRight, MoreHorizontal
+} from 'lucide-react'
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -119,12 +121,12 @@ function ResourceCard({ resource: r, onDelete }: { resource: any; onDelete: () =
           </button>
 
           {/* AI Ready badge */}
-          { r.has_study_kit && (
+          {r.has_study_kit && (
             <div className="absolute bottom-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/30">
-              <className="w-3 h-3 text-emerald-400" />
+              <Sparkles className="w-3 h-3 text-emerald-400" />
               <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Ready</span>
             </div>
-          ), Zap }
+          )}
         </div>
 
         {/* Info */}
@@ -283,8 +285,8 @@ export default function LibraryPage() {
 
         {/* Upload cards */}
         <div className="grid grid-cols-3 gap-3 mt-10 max-w-2xl mx-auto">
-          { /* Hiddenanchor - ensures icon stays in bundle */, Zap }
-          <span style={{ display: 'none' }}><Zap size={0} /></span>
+          {/* Hidden Sparkles anchor - ensures icon stays in bundle */}
+          <span style={{ display: 'none' }}><Sparkles size={0} /></span>
           {[
             { mode: 'file' as const, icon: Upload, label: 'Upload', sub: 'Image, file, audio, video' },
             { mode: 'paste' as const, icon: Link2, label: 'Paste', sub: 'YouTube, website, text' },

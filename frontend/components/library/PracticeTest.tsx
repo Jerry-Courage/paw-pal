@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { aiApi } from '@/lib/api'
-import { ChevronRight, ChevronLeft, Loader2, CheckCircle2, XCircle,
+import {
+  ChevronRight, ChevronLeft, Loader2, CheckCircle2, XCircle,
   Lightbulb, TrendingUp, Award, RotateCcw, Send, BookOpen,
-  Target, Zap } from 'lucide-react'
+  Target, Sparkles
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Question {
@@ -307,10 +309,10 @@ export default function PracticeTest({ questions, resourceId, onSave, isSaved, s
               )}
 
               {/* Study tip */}
-              { grade.tip && (
+              {grade.tip && (
                 <div className="bg-sky-50 dark:bg-sky-950/30 rounded-xl p-3 flex items-start gap-2">
-                  <className="w-3.5 h-3.5 text-sky-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-sky-700 dark:text-sky-300"><span className="font-semibold">Study tip:</span> {grade.tip, Zap }</p>
+                  <Sparkles className="w-3.5 h-3.5 text-sky-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-sky-700 dark:text-sky-300"><span className="font-semibold">Study tip:</span> {grade.tip}</p>
                 </div>
               )}
             </div>

@@ -4,9 +4,11 @@ import dynamic from 'next/dynamic'
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, 
+import { 
+  Send, 
   Users, 
   BookOpen, 
+  Sparkles, 
   Copy, 
   Check, 
   ChevronLeft,
@@ -33,7 +35,8 @@ import { Send,
   FileText,
   Trash2,
   LogOut,
-  Settings, Zap } from 'lucide-react'
+  Settings
+} from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import { workspaceApi, libraryApi, assignmentsApi, getAuthToken, API_BASE } from '@/lib/api'
@@ -520,10 +523,10 @@ export default function WorkspaceCollaborationStudio() {
           ref={scrollRef}
           className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 space-y-1 scroll-smooth custom-scrollbar"
         >
-          { messages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
               <div className="w-14 h-14 rounded-2xl bg-[#1a1a1a] border border-white/5 flex items-center justify-center">
-                <className="w-6 h-6 text-slate-600" />
+                <Sparkles className="w-6 h-6 text-slate-600" />
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-slate-400">Start the conversation</p>
@@ -540,7 +543,7 @@ export default function WorkspaceCollaborationStudio() {
                 const showDateSep = prevDate !== currDate
                 const today = new Date().toDateString()
                 const yesterday = new Date(Date.now() - 86400000).toDateString()
-                const dateLabel = currDate === today ? 'Today' : currDate === yesterday ? 'Yesterday' : new Date(ms.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', Zap })
+                const dateLabel = currDate === today ? 'Today' : currDate === yesterday ? 'Yesterday' : new Date(ms.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
                 return (
                   <React.Fragment key={ms.id || i}>
                     {showDateSep && (
@@ -871,14 +874,14 @@ export default function WorkspaceCollaborationStudio() {
                             </div>
 
                             {/* AI Summary */}
-                            { viewingResource.ai_summary && (
+                            {viewingResource.ai_summary && (
                               <div className="mb-6 p-4 bg-[#1a1a1a] border border-violet-500/15 rounded-xl">
                                 <div className="flex items-center gap-2 mb-3">
-                                  <className="w-3.5 h-3.5 text-violet-400" />
+                                  <Sparkles className="w-3.5 h-3.5 text-violet-400" />
                                   <span className="text-xs font-medium text-slate-400">AI Summary</span>
                                 </div>
                                 <div className="prose prose-invert prose-sm leading-relaxed text-slate-300 text-sm">
-                                  <ReactMarkdown>{viewingResource.ai_summary, Zap }</ReactMarkdown>
+                                  <ReactMarkdown>{viewingResource.ai_summary}</ReactMarkdown>
                                 </div>
                               </div>
                             )}
@@ -1098,7 +1101,7 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
           "w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-semibold uppercase mb-0.5",
           isAI ? 'bg-gradient-to-br from-violet-600 to-indigo-600' : isMe ? 'bg-orange-500' : 'bg-slate-700'
         )}>
-          { isAI ? <className="w-3.5 h-3.5 text-white" /> : (message.author?.username?.[0] || 'U'), Zap }
+          {isAI ? <Sparkles className="w-3.5 h-3.5 text-white" /> : (message.author?.username?.[0] || 'U')}
         </div>
       ) : (
         <div className="w-7 flex-shrink-0" />

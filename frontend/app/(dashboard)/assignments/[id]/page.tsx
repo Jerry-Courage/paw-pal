@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { assignmentsApi } from '@/lib/api'
-import { ArrowLeft, FileText, Download, Loader2,
+import {
+  ArrowLeft, Sparkles, FileText, Download, Loader2,
   CheckCircle2, Clock, AlertCircle, Cpu, CalendarPlus,
   Zap, Wand2, ArrowRight, FileDown, UserCheck, ShieldCheck,
-  Activity, ShieldAlert, BadgeCheck, Layers, Share2 } from 'lucide-react'
+  Activity, ShieldAlert, BadgeCheck, Layers, Share2
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
@@ -230,7 +232,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
           {/* Intelligence Polishing */}
           <div className="space-y-6">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Zap className="w-4 h-4 text-sky-500" /> Intelligence Suite
+              <Sparkles className="w-4 h-4 text-sky-500" /> Intelligence Suite
             </h4>
             <div className="grid grid-cols-1 gap-3">
               <button 
@@ -358,7 +360,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                  <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">Masterpiece Foundationalized</h2>
                  <p className="text-slate-500 max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your research input is loaded. Initialize the intelligence protocol to generate the ultimate synthesis.</p>
                  <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="btn-primary px-12 py-5 text-xl font-black rounded-3xl shadow-2xl shadow-sky-500/20 hover:-translate-y-1 transition-all active:scale-95 flex items-center gap-3">
-                    <Zap className="w-6 h-6" /> {solveMutation.isPending ? 'Engaging Core...' : 'Initialize Intelligence'}
+                    <Sparkles className="w-6 h-6" /> {solveMutation.isPending ? 'Engaging Core...' : 'Initialize Intelligence'}
                  </button>
               </div>
             )}
@@ -446,7 +448,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                   "h-14 w-14 rounded-[1.75rem] flex items-center justify-center shrink-0 transition-all shadow-lg active:scale-90",
                   refinePrompt ? "bg-sky-500 text-white shadow-sky-500/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700"
                 )}>
-                { refineMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <className="w-6 h-6" />, Zap }
+                {refineMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Sparkles className="w-6 h-6" />}
               </button>
             </div>
           </div>

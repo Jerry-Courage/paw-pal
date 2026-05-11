@@ -2,10 +2,12 @@
 
 import React, { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { X, Brain, HelpCircle, GitGraph, Wand2, 
-  BookOpen, Music2, Radio,
+import { 
+  X, Brain, HelpCircle, GitGraph, Wand2, 
+  BookOpen, Music2, Sparkles, Radio,
   Loader2, MessageSquare, ChevronRight, Edit3,
-  Calculator, Zap } from 'lucide-react'
+  Calculator
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
@@ -86,17 +88,17 @@ export default function ExpandableMobileHUD({
       <div className="fixed inset-4 pointer-events-none z-[110] lg:hidden" ref={constraintsRef} />
 
       {/* Loading overlay */}
-      { isGenerating && (
+      {isGenerating && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-2xl animate-in fade-in duration-500">
           <div className="relative">
             <div className="absolute inset-0 bg-primary/20 blur-3xl animate-pulse rounded-full" />
             <div className="relative w-24 h-24 bg-gradient-to-br from-primary to-violet-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-primary/40 animate-bounce">
-              <className="w-12 h-12 text-white animate-pulse" />
+              <Sparkles className="w-12 h-12 text-white animate-pulse" />
             </div>
           </div>
           <div className="mt-8 text-center space-y-2">
             <h3 className="text-xl font-black text-white uppercase tracking-tighter">FlowAI is Thinking...</h3>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Generating your {isGenerating, Zap } kit</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Generating your {isGenerating} kit</p>
           </div>
           <div className="absolute bottom-12 flex gap-1">
             {[0, 1, 2].map(i => (

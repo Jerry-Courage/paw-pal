@@ -6,8 +6,10 @@ import { communityApi, libraryApi } from '@/lib/api'
 import { useSession } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { Trophy, Calendar, 
-  LayoutGrid, Filter, Search, Plus, Loader2, Zap } from 'lucide-react'
+import { 
+  Sparkles, Trophy, Calendar, 
+  LayoutGrid, Filter, Search, Plus, Loader2 
+} from 'lucide-react'
 
 // Modular Components
 import CommunityHeader from '@/components/community/CommunityHeader'
@@ -19,9 +21,11 @@ import CommunitySidebar from '@/components/community/CommunitySidebar'
 import StoriesBar from '@/components/community/StoriesBar'
 import { POST_TYPES, TABS } from '@/components/community/constants'
 
-const TAB_ICONS: Record<string, any> = { feed:
+const TAB_ICONS: Record<string, any> = {
+  feed: Sparkles,
   leaderboard: Trophy,
-  events: Calendar, Zap }
+  events: Calendar,
+}
 
 export default function CommunityPage() {
   const [tab, setTab] = useState('feed')
@@ -162,7 +166,7 @@ export default function CommunityPage() {
                   ) : posts.length === 0 ? (
                     <div className="bg-[#1a1a1a] border border-dashed border-white/8 rounded-2xl p-20 text-center">
                        <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                        <Zap className="w-10 h-10 text-slate-700" />
+                        <Sparkles className="w-10 h-10 text-slate-700" />
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Feed is Quiet</h3>
                       <p className="text-sm text-slate-500 font-medium">Be the one to spark a conversation in the Nexus.</p>

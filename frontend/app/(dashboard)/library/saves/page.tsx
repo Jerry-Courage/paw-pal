@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
-import { ArrowLeft, Brain, FileText, Map, HelpCircle, Play,
-  BookOpen, ChevronDown, ExternalLink, Search, Zap } from 'lucide-react'
+import {
+  ArrowLeft, Brain, FileText, Map, HelpCircle, Play,
+  BookOpen, Sparkles, ChevronDown, ExternalLink, Search
+} from 'lucide-react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import { cn } from '@/lib/utils'
@@ -204,12 +206,13 @@ export default function SavesPage() {
   )
 }
 
-function Empty({ label, sub }: { label: string; sub: string }) { return (
+function Empty({ label, sub }: { label: string; sub: string }) {
+  return (
     <div className="card p-12 text-center">
       <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
-        <className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+        <Sparkles className="w-6 h-6 text-gray-300 dark:text-gray-600" />
       </div>
-      <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">{label, Zap }</p>
+      <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</p>
       <p className="text-sm text-gray-400 dark:text-gray-500 mb-5 max-w-xs mx-auto">{sub}</p>
       <Link href="/library" className="btn-primary text-sm">Go to Library</Link>
     </div>
