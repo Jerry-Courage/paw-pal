@@ -6,10 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import TopNav from '@/components/layout/TopNav'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-// Ensure Sparkles is always bundled — it's used across many components
-// and webpack tree-shaking can drop it from shared chunks
-import { Sparkles } from 'lucide-react'
-void Sparkles // prevent tree-shaking
+import SparklesAnchor from '@/components/SparklesAnchor'
 
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 
@@ -38,6 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
+      <SparklesAnchor />
       <TopNav />
       <main className={cn(
         isFullViewport
