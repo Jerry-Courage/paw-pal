@@ -97,9 +97,10 @@ export default function ProcessingView({ resource, compact = false }: Props) {
     return () => clearInterval(t)
   }, [])
 
-  // Current stage
-  const currentStage = STAGES.findLast(s => progress >= s.range[0]) || STAGES[0]
+  // Current stage — use findLast polyfill (not all browsers support it)
+  const currentStage = [...STAGES].reverse().find(s => progress >= s.range[0]) || STAGES[0]
   const currentStageIdx = STAGES.indexOf(currentStage)
+  const StageIcon = currentStage.icon
 
   const tip = TIPS[tipIdx]
   const selectedFeatures: string[] = resource.selected_features || ['flashcards', 'quiz', 'podcast', 'mindmap', 'practice']
@@ -111,7 +112,7 @@ export default function ProcessingView({ resource, compact = false }: Props) {
         {/* Animated icon + stage */}
         <div className="flex items-center gap-2.5">
           <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', currentStage.bg, currentStage.border, 'border')}>
-            <currentStage.icon className={cn('w-4 h-4', currentStage.color)} />
+            <StageIcon className={cn('w-4 h-4', currentStage.color)} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 mb-0.5">
@@ -166,7 +167,7 @@ export default function ProcessingView({ resource, compact = false }: Props) {
             <div className="absolute -inset-3 rounded-full bg-orange-500/5 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.5s' }} />
             {/* Main orb */}
             <div className="relative w-20 h-20 rounded-[2rem] bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 flex items-center justify-center">
-              <currentStage.icon className={cn('w-9 h-9 transition-all duration-500', currentStage.color)} />
+              <StageIcon className={cn('w-9 h-9 transition-all duration-500', currentStage.color)} />
             </div>
           </div>
 
