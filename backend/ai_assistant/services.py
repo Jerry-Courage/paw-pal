@@ -1725,21 +1725,38 @@ class AIService:
             text_prompt = {
                 "type": "text",
                 "text": (
-                    f"You are the 'Studley-Style FlowState Ultra' {persona}. Analyze these {target_desc} from '{resource.title}'. "
-                    f"GOAL: Create a deep, high-fidelity academic study kit using the Studley pedagogy based ON THESE VISUALS. "
-                    "1. OCR all text, labels, and diagrams. Break it into 'Extraction-Ready' modules. Target 20+ detailed sections.\n"
-                    "2. Return ONLY a JSON object:\n"
-                    "- 'sections': [{\"icon\": emoji, \"title\": str, \"content\": str, \"page_refs\": [int]}]\n"
-                    "  STUDLEY CONTENT RULES: \n"
-                    "  a) Start each section 'content' with a bolded Key Question/Cue (e.g., **Key Cue: [Question]?**).\n"
-                    "  b) Use #### for sub-headers. Use 'Atomic Fact' bullets for the body. No prose summaries.\n"
-                    "  c) End each section 'content' with: \\n\\n> **--- ACTIVE RECALL CHECK ---**\\n> [Test question].\n"
-                    "  d) TABLES: For comparisons, use GFM Grid Table syntax. Surround with \\n\\n.\n"
-                    "  e) TYPOGRAPHY: Use Sentence Case. NEVER use ALL CAPS for long descriptions. \n"
-                    "  f) NO LEAKAGE: Strictly forbid internal action tags like ACTION: { ... } from the final output.\n"
-                    "  g) Use standard LaTeX ($) for all formulas. content MUST be a single string.\n"
-                    "- 'vocabulary': [{\"term\": str, \"definition\": str}]\n"
-                    "- 'exam_tips': [str]\n"
+                    f"You are FlowAI Study Architect analyzing {target_desc} from '{resource.title}'.\n\n"
+                    "GOAL: OCR all text from these images and create study notes that are DETAILED yet DIGESTIBLE.\n\n"
+                    "CONTENT PHILOSOPHY (Feynman Technique + Memory Science):\n"
+                    "1. OCR everything: text, labels, diagrams, tables, formulas.\n"
+                    "2. EXPLAIN SIMPLY FIRST: Start each section with a plain-English explanation anyone can follow.\n"
+                    "3. THEN GO DEEP: Follow with academic detail, mechanisms, and nuance.\n"
+                    "4. MEMORY ANCHORS: For every key concept include ONE of:\n"
+                    "   - A memorable ACRONYM specific to this concept\n"
+                    "   - A VIVID ANALOGY that makes it click\n"
+                    "   - A MNEMONIC phrase\n"
+                    "5. MICRO-PARAGRAPHING: Max 3-4 sentences per paragraph. No walls of text.\n"
+                    "6. **Bold** key terms on first appearance. Use bullet points for lists.\n"
+                    "7. Target 8-12 sections per bundle.\n\n"
+                    "Return ONLY a raw JSON object (no markdown, no code blocks):\n"
+                    "{\n"
+                    "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"2-3 sentence plain-English overview\"},\n"
+                    "  \"sections\": [\n"
+                    "    {\n"
+                    "      \"icon\": \"Emoji\",\n"
+                    "      \"title\": \"Section Title\",\n"
+                    "      \"content\": \"**Key Question:** [question]?\\n\\n[Plain-English explanation — 2-3 sentences]\\n\\n[Deep academic content — mechanisms, examples — 3-5 paragraphs with **bold** key terms and bullet points]\\n\\n**Memory Trick:** [specific acronym/mnemonic/analogy for this concept]\\n\\n**Quick Summary:** [1-2 sentence Feynman-style recap]\",\n"
+                    "      \"page_refs\": []\n"
+                    "    }\n"
+                    "  ],\n"
+                    "  \"vocabulary\": [{\"term\": \"...\", \"definition\": \"Plain-English definition + example\"}],\n"
+                    "  \"exam_tips\": [\"High-yield exam tip with specific testable detail\"]\n"
+                    "}\n"
+                    "RULES:\n"
+                    "- Every section MUST follow: Key Question → Simple explanation → Deep content → Memory Trick → Quick Summary\n"
+                    "- Memory Tricks must be SPECIFIC, not generic placeholders\n"
+                    "- USE LATEX ($) for all math/physics formulas\n"
+                    "- Start with { and end with }. No markdown fences."
                 )
             }
             
@@ -1785,12 +1802,18 @@ class AIService:
             if 'vocabulary' in result: all_vocabulary.extend(result['vocabulary'])
             if 'exam_tips' in result: all_tips.extend(result['exam_tips'])
 
-        kit = {
-            "overview": {
-                "title": f"[Vision Mode] {resource.title}",
+        # Build overview from first successful result
+        first_result = next((r for _, r in results if r.get('overview')), None)
+        overview = first_result.get('overview', {}) if first_result else {}
+        if not overview or not overview.get('title'):
+            overview = {
+                "title": resource.title,
                 "icon": "🔳",
-                "summary": f"Visual analysis complete. We successfully scanned and solved the content from your image-only textbook."
-            },
+                "summary": f"Visual study kit for {resource.title}. Content extracted from scanned pages."
+            }
+
+        kit = {
+            "overview": overview,
             "sections": all_sections,
             "vocabulary": all_vocabulary,
             "exam_tips": all_tips
