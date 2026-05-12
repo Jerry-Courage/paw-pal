@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   Brain, LayoutDashboard, Calendar, BookOpen, FileText,
-  LayoutGrid, Users, Sparkles, Zap, Settings, LogOut,
+  LayoutGrid, Sparkles, Zap, Settings, LogOut,
   Menu, X, Bell, Search, ChevronDown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -20,7 +20,6 @@ const NAV_ITEMS = [
   { href: '/planner',     icon: Calendar,        label: 'Planner' },
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab' },
-  { href: '/community',   icon: Users,           label: 'Community' },
   { href: '/ai',          icon: Sparkles,        label: 'AI' },
 ]
 

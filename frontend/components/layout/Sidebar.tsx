@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  LayoutDashboard, Calendar, BookOpen, Users, Sparkles,
+  LayoutDashboard, Calendar, BookOpen, Sparkles,
   Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -22,7 +22,6 @@ const navItems = [
   { href: '/library',     icon: BookOpen,        label: 'Library' },
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab Space' },
-  { href: '/community',   icon: Users,           label: 'Community' },
   { href: '/ai',          icon: Sparkles,        label: 'AI Assistant' },
 ]
 
