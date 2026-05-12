@@ -18,6 +18,16 @@ type Technique = 'feynman' | 'active_recall' | 'socratic'
 type Phase = 'setup' | 'session' | 'report' | 'exam'
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
+// Available Gemini Live voices
+const GEMINI_VOICES = [
+  { id: 'Puck',   label: 'Puck',   desc: 'Playful & expressive 😄' },
+  { id: 'Aoede',  label: 'Aoede',  desc: 'Warm & engaging 🌟' },
+  { id: 'Kore',   label: 'Kore',   desc: 'Upbeat & encouraging ⚡' },
+  { id: 'Charon', label: 'Charon', desc: 'Thoughtful & measured 🎓' },
+  { id: 'Fenrir', label: 'Fenrir', desc: 'Confident & clear 💪' },
+  { id: 'Leda',   label: 'Leda',   desc: 'Calm & focused 🧘' },
+]
+
 interface SessionReport {
   summary: string
   strengths: string[]
@@ -129,6 +139,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   const [phase, setPhase] = useState<Phase>('setup')
   const [technique, setTechnique] = useState<Technique>('feynman')
+  const [voice, setVoice] = useState<string>('') // empty = auto-select by technique
   const [isConnecting, setIsConnecting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
@@ -227,6 +238,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           technique,
           resource_title: resource.title,
           resource_context: context,
+          ...(voice ? { voice } : {}),  // pass voice override if user selected one
         }))
       }
 
@@ -507,6 +519,34 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
                 </button>
               )
             })}
+          </div>
+
+          {/* Voice picker */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">AI Voice</p>
+              <span className="text-[10px] text-slate-600">Auto = best for technique</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setVoice('')}
+                className={cn(
+                  'py-2.5 px-3 rounded-xl border text-xs font-black transition-all',
+                  voice === '' ? 'border-orange-500/40 bg-orange-500/10 text-orange-400' : 'border-white/8 bg-white/3 text-slate-500 hover:border-white/15'
+                )}>
+                Auto ✨
+              </button>
+              {GEMINI_VOICES.map(v => (
+                <button key={v.id} onClick={() => setVoice(v.id)}
+                  className={cn(
+                    'py-2.5 px-3 rounded-xl border text-xs font-black transition-all text-left',
+                    voice === v.id ? 'border-orange-500/40 bg-orange-500/10 text-orange-400' : 'border-white/8 bg-white/3 text-slate-500 hover:border-white/15'
+                  )}>
+                  <span className="block">{v.label}</span>
+                  <span className="text-[9px] font-medium opacity-60 block mt-0.5">{v.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* How it works */}
