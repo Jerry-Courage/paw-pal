@@ -10,7 +10,6 @@
   --primary-glow: rgba(249, 115, 22, 0.25);
   /* Nav height = 56px + iOS/Android safe area inset */
   --nav-height: calc(56px + env(safe-area-inset-top, 0px));
-}
   --bg-base: #0d0d0d;
   --bg-card: #111111;
   --bg-card-2: #1a1a1a;
