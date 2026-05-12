@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { libraryApi, podcastApi } from '@/lib/api'
+import { libraryApi, podcastApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useAudio } from '@/context/AudioContext'
 import {
   ArrowLeft, Play, Pause, Loader2,
   Image as ImageIcon, Hand, Quote, Radio, XCircle, X,
-  SkipBack, SkipForward, Volume2
+  SkipBack, SkipForward, Volume2, Mic, MicOff, Zap
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -44,6 +44,17 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+
+  // ── Live Q&A state ────────────────────────────────────────────────
+  const [liveMode, setLiveMode] = useState<'off' | 'confirm' | 'connecting' | 'active'>('off')
+  const [liveAiSpeaking, setLiveAiSpeaking] = useState(false)
+  const [liveTranscript, setLiveTranscript] = useState<string[]>([])
+  const liveWsRef = useRef<WebSocket | null>(null)
+  const liveMicProcessorRef = useRef<ScriptProcessorNode | null>(null)
+  const liveMicStreamRef = useRef<MediaStream | null>(null)
+  const liveAudioCtxRef = useRef<AudioContext | null>(null)
+  const liveNextPlayRef = useRef(0)
+  const liveSpeakTimeoutRef = useRef<any>(null)
 
   const {
     state: audio,
@@ -122,6 +133,136 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const currentChunk = audio.script?.[audio.currentIndex] ?? null
   const activeVisual = visuals.find(v => v.id && currentChunk?.visual_ref && String(v.id) === String(currentChunk.visual_ref))
   const currentImage = activeVisual?.image || currentChunk?.visual_url || null
+
+  // ── Live Q&A helpers ─────────────────────────────────────────────
+
+  const playLiveAudio = useCallback((b64: string) => {
+    const binary = atob(b64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const int16 = new Int16Array(bytes.buffer)
+    const float32 = new Float32Array(int16.length)
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768
+
+    const ctx = liveAudioCtxRef.current || new AudioContext({ sampleRate: 24000 })
+    liveAudioCtxRef.current = ctx
+    const buf = ctx.createBuffer(1, float32.length, 24000)
+    buf.copyToChannel(float32, 0)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    const startAt = Math.max(ctx.currentTime, liveNextPlayRef.current)
+    src.start(startAt)
+    liveNextPlayRef.current = startAt + buf.duration
+    setLiveAiSpeaking(true)
+    clearTimeout(liveSpeakTimeoutRef.current)
+    liveSpeakTimeoutRef.current = setTimeout(() => setLiveAiSpeaking(false),
+      (liveNextPlayRef.current - ctx.currentTime) * 1000 + 600)
+  }, [])
+
+  const startLiveMic = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      })
+      liveMicStreamRef.current = stream
+      const ctx = new AudioContext()
+      const source = ctx.createMediaStreamSource(stream)
+      const processor = ctx.createScriptProcessor(2048, 1, 1)
+      liveMicProcessorRef.current = processor
+
+      processor.onaudioprocess = async (e) => {
+        if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
+        const float32 = e.inputBuffer.getChannelData(0).slice()
+        // Simple downsample to 16kHz
+        const ratio = ctx.sampleRate / 16000
+        const outLen = Math.round(float32.length / ratio)
+        const out = new Int16Array(outLen)
+        for (let i = 0; i < outLen; i++) {
+          const idx = Math.min(Math.round(i * ratio), float32.length - 1)
+          out[i] = Math.max(-32768, Math.min(32767, float32[idx] * 32768))
+        }
+        const bytes = new Uint8Array(out.buffer)
+        let binary = ''
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+        const b64 = btoa(binary)
+        liveWsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+      }
+      source.connect(processor)
+      processor.connect(ctx.destination)
+    } catch (e) {
+      toast.error('Microphone access denied')
+    }
+  }
+
+  const stopLiveMic = () => {
+    liveMicProcessorRef.current?.disconnect()
+    liveMicStreamRef.current?.getTracks().forEach(t => t.stop())
+  }
+
+  const startLiveQA = async () => {
+    if (!resource) return
+    setLiveMode('connecting')
+    globalPause()
+
+    try {
+      const token = await getAuthToken()
+      const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${protocol}//${backendHost}/ws/examprep/${resourceId}/?token=${token}`
+      const ws = new WebSocket(wsUrl)
+      liveWsRef.current = ws
+
+      ws.onopen = () => {
+        const kit = resource.ai_notes_json || {}
+        const sections = (kit.sections || []).slice(0, 8)
+        const context = sections.map((s: any) => `${s.title}: ${s.content?.slice(0, 200)}`).join('\n\n')
+        // Send with podcast-specific technique
+        ws.send(JSON.stringify({
+          type: 'start',
+          technique: 'podcast_qa',
+          resource_title: resource.title,
+          resource_context: context,
+        }))
+      }
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'ready') {
+          setLiveMode('active')
+          startLiveMic()
+        } else if (msg.type === 'audio') {
+          playLiveAudio(msg.data)
+        } else if (msg.type === 'transcript_ai') {
+          setLiveTranscript(prev => [...prev, msg.text])
+        } else if (msg.type === 'error') {
+          toast.error(msg.message)
+          endLiveQA()
+        }
+      }
+
+      ws.onerror = () => { toast.error('Live connection failed'); endLiveQA() }
+      ws.onclose = () => { stopLiveMic() }
+    } catch {
+      toast.error('Failed to start live Q&A')
+      setLiveMode('off')
+      globalResume()
+    }
+  }
+
+  const endLiveQA = () => {
+    if (liveWsRef.current?.readyState === WebSocket.OPEN) {
+      liveWsRef.current.send(JSON.stringify({ type: 'end_session' }))
+    }
+    liveWsRef.current?.close()
+    stopLiveMic()
+    setLiveMode('off')
+    setLiveTranscript([])
+    liveNextPlayRef.current = 0
+    clearTimeout(liveSpeakTimeoutRef.current)
+    // Resume podcast after a short delay
+    setTimeout(() => globalResume(), 800)
+  }
 
   const handleStart = async () => {
     try {
@@ -502,19 +643,125 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Right: raise hand */}
-            <button onClick={handleInterrupt}
+            <button onClick={() => {
+              if (liveMode === 'active') { endLiveQA(); return }
+              setLiveMode('confirm')
+              globalPause()
+            }}
               className={cn(
                 'flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all',
-                isRecording
+                liveMode === 'active'
                   ? 'bg-red-500/20 border border-red-500/40 text-red-400 animate-pulse'
                   : 'bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8'
               )}>
               <Hand className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{isRecording ? 'Listening...' : 'Raise Hand'}</span>
+              <span className="hidden sm:inline">{liveMode === 'active' ? 'End Q&A' : 'Raise Hand'}</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* ── Live Q&A confirm modal ── */}
+      {liveMode === 'confirm' && (
+        <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#1a1a1a] border border-white/8 rounded-3xl p-6 space-y-5">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-center justify-center">
+                <Mic className="w-7 h-7 text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Ask a Question Live</h3>
+                <p className="text-slate-500 text-sm mt-1 leading-relaxed">
+                  The podcast will pause and the AI host will answer your question in real-time voice.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { setLiveMode('off'); globalResume() }}
+                className="py-3 rounded-2xl bg-white/5 border border-white/8 text-white font-black text-sm hover:bg-white/8 transition-all">
+                Cancel
+              </button>
+              <button onClick={startLiveQA}
+                className="py-3 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2">
+                <Zap className="w-4 h-4" /> Go Live
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Live Q&A overlay ── */}
+      {(liveMode === 'connecting' || liveMode === 'active') && (
+        <div className="fixed inset-0 z-[500] bg-[#0d0d0d]/95 backdrop-blur-xl flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+            <div className="flex items-center gap-3">
+              <div className={cn('w-2 h-2 rounded-full', liveMode === 'active' ? 'bg-red-500 animate-pulse' : 'bg-slate-600')} />
+              <div>
+                <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Live Q&A</p>
+                <p className="text-xs text-slate-500">{liveMode === 'connecting' ? 'Connecting...' : 'Speak your question'}</p>
+              </div>
+            </div>
+            <button onClick={endLiveQA}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-black hover:bg-red-500/15 transition-all">
+              Done
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
+            {liveMode === 'connecting' ? (
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
+                <p className="text-slate-400 text-sm">Connecting to AI host...</p>
+              </div>
+            ) : (
+              <>
+                {/* AI speaking indicator */}
+                <div className={cn(
+                  'w-24 h-24 rounded-full border-4 flex items-center justify-center transition-all duration-300',
+                  liveAiSpeaking
+                    ? 'border-violet-500 bg-violet-500/10 scale-110'
+                    : 'border-white/10 bg-white/3'
+                )}>
+                  {liveAiSpeaking ? (
+                    <div className="flex gap-1">
+                      {[0,1,2,3].map(i => (
+                        <div key={i} className="w-1 bg-violet-400 rounded-full animate-bounce"
+                          style={{ height: `${12 + (i % 3) * 8}px`, animationDelay: `${i * 0.1}s` }} />
+                      ))}
+                    </div>
+                  ) : (
+                    <Mic className="w-10 h-10 text-red-400 animate-pulse" />
+                  )}
+                </div>
+
+                <div className="text-center">
+                  <p className="text-white font-black text-lg">
+                    {liveAiSpeaking ? 'AI Host is speaking...' : 'Listening...'}
+                  </p>
+                  <p className="text-slate-500 text-sm mt-1">
+                    {liveAiSpeaking ? 'Wait for the host to finish' : 'Ask your question out loud'}
+                  </p>
+                </div>
+
+                {/* AI transcript */}
+                {liveTranscript.length > 0 && (
+                  <div className="w-full max-w-sm bg-[#111] border border-violet-500/20 rounded-2xl p-4 space-y-2 max-h-40 overflow-y-auto">
+                    {liveTranscript.map((t, i) => (
+                      <p key={i} className="text-sm text-violet-200 leading-relaxed">{t}</p>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-xs text-slate-600 text-center">
+                  Tap "Done" when finished — podcast will resume
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Enlarged image lightbox */}
       {enlargedImage && (

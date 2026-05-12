@@ -287,6 +287,16 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 "When they explain something well, say 'Oh that makes sense!' and ask a follow-up. "
                 "Keep responses SHORT — 1-2 sentences max. You are the student, not the teacher."
             )
+        elif self.technique == 'podcast_qa':
+            role_desc = (
+                "You are a friendly, knowledgeable podcast host who has been discussing this topic. "
+                "The listener has raised their hand to ask a question. "
+                "Start by saying something like 'Oh great, looks like we have a question! Go ahead.' "
+                "Then listen to their question and answer it clearly and conversationally. "
+                "Keep answers focused and under 4 sentences — this is a podcast, not a lecture. "
+                "After answering, say something like 'Great question! We'll get back to our discussion now.' "
+                "Be warm, engaging, and natural — like a real podcast host."
+            )
         elif self.technique == 'active_recall':
             role_desc = (
                 "You are a strict but encouraging exam coach. "
