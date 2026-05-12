@@ -104,6 +104,13 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource.file_size = resource.file.size if resource.file else 0
         resource.status_text = "🧬 Synthesis Engine Initializing..."
 
+        # Auto-detect resource_type for PPTX files
+        if resource.file:
+            import os as _os
+            _ext = _os.path.splitext(resource.file.name)[1].lower()
+            if _ext in ['.pptx', '.ppt']:
+                resource.resource_type = 'slides'
+
         # Store selected features from the upload request
         raw_features = self.request.data.get('selected_features', '[]')
         try:

@@ -182,6 +182,45 @@ def process_resource_task(res_id):
                                     'url': img_url,
                                     'description': f"Illustration on page {item['page']}"
                                 })
+                    # ─── PPTX/PPT SLIDE HANDLING ───
+                    elif ext in ['.pptx', '.ppt']:
+                        res.resource_type = 'slides'
+                        res.save(update_fields=['resource_type'])
+                        slide_images = extraction.get('slide_images', [])
+                        total_pages = extraction.get('page_count', len(slide_images))
+
+                        if slide_images:
+                            import base64
+                            for img_data in slide_images:
+                                res_img = ResourceImage(resource=res, page_number=img_data['page'])
+                                mime = f"image/{img_data['ext']}" if img_data['ext'] not in ('jpg', 'jpeg') else 'image/jpeg'
+                                b64 = base64.b64encode(img_data['data']).decode('utf-8')
+                                res_img.description = f"data:{mime};base64,{b64}"
+                                res_img.save()
+
+                                if img_data['page'] not in page_image_map:
+                                    page_image_map[img_data['page']] = []
+                                page_image_map[img_data['page']].append({
+                                    'url': res_img.description,
+                                    'description': f"Slide image on slide {img_data['page']}"
+                                })
+
+                            # Use first slide image as cover
+                            if not res.cover_image and slide_images:
+                                try:
+                                    first_img = slide_images[0]
+                                    cover_name = f"cover_res_{res.id}.png"
+                                    res.cover_image.save(cover_name, ContentFile(first_img['data']), save=False)
+                                except Exception as e:
+                                    logger.warning(f"Failed to save PPTX cover for {res.id}: {e}")
+
+                            # Build vision_data for AI processing
+                            vision_data = [
+                                {'data': img['data'], 'page': img['page'], 'label': f"Slide {img['page']}"}
+                                for img in slide_images
+                            ]
+                            logger.info(f"[Task Queue] PPTX: {len(slide_images)} slide images extracted for {res.id}")
+
                 else:
                     logger.error(f"[Task Queue] Extraction failed for {res.id}: {extraction.get('error')}")
             except Exception as e:
