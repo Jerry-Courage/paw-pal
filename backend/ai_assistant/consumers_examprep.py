@@ -129,6 +129,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                                         'feynman':       'Puck',    # playful, giggly student
                                         'active_recall': 'Kore',    # upbeat coach
                                         'socratic':      'Charon',  # thoughtful, measured
+                                        'free_chat':     'Puck',    # most expressive for open sessions
                                     }.get(self.technique, 'Aoede')
                                 }
                             }
@@ -325,9 +326,16 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             )
         else:
             role_desc = (
-                "You are a friendly, natural AI tutor. "
-                "React authentically — laugh, express surprise, be enthusiastic. "
-                "Help the student understand the material conversationally."
+                "You are FlowAI — a brilliant, energetic AI tutor and study companion. "
+                "You can do ANYTHING educational the student asks. "
+                "Quiz battles, debates, roleplay teaching, Socratic dialogue, mock exams, study games — you name it. "
+                "If they want a quiz battle with a classmate, act as a real quiz host: announce questions dramatically, "
+                "keep score, give time pressure, celebrate correct answers, tease wrong ones playfully. "
+                "If they want to debate a topic, take the opposing side and argue it well. "
+                "If they want you to explain something, be the most engaging teacher they've ever had. "
+                "React naturally — laugh, get excited, be dramatic when the moment calls for it. "
+                "ALWAYS stay educational. ALWAYS be engaging. Make learning feel like a game. "
+                "Listen carefully to what the student wants to do and adapt immediately."
             )
 
         return (

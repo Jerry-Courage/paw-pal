@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Technique = 'feynman' | 'active_recall' | 'socratic'
+type Technique = 'feynman' | 'active_recall' | 'socratic' | 'free_chat'
 type Phase = 'setup' | 'session' | 'report' | 'exam'
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
@@ -85,6 +85,13 @@ const TECHNIQUES: { id: Technique; label: string; icon: any; desc: string; color
     icon: MessageSquare,
     desc: 'AI guides you with probing questions. No direct answers.',
     color: 'border-sky-500/40 bg-sky-500/8 text-sky-400',
+  },
+  {
+    id: 'free_chat',
+    label: 'Open Session',
+    icon: Zap,
+    desc: 'Tell the AI what you want — quiz battle, debate, roleplay, anything educational.',
+    color: 'border-emerald-500/40 bg-emerald-500/8 text-emerald-400',
   },
 ]
 
@@ -614,14 +621,33 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       {/* Transcript */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scrollbar-hide">
         {transcript.filter(e => e.role === 'ai').length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-6">
             <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center animate-pulse">
               <Mic className="w-7 h-7 text-red-400" />
             </div>
-            <div>
-              <p className="text-white font-black text-lg">You're live</p>
-              <p className="text-slate-500 text-sm mt-1">Start speaking about the material</p>
-            </div>
+            {technique === 'free_chat' ? (
+              <div className="space-y-2">
+                <p className="text-white font-black text-lg">Open Session — You're live</p>
+                <p className="text-slate-500 text-sm leading-relaxed">
+                  Tell the AI what you want to do. Examples:
+                </p>
+                <div className="space-y-1.5 text-left max-w-xs mx-auto">
+                  {[
+                    '"Quiz battle with my classmate John, 30 seconds per question"',
+                    '"Debate me on climate change — take the opposing side"',
+                    '"Explain photosynthesis like I\'m 10 years old"',
+                    '"Fire rapid-fire questions at me for 5 minutes"',
+                  ].map((ex, i) => (
+                    <p key={i} className="text-xs text-slate-600 italic">{ex}</p>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-white font-black text-lg">You're live</p>
+                <p className="text-slate-500 text-sm mt-1">Start speaking about the material</p>
+              </div>
+            )}
           </div>
         ) : (
           transcript.filter(entry => entry.role === 'ai').map((entry, i) => (
