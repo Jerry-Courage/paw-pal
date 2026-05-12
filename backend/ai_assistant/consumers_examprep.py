@@ -47,6 +47,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         self.transcript_log = []  # [(role, text), ...]
         self.technique = 'feynman'
         self.resource_title = ''
+        self.voice_override = None  # set by client to override default voice
 
     async def connect(self):
         user = self.scope.get('user')
@@ -81,7 +82,9 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         if msg_type == 'start':
             self.technique = msg.get('technique', 'feynman')
             self.resource_title = msg.get('resource_title', 'this material')
+            self.voice_override = msg.get('voice') or None  # e.g. 'Puck', 'Aoede', 'Kore'
             resource_context = msg.get('resource_context', '')
+            logger.info(f'[ExamPrep] Starting session: technique={self.technique} voice={self.voice_override or "auto"}')
             await self._start_gemini_session(resource_context)
 
         elif msg_type == 'audio':
@@ -120,9 +123,13 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                         'speechConfig': {
                             'voiceConfig': {
                                 'prebuiltVoiceConfig': {
-                                    # Puck = most expressive, natural laughs/giggles
-                                    # Aoede = warm and engaging
-                                    'voiceName': 'Puck' if self.technique == 'podcast_qa' else 'Aoede'
+                                    # Voice priority: user override > technique default
+                                    'voiceName': self.voice_override or {
+                                        'podcast_qa':    'Aoede',   # warm, natural podcast host
+                                        'feynman':       'Puck',    # playful, giggly student
+                                        'active_recall': 'Kore',    # upbeat coach
+                                        'socratic':      'Charon',  # thoughtful, measured
+                                    }.get(self.technique, 'Aoede')
                                 }
                             }
                         },
