@@ -1,6 +1,6 @@
 """
 YouTube resource processor.
-Extracts video metadata and transcript.
+Extracts video metadata, description, and transcript.
 """
 import sys
 import os
@@ -43,14 +43,52 @@ def get_video_metadata(video_id: str) -> dict:
     return {'title': 'YouTube Video', 'author': '', 'thumbnail': ''}
 
 
+def get_video_description(video_id: str) -> str:
+    """
+    Fetch video description, tags, and chapters via yt-dlp (no download).
+    Used as fallback context when transcript is unavailable from cloud IPs.
+    """
+    try:
+        import yt_dlp
+        ydl_opts = {'quiet': True, 'no_warnings': True, 'skip_download': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(
+                f'https://www.youtube.com/watch?v={video_id}',
+                download=False
+            )
+            desc = info.get('description', '') or ''
+            tags = info.get('tags', []) or []
+            chapters = info.get('chapters', []) or []
+
+            parts = []
+            if desc:
+                parts.append(f"VIDEO DESCRIPTION:\n{desc[:4000]}")
+            if tags:
+                parts.append(f"TAGS: {', '.join(tags[:30])}")
+            if chapters:
+                chapter_text = '\n'.join([
+                    f"- {c.get('title', '')} ({int(c.get('start_time', 0))}s)"
+                    for c in chapters[:30]
+                ])
+                parts.append(f"CHAPTERS:\n{chapter_text}")
+
+            result = '\n\n'.join(parts)
+            if result:
+                print(f"[YouTube] Got description/metadata: {len(result)} chars")
+            return result
+    except Exception as e:
+        print(f"[YouTube] Description fetch failed: {e}")
+        return ''
+
+
 def get_transcript(video_id: str) -> Optional[str]:
     """Get transcript using youtube-transcript-api v1.2.4+ (fetch/list API)."""
-    
+
     # 1. PRIMARY: youtube-transcript-api
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         api = YouTubeTranscriptApi()
-        
+
         # Try fetching with English language preference first
         try:
             result = api.fetch(video_id, languages=['en', 'en-US', 'en-GB'])
@@ -62,7 +100,7 @@ def get_transcript(video_id: str) -> Optional[str]:
                     return text
         except Exception as e:
             print(f"[YouTube] English fetch failed: {e}")
-        
+
         # Try any available language
         try:
             result = api.fetch(video_id)
@@ -91,12 +129,12 @@ def get_transcript(video_id: str) -> Optional[str]:
                     continue
         except Exception as e:
             print(f"[YouTube] list() failed: {e}")
-                
+
     except ImportError:
         print("[YouTube] youtube-transcript-api not installed")
     except Exception as e:
         print(f"[YouTube] Transcript library error: {e}")
-            
+
     # 2. FALLBACK: Download Audio + Transcribe with Groq Whisper
     print(f"[YouTube] Trying audio fallback for {video_id}...")
     try:
@@ -115,15 +153,15 @@ def get_transcript(video_id: str) -> Optional[str]:
                 ]
                 print(f"[YouTube] Running yt-dlp for {video_id}...")
                 result = subprocess.run(
-                    cmd, capture_output=True, text=True, 
+                    cmd, capture_output=True, text=True,
                     encoding='utf-8', errors='ignore', timeout=120
                 )
-                
+
                 files = os.listdir(tmpdir)
                 if files:
                     audio_path = os.path.join(tmpdir, files[0])
                     print(f"[YouTube] Transcribing {audio_path} via Groq Whisper...")
-                    
+
                     with open(audio_path, 'rb') as audio_file:
                         res = requests.post(
                             "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -140,15 +178,15 @@ def get_transcript(video_id: str) -> Optional[str]:
         import traceback
         traceback.print_exc()
         print(f"[YouTube] Audio fallback failed: {e}")
-        
-    return None
 
+    return None
 
 
 def process_youtube_url(url: str) -> dict:
     """
     Full processing pipeline for a YouTube URL.
     Returns metadata + transcript text for AI processing.
+    If transcript unavailable (cloud IP block), falls back to description/metadata.
     """
     video_id = extract_video_id(url)
     if not video_id:
@@ -157,13 +195,24 @@ def process_youtube_url(url: str) -> dict:
     metadata = get_video_metadata(video_id)
     transcript = get_transcript(video_id)
 
+    # If transcript failed (cloud IP block), use description as context
+    description_context = ''
+    if not transcript:
+        print(f"[YouTube] Transcript unavailable — fetching description as fallback context")
+        description_context = get_video_description(video_id)
+
+    # Combine transcript + description for maximum context
+    combined_context = transcript or description_context or ''
+
     return {
         'success': True,
         'video_id': video_id,
         'title': metadata['title'],
         'author': metadata['author'],
         'thumbnail': metadata['thumbnail'],
-        'transcript': transcript,
-        'has_transcript': transcript is not None and len(transcript) > 50,
+        'transcript': combined_context,
+        'has_transcript': bool(transcript),
+        'has_description': bool(description_context),
+        'has_context': bool(combined_context),
         'embed_url': f'https://www.youtube.com/embed/{video_id}',
     }

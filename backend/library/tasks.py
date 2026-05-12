@@ -217,6 +217,15 @@ def process_resource_task(res_id):
                     text = yt_data.get('transcript', '')
                     vision_data = [] # [FIX] Initialize for video frames
 
+                    # Log what context we have
+                    if text:
+                        if yt_data.get('has_transcript'):
+                            logger.info(f"[Task Queue] YouTube transcript: {len(text)} chars for {res.id}")
+                        else:
+                            logger.info(f"[Task Queue] YouTube description fallback: {len(text)} chars for {res.id}")
+                            res.status_text = "📋 Using video description as context..."
+                            res.save()
+
                     # 📸 NEW: VISUAL ANALYZER (Watching the video)
                     try:
                         res.status_text = "👁️ Analyzing video frames for slides..."

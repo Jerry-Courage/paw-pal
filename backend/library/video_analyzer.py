@@ -1,6 +1,4 @@
-import cv2
 import yt_dlp
-import numpy as np
 import logging
 import os
 import tempfile
@@ -18,7 +16,7 @@ class VideoAnalyzer:
     @staticmethod
     def get_stream_url(url):
         ydl_opts = {
-            'format': 'best[height<=720]', # 720p is perfect for OCR and fast to stream
+            'format': 'best[height<=720]',
             'quiet': True,
             'no_warnings': True,
         }
@@ -34,14 +32,19 @@ class VideoAnalyzer:
     def extract_visual_insights(cls, youtube_url, max_frames=15):
         """
         Main entry point. Returns a list of (image_bytes, timestamp_seconds).
+        Requires opencv-python — returns [] gracefully if not installed.
         """
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            logger.warning("[Video Analyzer] cv2/numpy not installed — skipping visual extraction")
+            return []
+
         stream_url, duration = cls.get_stream_url(youtube_url)
         if not stream_url or not duration:
             return []
 
-        # Adaptive Sampling: 
-        # For 5 min video: every 30s. 
-        # For 30 min video: every 90s.
         base_interval = max(30, int(duration / max_frames)) if duration > 0 else 60
         
         cap = cv2.VideoCapture(stream_url)
@@ -51,43 +54,32 @@ class VideoAnalyzer:
 
         insights = []
         last_frame_hash = None
-        
-        # We start at 10 seconds to skip intros
         current_sec = 10
         
         while current_sec < duration and len(insights) < max_frames:
-            # Smart Seeking: Jump directly to the timestamp
             cap.set(cv2.CAP_PROP_POS_MSEC, current_sec * 1000)
             ret, frame = cap.read()
             
             if not ret:
                 break
 
-            # Process Frame: Resize for AI processing (saves bandwidth/tokens)
-            # 1024 width is optimal for Gemini/GPT Vision OCR
             h, w = frame.shape[:2]
             target_w = 1024
             target_h = int(h * (target_w / w))
             resized = cv2.resize(frame, (target_w, target_h))
 
-            # Simple Change Detection: 
-            # We use a very downsampled gray version to see if content changed
             gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
             small = cv2.resize(gray, (32, 32))
             
             if last_frame_hash is not None:
                 diff = cv2.absdiff(small, last_frame_hash)
                 change_score = np.mean(diff)
-                
-                # Threshold for a 'Slide Change' (empirically found ~5 is a good jump)
                 if change_score < 4.0:
                     current_sec += base_interval
                     continue
 
-            # It's a significant visual frame!
             last_frame_hash = small
             
-            # Convert to RGB and encode to PNG
             rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
             is_success, buffer = cv2.imencode(".png", cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR))
             
