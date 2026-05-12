@@ -642,104 +642,28 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            {/* Right: raise hand / drop hand */}
+            {/* Right: raise hand / drop hand — no overlay, everything in background */}
             <button onClick={() => {
               if (liveMode === 'active' || liveMode === 'connecting') {
                 endLiveQA()
               } else {
-                // Seamless: pause podcast and connect immediately, no modal
                 startLiveQA()
               }
             }}
               className={cn(
                 'flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all',
-                liveMode === 'active'
-                  ? 'bg-red-500/20 border border-red-500/40 text-red-400'
-                  : liveMode === 'connecting'
-                  ? 'bg-orange-500/20 border border-orange-500/40 text-orange-400 animate-pulse'
+                liveMode !== 'off'
+                  ? 'bg-orange-500/20 border border-orange-500/40 text-orange-400'
                   : 'bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8'
               )}>
-              <Hand className="w-3.5 h-3.5" />
+              <Hand className={cn('w-3.5 h-3.5', liveMode !== 'off' && 'animate-pulse')} />
               <span className="hidden sm:inline">
-                {liveMode === 'active' ? 'Drop Hand' : liveMode === 'connecting' ? 'Connecting...' : 'Raise Hand'}
+                {liveMode !== 'off' ? 'Drop Hand' : 'Raise Hand'}
               </span>
             </button>
           </div>
         </div>
       </div>
-
-      {/* ── Live Q&A overlay ── */}
-      {(liveMode === 'connecting' || liveMode === 'active') && (
-        <div className="fixed inset-0 z-[500] bg-[#0d0d0d]/95 backdrop-blur-xl flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-            <div className="flex items-center gap-3">
-              <div className={cn('w-2 h-2 rounded-full', liveMode === 'active' ? 'bg-red-500 animate-pulse' : 'bg-slate-600')} />
-              <div>
-                <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Live Q&A</p>
-                <p className="text-xs text-slate-500">{liveMode === 'connecting' ? 'Connecting...' : 'Speak your question'}</p>
-              </div>
-            </div>
-            <button onClick={endLiveQA}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-black hover:bg-red-500/15 transition-all">
-              Done
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
-            {liveMode === 'connecting' ? (
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
-                <p className="text-slate-400 text-sm">Connecting to AI host...</p>
-              </div>
-            ) : (
-              <>
-                {/* AI speaking indicator */}
-                <div className={cn(
-                  'w-24 h-24 rounded-full border-4 flex items-center justify-center transition-all duration-300',
-                  liveAiSpeaking
-                    ? 'border-violet-500 bg-violet-500/10 scale-110'
-                    : 'border-white/10 bg-white/3'
-                )}>
-                  {liveAiSpeaking ? (
-                    <div className="flex gap-1">
-                      {[0,1,2,3].map(i => (
-                        <div key={i} className="w-1 bg-violet-400 rounded-full animate-bounce"
-                          style={{ height: `${12 + (i % 3) * 8}px`, animationDelay: `${i * 0.1}s` }} />
-                      ))}
-                    </div>
-                  ) : (
-                    <Mic className="w-10 h-10 text-red-400 animate-pulse" />
-                  )}
-                </div>
-
-                <div className="text-center">
-                  <p className="text-white font-black text-lg">
-                    {liveAiSpeaking ? 'AI Host is speaking...' : 'Listening...'}
-                  </p>
-                  <p className="text-slate-500 text-sm mt-1">
-                    {liveAiSpeaking ? 'Wait for the host to finish' : 'Ask your question out loud'}
-                  </p>
-                </div>
-
-                {/* AI transcript */}
-                {liveTranscript.length > 0 && (
-                  <div className="w-full max-w-sm bg-[#111] border border-violet-500/20 rounded-2xl p-4 space-y-2 max-h-40 overflow-y-auto">
-                    {liveTranscript.map((t, i) => (
-                      <p key={i} className="text-sm text-violet-200 leading-relaxed">{t}</p>
-                    ))}
-                  </div>
-                )}
-
-                <p className="text-xs text-slate-600 text-center">
-                  Tap "Done" when finished — podcast will resume
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Enlarged image lightbox */}
       {enlargedImage && (
