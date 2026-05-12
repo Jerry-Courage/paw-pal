@@ -7,7 +7,7 @@ import { useAudio } from '@/context/AudioContext'
 import {
   ArrowLeft, Play, Pause, Loader2,
   Image as ImageIcon, Hand, Quote, Radio, XCircle, X,
-  SkipBack, SkipForward, Volume2, Mic, MicOff, Zap
+  SkipBack, SkipForward, Volume2, Mic, MicOff
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -46,7 +46,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const audioChunksRef = useRef<Blob[]>([])
 
   // ── Live Q&A state ────────────────────────────────────────────────
-  const [liveMode, setLiveMode] = useState<'off' | 'confirm' | 'connecting' | 'active'>('off')
+  const [liveMode, setLiveMode] = useState<'off' | 'connecting' | 'active'>('off')
   const [liveAiSpeaking, setLiveAiSpeaking] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState<string[]>([])
   const liveWsRef = useRef<WebSocket | null>(null)
@@ -642,53 +642,31 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            {/* Right: raise hand */}
+            {/* Right: raise hand / drop hand */}
             <button onClick={() => {
-              if (liveMode === 'active') { endLiveQA(); return }
-              setLiveMode('confirm')
-              globalPause()
+              if (liveMode === 'active' || liveMode === 'connecting') {
+                endLiveQA()
+              } else {
+                // Seamless: pause podcast and connect immediately, no modal
+                startLiveQA()
+              }
             }}
               className={cn(
                 'flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all',
                 liveMode === 'active'
-                  ? 'bg-red-500/20 border border-red-500/40 text-red-400 animate-pulse'
+                  ? 'bg-red-500/20 border border-red-500/40 text-red-400'
+                  : liveMode === 'connecting'
+                  ? 'bg-orange-500/20 border border-orange-500/40 text-orange-400 animate-pulse'
                   : 'bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8'
               )}>
               <Hand className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{liveMode === 'active' ? 'End Q&A' : 'Raise Hand'}</span>
+              <span className="hidden sm:inline">
+                {liveMode === 'active' ? 'Drop Hand' : liveMode === 'connecting' ? 'Connecting...' : 'Raise Hand'}
+              </span>
             </button>
           </div>
         </div>
       </div>
-
-      {/* ── Live Q&A confirm modal ── */}
-      {liveMode === 'confirm' && (
-        <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-[#1a1a1a] border border-white/8 rounded-3xl p-6 space-y-5">
-            <div className="flex flex-col items-center text-center gap-3">
-              <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-center justify-center">
-                <Mic className="w-7 h-7 text-orange-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-white">Ask a Question Live</h3>
-                <p className="text-slate-500 text-sm mt-1 leading-relaxed">
-                  The podcast will pause and the AI host will answer your question in real-time voice.
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setLiveMode('off'); globalResume() }}
-                className="py-3 rounded-2xl bg-white/5 border border-white/8 text-white font-black text-sm hover:bg-white/8 transition-all">
-                Cancel
-              </button>
-              <button onClick={startLiveQA}
-                className="py-3 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2">
-                <Zap className="w-4 h-4" /> Go Live
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Live Q&A overlay ── */}
       {(liveMode === 'connecting' || liveMode === 'active') && (
