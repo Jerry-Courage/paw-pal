@@ -706,13 +706,14 @@ export default function WorkspaceCollaborationStudio() {
                   {viewingResource && (
                     <button 
                       onClick={() => setViewingResource(null)}
-                      className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-slate-500 hover:text-white"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-white text-xs font-medium"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Back</span>
                     </button>
                   )}
                   <button 
-                    onClick={() => setIsKnowledgeDrawerOpen(false)} 
+                    onClick={() => { setIsKnowledgeDrawerOpen(false); setViewingResource(null) }} 
                     className="p-1.5 hover:bg-white/5 rounded-lg transition-colors"
                   >
                     <X className="w-4 h-4 text-slate-500" />

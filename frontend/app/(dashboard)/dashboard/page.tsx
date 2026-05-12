@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { plannerApi, libraryApi, aiApi, authApi, groupsApi } from '@/lib/api'
-import { Plus, Users, Upload, Sparkles, Clock, Flame, ArrowRight, Play, BookOpen, Brain, Target, BarChart2, Zap, Pencil, Check, Headphones, TrendingUp } from 'lucide-react'
+import { Plus, Users, Upload, Sparkles, Clock, Flame, ArrowRight, Play, BookOpen, Brain, Target, BarChart2, Zap, Pencil, Check, Headphones, TrendingUp, LayoutGrid } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -48,8 +48,8 @@ export default function DashboardPage() {
   const weeklyProgress = Math.min(100, Math.round((studyTime / weeklyGoal) * 100))
 
   const quickActions = [
-    { icon: Plus,     label: 'New Session',  sub: 'Start a focused block',   href: '/planner?new=1', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
-    { icon: Users,    label: 'Start Group',  sub: 'Collaborate with peers',  href: '/groups',        color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    { icon: Plus,      label: 'New Session',   sub: 'Start a focused block',   href: '/planner?new=1', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+    { icon: LayoutGrid, label: 'Collab Space',  sub: 'Study with your group',   href: '/workspace',     color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
     { icon: Upload,   label: 'Upload Files', sub: 'PDF, Video, or Notes',    href: '/library',       color: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
     { icon: Sparkles, label: 'Ask AI',       sub: 'Instant study help',      href: '/ai',            color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
   ]
