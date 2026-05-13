@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import TopNav from '@/components/layout/TopNav'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
+import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
 
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 
@@ -17,6 +18,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login')
   }, [status, router])
+
+  // Ask for push permission shortly after app loads (only once, only if not already decided)
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    const permission = checkNotificationPermission()
+    if (permission === 'default') {
+      const timer = setTimeout(() => {
+        registerPushNotifications()
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [status])
 
   if (status === 'loading' || status === 'unauthenticated') {
     return (
