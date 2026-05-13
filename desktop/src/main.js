@@ -3,7 +3,7 @@ const { autoUpdater } = require('electron-updater')
 const path = require('path')
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const LIVE_URL = 'https://flowstate-frontend-7irq.onrender.com'
+const LIVE_URL = 'https://paw-pal-frontend-c7x0.onrender.com'
 const DEV_URL = 'http://localhost:3000'
 const isDev = process.argv.includes('--dev')
 const APP_URL = isDev ? DEV_URL : LIVE_URL
