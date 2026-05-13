@@ -41,6 +41,7 @@ import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import { workspaceApi, libraryApi, assignmentsApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useSession } from 'next-auth/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 
 const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
@@ -89,6 +90,7 @@ export default function WorkspaceCollaborationStudio() {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const timerRef = useRef<any>(null)
   const chunksRef = useRef<Blob[]>([])
+  const qc = useQueryClient()
 
   useEffect(() => {
     fetchWorkspace()
@@ -109,6 +111,8 @@ export default function WorkspaceCollaborationStudio() {
       setWorkspace(res.data)
       setMessages(res.data.messages || [])
       setIsLoading(false)
+      // Instantly clear the unread badge on the workspace list
+      qc.invalidateQueries({ queryKey: ['workspaces'] })
     } catch (err) {
       console.error(err)
     }

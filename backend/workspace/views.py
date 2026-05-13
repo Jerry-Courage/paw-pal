@@ -32,6 +32,13 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             return WorkspaceDetailSerializer
         return WorkspaceSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        """Mark workspace as read when user opens it."""
+        instance = self.get_object()
+        # Update last_seen to now — clears unread badge
+        WorkspaceMember.objects.filter(workspace=instance, user=request.user).update(last_seen=timezone.now())
+        return super().retrieve(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         ws = serializer.save(owner=self.request.user)
         WorkspaceMember.objects.create(workspace=ws, user=self.request.user, role='owner')
