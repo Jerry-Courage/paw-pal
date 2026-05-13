@@ -8,7 +8,7 @@ import uuid
 import threading
 import time
 from django.conf import settings
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, parsers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
@@ -483,6 +483,7 @@ class ChapterSummariesView(APIView):
 class VisionMessageView(APIView):
     """Send a message with an attached image or file that the AI reads."""
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
     throttle_classes = [AIRateThrottle]
 
     def post(self, request, session_id):

@@ -340,7 +340,7 @@ class AIService:
                         resp = await client.post(
                             GROQ_API_URL,
                             headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                            json={'model': 'meta-llama/llama-4-scout-17b-16e-instruct', 'messages': messages, 'max_tokens': max_tokens},
+                            json={'model': 'llama-3.2-90b-vision-instruct', 'messages': messages, 'max_tokens': max_tokens},
                             timeout=15,
                         )
                         if resp.status_code == 200:
