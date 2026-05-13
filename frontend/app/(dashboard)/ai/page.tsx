@@ -797,19 +797,19 @@ function AIChat() {
     } finally {
       setSending(false)
       removeFile()
-      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      e.preventDefault();
+      handleSend();
     }
-  }
+  };
 
   return (
-    <div className="fixed inset-0 [top:var(--nav-height)] flex bg-[#050505] overflow-hidden text-white font-sans selection:bg-orange-500/30">
+    <div className="fixed inset-0 top-[56px] flex bg-[#050505] overflow-hidden text-white font-sans selection:bg-orange-500/30">
       {/* Subtle Mesh Gradient Background */}
       <div className="absolute inset-0 pointer-events-none opacity-40">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-orange-500/10 blur-[120px]" />
