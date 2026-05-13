@@ -157,6 +157,12 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             # Start receiving loop
             self.gemini_task = asyncio.create_task(self._receive_from_gemini())
 
+            # Trigger initial greeting for podcast Q&A so the AI speaks first
+            if self.technique == 'podcast_qa':
+                await self._send_text_to_gemini(
+                    "Hello! I've just joined the live Q&A. Please greet me warmly as the host and ask for my question."
+                )
+
         except Exception as e:
             logger.error(f'[ExamPrep] Failed to connect to Gemini: {e}')
             await self._send({'type': 'error', 'message': f'Failed to start session: {str(e)}'})
@@ -174,6 +180,24 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             await self.gemini_ws.send(json.dumps(msg))
         except Exception as e:
             logger.warning(f'[ExamPrep] Failed to send audio to Gemini: {e}')
+
+    async def _send_text_to_gemini(self, text: str):
+        """Send a text turn to Gemini to trigger a response."""
+        try:
+            msg = {
+                'clientContent': {
+                    'turns': [
+                        {
+                            'role': 'user',
+                            'parts': [{'text': text}]
+                        }
+                    ],
+                    'turnComplete': True
+                }
+            }
+            await self.gemini_ws.send(json.dumps(msg))
+        except Exception as e:
+            logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
 
     async def _receive_from_gemini(self):
         """Continuously receive messages from Gemini and forward to browser."""
