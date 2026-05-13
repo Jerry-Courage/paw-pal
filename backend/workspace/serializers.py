@@ -117,12 +117,14 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return 0
-        # Optimization: Use prefetch_related if possible, but for count it's okay
         membership = obj.memberships.filter(user=request.user).first()
-        if not membership:
+        if not membership or not membership.last_seen:
             return 0
-        # Count messages created after the user's last_seen
-        return obj.messages.filter(created_at__gt=membership.last_seen).count()
+        # Only count messages from OTHER human members sent after last_seen
+        return obj.messages.filter(
+            created_at__gt=membership.last_seen,
+            is_ai=False,
+        ).exclude(author=request.user).count()
 
     def get_is_owner(self, obj):
         request = self.context.get('request')
