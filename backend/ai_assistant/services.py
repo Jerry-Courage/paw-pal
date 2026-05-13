@@ -1038,48 +1038,6 @@ class AIService:
             logger.error(f"[Global RAG Error]: {e}")
             return ""
 
-    async def search_library(self, query: str, user, limit: int = 10) -> list:
-        """
-        Structured search across the library. Returns a list of results with 
-        resource info and the relevant text snippet.
-        """
-        if not query: return []
-            
-        try:
-            from library.models import DocumentChunk
-            from pgvector.django import L2Distance
-            
-            # 1. Get embedding
-            query_vector = await asyncio.to_thread(self.embed_text_cloud, query)
-            if not query_vector:
-                return []
-
-            # 2. Query DB
-            def _do_query():
-                return list(DocumentChunk.objects.filter(
-                    resource__owner=user
-                ).annotate(
-                    distance=L2Distance('embedding', query_vector)
-                ).order_by('distance').select_related('resource')[:limit])
-            
-            top_chunks = await asyncio.to_thread(_do_query)
-            
-            # 3. Format results
-            results = []
-            for chunk in top_chunks:
-                results.append({
-                    'resource_id': chunk.resource.id,
-                    'resource_title': chunk.resource.title,
-                    'resource_type': chunk.resource.resource_type,
-                    'page_number': chunk.page_number,
-                    'snippet': chunk.text_content.strip(),
-                    'score': 1 - float(chunk.distance) # Convert L2 to a pseudo-score
-                })
-            return results
-        except Exception as e:
-            logger.error(f"[Library Search Error]: {e}")
-            return []
-
     def get_workspace_library_context(self, workspace) -> str:
         """
         Aggregate context from all resources linked to a specific workspace.

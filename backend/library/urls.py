@@ -7,7 +7,7 @@ from .views import (
     RefetchTranscriptView, MathSolverView,
     DeckListCreateView, DeckDetailView, SaveFlashcardsView,
     CloneResourceView, ResourceFileView, CuratedLibraryView,
-    ReprocessResourceView, GlobalSearchView
+    ReprocessResourceView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
@@ -18,7 +18,6 @@ urlpatterns = [
     path('decks/<int:deck_id>/save-flashcards/', SaveFlashcardsView.as_view(), name='save-flashcards'),
     path('resources/status-stream/', ResourceStatusSSEView.as_view(), name='resource-status-stream'),
     path('resources/curated/', CuratedLibraryView.as_view(), name='resource-curated'),
-    path('resources/search/', GlobalSearchView.as_view(), name='resource-search'),
     path('resources/', ResourceListCreateView.as_view(), name='resource-list'),
     path('resources/<int:pk>/', ResourceDetailView.as_view(), name='resource-detail'),
     path('resources/<int:resource_id>/reprocess/', ReprocessResourceView.as_view(), name='resource-reprocess'),

@@ -1,0 +1,3 @@
+ERR llama-3.1-8b-instant  0.46s  HTTP 403: error code: 1010
+ERR openai/gpt-oss-20b  0.12s  HTTP 403: error code: 1010
+ERR llama-3.3-70b-versatile  0.12s  HTTP 403: error code: 1010

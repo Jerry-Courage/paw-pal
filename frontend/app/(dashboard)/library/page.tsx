@@ -7,7 +7,7 @@ import { libraryApi, getAuthToken, SERVER_URL } from '@/lib/api'
 import {
   Upload, Link2, Mic, Search, Sparkles, Trash2, BookOpen,
   FileText, Video, Code2, Layers, Brain, Zap,
-  Folder, ChevronRight, MoreHorizontal, MessageSquare, ExternalLink
+  Folder, ChevronRight, MoreHorizontal
 } from 'lucide-react'
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -157,16 +157,7 @@ export default function LibraryPage() {
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; resourceId: number | null; title: string }>({
     isOpen: false, resourceId: null, title: ''
   })
-  const [isSearching, setIsSearching] = useState(false)
   const qc = useQueryClient()
-
-  // True Semantic Search Query
-  const { data: semanticResults, isLoading: isSemanticLoading } = useQuery({
-    queryKey: ['semantic-search', search],
-    queryFn: () => libraryApi.searchResources(search).then(r => r.data),
-    enabled: search.length > 3,
-    staleTime: 30000,
-  })
 
   const { data, isLoading } = useQuery({
     queryKey: ['resources'],
@@ -317,63 +308,14 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {/* ── Semantic Intelligence (RAG Search) ─────────────────── */}
-      {search.length > 3 && (
-        <div className="max-w-6xl mx-auto mb-12">
-          <div className="flex items-center gap-3 mb-5">
-            <Sparkles className="w-4 h-4 text-orange-400" />
-            <h2 className="text-sm font-black text-white uppercase tracking-widest">Semantic Insights</h2>
-            {isSemanticLoading && <Zap className="w-3 h-3 text-orange-400 animate-pulse" />}
-          </div>
-
-          {semanticResults && semanticResults.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {semanticResults.map((res: any, i: number) => (
-                <Link key={i} href={`/library/${res.resource_id}`} className="group">
-                  <div className="bg-[#1a1a1a] border border-orange-500/10 hover:border-orange-500/30 rounded-2xl p-4 transition-all hover:shadow-xl hover:shadow-orange-500/5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full uppercase">
-                          Match {Math.round(res.score * 100)}%
-                        </span>
-                        <h4 className="text-xs font-bold text-white truncate max-w-[200px]">{res.resource_title}</h4>
-                      </div>
-                      <ExternalLink className="w-3 h-3 text-slate-600 group-hover:text-orange-400 transition-colors" />
-                    </div>
-                    <p className="text-xs text-slate-400 line-clamp-3 italic leading-relaxed">
-                      "...{res.snippet}..."
-                    </p>
-                    {res.page_number && (
-                      <p className="text-[9px] font-black text-slate-600 mt-3 uppercase tracking-tighter">
-                        Page {res.page_number}
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : !isSemanticLoading && (
-            <div className="bg-white/5 rounded-2xl p-8 text-center border border-dashed border-white/10">
-              <p className="text-xs text-slate-500 font-medium">No deep content matches found for "{search}"</p>
-            </div>
-          )}
-          
-          <div className="h-px bg-gradient-to-r from-transparent via-white/5 to-transparent mt-12" />
-        </div>
-      )}
-
       {/* ── My Resources (if any) ─────────────────────────────────── */}
-      {(myResources.length > 0 || search) && (
+      {myResources.length > 0 && (
         <div className="max-w-6xl mx-auto mb-12">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <Folder className="w-4 h-4 text-slate-500" />
-              <h2 className="text-sm font-black text-white uppercase tracking-widest">
-                {search ? 'Filtered Results' : 'My Library'}
-              </h2>
-              <span className="text-[10px] font-black text-slate-600 bg-white/5 px-2 py-0.5 rounded-full">
-                {myResources.length}
-              </span>
+              <h2 className="text-sm font-black text-white uppercase tracking-widest">My Library</h2>
+              <span className="text-[10px] font-black text-slate-600 bg-white/5 px-2 py-0.5 rounded-full">{myResources.length}</span>
             </div>
             {/* Search */}
             <div className="relative">

@@ -690,7 +690,7 @@ export default function WorkspaceCollaborationStudio() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="absolute right-0 top-0 bottom-0 w-full sm:max-w-sm bg-[#0d0d0d] border-l border-white/5 z-50 flex flex-col shadow-2xl"
+              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-[#0d0d0d] border-l border-white/5 z-50 flex flex-col"
             >
               {/* Drawer header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">

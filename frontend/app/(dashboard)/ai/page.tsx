@@ -14,7 +14,6 @@ import { timeAgo, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { motion, AnimatePresence } from 'framer-motion'
 
 // ─── LIGHTBOX ────────────────────────────────────────────────────────────────
 function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
@@ -363,45 +362,30 @@ function RichContent({ content }: { content: string }) {
 // ─── THINKING INDICATOR ───────────────────────────────────────────────────────
 function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) {
   const states = action === 'diagram'
-    ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20', label: 'Synthesizing knowledge graph...' }
+    ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/10', label: 'Generating diagram...' }
     : action === 'image'
-    ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/10', border: 'border-pink-500/20', label: 'Visualizing concept...' }
-    : { icon: Sparkles, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', label: 'Consulting library...' }
+    ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/10', label: 'Generating image...' }
+    : { icon: Sparkles, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Thinking...' }
 
   const Icon = states.icon
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      className="flex items-start gap-4"
-    >
-      <div className={cn('w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border shadow-lg', states.bg, states.border)}>
-        <Icon className={cn('w-5 h-5', states.color, 'animate-pulse')} />
+    <div className="flex items-start gap-3">
+      <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', states.bg)}>
+        <Icon className={cn('w-4 h-4', states.color, 'animate-pulse')} />
       </div>
-      <div className={cn('px-5 py-4 rounded-3xl rounded-tl-none border backdrop-blur-md shadow-xl', states.bg, states.border)}>
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1.5">
+      <div className={cn('px-4 py-3 rounded-2xl rounded-tl-none border', states.bg, 'border-white/5')}>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
             {[0,1,2].map(i => (
-              <motion.span 
-                key={i} 
-                animate={{ 
-                  scale: [1, 1.3, 1],
-                  opacity: [0.3, 1, 0.3]
-                }}
-                transition={{
-                  duration: 1,
-                  repeat: Infinity,
-                  delay: i * 0.2
-                }}
-                className={cn('w-2 h-2 rounded-full', states.color.replace('text-', 'bg-'))}
-              />
+              <span key={i} className={cn('w-1.5 h-1.5 rounded-full animate-bounce', states.color.replace('text-', 'bg-'))}
+                style={{ animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
-          <span className={cn('text-sm font-bold tracking-tight', states.color)}>{states.label}</span>
+          <span className={cn('text-xs font-medium', states.color)}>{states.label}</span>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -419,85 +403,57 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
   }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-      className={cn('flex gap-4 group', isUser ? 'flex-row-reverse' : 'flex-row')}
-    >
-      {/* Avatar Container */}
-      <div className="flex flex-col items-center gap-2 mt-1">
-        <div className={cn(
-          'w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-lg transition-transform group-hover:scale-110 duration-300 border',
-          isUser 
-            ? 'bg-gradient-to-br from-orange-500 to-rose-600 text-white border-white/20' 
-            : 'bg-[#1a1a1a] text-orange-400 border-white/5'
-        )}>
-          {isUser ? 'ME' : <Sparkles className="w-5 h-5 animate-pulse" />}
-        </div>
+    <div className={cn('flex gap-3 group', isUser ? 'flex-row-reverse' : 'flex-row')}>
+      {/* Avatar */}
+      <div className={cn(
+        'w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 mt-1',
+        isUser ? 'bg-orange-500 text-white' : 'bg-white/8 text-slate-400'
+      )}>
+        {isUser ? 'ME' : <Sparkles className="w-4 h-4" />}
       </div>
 
-      {/* Bubble Container */}
-      <div className={cn('flex flex-col gap-1.5 min-w-0', isUser ? 'items-end' : 'items-start', 'max-w-[85%] sm:max-w-[80%]')}>
-        <div className="flex items-center gap-2 px-1">
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
-            {isUser ? 'Neural Link' : 'Flow Intelligence'}
-          </span>
-          {msg.is_streaming && (
-            <motion.div 
-              animate={{ opacity: [0, 1, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              className="w-1.5 h-1.5 rounded-full bg-orange-500"
-            />
-          )}
-        </div>
+      {/* Bubble */}
+      <div className={cn('flex flex-col gap-1 min-w-0', isUser ? 'items-end' : 'items-start', 'max-w-[82%] sm:max-w-[75%]')}>
+        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">
+          {isUser ? 'You' : 'FlowAI'}
+        </span>
 
         <div className={cn(
-          'rounded-[2rem] px-6 py-4 w-full relative backdrop-blur-xl shadow-2xl transition-all duration-300 border',
+          'rounded-2xl px-4 py-3 w-full relative',
           isUser
-            ? 'bg-[#1a1a1a]/80 border-white/10 text-slate-100 rounded-tr-none'
-            : 'bg-[#0f0f0f]/90 border-orange-500/10 text-slate-200 rounded-tl-none group-hover:border-orange-500/20'
+            ? 'bg-[#1e1e1e] border border-white/8 text-slate-100 rounded-tr-none'
+            : 'bg-[#111] border border-white/6 text-slate-200 rounded-tl-none'
         )}>
-          {/* Subtle Glow for AI Messages */}
-          {!isUser && (
-            <div className="absolute -inset-1 bg-gradient-to-br from-orange-500/5 to-transparent blur-2xl -z-10 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity" />
-          )}
-
           {/* User image attachment */}
           {msg.image && isUser && (
-            <div className="mb-4 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
-              <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-80 object-contain" />
+            <div className="mb-3 rounded-xl overflow-hidden border border-white/10">
+              <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-64 object-contain" />
             </div>
           )}
 
           {/* Content */}
           {isUser ? (
-            <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
           ) : (
-            <div className="text-sm md:text-base leading-relaxed font-normal">
+            <div className="text-sm">
               <RichContent content={msg.content} />
             </div>
           )}
 
           {/* AI-generated image */}
           {msg.image && !isUser && (
-            <motion.div 
-              whileHover={{ scale: 1.01 }}
-              className="mt-4 rounded-2xl overflow-hidden border border-white/10 cursor-zoom-in relative group/img shadow-2xl"
-              onClick={() => setImgLightbox(msg.image!)}
-            >
-              <img src={msg.image} alt="generated" className="w-full h-auto" />
-              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all scale-75 group-hover/img:scale-100">
-                  <Maximize2 className="w-6 h-6 text-white drop-shadow-lg" />
-                </div>
+            <div className="mt-3 rounded-xl overflow-hidden border border-white/10 cursor-zoom-in relative group/img"
+              onClick={() => setImgLightbox(msg.image!)}>
+              <img src={msg.image} alt="generated" className="max-w-full h-auto" />
+              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-all flex items-center justify-center">
+                <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover/img:opacity-100 transition-all drop-shadow-lg" />
               </div>
-            </motion.div>
+            </div>
           )}
 
-          {/* Standalone diagram */}
+          {/* Standalone diagram (from diagram field, not inline in text) */}
           {msg.diagram && (
-            <div className="mt-4">
+            <div className="mt-3">
               <MermaidChart chart={msg.diagram} />
             </div>
           )}
@@ -505,21 +461,17 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
 
         {/* Actions row */}
         {!isUser && (
-          <div className="flex items-center gap-2 px-2 opacity-0 group-hover:opacity-100 transition-opacity translate-y-1 group-hover:translate-y-0 duration-300">
+          <div className="flex items-center gap-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button onClick={handleCopy}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold border border-transparent hover:border-white/5 shadow-sm">
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? 'COPIED' : 'COPY'}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all text-[10px] font-medium">
+              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'Copied' : 'Copy'}
             </button>
-            <div className="h-3 w-px bg-white/5 mx-1" />
-            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
-              Generated by {activeSession?.model || 'Gemini 3'}
-            </span>
           </div>
         )}
       </div>
       {imgLightbox && <Lightbox src={imgLightbox} type="image" onClose={() => setImgLightbox(null)} />}
-    </motion.div>
+    </div>
   )
 }
 
@@ -797,24 +749,21 @@ function AIChat() {
     } finally {
       setSending(false)
       removeFile()
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+      e.preventDefault()
+      handleSend()
     }
-  };
+  }
+
+  const isEmpty = messages.length === 0
 
   return (
-    <div className="fixed inset-0 top-[56px] flex bg-[#050505] overflow-hidden text-white font-sans selection:bg-orange-500/30">
-      {/* Subtle Mesh Gradient Background */}
-      <div className="absolute inset-0 pointer-events-none opacity-40">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-orange-500/10 blur-[120px]" />
-        <div className="absolute bottom-[10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-violet-600/10 blur-[150px]" />
-      </div>
+    <div className="fixed inset-0 [top:var(--nav-height)] flex bg-[#0d0d0d] overflow-hidden text-white">
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -957,143 +906,122 @@ function AIChat() {
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-[#0d0d0d]">
         
-        {/* Slim toolbar */}
+        {/* Slim toolbar - just sidebar toggle + new chat, no branding */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 shrink-0">
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 rounded-xl text-slate-500 hover:bg-white/5 hover:text-white transition-all active:scale-95">
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Main Header (Mobile/Compact) */}
-        <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-[#0d0d0d]/80 backdrop-blur-md border-b border-white/5 z-20">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl bg-white/5 border border-white/10">
-              <Menu className="w-5 h-5 text-slate-400" />
+          <div className="flex items-center gap-2">
+            {activeSession && (
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider truncate max-w-[150px]">
+                {activeSession.title || 'Current Thread'}
+              </span>
+            )}
+            <button onClick={startNew}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-orange-400 bg-orange-500/10 hover:bg-orange-500/15 transition-all font-black text-xs active:scale-95">
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Chat</span>
             </button>
-            <span className="text-sm font-black tracking-tight text-white/90">Neural Core</span>
           </div>
-          <button onClick={startNew} className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400">
-            <Plus className="w-5 h-5" />
-          </button>
         </div>
 
-        {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth scrollbar-hide pb-40">
-          <AnimatePresence mode="popLayout">
-            {messages.length === 0 ? (
-              <motion.div 
-                key="empty"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="max-w-3xl mx-auto pt-12 md:pt-20 text-center"
-              >
-                <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-orange-500/5 border border-orange-500/10 mb-8">
-                  <Sparkles className="w-4 h-4 text-orange-400" />
-                  <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Awaiting Command</span>
-                </div>
-                
-                <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight mb-6 leading-tight">
-                  Master anything <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-rose-500 to-violet-500 animate-gradient-x">
-                    at light speed.
-                  </span>
-                </h1>
-                
-                <p className="text-slate-500 text-base md:text-lg max-w-xl mx-auto mb-12 font-medium">
-                  I'm your Neural Study Engine. I can explain complex topics, 
-                  draw diagrams, and visualize anything in your library.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
-                  {SUGGESTIONS.map((s, i) => (
-                    <motion.button
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      onClick={() => setInput(s.text)}
-                      className="group flex items-center gap-4 p-4 rounded-2xl bg-[#111] border border-white/5 hover:border-orange-500/40 hover:bg-[#161616] transition-all text-left shadow-lg hover:shadow-orange-500/5"
-                    >
-                      <span className="text-2xl group-hover:scale-125 transition-transform duration-300">{s.icon}</span>
-                      <span className="text-xs md:text-sm font-bold text-slate-400 group-hover:text-white transition-colors">{s.text}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
-            ) : (
-              <div key="messages" className="max-w-4xl mx-auto space-y-8">
-                {messages.map((m, i) => (
-                  <MessageBubble key={i} msg={m} index={i} />
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto w-full scrollbar-hide">
+          {isEmpty ? (
+            <div className="flex flex-col items-center justify-center min-h-full px-4 py-8 text-center">
+              <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
+                <Sparkles className="w-7 h-7 text-orange-400" />
+              </div>
+              <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Hi, I'm FlowAI</h1>
+              <p className="text-slate-500 text-sm max-w-xs mb-8 leading-relaxed">
+                Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 w-full max-w-xl">
+                {SUGGESTIONS.map((s, i) => (
+                  <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
+                    className={cn('flex items-start gap-2.5 p-3.5 bg-[#1a1a1a] border border-white/6 rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f1f] group',
+                      i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
+                    )}>
+                    <div className="text-base shrink-0 bg-white/5 p-1.5 rounded-lg group-hover:scale-110 transition-transform">{s.icon}</div>
+                    <span className="text-xs font-bold text-slate-400 group-hover:text-orange-400 transition-colors leading-relaxed">{s.text}</span>
+                  </button>
                 ))}
-                {sending && <ThinkingIndicator action={pendingAction} />}
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
+              {messages.map((msg, i) => (
+                <MessageBubble key={i} msg={msg} index={i} />
+              ))}
+              {sending && <ThinkingIndicator action={pendingAction} />}
+              <div ref={bottomRef} className="h-4" />
+            </div>
+          )}
+        </div>
+
+        {/* Input Area */}
+        <div className="p-4 sm:p-5 bg-[#0d0d0d] border-t border-white/5 flex-shrink-0 relative z-20"
+          style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))' }}
+        >
+          <div className="max-w-4xl mx-auto">
+            
+            {/* Attached file preview */}
+            {attachedFile && (
+              <div className="flex items-center gap-3 mb-4 p-3 bg-[#1a1a1a] border border-white/8 rounded-2xl animate-fade-in-up w-fit pr-10 relative">
+                {filePreview ? (
+                  <img src={filePreview} alt="preview" className="w-12 h-12 rounded-xl object-cover shadow-sm" />
+                ) : (
+                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <Paperclip className="w-5 h-5 text-primary" />
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-extrabold text-white max-w-[150px] sm:max-w-xs truncate">{attachedFile.name}</div>
+                  <div className="text-xs font-bold text-slate-400 mt-0.5">{(attachedFile.size / 1024).toFixed(0)} KB</div>
+                </div>
+                <button onClick={removeFile} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             )}
-          </AnimatePresence>
-          <div ref={bottomRef} className="h-4" />
-        </div>
 
-        {/* Floating Input Island */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 md:p-8 pointer-events-none">
-          <div className="max-w-4xl mx-auto">
-            <motion.div 
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className="relative p-2 rounded-[2.5rem] bg-[#121212]/80 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] pointer-events-auto"
-            >
-              {/* Context Pill */}
-              <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/5 shadow-lg">
-                <Network className={cn('w-3.5 h-3.5', contextType === 'global' ? 'text-blue-400' : 'text-orange-400')} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                  {contextType === 'global' ? 'Full Library Context' : 'Focused Resource Mode'}
-                </span>
-              </div>
-
-              {/* File Preview */}
-              {filePreview && (
-                <div className="absolute bottom-full mb-4 left-4 p-3 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/5">
-                    <img src={filePreview} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="min-w-0 pr-2">
-                    <p className="text-[10px] font-black text-white truncate max-w-[120px]">{attachedFile?.name}</p>
-                    <button onClick={removeFile} className="text-[10px] font-bold text-rose-500 hover:text-rose-400 mt-0.5">Remove</button>
-                  </div>
+            {/* Input Wrapper */}
+            <div className="relative bg-[#1a1a1a] border border-white/8 rounded-3xl p-2 focus-within:border-orange-500/30 transition-all duration-300">
+              <div className="flex items-end gap-2">
+                
+                {/* Plus context menu (mobile friendly) */}
+                <div className="flex bg-white/5 rounded-2xl p-1 shrink-0 mb-1 ml-1">
+                  <button onClick={() => fileRef.current?.click()}
+                    className="p-2 sm:p-2.5 text-slate-500 hover:text-orange-400 transition-colors hover:bg-white/5 rounded-xl" title="Upload">
+                    <Plus className="w-5 h-5" />
+                  </button>
+                  <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
                 </div>
-              )}
 
-              <div className="flex items-end gap-2 px-2">
-                <button 
-                  onClick={() => fileRef.current?.click()}
-                  className="p-4 rounded-3xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-90"
-                >
-                  <Plus className="w-6 h-6" />
-                </button>
-                <input type="file" ref={fileRef} onChange={handleFile} hidden accept="image/*,application/pdf" />
-
+                {/* Textarea */}
                 <textarea
                   ref={textareaRef}
                   value={input}
                   onChange={handleInput}
                   onKeyDown={handleKeyDown}
-                  placeholder={contextType === 'global' ? "Ask anything about your entire library..." : "Ask about this document..."}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-slate-100 placeholder:text-slate-500 py-4 px-2 text-sm md:text-base min-h-[56px] max-h-40 resize-none scrollbar-hide font-medium"
+                  placeholder="Ask FlowAI anything..."
+                  className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] sm:text-base text-white placeholder-slate-600 py-3 sm:py-4 px-2 min-h-[50px] sm:min-h-[56px] max-h-[160px]"
+                  style={{ lineHeight: '1.5' }}
                   rows={1}
                 />
-                <button
-                  onClick={handleSend}
+
+                {/* Send Button */}
+                <button onClick={handleSend}
                   disabled={sending || (!input.trim() && !attachedFile)}
-                  className={cn(
-                    'p-4 rounded-[2rem] transition-all duration-300 shadow-xl active:scale-90',
+                  className={cn('p-3 sm:p-4 rounded-2xl flex-shrink-0 transition-all duration-300 mb-1 mr-1',
                     (input.trim() || attachedFile) && !sending
-                      ? 'bg-gradient-to-br from-orange-500 to-rose-600 text-white shadow-orange-500/20'
-                      : 'bg-white/5 text-slate-600 opacity-50 cursor-not-allowed'
-                  )}
-                >
-                  {sending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+                      ? 'bg-orange-500 hover:bg-orange-400 text-white shadow-lg shadow-orange-500/20 hover:-translate-y-0.5'
+                      : 'bg-white/5 text-slate-600 cursor-not-allowed')}>
+                  {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 translate-x-0.5" />}
                 </button>
               </div>
-            </motion.div>
+            </div>
             
             {/* Footer tags */}
             <div className="flex items-center justify-center md:justify-center gap-4 mt-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest flex-wrap pr-16 md:pr-0">
