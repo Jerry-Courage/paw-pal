@@ -37,7 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <TopNav />
       <main className={cn(
         isFullViewport
-          ? 'fixed inset-0 overflow-hidden'
+          ? 'fixed inset-0 overflow-hidden z-[60]'
           : 'px-4 md:px-6 pb-20 md:pb-8'
       )}
         style={isFullViewport
