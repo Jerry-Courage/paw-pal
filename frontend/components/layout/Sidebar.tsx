@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard, Calendar, BookOpen, Sparkles,
   Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { groupsApi } from '@/lib/api'
+import { groupsApi, workspaceApi } from '@/lib/api'
 
 interface SidebarProps {
   onToggle?: () => void
@@ -30,12 +30,21 @@ const GROUP_COLORS = ['bg-emerald-400', 'bg-sky-400', 'bg-violet-400', 'bg-orang
 export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const qc = useQueryClient()
 
   const { data } = useQuery({
     queryKey: ['groups'],
     queryFn: () => groupsApi.getGroups('my').then(r => r.data),
   })
   const groups = data?.results || []
+
+  const { data: workspacesData } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => workspaceApi.getAll().then(r => r.data),
+    refetchInterval: 30000, // Sync every 30s
+  })
+  const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
+  const totalUnreadWorkspaces = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
 
   return (
     <aside className="w-64 bg-[#111] border-r border-white/5 flex flex-col h-full flex-shrink-0 relative overflow-hidden">
@@ -79,7 +88,12 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
               )}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
-              {item.label}
+              <span className="flex-1 truncate">{item.label}</span>
+              {item.href === '/workspace' && totalUnreadWorkspaces > 0 && (
+                <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full min-w-[18px] text-center shadow-lg shadow-orange-500/20">
+                  {totalUnreadWorkspaces > 9 ? '9+' : totalUnreadWorkspaces}
+                </span>
+              )}
             </Link>
           )
         })}

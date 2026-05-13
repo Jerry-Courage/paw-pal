@@ -10,9 +10,30 @@ def create_notification(user, type: str, title: str, body: str, link: str = ''):
         import threading
         
         # 1. Save to Database
-        Notification.objects.create(user=user, type=type, title=title, body=body, link=link)
+        notif = Notification.objects.create(user=user, type=type, title=title, body=body, link=link)
         
-        # 2. Trigger Push (Async to avoid blocking)
+        # 2. Trigger WS Push (Real-time)
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_notifications_{user.id}",
+            {
+                "type": "send_notification",
+                "notification": {
+                    "id": notif.id,
+                    "type": notif.type,
+                    "title": notif.title,
+                    "body": notif.body,
+                    "link": notif.link,
+                    "is_read": notif.is_read,
+                    "created_at": notif.created_at.isoformat(),
+                }
+            }
+        )
+
+        # 3. Trigger Push (Async to avoid blocking)
         def send_push():
             PushService.send_notification(user, title, body, link)
             
@@ -20,8 +41,10 @@ def create_notification(user, type: str, title: str, body: str, link: str = ''):
         thread.daemon = True
         thread.start()
         
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logger = logging.getLogger('flowstate')
+        logger.error(f"Failed to create notification for {user.email}: {e}")
 
 
 def notify_streak_at_risk(user):

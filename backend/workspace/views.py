@@ -112,6 +112,13 @@ class WorkspaceMessageView(APIView):
 
     def get(self, request, workspace_id):
         ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
+        
+        # Mark as Read: Update last_seen for the current user
+        member = ws.memberships.filter(user=request.user).first()
+        if member:
+            member.last_seen = timezone.now()
+            member.save(update_fields=['last_seen'])
+            
         msgs = ws.messages.all().order_by('created_at')
         return Response(WorkspaceMessageSerializer(msgs, many=True).data)
 

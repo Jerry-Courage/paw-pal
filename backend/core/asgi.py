@@ -10,6 +10,7 @@ from channels.auth import AuthMiddlewareStack
 from workspace.middleware import JWTAuthMiddleware
 from workspace.routing import websocket_urlpatterns as workspace_ws
 from ai_assistant.routing import websocket_urlpatterns as ai_ws
+from users.routing import websocket_urlpatterns as users_ws
 
 # ─── ASGI APPLICATION ENTRY ────────────────────────────────────────────────
 application = ProtocolTypeRouter({
@@ -17,7 +18,7 @@ application = ProtocolTypeRouter({
     "websocket": AuthMiddlewareStack(
         JWTAuthMiddleware(
             URLRouter(
-                workspace_ws + ai_ws
+                workspace_ws + ai_ws + users_ws
             )
         )
     ),

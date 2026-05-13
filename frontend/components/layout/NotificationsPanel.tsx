@@ -1,22 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { Bell, X, Sparkles, Users, Calendar, BookOpen, Flame, Info, Zap, CheckCheck } from 'lucide-react'
-import { authApi } from '@/lib/api'
+import { Bell, X, Sparkles, Users, Calendar, BookOpen, Flame, Info, Zap, CheckCheck, Trash2 } from 'lucide-react'
+import { authApi, SERVER_URL } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
+import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 
-const TYPE_CONFIG: Record<string, { icon: any; color: string }> = {
-  ai_nudge:  { icon: Sparkles, color: 'bg-sky-500/10 text-sky-400' },
-  streak:    { icon: Flame,    color: 'bg-orange-500/10 text-orange-400' },
-  deadline:  { icon: Calendar, color: 'bg-red-500/10 text-red-400' },
-  flashcard: { icon: BookOpen, color: 'bg-violet-500/10 text-violet-400' },
-  group:     { icon: Users,    color: 'bg-emerald-500/10 text-emerald-400' },
-  resource:  { icon: BookOpen, color: 'bg-violet-500/10 text-violet-400' },
-  system:    { icon: Info,     color: 'bg-white/5 text-slate-400' },
+const TYPE_CONFIG: Record<string, { icon: any; color: string; label: string; glow: string }> = {
+  ai_nudge:  { icon: Sparkles, color: 'text-sky-400',  label: 'AI Tip',    glow: 'bg-sky-500/10' },
+  streak:    { icon: Flame,    color: 'text-orange-400', label: 'Streak',    glow: 'bg-orange-500/10' },
+  deadline:  { icon: Calendar, color: 'text-red-400',    label: 'Deadline',  glow: 'bg-red-500/10' },
+  flashcard: { icon: BookOpen, color: 'text-violet-400', label: 'Flashcard', glow: 'bg-violet-500/10' },
+  group:     { icon: Users,    color: 'text-emerald-400',label: 'Collab',    glow: 'bg-emerald-500/10' },
+  resource:  { icon: BookOpen, color: 'text-amber-400',  label: 'Library',   glow: 'bg-amber-500/10' },
+  system:    { icon: Info,     color: 'text-slate-400',  label: 'System',    glow: 'bg-white/5' },
 }
 
 function timeAgo(iso: string) {
@@ -30,19 +32,71 @@ function timeAgo(iso: string) {
 }
 
 export default function NotificationsPanel() {
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const [open, setOpen] = useState(false)
   const [permission, setPermission] = useState(checkNotificationPermission())
   const [subscribing, setSubscribing] = useState(false)
   const qc = useQueryClient()
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Only poll when authenticated — stops the Unauthorized log noise
+  // 📡 Real-Time WebSocket Logic
+  useEffect(() => {
+    if (status !== 'authenticated') return
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = SERVER_URL.replace(/^https?:\/\//, '')
+    const wsUrl = `${protocol}//${host}/ws/notifications/`
+    
+    let socket: WebSocket | null = null
+    let reconnectTimeout: any = null
+
+    const connect = () => {
+      socket = new WebSocket(wsUrl)
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        if (data.type === 'new_notification') {
+          // Play subtle "pop" sound
+          if (audioRef.current) {
+            audioRef.current.currentTime = 0
+            audioRef.current.play().catch(() => {})
+          }
+          
+          // Update cache manually for instant UI update
+          qc.setQueryData(['notifications'], (old: any) => {
+            if (!old) return old
+            return {
+              ...old,
+              results: [data.notification, ...(old.results || [])].slice(0, 50),
+              unread_count: (old.unread_count || 0) + 1
+            }
+          })
+          
+          toast(data.notification.title, {
+            description: data.notification.body,
+            icon: <Bell className="w-4 h-4 text-orange-500" />
+          })
+        }
+      }
+
+      socket.onclose = () => {
+        reconnectTimeout = setTimeout(connect, 5000)
+      }
+    }
+
+    connect()
+    return () => {
+      if (socket) socket.close()
+      if (reconnectTimeout) clearTimeout(reconnectTimeout)
+    }
+  }, [status, qc])
+
   const { data, refetch } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => authApi.getNotifications().then(r => r.data),
-    refetchInterval: open ? 15000 : 60000,
     enabled: status === 'authenticated',
     retry: false,
+    staleTime: 60000,
   })
 
   const notifications: any[] = data?.results || []
@@ -58,147 +112,219 @@ export default function NotificationsPanel() {
     setSubscribing(true)
     try {
       const success = await registerPushNotifications()
-      if (success) {
-        setPermission('granted')
-      }
+      if (success) setPermission('granted')
     } finally {
       setSubscribing(false)
     }
   }
 
-  const markAllMutation = useMutation({
-    mutationFn: () => authApi.markAllRead(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  const markReadMutation = useMutation({
+    mutationFn: (id: number) => authApi.markRead(id),
+    onSuccess: (_, id) => {
+      qc.setQueryData(['notifications'], (old: any) => {
+        if (!old) return old
+        return {
+          ...old,
+          results: old.results.map((n: any) => n.id === id ? { ...n, is_read: true } : n),
+          unread_count: Math.max(0, old.unread_count - 1)
+        }
+      })
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => authApi.deleteNotification(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: (_, id) => {
+      qc.setQueryData(['notifications'], (old: any) => {
+        if (!old) return old
+        const wasUnread = old.results.find((n: any) => n.id === id)?.is_read === false
+        return {
+          ...old,
+          results: old.results.filter((n: any) => n.id !== id),
+          unread_count: wasUnread ? Math.max(0, old.unread_count - 1) : old.unread_count
+        }
+      })
+    },
   })
 
-  const markReadMutation = useMutation({
-    mutationFn: (id: number) => authApi.markRead(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  const markAllMutation = useMutation({
+    mutationFn: () => authApi.markAllRead(),
+    onSuccess: () => {
+      qc.setQueryData(['notifications'], (old: any) => {
+        if (!old) return old
+        return {
+          ...old,
+          results: old.results.map((n: any) => ({ ...n, is_read: true })),
+          unread_count: 0
+        }
+      })
+    },
   })
 
   if (status !== 'authenticated') return null
 
   return (
     <div className="relative">
+      <audio ref={audioRef} src="/sounds/notification.mp3" preload="auto" />
+      
       <button
         onClick={handleOpen}
-        className="relative p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
-      >
-        <Bell className="w-4 h-4" />
-        {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-orange-500 rounded-full flex items-center justify-center text-white text-[9px] font-black">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
+        className={cn(
+          "relative p-2 rounded-xl transition-all duration-300",
+          open ? "bg-white/10 text-white" : "text-slate-500 hover:text-white hover:bg-white/5"
         )}
+      >
+        <Bell className={cn("w-4 h-4", unreadCount > 0 && "animate-pulse")} />
+        <AnimatePresence>
+          {unreadCount > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+              className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border border-[#111]"
+            />
+          )}
+        </AnimatePresence>
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-[#1a1a1a] rounded-2xl border border-white/8 shadow-2xl z-50 overflow-hidden">
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <Bell className="w-3.5 h-3.5 text-slate-500" />
-                <span className="text-xs font-black text-white uppercase tracking-widest">Notifications</span>
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+              onClick={() => setOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute right-0 top-full mt-3 w-[340px] bg-[#1a1a1a]/80 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.02]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <Bell className="w-3.5 h-3.5 text-orange-500" />
+                  </div>
+                  <span className="text-xs font-black text-white uppercase tracking-widest">Nexus Inbox</span>
+                </div>
                 {unreadCount > 0 && (
-                  <span className="text-[10px] bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded-full font-black">
-                    {unreadCount} new
-                  </span>
+                  <button
+                    onClick={() => markAllMutation.mutate()}
+                    className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 hover:text-orange-400 transition-colors uppercase tracking-widest"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" /> Mark All
+                  </button>
                 )}
               </div>
-              {unreadCount > 0 && (
-                <button
-                  onClick={() => markAllMutation.mutate()}
-                  disabled={markAllMutation.isPending}
-                  className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-orange-400 transition-colors"
-                >
-                  <CheckCheck className="w-3 h-3" /> Mark all read
-                </button>
-              )}
-            </div>
 
-            {/* Push notification prompt */}
-            {permission === 'default' && (
-              <div className="px-4 py-3 border-b border-white/5 bg-orange-500/5">
-                <p className="text-[11px] text-slate-400 mb-2">Get notified about deadlines, streaks, and AI nudges.</p>
-                <button
-                  onClick={handleSubscribe}
-                  disabled={subscribing}
-                  className="w-full py-2 bg-orange-500/10 hover:bg-orange-500/15 text-orange-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 border border-orange-500/20"
-                >
-                  <Zap className="w-3 h-3" />
-                  {subscribing ? 'Enabling...' : 'Enable Push Notifications'}
-                </button>
-              </div>
-            )}
-
-            {permission === 'granted' && (
-              <div className="px-4 py-2 border-b border-white/5 bg-emerald-500/5">
-                <p className="text-[10px] text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Push notifications active
-                </p>
-              </div>
-            )}
-
-            {/* Notifications list */}
-            <div className="max-h-80 overflow-y-auto scrollbar-hide">
-              {notifications.length === 0 ? (
-                <div className="py-10 text-center">
-                  <Bell className="w-7 h-7 mx-auto mb-2 text-slate-700" />
-                  <p className="text-xs text-slate-600 font-medium">All caught up!</p>
-                </div>
-              ) : (
-                notifications.map(n => {
-                  const cfg = TYPE_CONFIG[n.type] || TYPE_CONFIG.system
-                  const Icon = cfg.icon
-                  const inner = (
-                    <div
-                      className={cn(
-                        'flex gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors cursor-pointer group',
-                        !n.is_read && 'bg-orange-500/3'
-                      )}
-                      onClick={() => !n.is_read && markReadMutation.mutate(n.id)}
+              {/* Body */}
+              <div className="max-h-[420px] overflow-y-auto scrollbar-hide py-2">
+                <AnimatePresence initial={false}>
+                  {notifications.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="py-16 text-center"
                     >
-                      <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', cfg.color)}>
-                        <Icon className="w-3.5 h-3.5" />
+                      <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <Bell className="w-6 h-6 text-slate-700" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className={cn('text-xs font-bold leading-snug', n.is_read ? 'text-slate-400' : 'text-white')}>
-                            {n.title}
-                          </span>
-                          <span className="text-[10px] text-slate-600 shrink-0">{timeAgo(n.created_at)}</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{n.body}</p>
-                      </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteMutation.mutate(n.id) }}
-                        className="text-slate-700 hover:text-slate-400 shrink-0 self-start mt-0.5 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )
-
-                  return n.link ? (
-                    <Link key={n.id} href={n.link} onClick={() => setOpen(false)}>{inner}</Link>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Peace and Quiet</p>
+                    </motion.div>
                   ) : (
-                    <div key={n.id}>{inner}</div>
-                  )
-                })
+                    notifications.map((n, idx) => {
+                      const cfg = TYPE_CONFIG[n.type] || TYPE_CONFIG.system
+                      const Icon = cfg.icon
+                      return (
+                        <motion.div
+                          key={n.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.03 }}
+                          className={cn(
+                            "relative group px-4 py-3.5 hover:bg-white/[0.03] transition-all cursor-default border-l-2",
+                            n.is_read ? "border-transparent opacity-60" : "border-orange-500 bg-orange-500/[0.02]"
+                          )}
+                        >
+                          <div className="flex gap-3.5">
+                            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg", cfg.glow)}>
+                              <Icon className={cn("w-4 h-4", cfg.color)} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2 mb-0.5">
+                                <span className={cn("text-[10px] font-black uppercase tracking-widest", cfg.color)}>
+                                  {cfg.label}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-600">{timeAgo(n.created_at)}</span>
+                              </div>
+                              <p className={cn("text-[13px] font-bold leading-snug mb-1", n.is_read ? "text-slate-400" : "text-white")}>
+                                {n.title}
+                              </p>
+                              <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{n.body}</p>
+                              
+                              <div className="flex items-center gap-3 mt-3">
+                                {n.link && (
+                                  <Link 
+                                    href={n.link} 
+                                    onClick={() => { setOpen(false); !n.is_read && markReadMutation.mutate(n.id) }}
+                                    className="text-[10px] font-black text-orange-500 uppercase tracking-widest hover:text-orange-400"
+                                  >
+                                    View Action
+                                  </Link>
+                                )}
+                                {!n.is_read && (
+                                  <button 
+                                    onClick={() => markReadMutation.mutate(n.id)}
+                                    className="text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white"
+                                  >
+                                    Mark Read
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => deleteMutation.mutate(n.id)}
+                              className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )
+                    })
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Footer / Push Prompt */}
+              {permission === 'default' && (
+                <div className="p-4 bg-orange-500/10 border-t border-white/5">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-orange-500/20">
+                      <Zap className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black text-white uppercase tracking-tight">Stay Synchronized</p>
+                      <p className="text-[10px] text-slate-400">Enable real-time push for streaks and deadlines.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSubscribe}
+                    disabled={subscribing}
+                    className="w-full py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-orange-500/20"
+                  >
+                    {subscribing ? "Activating..." : "Enable Push"}
+                  </button>
+                </div>
               )}
-            </div>
-          </div>
-        </>
-      )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

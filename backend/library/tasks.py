@@ -372,6 +372,13 @@ def process_resource_task(res_id):
         res.save()
         logger.info(f'[Task Queue] Resource {res.id} marked as ready.')
 
+        # 📳 Trigger Notification
+        try:
+            from users.notifications import notify_resource_ready
+            notify_resource_ready(res.owner, res.title, res.id)
+        except Exception as ne:
+            logger.error(f"Failed to send resource ready notification: {ne}")
+
         # ─── AUTO-GENERATE SELECTED FEATURES ───
         features = [f for f in (res.selected_features or []) if f != 'notes']
         if features:

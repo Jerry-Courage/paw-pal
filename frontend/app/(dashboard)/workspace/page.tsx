@@ -84,9 +84,22 @@ export default function WorkspacePortal() {
                     <div className={cn('w-12 h-12 bg-gradient-to-br rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg ring-1 ring-white/10', COLORS[i % COLORS.length])}>
                       {ws.name[0].toUpperCase()}
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
-                      <Users className="w-3 h-3 text-zinc-500" />
-                      <span className="text-[10px] font-black text-zinc-400">{ws.member_count}</span>
+                    <div className="flex items-center gap-2">
+                      <AnimatePresence>
+                        {ws.unread_count > 0 && (
+                          <motion.div
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="px-2 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-orange-500/20"
+                          >
+                            {ws.unread_count}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                        <Users className="w-3 h-3 text-zinc-500" />
+                        <span className="text-[10px] font-black text-zinc-400">{ws.member_count}</span>
+                      </div>
                     </div>
                   </div>
 

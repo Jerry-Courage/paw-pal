@@ -332,29 +332,52 @@ class AIService:
             for msg in messages
         )
 
-        # ── VISION FAST PATH ──────────────────────────────────────────────────
+        # ── VISION FAST PATH (2026 Standard) ──────────────────────────────────
         if has_images:
-            for groq_key in self._groq_keys():
+            # 1. Try Google Gemini (Supreme Vision Intelligence — 2026 Generation)
+            for g_client in self._google_clients():
                 try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            GROQ_API_URL,
-                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                            json={'model': 'llama-3.2-90b-vision-instruct', 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=15,
-                        )
-                        if resp.status_code == 200:
-                            return self._extract_content(resp.json())
+                    contents, sys_instr = self._to_gemini_format(messages)
+                    if sys_instr and contents and contents[0].get('role') == 'user':
+                        contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                    
+                    response = await asyncio.wait_for(
+                        g_client.aio.models.generate_content(
+                            model='gemini-2.5-flash', contents=contents, config={'max_output_tokens': max_tokens}
+                        ), timeout=25
+                    )
+                    if response.text:
+                        logger.info(f"[Google Vision Chat] ✓ gemini-2.5-flash")
+                        return response.text
                 except Exception as e:
-                    logger.error(f"[Groq Vision Chat Error] {e}")
-            # Fall through to OpenRouter vision fallback below
+                    logger.warning(f"[Google Vision Chat] Failed: {e}")
 
+            # 2. Try Groq (Llama 4 Maverick / Scout — 2026 High-Speed Vision)
+            for groq_key in self._groq_keys():
+                for groq_model in ['meta-llama/llama-4-scout-17b-16e-instruct', 'groq/compound', 'llama-3.3-70b-versatile']:
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(
+                                GROQ_API_URL,
+                                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                                timeout=15,
+                            )
+                            if resp.status_code == 200:
+                                logger.info(f"[Groq Vision Chat] ✓ {groq_model}")
+                                return self._extract_content(resp.json())
+                    except Exception as e:
+                        logger.warning(f"[Groq Vision Chat] {groq_model} error: {e}")
+            
+            # Fall through to OpenRouter vision fallback below
+            
         # ── STAGE 0: GROQ (all keys) — fastest inference on the planet ─────
         groq_keys = self._groq_keys()
 
         if groq_keys and not has_images:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
+                    ('groq/compound', 8),              # 2026 MoE Flagship
                     ('openai/gpt-oss-20b', 6),         # 1000 t/s — absolute fastest
                     ('llama-3.1-8b-instant', 6),       # 560 t/s  — reliable fast
                 ]:

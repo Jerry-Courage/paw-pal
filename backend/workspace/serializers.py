@@ -103,14 +103,26 @@ class WorkspaceDetailSerializer(serializers.ModelSerializer):
 class WorkspaceSerializer(serializers.ModelSerializer):
     member_count = serializers.IntegerField(source='members.count', read_only=True)
     is_owner = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Workspace
         fields = [
             'id', 'name', 'subject', 'description', 
             'is_active', 'member_count', 'is_owner', 
-            'created_at', 'updated_at'
+            'unread_count', 'created_at', 'updated_at'
         ]
+
+    def get_unread_count(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return 0
+        # Optimization: Use prefetch_related if possible, but for count it's okay
+        membership = obj.memberships.filter(user=request.user).first()
+        if not membership:
+            return 0
+        # Count messages created after the user's last_seen
+        return obj.messages.filter(created_at__gt=membership.last_seen).count()
 
     def get_is_owner(self, obj):
         request = self.context.get('request')
