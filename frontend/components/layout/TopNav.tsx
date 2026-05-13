@@ -15,7 +15,6 @@ import NotificationsPanel from '@/components/layout/NotificationsPanel'
 import SearchBar from '@/components/layout/SearchBar'
 import { useQuery } from '@tanstack/react-query'
 import { workspaceApi } from '@/lib/api'
-import { useSession } from 'next-auth/react'
 
 const NAV_ITEMS = [
   { href: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
