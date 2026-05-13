@@ -104,6 +104,7 @@ export const libraryApi = {
     api.post(`/library/resources/${id}/math/solve/`, { problem }),
   cloneResource: (id: number) =>
     api.post(`/library/resources/${id}/clone/`),
+  searchResources: (q: string) => api.get('/library/resources/search/', { params: { q } }),
 }
 
 // AI

@@ -476,22 +476,23 @@ class ResourceFileView(APIView):
             return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            import base64, os
-            # Check file exists before trying to read
-            if not os.path.exists(resource.file.path):
-                return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
-            file_data = resource.file.read()
+            import base64
+            # Storage-agnostic check and read
+            if not resource.file.storage.exists(resource.file.name):
+                return Response({'error': 'File no longer available in storage.'}, status=status.HTTP_404_NOT_FOUND)
+            
+            with resource.file.open('rb') as f:
+                file_data = f.read()
+                
             base64_data = base64.b64encode(file_data).decode('utf-8')
             return Response({
                 'data': base64_data,
                 'file_name': resource.file.name,
                 'size': len(file_data)
             })
-        except FileNotFoundError:
-            return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"[ResourceFileView] Error reading file for resource {resource_id}: {e}")
-            return Response({'error': 'Failed to read file.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': f'Failed to read file: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ReprocessResourceView(APIView):
     """
@@ -514,5 +515,23 @@ class ReprocessResourceView(APIView):
         # Trigger local background task
         async_task('library.tasks.process_resource_task', resource.id)
         
-        logger.info(f'[Manual Failover] User {request.user.id} forced local synthesis for Resource {resource.id}')
-        return Response({'success': True, 'message': 'Imperial Forge ignited locally. Check status in a few minutes.'})
+
+class GlobalSearchView(APIView):
+    """
+    True Semantic Search across the entire library using AIService.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+        if not query:
+            return Response([])
+
+        from asgiref.sync import async_to_sync
+        ai = AIService()
+        results = async_to_sync(ai.search_library)(query, request.user)
+        
+        # Optionally, we could group by resource here to make the UI cleaner
+        # but for now, we'll return the raw ranked snippets.
+        return Response(results)
