@@ -271,8 +271,10 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ─── File Upload Security ─────────────────────────────────────────────────────
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
-ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.pptx', '.txt', '.py', '.js', '.ts', '.jpg', '.jpeg', '.png', '.mp4']
+ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.pptx', '.txt', '.py', '.js', '.ts', '.jpg', '.jpeg', '.png', '.mp4', '.heic', '.heif']
 API_URL = os.getenv('API_URL', os.getenv('RENDER_EXTERNAL_URL', 'http://localhost:8000'))
 
 # ─── OpenRouter ───────────────────────────────────────────────────────────────

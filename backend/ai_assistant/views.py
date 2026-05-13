@@ -519,10 +519,18 @@ class VisionMessageView(APIView):
             uploaded_file.seek(0) # Reset pointer for potential reread
             file_url = f"{settings.MEDIA_URL}{path}"
 
-            if ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
+            if ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic', '.heif']:
                 import base64
                 img_data = base64.b64encode(uploaded_file.read()).decode('utf-8')
-                mime = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else f'image/{ext[1:]}'
+                
+                # MIME mapping for standard and high-efficiency formats
+                mime_map = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.heic': 'image/heic',
+                    '.heif': 'image/heif'
+                }
+                mime = mime_map.get(ext, f'image/{ext[1:]}')
                 is_vision = True
 
                 # Build multimodal message

@@ -120,7 +120,6 @@ export const aiApi = {
     if (file) fd.append('file', file)
     return api.post(`/ai/sessions/${sessionId}/message/vision/`, fd, {
       ...config,
-      headers: { ...config?.headers, 'Content-Type': 'multipart/form-data' },
     })
   },
   generateDiagram: (description: string, type: string, message_id?: number) =>
