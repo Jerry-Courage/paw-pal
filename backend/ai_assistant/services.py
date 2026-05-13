@@ -557,6 +557,7 @@ class AIService:
         if groq_keys:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
+                    ('groq/compound', 60),             # 2026 Flagship
                     ('llama-3.3-70b-versatile', 60),   # most capable on Groq
                     ('openai/gpt-oss-120b', 60),       # smart
                 ]:
