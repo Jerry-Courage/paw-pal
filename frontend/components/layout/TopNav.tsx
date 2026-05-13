@@ -13,6 +13,9 @@ import { cn } from '@/lib/utils'
 import { getInitials } from '@/lib/utils'
 import NotificationsPanel from '@/components/layout/NotificationsPanel'
 import SearchBar from '@/components/layout/SearchBar'
+import { useQuery } from '@tanstack/react-query'
+import { workspaceApi } from '@/lib/api'
+import { useSession } from 'next-auth/react'
 
 const NAV_ITEMS = [
   { href: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
@@ -28,6 +31,16 @@ export default function TopNav() {
   const { data: session } = useSession()
   const [mobileOpen, setMobileOpen] = useState(false)
   const name = session?.user?.name || session?.user?.email || 'User'
+
+  // Unread workspace count — shares cache with Sidebar, no extra requests
+  const { data: workspacesData } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => workspaceApi.getAll().then(r => r.data),
+    staleTime: 30000,
+    enabled: !!session,
+  })
+  const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
+  const totalUnread = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
 
   return (
     <>
@@ -50,14 +63,15 @@ export default function TopNav() {
 
         {/* Desktop nav links + search */}
         <nav className="hidden md:flex items-center gap-0.5 flex-1">
-          {NAV_ITEMS.map(item => {
+        {NAV_ITEMS.map(item => {
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+            const showBadge = item.href === '/workspace' && totalUnread > 0
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap',
+                  'relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap',
                   active
                     ? 'bg-orange-500/10 text-orange-400'
                     : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
@@ -65,6 +79,11 @@ export default function TopNav() {
               >
                 <item.icon className="w-3.5 h-3.5" />
                 {item.label}
+                {showBadge && (
+                  <span className="ml-0.5 px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full min-w-[16px] text-center leading-none">
+                    {totalUnread > 9 ? '9+' : totalUnread}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -135,6 +154,7 @@ export default function TopNav() {
             <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
               {NAV_ITEMS.map(item => {
                 const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                const showBadge = item.href === '/workspace' && totalUnread > 0
                 return (
                   <Link
                     key={item.href}
@@ -146,7 +166,12 @@ export default function TopNav() {
                     )}
                   >
                     <item.icon className="w-4 h-4 shrink-0" />
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full min-w-[18px] text-center">
+                        {totalUnread > 9 ? '9+' : totalUnread}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
