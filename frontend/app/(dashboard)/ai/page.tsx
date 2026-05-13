@@ -362,27 +362,27 @@ function RichContent({ content }: { content: string }) {
 // ─── THINKING INDICATOR ───────────────────────────────────────────────────────
 function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) {
   const states = action === 'diagram'
-    ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/10', label: 'Generating diagram...' }
+    ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/5', border: 'border-violet-500/10', label: 'Drafting diagram...' }
     : action === 'image'
-    ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/10', label: 'Generating image...' }
-    : { icon: Sparkles, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Thinking...' }
+    ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/5', border: 'border-pink-500/10', label: 'Synthesizing image...' }
+    : { icon: Sparkles, color: 'text-orange-400', bg: 'bg-orange-500/5', border: 'border-orange-500/10', label: 'Processing...' }
 
   const Icon = states.icon
 
   return (
-    <div className="flex items-start gap-3">
-      <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', states.bg)}>
+    <div className="flex items-start gap-4">
+      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#1a1a1a] border border-white/5')}>
         <Icon className={cn('w-4 h-4', states.color, 'animate-pulse')} />
       </div>
-      <div className={cn('px-4 py-3 rounded-2xl rounded-tl-none border', states.bg, 'border-white/5')}>
-        <div className="flex items-center gap-2">
+      <div className={cn('px-5 py-3.5 rounded-2xl rounded-tl-none border backdrop-blur-md', states.bg, states.border)}>
+        <div className="flex items-center gap-3">
           <div className="flex gap-1">
             {[0,1,2].map(i => (
               <span key={i} className={cn('w-1.5 h-1.5 rounded-full animate-bounce', states.color.replace('text-', 'bg-'))}
-                style={{ animationDelay: `${i * 0.15}s` }} />
+                style={{ animationDelay: `${i * 0.2}s` }} />
             ))}
           </div>
-          <span className={cn('text-xs font-medium', states.color)}>{states.label}</span>
+          <span className={cn('text-[11px] font-bold tracking-wider uppercase opacity-80', states.color)}>{states.label}</span>
         </div>
       </div>
     </div>
@@ -402,58 +402,86 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
     toast.success('Copied')
   }
 
+  const downloadImage = (e: React.MouseEvent, url: string) => {
+    e.stopPropagation()
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `generated-${Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
-    <div className={cn('flex gap-3 group', isUser ? 'flex-row-reverse' : 'flex-row')}>
+    <div className={cn('flex gap-4 group w-full', isUser ? 'flex-row-reverse' : 'flex-row')}>
       {/* Avatar */}
       <div className={cn(
-        'w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 mt-1',
-        isUser ? 'bg-orange-500 text-white' : 'bg-white/8 text-slate-400'
+        'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg',
+        isUser 
+          ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white order-2' 
+          : 'bg-[#1a1a1a] border border-white/5 text-orange-400 order-1'
       )}>
-        {isUser ? 'ME' : <Sparkles className="w-4 h-4" />}
+        {isUser ? <span className="font-black text-[10px]">ME</span> : <Sparkles className="w-4 h-4" />}
       </div>
 
-      {/* Bubble */}
-      <div className={cn('flex flex-col gap-1 min-w-0', isUser ? 'items-end' : 'items-start', 'max-w-[82%] sm:max-w-[75%]')}>
-        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">
-          {isUser ? 'You' : 'FlowAI'}
-        </span>
-
+      {/* Bubble Container */}
+      <div className={cn(
+        'flex flex-col gap-2 min-w-0 max-w-[85%] sm:max-w-[75%]',
+        isUser ? 'items-end' : 'items-start'
+      )}>
         <div className={cn(
-          'rounded-2xl px-4 py-3 w-full relative',
+          'rounded-3xl px-5 py-3.5 relative overflow-hidden transition-all duration-300',
           isUser
-            ? 'bg-[#1e1e1e] border border-white/8 text-slate-100 rounded-tr-none'
-            : 'bg-[#111] border border-white/6 text-slate-200 rounded-tl-none'
+            ? 'bg-[#1a1a1a] border border-white/8 text-slate-100 rounded-tr-sm shadow-xl'
+            : 'bg-white/[0.03] backdrop-blur-md border border-white/8 text-slate-200 rounded-tl-sm shadow-2xl'
         )}>
+          {/* Subtle background glow for AI */}
+          {!isUser && <div className="absolute -top-10 -right-10 w-24 h-24 bg-orange-500/5 blur-[40px] pointer-events-none" />}
+
           {/* User image attachment */}
           {msg.image && isUser && (
-            <div className="mb-3 rounded-xl overflow-hidden border border-white/10">
-              <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-64 object-contain" />
+            <div className="mb-4 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+              <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
             </div>
           )}
 
           {/* Content */}
           {isUser ? (
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
           ) : (
-            <div className="text-sm">
+            <div className="text-[15px] leading-relaxed">
               <RichContent content={msg.content} />
             </div>
           )}
 
           {/* AI-generated image */}
           {msg.image && !isUser && (
-            <div className="mt-3 rounded-xl overflow-hidden border border-white/10 cursor-zoom-in relative group/img"
-              onClick={() => setImgLightbox(msg.image!)}>
+            <div 
+              className="mt-4 rounded-2xl overflow-hidden border border-white/10 cursor-zoom-in relative group/img shadow-2xl transition-transform hover:scale-[1.01] active:scale-[0.99]"
+              onClick={() => setImgLightbox(msg.image!)}
+            >
               <img src={msg.image} alt="generated" className="max-w-full h-auto" />
-              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-all flex items-center justify-center">
-                <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover/img:opacity-100 transition-all drop-shadow-lg" />
+              
+              {/* Image Overlays */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                <div className="flex items-center justify-between gap-2 translate-y-4 group-hover/img:translate-y-0 transition-transform duration-300">
+                  <button 
+                    onClick={(e) => downloadImage(e, msg.image!)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-bold text-white hover:bg-white/20 transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5" /> DOWNLOAD
+                  </button>
+                  <div className="p-2 bg-white/10 backdrop-blur-md border border-white/10 rounded-xl">
+                    <Maximize2 className="w-4 h-4 text-white" />
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Standalone diagram (from diagram field, not inline in text) */}
+          {/* Standalone diagram */}
           {msg.diagram && (
-            <div className="mt-3">
+            <div className="mt-4 animate-fade-in">
               <MermaidChart chart={msg.diagram} />
             </div>
           )}
@@ -461,12 +489,18 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
 
         {/* Actions row */}
         {!isUser && (
-          <div className="flex items-center gap-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={handleCopy}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all text-[10px] font-medium">
-              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          <div className="flex items-center gap-3 px-2">
+            <button 
+              onClick={handleCopy}
+              className="group/copy flex items-center gap-1.5 text-slate-500 hover:text-orange-400 transition-colors text-[10px] font-black uppercase tracking-widest"
+            >
+              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 group-hover/copy:scale-110 transition-transform" />}
               {copied ? 'Copied' : 'Copy'}
             </button>
+            <div className="h-1 w-1 rounded-full bg-white/10" />
+            <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">
+              Verified Response
+            </span>
           </div>
         )}
       </div>
