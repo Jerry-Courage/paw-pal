@@ -14,6 +14,9 @@ import { timeAgo, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 // ─── LIGHTBOX ────────────────────────────────────────────────────────────────
 function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
@@ -279,7 +282,8 @@ function RichContent({ content }: { content: string }) {
         ) : (
           <ReactMarkdown
             key={i}
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
             components={{
               // Headings
               h1: ({ children }) => <h1 className="text-xl font-black text-white mt-5 mb-2 tracking-tight">{children}</h1>,
