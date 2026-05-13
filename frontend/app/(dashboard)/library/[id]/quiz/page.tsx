@@ -10,6 +10,11 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 interface MCQQuestion {
   question: string
@@ -329,7 +334,13 @@ export default function QuizPage({ params }: { params: { id: string } }) {
           {/* Question card */}
           <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-5">
             <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2 block">Multiple Choice</span>
-            <p className="text-base font-bold text-white leading-relaxed">{q?.question}</p>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm, remarkMath]} 
+              rehypePlugins={[rehypeKatex]}
+              className="text-base font-bold text-white leading-relaxed prose prose-invert max-w-none"
+            >
+              {q?.question}
+            </ReactMarkdown>
           </div>
 
           {/* Options */}
@@ -359,7 +370,15 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                       : isChosen ? <XCircle className="w-3.5 h-3.5" />
                       : letter : letter}
                   </span>
-                  <span className="flex-1 leading-snug">{opt}</span>
+                  <div className="flex-1 leading-snug">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm, remarkMath]} 
+                      rehypePlugins={[rehypeKatex]}
+                      className="prose prose-invert prose-sm max-w-none"
+                    >
+                      {opt}
+                    </ReactMarkdown>
+                  </div>
                 </button>
               )
             })}
@@ -369,7 +388,13 @@ export default function QuizPage({ params }: { params: { id: string } }) {
           {isRevealed && q?.explanation && (
             <div className="bg-sky-500/8 border border-sky-500/20 rounded-2xl p-4">
               <p className="text-[10px] font-black text-sky-400 uppercase tracking-widest mb-1.5">Explanation</p>
-              <p className="text-sm text-sky-200/80 leading-relaxed">{q.explanation}</p>
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm, remarkMath]} 
+                rehypePlugins={[rehypeKatex]}
+                className="text-sm text-sky-200/80 leading-relaxed prose prose-invert prose-sm max-w-none"
+              >
+                {q.explanation}
+              </ReactMarkdown>
             </div>
           )}
         </div>

@@ -11,6 +11,11 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 interface Question { question: string; type: string; hint?: string; model_answer: string }
 interface GradeResult { score: number; grade: string; correct: boolean; feedback: string; strengths: string[]; improvements: string[]; tip: string }
@@ -199,7 +204,13 @@ export default function PracticePage({ params }: { params: { id: string } }) {
           <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2 block">
             {q?.type?.replace('_', ' ') || 'Short Answer'}
           </span>
-          <p className="text-base font-bold text-white leading-relaxed">{q?.question}</p>
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm, remarkMath]} 
+            rehypePlugins={[rehypeKatex]}
+            className="text-base font-bold text-white leading-relaxed prose prose-invert max-w-none"
+          >
+            {q?.question}
+          </ReactMarkdown>
           {q?.hint && (
             <div className="mt-3">
               {!showHint ? (
@@ -209,7 +220,15 @@ export default function PracticePage({ params }: { params: { id: string } }) {
               ) : (
                 <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2.5 mt-2">
                   <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-300">{q.hint}</p>
+                  <div className="text-xs text-amber-300">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm, remarkMath]} 
+                      rehypePlugins={[rehypeKatex]}
+                      className="prose prose-invert prose-sm max-w-none text-amber-300"
+                    >
+                      {q.hint}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               )}
             </div>
@@ -244,25 +263,54 @@ export default function PracticePage({ params }: { params: { id: string } }) {
                   {grade.correct ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-red-400" />}
                   <span className={cn('text-sm font-black', GRADE_COLOR(grade.grade))}>Grade: {grade.grade}</span>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">{grade.feedback}</p>
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm, remarkMath]} 
+                  rehypePlugins={[rehypeKatex]}
+                  className="text-xs text-slate-400 leading-relaxed prose prose-invert prose-sm max-w-none"
+                >
+                  {grade.feedback}
+                </ReactMarkdown>
               </div>
             </div>
             {grade.strengths?.length > 0 && (
               <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-2xl p-4">
                 <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> What you got right</p>
-                <ul className="space-y-1">{grade.strengths.map((s, i) => <li key={i} className="text-xs text-emerald-300 flex items-start gap-1.5"><span className="mt-0.5 shrink-0">•</span>{s}</li>)}</ul>
+                <ul className="space-y-1">
+                  {grade.strengths.map((s, i) => (
+                    <li key={i} className="text-xs text-emerald-300 flex items-start gap-1.5">
+                      <span className="mt-0.5 shrink-0">•</span>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} className="inline prose prose-invert prose-sm max-w-none text-emerald-300">{s}</ReactMarkdown>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {grade.improvements?.length > 0 && (
               <div className="bg-orange-500/8 border border-orange-500/20 rounded-2xl p-4">
                 <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> How to improve</p>
-                <ul className="space-y-1">{grade.improvements.map((s, i) => <li key={i} className="text-xs text-orange-300 flex items-start gap-1.5"><span className="mt-0.5 shrink-0">•</span>{s}</li>)}</ul>
+                <ul className="space-y-1">
+                  {grade.improvements.map((s, i) => (
+                    <li key={i} className="text-xs text-orange-300 flex items-start gap-1.5">
+                      <span className="mt-0.5 shrink-0">•</span>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} className="inline prose prose-invert prose-sm max-w-none text-orange-300">{s}</ReactMarkdown>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {grade.tip && (
               <div className="bg-sky-500/8 border border-sky-500/20 rounded-2xl p-4 flex items-start gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-sky-300"><span className="font-black">Study tip:</span> {grade.tip}</p>
+                <div className="text-xs text-sky-300">
+                  <span className="font-black">Study tip:</span> 
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]} 
+                    rehypePlugins={[rehypeKatex]}
+                    className="inline prose prose-invert prose-sm max-w-none text-sky-300 ml-1"
+                  >
+                    {grade.tip}
+                  </ReactMarkdown>
+                </div>
               </div>
             )}
           </div>
