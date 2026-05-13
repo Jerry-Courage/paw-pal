@@ -38,6 +38,14 @@ export default function DashboardPage() {
     queryFn: () => authApi.getAnalytics().then(r => r.data),
   })
 
+  const { data: workspacesData } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => workspaceApi.getAll().then(r => r.data),
+    staleTime: 30000,
+  })
+  const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
+  const totalUnread = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
+
   const sessions = sessionsData?.results || []
   const resources = resourcesData?.results || []
   const activeSession = sessions.find((s: any) => s.status === 'active' || s.status === 'scheduled')
@@ -49,7 +57,7 @@ export default function DashboardPage() {
 
   const quickActions = [
     { icon: Plus,      label: 'New Session',   sub: 'Start a focused block',   href: '/planner?new=1', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
-    { icon: LayoutGrid, label: 'Collab Space',  sub: 'Study with your group',   href: '/workspace',     color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    { icon: LayoutGrid, label: 'Collab Space',  sub: 'Study with your group',   href: '/workspace',     color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', badge: totalUnread },
     { icon: Upload,   label: 'Upload Files', sub: 'PDF, Video, or Notes',    href: '/library',       color: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
     { icon: Sparkles, label: 'Ask AI',       sub: 'Instant study help',      href: '/ai',            color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
   ]
@@ -107,7 +115,12 @@ export default function DashboardPage() {
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {quickActions.map(a => (
-                <Link key={a.label} href={a.href} className="group flex flex-col gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:border-white/12 transition-all hover:-translate-y-0.5">
+                <Link key={a.label} href={a.href} className="group relative flex flex-col gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:border-white/12 transition-all hover:-translate-y-0.5">
+                  {(a as any).badge > 0 && (
+                    <div className="absolute top-3 right-3 px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-orange-500/20">
+                      {(a as any).badge > 9 ? '9+' : (a as any).badge}
+                    </div>
+                  )}
                   <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center border transition-transform group-hover:scale-110', a.color)}>
                     <a.icon className="w-5 h-5" />
                   </div>
