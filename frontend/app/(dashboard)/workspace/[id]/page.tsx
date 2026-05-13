@@ -489,8 +489,27 @@ export default function WorkspaceCollaborationStudio() {
                       initial={{ opacity: 0, scale: 0.95, y: 8 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                      className="absolute right-0 mt-2 w-44 bg-[#1a1a1a] border border-white/8 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
+                      className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/8 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
                     >
+                      {/* Mobile Invite Section */}
+                      <div className="px-3 py-2.5 border-b border-white/5 mb-1.5 bg-white/[0.02]">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Workspace Code</p>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyInviteCode();
+                          }}
+                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-white/8 rounded-lg hover:border-orange-500/30 transition-all group active:scale-[0.98]"
+                        >
+                          <span className="text-xs font-mono text-orange-500 font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
+                          {copied ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                          )}
+                        </button>
+                      </div>
+
                       {workspace?.is_owner ? (
                         <button 
                           onClick={handleDeleteWorkspace}
