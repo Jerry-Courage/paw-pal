@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { Bell, X, Sparkles, Users, Calendar, BookOpen, Flame, Info, Zap, CheckCheck, Trash2 } from 'lucide-react'
-import { authApi, SERVER_URL } from '@/lib/api'
+import { authApi, SERVER_URL, getAuthToken } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
@@ -37,50 +37,54 @@ export default function NotificationsPanel() {
   const [permission, setPermission] = useState(checkNotificationPermission())
   const [subscribing, setSubscribing] = useState(false)
   const qc = useQueryClient()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // 📡 Real-Time WebSocket Logic
   useEffect(() => {
     if (status !== 'authenticated') return
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = SERVER_URL.replace(/^https?:\/\//, '')
-    const wsUrl = `${protocol}//${host}/ws/notifications/`
-    
     let socket: WebSocket | null = null
     let reconnectTimeout: any = null
 
-    const connect = () => {
-      socket = new WebSocket(wsUrl)
+    const connect = async () => {
+      try {
+        const token = await authApi.getNotifications().then(() => getAuthToken()) // Helper to get token
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const host = SERVER_URL.replace(/^https?:\/\//, '')
+        const wsUrl = `${protocol}//${host}/ws/notifications/${token ? `?token=${token}` : ''}`
+        
+        console.log("[WS Notifications] Connecting...")
+        socket = new WebSocket(wsUrl)
 
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.type === 'new_notification') {
-          // Play subtle "pop" sound
-          if (audioRef.current) {
-            audioRef.current.currentTime = 0
-            audioRef.current.play().catch(() => {})
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+          if (data.type === 'new_notification') {
+            // Update cache manually for instant UI update
+            qc.setQueryData(['notifications'], (old: any) => {
+              if (!old) return old
+              return {
+                ...old,
+                results: [data.notification, ...(old.results || [])].slice(0, 50),
+                unread_count: (old.unread_count || 0) + 1
+              }
+            })
+            
+            toast(data.notification.title, {
+              description: data.notification.body,
+              icon: <Bell className="w-4 h-4 text-orange-500" />
+            })
           }
-          
-          // Update cache manually for instant UI update
-          qc.setQueryData(['notifications'], (old: any) => {
-            if (!old) return old
-            return {
-              ...old,
-              results: [data.notification, ...(old.results || [])].slice(0, 50),
-              unread_count: (old.unread_count || 0) + 1
-            }
-          })
-          
-          toast(data.notification.title, {
-            description: data.notification.body,
-            icon: <Bell className="w-4 h-4 text-orange-500" />
-          })
         }
-      }
 
-      socket.onclose = () => {
-        reconnectTimeout = setTimeout(connect, 5000)
+        socket.onclose = () => {
+          console.warn("[WS Notifications] Closed. Reconnecting...")
+          reconnectTimeout = setTimeout(connect, 5000)
+        }
+
+        socket.onerror = (err) => {
+          console.error("[WS Notifications] Error:", err)
+        }
+      } catch (err) {
+        console.error("[WS Notifications] Connection failed:", err)
       }
     }
 
@@ -165,7 +169,6 @@ export default function NotificationsPanel() {
 
   return (
     <div className="relative">
-      <audio ref={audioRef} src="/sounds/notification.mp3" preload="auto" />
       
       <button
         onClick={handleOpen}
@@ -201,7 +204,7 @@ export default function NotificationsPanel() {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 top-full mt-3 w-[340px] bg-[#1a1a1a]/80 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
+              className="fixed sm:absolute inset-x-4 sm:inset-x-auto sm:right-0 top-20 sm:top-full mt-3 w-auto sm:w-[380px] bg-[#1a1a1a]/90 backdrop-blur-3xl rounded-[32px] border border-white/10 shadow-[0_25px_80px_rgba(0,0,0,0.8)] z-50 overflow-hidden"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.02]">
@@ -230,10 +233,11 @@ export default function NotificationsPanel() {
                       animate={{ opacity: 1 }}
                       className="py-16 text-center"
                     >
-                      <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                        <Bell className="w-6 h-6 text-slate-700" />
+                      <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-white/5">
+                        <Bell className="w-7 h-7 text-slate-700" />
                       </div>
-                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Peace and Quiet</p>
+                      <p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.25em] mb-1">Silence is Golden</p>
+                      <p className="text-[10px] text-slate-600 font-medium">Your Nexus Inbox is clean.</p>
                     </motion.div>
                   ) : (
                     notifications.map((n, idx) => {
