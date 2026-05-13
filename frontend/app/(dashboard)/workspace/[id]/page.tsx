@@ -683,17 +683,19 @@ export default function WorkspaceCollaborationStudio() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsKnowledgeDrawerOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
             />
             <motion.div 
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-[#0d0d0d] border-l border-white/5 z-50 flex flex-col"
+              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-[#0d0d0d] border-l border-white/5 z-[70] flex flex-col"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5"
+                style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
+              >
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 bg-orange-500/10 rounded-lg flex items-center justify-center">
                     <BookOpen className="w-3.5 h-3.5 text-orange-500" />
@@ -703,20 +705,18 @@ export default function WorkspaceCollaborationStudio() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {viewingResource && (
-                    <button 
-                      onClick={() => setViewingResource(null)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-white text-xs font-medium"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Back</span>
-                    </button>
-                  )}
                   <button 
-                    onClick={() => { setIsKnowledgeDrawerOpen(false); setViewingResource(null) }} 
-                    className="p-1.5 hover:bg-white/5 rounded-lg transition-colors"
+                    onClick={() => { 
+                      if (viewingResource) {
+                        setViewingResource(null)
+                      } else {
+                        setIsKnowledgeDrawerOpen(false)
+                      }
+                    }} 
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white"
                   >
-                    <X className="w-4 h-4 text-slate-500" />
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="text-xs font-semibold">Back</span>
                   </button>
                 </div>
               </div>
