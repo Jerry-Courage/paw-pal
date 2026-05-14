@@ -36,22 +36,24 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.accessToken = (user as any).accessToken
-        token.refreshToken = (user as any).refreshToken
-        token.id = user.id
-        token.email = user.email
-        token.name = (user as any).username
-        token.picture = (user as any).avatar_url
-      }
-      return token
-    },
-    async session({ session, token }) {
-      session.accessToken = token.accessToken as string
-      session.user.id = token.id as string
-      return session
-    },
+  async jwt({ token, user }) {
+    if (user) {
+      token.accessToken = (user as any).accessToken
+      token.refreshToken = (user as any).refreshToken
+      token.id = user.id
+      token.email = user.email
+      token.name = (user as any).username
+      token.picture = (user as any).avatar_url
+      token.onboarded = (user as any).onboarding_status?.completed || false
+    }
+    return token
+  },
+  async session({ session, token }) {
+    session.accessToken = token.accessToken as string
+    session.user.id = token.id as string
+    (session.user as any).onboarded = token.onboarded
+    return session
+  },
   },
   pages: {
     signIn: '/login',

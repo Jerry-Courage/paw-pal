@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import TopNav from '@/components/layout/TopNav'
@@ -14,12 +14,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login')
   }, [status, router])
 
-  // Ask for push permission shortly after app loads (only once, only if not already decided)
+  // Onboarding Logic
+  useEffect(() => {
+    if (status !== 'authenticated' || !session) return
+    
+    const onboardedLocal = localStorage.getItem('nitemind_onboarded') === 'true'
+    const onboardedServer = (session.user as any).onboarded
+
+    if (!onboardedLocal && !onboardedServer) {
+        setShowOnboarding(true)
+    }
+  }, [status, session])
+
+  // Ask for push permission shortly after app loads
   useEffect(() => {
     if (status !== 'authenticated') return
     const permission = checkNotificationPermission()
@@ -60,6 +73,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {children}
       </main>
+
+      {showOnboarding && (
+        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+      )}
     </div>
   )
 }

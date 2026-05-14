@@ -107,7 +107,7 @@ class PushSubscription(models.Model):
 
 class GlobalConfig(models.Model):
     """Singleton model for global app settings."""
-    app_name = models.CharField(max_length=100, default='FlowState')
+    app_name = models.CharField(max_length=100, default='NITE Mind')
     tutorial_video_url = models.URLField(
         blank=True, 
         help_text="YouTube/Vimeo embed URL (e.g. https://www.youtube.com/embed/XXXX)"
