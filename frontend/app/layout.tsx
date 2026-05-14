@@ -29,17 +29,17 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'NITE Mind',
-    startupImage: '/images/logo-icon.png',
+    startupImage: '/images/logo-pwa.png',
   },
   icons: {
-    icon: '/images/logo-icon.png',
-    apple: '/images/logo-icon.png',
+    icon: '/images/logo-pwa.png',
+    apple: '/images/logo-pwa.png',
   },
   other: {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'black-translucent',
-    'msapplication-TileImage': '/images/logo-icon.png',
+    'msapplication-TileImage': '/images/logo-pwa.png',
     'msapplication-TileColor': '#0d0d0d',
   },
 }
@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="NITE Mind" />
-        <link rel="apple-touch-icon" href="/images/logo-icon.png" />
+        <link rel="apple-touch-icon" href="/images/logo-pwa.png" />
       </head>
       <body suppressHydrationWarning className={cn(outfit.className, outfit.variable)}>
         <NextTopLoader
