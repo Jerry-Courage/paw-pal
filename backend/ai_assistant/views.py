@@ -970,17 +970,36 @@ class AgentStreamView(APIView):
                 
                 display_reply = full_reply.split('ACTION:')[0].strip()
                 
-                # Update the placeholder with final content
+                # Execute any action (image/diagram) that was embedded in the stream
+                action = agent._extract_action(full_reply)
+                execution_result = None
+                if action:
+                    execution_result = await agent.execute_action(action)
+                
+                # Update the placeholder with final content + any generated media
                 def update_msg():
-                    # REFRESH FROM DB: In case a tools (image/diagram) was saved to this msg during the stream
                     assistant_msg.refresh_from_db()
                     assistant_msg.content = display_reply
+                    if action and action.get('tool') == 'generate_image' and execution_result:
+                        assistant_msg.image = execution_result
+                    if action and action.get('tool') == 'generate_diagram' and execution_result:
+                        assistant_msg.diagram_code = execution_result
                     assistant_msg.save()
                     session.save()
                 
                 await sync_to_async(update_msg)()
 
-                yield f"data: {json.dumps({'done': True, 'message_id': assistant_msg.id})}\n\n"
+                # Emit done event with action result so frontend renders image/diagram instantly
+                done_payload = {'done': True, 'message_id': assistant_msg.id}
+                if action and execution_result:
+                    done_payload['action'] = action
+                    done_payload['execution_result'] = execution_result
+                    if action.get('tool') == 'generate_image':
+                        done_payload['image_url'] = execution_result
+                    elif action.get('tool') == 'generate_diagram':
+                        done_payload['diagram'] = execution_result
+
+                yield f"data: {json.dumps(done_payload)}\n\n"
                 yield "data: [DONE]\n\n"
             except asyncio.CancelledError:
                 pass

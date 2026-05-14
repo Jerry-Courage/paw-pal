@@ -804,6 +804,22 @@ function AIChat() {
                   })
                 }
               }).catch(() => {}).finally(() => setPendingAction(null))
+            } else if (wantsImage && !imageUrl) {
+              setPendingAction('image')
+              aiApi.generateImage(query, response.data.message_id).then(res => {
+                if (res.data.url) {
+                  setMessages(prev => {
+                    const updated = [...prev]
+                    for (let i = updated.length - 1; i >= 0; i--) {
+                      if (updated[i].role === 'assistant') {
+                        updated[i] = { ...updated[i], image: res.data.url }
+                        break
+                      }
+                    }
+                    return updated
+                  })
+                }
+              }).catch(() => {}).finally(() => setPendingAction(null))
             }
           }
         } catch (err: any) {
