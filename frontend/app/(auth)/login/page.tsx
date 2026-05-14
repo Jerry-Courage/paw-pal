@@ -44,11 +44,11 @@ function LoginForm() {
       <div className="flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 mb-12 group w-fit">
-          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-            <Brain className="w-5 h-5 text-orange-400" />
+          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+             <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
           </div>
           <span className="text-xl font-black text-white uppercase tracking-tight">
-            Flow<span className="text-orange-500">State</span>
+            NITE <span className="text-orange-500">Mind</span>
           </span>
         </Link>
 
@@ -119,7 +119,7 @@ function LoginForm() {
         </form>
 
         <p className="text-center text-sm text-slate-600 mt-6">
-          New to FlowState?{' '}
+          New to NITE Mind?{' '}
           <Link href="/signup" className="text-orange-400 font-bold hover:text-orange-300 transition-colors">Sign up for free</Link>
         </p>
       </div>

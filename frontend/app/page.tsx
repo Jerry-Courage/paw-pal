@@ -14,11 +14,11 @@ function Navbar() {
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-            <Brain className="w-5 h-5 text-orange-400" />
+          <div className="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors overflow-hidden p-0.5">
+             <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
           </div>
-          <span className="text-lg font-black tracking-tight">
-            Flow<span className="text-orange-500">State</span>
+          <span className="text-lg font-black tracking-tight uppercase">
+            NITE <span className="text-orange-500">Mind</span>
           </span>
         </Link>
 
@@ -325,7 +325,7 @@ function SpotlightTutor() {
             <span className="text-orange-500">read your notes.</span>
           </h2>
           <p className="text-slate-400 text-lg leading-relaxed mb-8">
-            Unlike generic chatbots, FlowAI is trained on your exact uploaded material. Ask it to explain a concept from your lecture, quiz you on a specific chapter, or simplify a complex formula — it knows your content inside out.
+            Unlike generic chatbots, NITE AI is trained on your exact uploaded material. Ask it to explain a concept from your lecture, quiz you on a specific chapter, or simplify a complex formula — it knows your content inside out.
           </p>
           <ul className="space-y-3 mb-8">
             {[
@@ -355,7 +355,7 @@ function SpotlightTutor() {
                 <Brain className="w-4 h-4 text-orange-400" />
               </div>
               <div>
-                <p className="text-sm font-black text-white">FlowAI Tutor</p>
+                <p className="text-sm font-black text-white">NITE AI Tutor</p>
                 <p className="text-xs text-emerald-400 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                   Trained on your Anatomy Notes.pdf
@@ -561,9 +561,9 @@ function ComparisonTable() {
     <section className="py-28 px-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-14">
-          <p className="text-orange-500 text-xs font-black uppercase tracking-widest mb-3">Why FlowState</p>
+          <p className="text-orange-500 text-xs font-black uppercase tracking-widest mb-3">Why NITE Mind</p>
           <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-4">
-            FlowState vs Traditional Studying
+            NITE Mind vs Traditional Studying
           </h2>
           <p className="text-slate-500 text-lg">The difference is night and day.</p>
         </div>
@@ -573,7 +573,7 @@ function ComparisonTable() {
           <div className="grid grid-cols-3 bg-[#161616] border-b border-white/6">
             <div className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-widest">Feature</div>
             <div className="px-6 py-4 text-xs font-black text-orange-400 uppercase tracking-widest flex items-center gap-2">
-              <Brain className="w-3.5 h-3.5" /> FlowState
+              <img src="/images/logo-icon.png" className="w-3.5 h-3.5 object-contain" /> NITE Mind
             </div>
             <div className="px-6 py-4 text-xs font-black text-slate-600 uppercase tracking-widest">Traditional</div>
           </div>
@@ -779,8 +779,8 @@ function CTASection() {
           </div>
 
           <h2 className="relative text-5xl md:text-6xl font-black text-white tracking-tight mb-5 leading-[1.05]">
-            Ready to enter your<br />
-            <span className="text-orange-500">FlowState?</span>
+            Ready to enter the<br />
+            <span className="text-orange-500">NITE Mind?</span>
           </h2>
 
           <p className="relative text-slate-400 text-lg mb-10 max-w-xl leading-relaxed">

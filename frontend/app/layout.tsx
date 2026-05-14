@@ -22,13 +22,13 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'FlowState — Study Smarter with Your AI Third Member',
-  description: 'Transform PDFs, YouTube videos, and class notes into interactive lessons, flashcards, and quizzes.',
+  title: 'NITE Mind — New Intelligence Tech Era',
+  description: 'Transform PDFs, YouTube videos, and class notes into interactive lessons with the power of NITE Mind AI.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'FlowState',
+    title: 'NITE Mind',
     startupImage: '/images/logo-icon.png',
   },
   icons: {
@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="FlowState" />
+        <meta name="apple-mobile-web-app-title" content="NITE Mind" />
         <link rel="apple-touch-icon" href="/images/logo-icon.png" />
       </head>
       <body suppressHydrationWarning className={cn(outfit.className, outfit.variable)}>

@@ -52,11 +52,11 @@ export default function TopNav() {
         <div className="h-14 flex items-center px-4 md:px-6 gap-4">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0 mr-2">
-          <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-            <Brain className="w-3.5 h-3.5 text-orange-400" />
+          <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+             <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
           </div>
           <span className="text-sm font-black text-white uppercase tracking-tight hidden sm:block">
-            Flow<span className="text-orange-500">State</span>
+            NITE <span className="text-orange-500">Mind</span>
           </span>
         </Link>
 
@@ -139,11 +139,11 @@ export default function TopNav() {
               style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)', paddingBottom: '16px' }}
             >
               <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-                <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                  <Brain className="w-3.5 h-3.5 text-orange-400" />
+                <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+                  <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-sm font-black text-white uppercase tracking-tight">
-                  Flow<span className="text-orange-500">State</span>
+                  NITE <span className="text-orange-500">Mind</span>
                 </span>
               </Link>
               <button onClick={() => setMobileOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all">

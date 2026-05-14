@@ -109,11 +109,11 @@ export default function SignupPage() {
       <div className="flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 mb-10 group w-fit">
-          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-            <Brain className="w-5 h-5 text-orange-400" />
+          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+             <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
           </div>
           <span className="text-xl font-black text-white uppercase tracking-tight">
-            Flow<span className="text-orange-500">State</span>
+            NITE <span className="text-orange-500">Mind</span>
           </span>
         </Link>
 
@@ -255,7 +255,7 @@ export default function SignupPage() {
           <span className="text-orange-400">master any subject.</span>
         </h2>
         <p className="text-slate-500 text-sm mb-10 leading-relaxed">
-          Join 50,000+ students using FlowState to study smarter with AI.
+          Join 50,000+ students using NITE Mind to study smarter with AI.
         </p>
 
         <div className="space-y-3">

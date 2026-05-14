@@ -1,7 +1,7 @@
 {
-  "name": "FlowState",
-  "short_name": "FlowState",
-  "description": "Study smarter with your AI study partner",
+  "name": "NITE Mind",
+  "short_name": "NITE Mind",
+  "description": "New Intelligence Tech Era - Study Smarter",
   "start_url": "/dashboard",
   "display": "standalone",
   "orientation": "portrait",
