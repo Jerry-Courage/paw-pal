@@ -198,7 +198,17 @@ class WorkspaceMessageView(APIView):
                     is_reply_to_ai = True
             except: pass
 
-        wake_words = r'\b(nite|niteai|nitemind|assistant|hey nite|hey niteai|yo nite|yo niteai)\b'
+        # Wake word detection — covers both typed and STT-transcribed variants.
+        # STT commonly transcribes "NITE" as: night, knight, ignite, unite, etc.
+        # We only trigger when used as a direct address/name, not in normal sentences
+        # like "good night", "last night", "knight in armor", etc.
+        wake_words = (
+            r'\b(nite(?:ai|mind)?|nite\s+ai|nite\s+mind)\b'           # typed: nite, niteai, nitemind
+            r'|(?:^|[\s,!?])(?:hey|yo|ok|okay|hi)\s+(nite|night|niteai|nitemind)\b'  # hey/yo nite/night
+            r'|\b(night\s*ai|night\s*mind|nightmind)\b'                # STT: night ai, night mind
+            r'|\bnite[,!?]'                                             # nite followed by punctuation
+            r'|\bassistant\b'                                           # generic: assistant
+        )
         if is_reply_to_ai or re.search(wake_words, content, re.IGNORECASE):
             self._trigger_ai_response(ws, content, request.user, is_audio_trigger=bool(audio_file), msg=msg)
 
