@@ -47,6 +47,7 @@ import { workspaceApi, libraryApi, assignmentsApi, getAuthToken, API_BASE } from
 import { useSession } from 'next-auth/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import remarkGfm from 'remark-gfm'
 
 const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
@@ -1357,8 +1358,27 @@ function MessageBubble({
           ) : (message.audio_file || message.audio_data) ? (
             <AudioPlayer url={message.audio_data || message.audio_file} isMe={isMe} />
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none">
-              <ReactMarkdown>
+            <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5">
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({children}) => <h1 className="text-base font-bold text-white mt-4 mb-2">{children}</h1>,
+                  h2: ({children}) => <h2 className="text-sm font-bold text-white mt-4 mb-2">{children}</h2>,
+                  h3: ({children}) => <h3 className="text-[13px] font-bold text-slate-200 mt-3 mb-1">{children}</h3>,
+                  ul: ({children}) => <ul className="list-disc pl-4 space-y-1 mb-3">{children}</ul>,
+                  ol: ({children}) => <ol className="list-decimal pl-4 space-y-1 mb-3">{children}</ol>,
+                  li: ({children}) => <li className="text-[13px] text-slate-300 leading-normal">{children}</li>,
+                  table: ({children}) => (
+                    <div className="my-4 overflow-x-auto rounded-xl border border-white/5 bg-black/20">
+                      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
+                    </div>
+                  ),
+                  thead: ({children}) => <thead className="bg-white/5 text-slate-400 font-semibold">{children}</thead>,
+                  th: ({children}) => <th className="px-3 py-2 border-b border-white/5">{children}</th>,
+                  td: ({children}) => <td className="px-3 py-2 border-b border-white/5 text-slate-300">{children}</td>,
+                  p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-slate-300 leading-relaxed">{children}</p>,
+                }}
+              >
                 {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
               </ReactMarkdown>
             </div>
