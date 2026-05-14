@@ -254,6 +254,22 @@ export default function WorkspaceCollaborationStudio() {
     }, 3000)
   }
 
+  const getSupportedMimeType = () => {
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/mpeg',
+      'audio/wav',
+    ]
+    for (const type of types) {
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+        return type
+      }
+    }
+    return 'audio/mpeg' // Fallback
+  }
+
   const handleSendMessage = async (e?: React.FormEvent, audioBlob?: Blob) => {
     e?.preventDefault()
     if (!inputText.trim() && !audioBlob) return
@@ -279,7 +295,9 @@ export default function WorkspaceCollaborationStudio() {
       if (audioBlob) {
         data = new FormData()
         data.append('content', tempText || "Voice Note")
-        data.append('audio', audioBlob, 'voice_note.webm')
+        // Use proper extension based on blob type
+        const extension = audioBlob.type.includes('mp4') ? 'm4a' : 'webm'
+        data.append('audio', audioBlob, `voice_note.${extension}`)
       }
       
       const response = await workspaceApi.sendMessage(Number(id), data, replyingTo?.id)
@@ -293,13 +311,14 @@ export default function WorkspaceCollaborationStudio() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
+      const mimeType = getSupportedMimeType()
+      const recorder = new MediaRecorder(stream, { mimeType })
       recorderRef.current = recorder
       chunksRef.current = []
 
       recorder.ondataavailable = (e) => chunksRef.current.push(e.data)
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const blob = new Blob(chunksRef.current, { type: mimeType })
         handleSendMessage(undefined, blob)
         stream.getTracks().forEach(t => t.stop())
       }
