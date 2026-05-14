@@ -26,9 +26,9 @@ export default function SplashScreen() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 1, ease: 'easeOut' }}
-              className="relative z-10 w-24 h-24 bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-500/20"
+              className="relative z-10 w-24 h-24 bg-orange-500/5 border border-orange-500/10 rounded-[2.5rem] flex items-center justify-center shadow-2xl overflow-hidden p-4"
             >
-              <Brain className="w-12 h-12 text-white" />
+              <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
               
               {/* Pulsing Aura */}
               <motion.div
