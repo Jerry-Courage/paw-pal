@@ -62,6 +62,7 @@ type Message = {
   is_streaming?: boolean
   // what the AI is currently doing (for loading indicator)
   pending_action?: 'diagram' | 'image' | null
+  file?: File // Store original file for regeneration
 }
 
 const SUGGESTIONS = [
@@ -394,7 +395,7 @@ function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) 
 }
 
 // ─── MESSAGE COMPONENT ───────────────────────────────────────────────────────
-function MessageBubble({ msg, index }: { msg: Message; index: number }) {
+function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; index: number; isLast?: boolean; onRegenerate?: (index: number) => void }) {
   const [copied, setCopied] = useState(false)
   const [imgLightbox, setImgLightbox] = useState<string | null>(null)
   const isUser = msg.role === 'user'
@@ -501,6 +502,18 @@ function MessageBubble({ msg, index }: { msg: Message; index: number }) {
               {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 group-hover/copy:scale-110 transition-transform" />}
               {copied ? 'Copied' : 'Copy'}
             </button>
+            {isLast && onRegenerate && (
+              <>
+                <div className="h-1 w-1 rounded-full bg-white/10" />
+                <button 
+                  onClick={() => onRegenerate(index)}
+                  className="group/regen flex items-center gap-1.5 text-slate-500 hover:text-orange-400 transition-colors text-[10px] font-black uppercase tracking-widest"
+                >
+                  <Wand2 className="w-3 h-3 group-hover/regen:rotate-12 transition-transform" />
+                  Regenerate
+                </button>
+              </>
+            )}
             <div className="h-1 w-1 rounded-full bg-white/10" />
             <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">
               Verified Response
@@ -638,24 +651,48 @@ function AIChat() {
     setFilePreview(null)
   }
 
+  const handleRegenerate = async (index: number) => {
+    if (sending) return
+    const userMsg = messages[index - 1]
+    if (!userMsg || userMsg.role !== 'user') return
+
+    // Roll back messages
+    const history = messages.slice(0, index - 1)
+    setMessages(history)
+    
+    // Execute again
+    await executeQuery(userMsg.content, userMsg.file, history)
+  }
+
   const handleSend = async () => {
     if ((!input.trim() && !attachedFile) || sending) return
-    
-    const userMsg: Message = { role: 'user', content: input }
-    if (filePreview) userMsg.image = filePreview
+    const currentInput = input
+    const currentFile = attachedFile
+    const currentFilePreview = filePreview
+
+    const userMsg: Message = { role: 'user', content: currentInput, file: currentFile || undefined }
+    if (currentFilePreview) userMsg.image = currentFilePreview
     
     setMessages(prev => [...prev, userMsg])
-    const currentInput = input
+    const history = [...messages]
+
     setInput('')
+    removeFile()
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+
+    await executeQuery(currentInput, currentFile, history)
+  }
+
+  const executeQuery = async (query: string, file: File | null | undefined, history: Message[]) => {
     setSending(true)
     
     try {
       let activeId = activeSession?.id;
 
       // Ensure we have a session for files if one doesn't exist
-      if (attachedFile && !activeId) {
+      if (file && !activeId) {
         const sessRes = await aiApi.createSession({ 
-          title: currentInput.slice(0, 30) || 'Image Analysis',
+          title: query.slice(0, 30) || 'Image Analysis',
           context_type: contextType,
           resource_id: selectedResource 
         });
@@ -664,9 +701,9 @@ function AIChat() {
         queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
       }
 
-      if (attachedFile) {
-        // VISION: Still uses standard blocking API for now
-        const responseRes = await aiApi.sendVisionMessage(activeId || 0, currentInput, attachedFile);
+      if (file) {
+        // VISION
+        const responseRes = await aiApi.sendVisionMessage(activeId || 0, query, file);
         const response = responseRes.data;
         const assistantMsgId = response.id;
         
@@ -679,7 +716,7 @@ function AIChat() {
         
         setMessages(prev => [...prev, assistantMsg]);
 
-        // Check for actions in vision mode too
+        // Check for actions in vision mode
         if (assistantMsg.content.includes('ACTION:')) {
            const parts = assistantMsg.content.split('ACTION:');
            try {
@@ -704,20 +741,19 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT: Atomic Agent Implementation
+        // CHAT
         try {
-          // Detect what kind of action the user wants for the loading indicator
-          const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(currentInput)
-          const wantsImage = /generate.*image|image.*of|show.*me|picture.*of|illustrat/i.test(currentInput)
+          const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(query)
+          const wantsImage = /generate.*image|image.*of|show.*me|picture.*of|illustrat/i.test(query)
           if (wantsDiagram) setPendingAction('diagram')
           else if (wantsImage) setPendingAction('image')
 
           const response = await aiApi.askAgent(
-            currentInput,
+            query,
             contextType === 'resource' ? `resource_id:${selectedResource}` : '',
             false,
             undefined,
-            messages.map(m => ({ role: m.role, content: m.content })),
+            history.map(m => ({ role: m.role, content: m.content })),
             false,
             activeSession?.id
           );
@@ -747,15 +783,14 @@ function AIChat() {
 
             if (response.data.session_id) {
               if (!activeSession || activeSession.id !== response.data.session_id) {
-                setActiveSession({ id: response.data.session_id, title: currentInput.slice(0, 60) || 'New Chat' });
+                setActiveSession({ id: response.data.session_id, title: query.slice(0, 60) || 'New Chat' });
                 queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
               }
             }
 
-            // If user asked for a diagram but agent didn't return one, call diagram endpoint
             if (wantsDiagram && !diagramCode) {
               setPendingAction('diagram')
-              aiApi.generateDiagram(currentInput, 'auto', response.data.message_id).then(res => {
+              aiApi.generateDiagram(query, 'auto', response.data.message_id).then(res => {
                 if (res.data.mermaid) {
                   setMessages(prev => {
                     const updated = [...prev]
@@ -782,12 +817,10 @@ function AIChat() {
 
       if (!activeSession) queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
     } catch (err: any) {
-      console.error('Failed to send:', err);
+      console.error('Failed to execute:', err);
       toast.error(err.message || 'Intelligence Signal Interrupted');
     } finally {
       setSending(false)
-      removeFile()
-      if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
   };
 
@@ -990,7 +1023,13 @@ function AIChat() {
           ) : (
             <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
               {messages.map((msg, i) => (
-                <MessageBubble key={i} msg={msg} index={i} />
+                <MessageBubble 
+                  key={i} 
+                  msg={msg} 
+                  index={i} 
+                  isLast={i === messages.length - 1} 
+                  onRegenerate={handleRegenerate}
+                />
               ))}
               {sending && <ThinkingIndicator action={pendingAction} />}
               <div ref={bottomRef} className="h-4" />
