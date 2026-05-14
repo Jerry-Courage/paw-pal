@@ -86,3 +86,9 @@ class WorkspaceConsumer(AsyncWebsocketConsumer):
 
     async def presence_update(self, event):
         await self.send(text_data=json.dumps(event))
+
+    async def broadcast_chat_message_edit(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def broadcast_chat_message_delete(self, event):
+        await self.send(text_data=json.dumps(event))

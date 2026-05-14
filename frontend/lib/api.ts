@@ -319,6 +319,8 @@ export const workspaceApi = {
   },
   shareResource: (id: number, resource_id: number) => api.post(`/workspace/workspaces/${id}/share_resource/`, { resource_id }),
   leave: (id: number) => api.post(`/workspace/workspaces/${id}/leave/`),
+  editMessage: (workspace_id: number, message_id: number, content: string) => api.patch(`/workspace/workspaces/${workspace_id}/messages/${message_id}/`, { content }),
+  deleteMessage: (workspace_id: number, message_id: number) => api.delete(`/workspace/workspaces/${workspace_id}/messages/${message_id}/`),
   // Missing methods used in ResourceShelf
   getFiles: (id: number) => api.get(`/workspace/workspaces/${id}/files/`),
   getVersions: (id: number) => api.get(`/workspace/workspaces/${id}/versions/`),

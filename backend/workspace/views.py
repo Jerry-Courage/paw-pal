@@ -331,3 +331,53 @@ class WorkspaceMessageView(APIView):
             thread.start()
         except Exception as e:
             logger.error(f"Failed to start AI thread: {e}")
+
+class WorkspaceMessageDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, workspace_id, pk):
+        ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
+        msg = get_object_or_404(WorkspaceMessage, id=pk, workspace=ws, author=request.user)
+        
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response({'error': 'Content required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        msg.content = content
+        msg.save()
+        
+        self._broadcast_edit(ws.id, msg)
+        return Response(WorkspaceMessageSerializer(msg, context={'request': request}).data)
+
+    def delete(self, request, workspace_id, pk):
+        ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
+        msg = get_object_or_404(WorkspaceMessage, id=pk, workspace=ws)
+        
+        if msg.author != request.user and ws.owner != request.user:
+             return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+             
+        msg_id = msg.id
+        msg.delete()
+        
+        self._broadcast_delete(ws.id, msg_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _broadcast_edit(self, workspace_id, msg):
+        layer = get_channel_layer()
+        async_to_sync(layer.group_send)(
+            f'workspace_{workspace_id}',
+            {
+                'type': 'broadcast_chat_message_edit',
+                'message': WorkspaceMessageSerializer(msg).data
+            }
+        )
+
+    def _broadcast_delete(self, workspace_id, message_id):
+        layer = get_channel_layer()
+        async_to_sync(layer.group_send)(
+            f'workspace_{workspace_id}',
+            {
+                'type': 'broadcast_chat_message_delete',
+                'message_id': message_id
+            }
+        )

@@ -35,7 +35,11 @@ import {
   FileText,
   Trash2,
   LogOut,
-  Settings
+  Settings,
+  MoreVertical,
+  Pencil,
+  Copy as CopyIcon,
+  Pin as PinIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -207,6 +211,12 @@ export default function WorkspaceCollaborationStudio() {
               ...prev,
               [data.user]: data.is_typing
             }))
+          } else if (data.type === 'broadcast_chat_message_edit') {
+            const msg = data.message
+            setMessages(prev => prev.map(m => String(m.id) === String(msg.id) ? { ...m, ...msg } : m))
+          } else if (data.type === 'broadcast_chat_message_delete') {
+            const msgId = data.message_id
+            setMessages(prev => prev.filter(m => String(m.id) !== String(msgId)))
           }
         }
 
@@ -599,6 +609,7 @@ export default function WorkspaceCollaborationStudio() {
                       message={ms} 
                       isMe={isMe} 
                       showAvatar={showAvatar}
+                      workspaceId={Number(id)}
                       onReply={() => setReplyingTo({
                         id: ms.id,
                         author_name: ms.author?.username || 'User',
@@ -1119,8 +1130,74 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
   )
 }
 
-function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResource }: { message: any, isMe: boolean, showAvatar?: boolean, onReply: () => void, onViewResource: (res: any) => void }) {
+function MessageBubble({ 
+  message, 
+  isMe, 
+  showAvatar = true, 
+  onReply, 
+  onViewResource,
+  workspaceId
+}: { 
+  message: any, 
+  isMe: boolean, 
+  showAvatar?: boolean, 
+  onReply: () => void, 
+  onViewResource: (res: any) => void,
+  workspaceId: number
+}) {
   const isAI = message.is_ai
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState(message.content)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+
+  // Handle outside click to close menu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+    if (isMenuOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isMenuOpen])
+
+  const handleLongPress = () => {
+    setIsMenuOpen(true)
+    if (window.navigator.vibrate) window.navigator.vibrate(50)
+  }
+
+  const handleEdit = async () => {
+    if (!editText.trim() || editText === message.content) {
+      setIsEditing(false)
+      return
+    }
+    try {
+      await workspaceApi.editMessage(workspaceId, message.id, editText)
+      setIsEditing(false)
+    } catch (err) {
+      toast.error('Failed to edit message')
+    }
+  }
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await workspaceApi.deleteMessage(workspaceId, message.id)
+      toast.success('Message deleted')
+    } catch (err) {
+      toast.error('Failed to delete message')
+      setIsDeleting(false)
+    }
+  }
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(message.content)
+    toast.success('Copied to clipboard')
+    setIsMenuOpen(false)
+  }
 
   return (
     <motion.div 
@@ -1132,8 +1209,17 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
       onDragEnd={(_, info) => {
         if (info.offset.x > 70) onReply()
       }}
+      onPointerDown={() => {
+        longPressTimer.current = setTimeout(handleLongPress, 500)
+      }}
+      onPointerUp={() => {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current)
+      }}
+      onPointerLeave={() => {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current)
+      }}
       className={cn(
-        "flex items-end gap-2 max-w-full group",
+        "flex items-end gap-2 max-w-full group relative",
         isMe ? 'flex-row-reverse' : '',
         !showAvatar ? 'mt-0.5' : 'mt-3'
       )}
@@ -1151,7 +1237,7 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
       )}
 
       <div className={cn(
-        "flex flex-col max-w-[80%] sm:max-w-[70%]",
+        "flex flex-col max-w-[85%] sm:max-w-[70%]",
         isMe ? 'items-end' : 'items-start'
       )}>
         {/* Sender name + time */}
@@ -1162,6 +1248,7 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
             </span>
             <span className="text-[10px] text-slate-600">
               {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {message.is_edited && <span className="ml-1 text-[9px] opacity-50">(edited)</span>}
             </span>
           </div>
         )}
@@ -1183,28 +1270,94 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
 
         {/* Bubble */}
         <div className={cn(
-          "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg",
+          "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg transition-all duration-200",
           isAI 
-            ? 'bg-[#1a1a1a] border-l-2 border-violet-500/40 text-slate-200 rounded-2xl rounded-tl-sm prose prose-invert prose-sm prose-p:leading-relaxed' 
+            ? 'bg-[#1a1a1a] border-l-2 border-violet-500/40 text-slate-200 rounded-2xl rounded-tl-sm' 
             : isMe 
               ? 'bg-orange-500/10 border-r-2 border-orange-500/40 text-white rounded-2xl rounded-tr-sm font-medium' 
-              : 'bg-white/[0.03] text-slate-200 rounded-2xl rounded-tl-sm'
+              : 'bg-white/[0.03] text-slate-200 rounded-2xl rounded-tl-sm',
+          isDeleting && "opacity-40 grayscale pointer-events-none"
         )}>
-          {/* Reply button on hover */}
-          <button 
-            onClick={onReply}
-            className={cn(
-              "absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-[#1a1a1a] border border-white/5 rounded-xl shadow-xl hover:text-orange-500",
-              isMe ? "-left-11" : "-right-11"
-            )}
-          >
-            <Reply className="w-3.5 h-3.5" />
-          </button>
+          
+          {/* Action Menu Trigger (Desktop 3-dots) */}
+          {!isAI && !isEditing && (
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={cn(
+                "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-[#1a1a1a] border border-white/5 text-slate-400 hover:text-white transition-all opacity-0 group-hover:opacity-100 hidden sm:block shadow-xl z-20",
+                isMe ? "-left-10" : "-right-10"
+              )}
+            >
+              <MoreVertical className="w-3.5 h-3.5" />
+            </button>
+          )}
 
-          {(message.audio_file || message.audio_data) ? (
+          {/* Context Menu Dropdown */}
+          <AnimatePresence>
+            {isMenuOpen && (
+              <motion.div 
+                ref={menuRef}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className={cn(
+                  "absolute bottom-full mb-2 w-36 bg-[#1a1a1a] border border-white/8 rounded-xl shadow-2xl z-[100] p-1 overflow-hidden",
+                  isMe ? "right-0" : "left-0"
+                )}
+              >
+                <button 
+                  onClick={copyToClipboard}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/5 rounded-lg transition-all"
+                >
+                  <CopyIcon className="w-3 h-3" /> Copy text
+                </button>
+                {isMe && !message.audio_file && (
+                  <button 
+                    onClick={() => { setIsEditing(true); setIsMenuOpen(false); }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/5 rounded-lg transition-all"
+                  >
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                )}
+                <button 
+                  onClick={onReply}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/5 rounded-lg transition-all"
+                >
+                  <Reply className="w-3 h-3" /> Reply
+                </button>
+                {(isMe || message.is_owner) && (
+                  <button 
+                    onClick={() => { handleDelete(); setIsMenuOpen(false); }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {isEditing ? (
+            <div className="flex flex-col gap-2 min-w-[150px] sm:min-w-[200px] py-1">
+              <textarea 
+                autoFocus
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit(); }
+                  if (e.key === 'Escape') setIsEditing(false)
+                }}
+                className="w-full bg-black/40 border border-orange-500/30 rounded-xl px-3 py-2 text-sm text-white focus:outline-none min-h-[60px]"
+              />
+              <div className="flex justify-end gap-1.5">
+                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-slate-500 hover:text-slate-300">Cancel</button>
+                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-orange-500 text-white rounded-lg hover:bg-orange-400">Save</button>
+              </div>
+            </div>
+          ) : (message.audio_file || message.audio_data) ? (
             <AudioPlayer url={message.audio_data || message.audio_file} isMe={isMe} />
           ) : (
-            <div>
+            <div className="prose prose-invert prose-sm max-w-none">
               <ReactMarkdown>
                 {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
               </ReactMarkdown>
@@ -1215,7 +1368,7 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
           {message.pinned_resource_data && (
             <div 
               onClick={() => onViewResource(message.pinned_resource_data)}
-              className="mt-3 p-3 bg-black/30 border border-white/8 rounded-xl flex items-center gap-3 hover:border-orange-500/20 transition-all cursor-pointer group/res"
+              className="mt-3 p-3 bg-black/30 border border-white/5 rounded-xl flex items-center gap-3 hover:border-orange-500/20 transition-all cursor-pointer group/res"
             >
               <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
                 <BookOpen className="w-3.5 h-3.5 text-orange-500" />
