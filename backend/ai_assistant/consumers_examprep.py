@@ -138,6 +138,11 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
                     },
+                    'realtimeInputConfig': {
+                        'automaticActivityDetection': {
+                            'silenceDurationMs': 400
+                        }
+                    },
                     'inputAudioTranscription': {},
                     'outputAudioTranscription': {},
                 }
