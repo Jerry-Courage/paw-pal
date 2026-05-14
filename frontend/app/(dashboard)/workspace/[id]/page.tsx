@@ -475,9 +475,9 @@ export default function WorkspaceCollaborationStudio() {
             {/* Invite code */}
             <button 
               onClick={copyInviteCode}
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1a1a1a] border border-white/8 rounded-lg hover:border-white/15 transition-all"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl transition-all"
             >
-              <span className="text-[10px] font-medium text-slate-400 font-mono">{workspace?.invite_code}</span>
+              <span className="text-[10px] font-bold text-slate-400 font-mono tracking-tight">{workspace?.invite_code}</span>
               {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-500" />}
             </button>
 
@@ -493,7 +493,7 @@ export default function WorkspaceCollaborationStudio() {
             <div className="relative">
               <button 
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className="p-2 bg-[#1a1a1a] border border-white/8 rounded-lg hover:border-white/15 transition-all"
+                className="p-2 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl transition-all"
               >
                 <Settings className="w-3.5 h-3.5 text-slate-400" />
               </button>
@@ -681,14 +681,14 @@ export default function WorkspaceCollaborationStudio() {
                   "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
                   isRecording 
                     ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" 
-                    : "bg-[#1a1a1a] border border-white/8 text-slate-500 hover:text-orange-500 hover:border-orange-500/30"
+                    : "bg-white/[0.03] text-slate-500 hover:text-orange-500 hover:bg-white/[0.06]"
                 )}
               >
                 {isRecording ? <Square className="w-3.5 h-3.5 fill-white text-white" /> : <Mic className="w-4 h-4" />}
               </button>
 
               {/* Input pill */}
-              <div className="flex-1 relative flex items-center bg-[#1a1a1a] border border-white/8 rounded-2xl focus-within:border-orange-500/40 transition-colors">
+              <div className="flex-1 relative flex items-center bg-white/[0.03] hover:bg-white/[0.05] rounded-2xl transition-all group/input">
                 <input 
                   value={inputText}
                   onChange={(e) => {
@@ -1183,22 +1183,22 @@ function MessageBubble({ message, isMe, showAvatar = true, onReply, onViewResour
 
         {/* Bubble */}
         <div className={cn(
-          "relative px-4 py-2.5 text-sm leading-relaxed shadow-sm",
+          "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg",
           isAI 
-            ? 'bg-[#1a1a1a] border border-violet-500/20 text-slate-200 rounded-2xl rounded-tl-sm prose prose-invert prose-sm prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5' 
+            ? 'bg-[#1a1a1a] border-l-2 border-violet-500/40 text-slate-200 rounded-2xl rounded-tl-sm prose prose-invert prose-sm prose-p:leading-relaxed' 
             : isMe 
-              ? 'bg-orange-500 text-white rounded-2xl rounded-tr-sm font-medium' 
-              : 'bg-[#1a1a1a] border border-white/8 text-slate-200 rounded-2xl rounded-tl-sm'
+              ? 'bg-orange-500/10 border-r-2 border-orange-500/40 text-white rounded-2xl rounded-tr-sm font-medium' 
+              : 'bg-white/[0.03] text-slate-200 rounded-2xl rounded-tl-sm'
         )}>
           {/* Reply button on hover */}
           <button 
             onClick={onReply}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-[#1a1a1a] border border-white/8 rounded-lg shadow-sm hover:text-orange-500",
-              isMe ? "-left-9" : "-right-9"
+              "absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-[#1a1a1a] border border-white/5 rounded-xl shadow-xl hover:text-orange-500",
+              isMe ? "-left-11" : "-right-11"
             )}
           >
-            <Reply className="w-3 h-3" />
+            <Reply className="w-3.5 h-3.5" />
           </button>
 
           {(message.audio_file || message.audio_data) ? (
