@@ -1,5 +1,19 @@
 from rest_framework import serializers
-from .models import Assignment
+from .models import Assignment, AssignmentSource
+
+
+class AssignmentSourceSerializer(serializers.ModelSerializer):
+    file_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AssignmentSource
+        fields = ('id', 'file', 'file_name', 'file_type', 'created_at')
+
+    def get_file_name(self, obj):
+        if obj.file:
+            import os
+            return os.path.basename(obj.file.name)
+        return None
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
@@ -8,13 +22,14 @@ class AssignmentSerializer(serializers.ModelSerializer):
     deadline_id = serializers.SerializerMethodField()
     deadline_date = serializers.SerializerMethodField()
     session_count = serializers.SerializerMethodField()
+    sources = AssignmentSourceSerializer(many=True, read_only=True)
 
     class Meta:
         model = Assignment
         fields = (
             'id', 'title', 'subject', 'instructions', 'file', 'file_name',
             'resources', 'resource_titles', 'status', 'chat_history',
-            'ai_response', 'ai_overview', 'ai_outline',
+            'ai_response', 'ai_overview', 'ai_outline', 'sources',
             'due_date', 'deadline_id', 'deadline_date', 'session_count',
             'created_at', 'updated_at',
         )
@@ -49,8 +64,6 @@ class AssignmentSerializer(serializers.ModelSerializer):
         return obj.sessions.count()
 
     def validate(self, data):
-        instructions = data.get('instructions', '').strip()
-        file = data.get('file')
-        if self.instance is None and not instructions and not file:
-            raise serializers.ValidationError('Provide either instructions or upload a file.')
+        # Validation is more relaxed now that we have multi-modal sources
+        # We'll rely on the view to check if at least one source (text, pdf, or images) exists
         return data

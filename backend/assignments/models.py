@@ -14,15 +14,18 @@ class Assignment(models.Model):
     title = models.CharField(max_length=300)
     subject = models.CharField(max_length=200, blank=True)
     instructions = models.TextField()  # The assignment question/instructions
-    file = models.FileField(upload_to='assignments/', null=True, blank=True)  # Optional uploaded file
-    resources = models.ManyToManyField('library.Resource', blank=True, related_name='assignments')  # Resources to use
+    
+    # Primary file (usually PDF) - kept for backward compatibility
+    file = models.FileField(upload_to='assignments/', null=True, blank=True)
+    
+    resources = models.ManyToManyField('library.Resource', blank=True, related_name='assignments')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
 
     # AI generated output
-    ai_response = models.TextField(blank=True)       # Full structured response
-    ai_overview = models.TextField(blank=True)       # Brief overview of what AI did
-    ai_outline = models.JSONField(default=list)      # Structured outline sections
-    chat_history = models.JSONField(default=list)    # Conversation history for refinement
+    ai_response = models.TextField(blank=True)
+    ai_overview = models.TextField(blank=True)
+    ai_outline = models.JSONField(default=list)
+    chat_history = models.JSONField(default=list)
 
     due_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -33,3 +36,10 @@ class Assignment(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class AssignmentSource(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='sources')
+    file = models.FileField(upload_to='assignment_sources/')
+    file_type = models.CharField(max_length=50) # 'pdf', 'image', etc.
+    created_at = models.DateTimeField(auto_now_add=True)

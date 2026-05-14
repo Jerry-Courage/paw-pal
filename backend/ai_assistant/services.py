@@ -2231,60 +2231,88 @@ class AIService:
 
     def solve_assignment(self, assignment) -> dict:
         """
-        Use AI + linked resources to solve/complete an assignment.
-        Returns structured dict with response, overview, and outline.
+        Premium Synthesis Engine: Ingests multi-modal sources (Text, PDF, Images) 
+        and linked resources to construct a high-fidelity academic masterpiece.
         """
-        # Build context from linked resources
+        # 1. Build context from linked library resources
         resource_contexts = []
         for resource in assignment.resources.all():
             ctx = self._get_resource_context(resource)
             if ctx:
-                resource_contexts.append(f"--- Resource: {resource.title} ---\n{ctx[:2000]}")
+                resource_contexts.append(f"--- Library Resource: {resource.title} ---\n{ctx[:3000]}")
+        library_context = '\n\n'.join(resource_contexts) if resource_contexts else ''
 
-        context_block = '\n\n'.join(resource_contexts) if resource_contexts else ''
+        # 2. Build multi-modal input from assignment sources
+        # We'll use the 'image_url' message format if images are present
+        content_parts = []
+        
+        # Add textual instructions
+        instructions = f"Assignment Title: {assignment.title}\n"
+        if assignment.subject: instructions += f"Subject: {assignment.subject}\n"
+        instructions += f"\nCORE INSTRUCTIONS:\n{assignment.instructions}\n"
+        
+        if library_context:
+            instructions += f"\nREFERENCE MATERIAL FROM LIBRARY:\n{library_context}\n"
+            
+        content_parts.append({'type': 'text', 'text': instructions})
 
-        prompt = (
-            f"You are FlowAI helping a student complete an assignment.\n\n"
-            f"Assignment Title: {assignment.title}\n"
-            f"Subject: {assignment.subject or 'General'}\n\n"
-            f"Instructions/Question:\n{assignment.instructions}\n\n"
+        # Add image sources
+        has_images = False
+        for source in assignment.sources.filter(file_type='image'):
+            try:
+                with open(source.file.path, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                    mime_type = "image/jpeg" if source.file.name.endswith(('.jpg', '.jpeg')) else "image/png"
+                    content_parts.append({
+                        'type': 'image_url',
+                        'image_url': {'url': f"data:{mime_type};base64,{encoded_string}"}
+                    })
+                    has_images = True
+            except Exception as e:
+                logger.warning(f"Could not load image source {source.id}: {e}")
+
+        # 3. Strategy Selection
+        # If images are present, we MUST use a vision model.
+        # We'll use Gemini 2.0 Flash for its superior reasoning and high-fidelity output.
+        system_prompt = (
+            "You are FlowAI, a world-class academic researcher and technical writer. "
+            "Your goal is to construct a high-fidelity, comprehensive assignment solution that follows a 'Zen' academic aesthetic.\n\n"
+            "REQUIREMENTS:\n"
+            "1. STRUCTURE: Use clear, meaningful headers (H2, H3). Include a strong introduction and a synthesis-driven conclusion.\n"
+            "2. FIDELITY: Be thorough. If the instructions ask for a report, provide a professional report. If a lab analysis, be technical.\n"
+            "3. MATHEMATICS: Use LaTeX ($$ for blocks, $ for inline) for ALL mathematical, chemical, or physical notations.\n"
+            "4. MULTI-MODAL: If images are provided (charts, screenshots, prompts), analyze them deeply and integrate their data into your response.\n"
+            "5. TONE: Maintain a professional, high-end academic tone. Use markdown for all formatting."
         )
-        if context_block:
-            prompt += f"Use these study resources as reference:\n\n{context_block}\n\n"
 
-        prompt += (
-            "Provide a complete, well-structured assignment response. "
-            "Format your response as proper academic work with:\n"
-            "- Clear introduction\n"
-            "- Well-organized body sections with headings\n"
-            "- Supporting evidence/examples from the resources if available\n"
-            "- Conclusion\n\n"
-            "Use markdown formatting. Use LaTeX ($$ for blocks, $ for inline) for all math/chemistry. Be thorough and academic in tone."
-        )
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': content_parts if len(content_parts) > 1 else instructions}
+        ]
 
-        response = self.chat_sync([{'role': 'user', 'content': prompt}])
+        logger.info(f"[Synthesis] Initializing high-fidelity engine for: {assignment.title} (Images: {has_images})")
+        
+        # Use Flash 2.0 for everything assignment related - it handles vision and long context perfectly
+        response = self.chat_sync(messages, forced_model='google/gemini-2.0-flash-001')
 
+        # 4. Post-Synthesis: Metadata Generation
         # Generate overview
-        overview_prompt = (
-            f"In 2-3 sentences, summarize what you just did to complete this assignment: '{assignment.title}'. "
-            "Mention which resources were used and the key approach taken. Be concise."
-        )
+        overview_prompt = "In 2 concise sentences, summarize the core synthesis strategy used to complete this assignment. Mention if visual data was integrated."
         overview = self.chat_sync([
-            {'role': 'user', 'content': prompt},
+            {'role': 'system', 'content': "Be extremely concise. Professional tone."},
             {'role': 'assistant', 'content': response},
             {'role': 'user', 'content': overview_prompt},
-        ])
+        ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
 
-        # Generate structured outline
+        # Generate structured outline for UI navigation
         outline_prompt = (
-            "Extract the main sections of the assignment response as a JSON array. "
-            "Return ONLY: [{\"section\": \"Section Title\", \"summary\": \"One sentence summary\"}]"
+            "Extract the main sections as a JSON array for a navigation menu. "
+            "Return ONLY: [{\"section\": \"Section Title\", \"summary\": \"Brief gist\"}]"
         )
         outline_raw = self.chat_sync([
-            {'role': 'user', 'content': prompt},
             {'role': 'assistant', 'content': response},
             {'role': 'user', 'content': outline_prompt},
-        ])
+        ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
         outline = self._parse_json(outline_raw, [])
 
         return {

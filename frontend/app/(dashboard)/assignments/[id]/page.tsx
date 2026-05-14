@@ -9,7 +9,8 @@ import {
   ArrowLeft, Sparkles, FileText, Download, Loader2,
   CheckCircle2, Clock, AlertCircle, Cpu, CalendarPlus,
   Zap, Wand2, ArrowRight, FileDown, UserCheck, ShieldCheck,
-  Activity, ShieldAlert, BadgeCheck, Layers, Share2
+  Activity, ShieldAlert, BadgeCheck, Layers, Share2, 
+  Trash2, Search, MoreVertical, Copy, RotateCcw
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -17,11 +18,11 @@ import ReactMarkdown from 'react-markdown'
 import Link from 'next/link'
 import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
 
-const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  pending:    { color: 'text-slate-500 ring-slate-200',   label: 'Pending' },
-  processing: { color: 'text-sky-600 ring-sky-200',       label: 'AI Working' },
-  completed:  { color: 'text-emerald-600 ring-emerald-200', label: 'Completed' },
-  error:      { color: 'text-rose-600 ring-rose-200',     label: 'Error' },
+const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
+  pending:    { color: 'text-slate-500 bg-slate-500/10 border-slate-500/20',   label: 'Pending', icon: Clock },
+  processing: { color: 'text-sky-400 bg-sky-400/10 border-sky-400/20',       label: 'AI Working', icon: Loader2 },
+  completed:  { color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', label: 'Completed', icon: CheckCircle2 },
+  error:      { color: 'text-rose-400 bg-rose-400/10 border-rose-400/20',     label: 'Error', icon: AlertCircle },
 }
 
 export default function AssignmentDetailPage({ params }: { params: { id: string } }) {
@@ -30,7 +31,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   const id = parseInt(params.id)
   
   const [refinePrompt, setRefinePrompt] = useState('')
-  const [showSpecialized, setShowSpecialized] = useState(false)
+  const [activeTab, setActiveTab] = useState<'document' | 'integrity' | 'sources'>('document')
   const [auditReport, setAuditReport] = useState<any>(null)
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
@@ -55,22 +56,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       qc.invalidateQueries({ queryKey:['assignment', id] })
       setRefinePrompt('')
       toast.success('Solution refined.')
-      
-      // tactical intercept for auto-export
       if (res.data?.action === 'export_pdf') handleExport('pdf')
       if (res.data?.action === 'export_docx') handleExport('docx')
-    } 
-  })
-  
-  const roadmapMutation = useMutation({ 
-    mutationFn: () => assignmentsApi.generateRoadmap(id), 
-    onSuccess: (res) => toast.success(res.data.message) 
-  })
-    const transformMutation = useMutation({ 
-    mutationFn: () => assignmentsApi.transformToWorkspace(id), 
-    onSuccess: (res) => { 
-      toast.success('Workspace created!')
-      router.push(`/workspace/${res.data.workspace_id}`) 
     } 
   })
 
@@ -78,7 +65,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
     mutationFn: () => assignmentsApi.humanize(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey:['assignment', id] })
-      toast.success("Applied 'Vanish' Protocol (Humanizer)")
+      toast.success("Applied 'Vanish' Protocol (AI Remover)")
     }
   })
   
@@ -86,7 +73,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
     mutationFn: () => assignmentsApi.originality(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey:['assignment', id] })
-      toast.success("Engaged 'Originality Shield' (Anti-Plagiarism)")
+      toast.success("Engaged 'Originality Shield' (Plagiarism Remover)")
     }
   })
 
@@ -98,12 +85,6 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       toast.success("Mission Audit Complete!")
     }
   })
-
-  useEffect(() => {
-    if (a?.status === 'completed' && scrollRef.current) {
-        // Auto scroll to bottom of chat history when new message comes in, but avoid aggressive scrolling
-    }
-  }, [a?.chat_history?.length])
 
   const handleExport = async (fmt: 'pdf' | 'docx') => {
     let downloadTriggered = false
@@ -122,465 +103,366 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         toast.success(`Successfully exported as ${fmt.toUpperCase()}`)
       }
     } catch (err) {
-      console.error('Export signal artifact:', err)
-      // Only show error if we didn't actually get the file
-      if (!downloadTriggered) {
-        toast.error(`Failed to export as ${fmt.toUpperCase()}`)
-      }
+      if (!downloadTriggered) toast.error(`Failed to export as ${fmt.toUpperCase()}`)
     }
   }
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-[80vh]">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
-        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Loading Assignment...</p>
+      <div className="flex flex-col items-center gap-6">
+        <div className="relative">
+          <div className="absolute inset-0 bg-orange-500 blur-2xl opacity-20 animate-pulse" />
+          <Loader2 className="w-12 h-12 text-orange-500 animate-spin relative z-10" />
+        </div>
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
       </div>
     </div>
   )
 
   if (!a) return (
-    <div className="flex items-center justify-center h-[80vh]">
-      <p>Assignment not found.</p>
+    <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+      <AlertCircle className="w-12 h-12 text-rose-500 opacity-20" />
+      <p className="text-slate-500 font-bold">Assignment not found in initialization records.</p>
+      <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
     </div>
   )
 
-  const visibleHistory = (a.chat_history || []).filter((m: any) => m.role !== 'system')
-
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] -m-4 md:-m-6 overflow-hidden bg-white dark:bg-slate-950 transition-colors duration-500">
+    <div className="flex flex-col h-[calc(100vh-64px)] -m-4 md:-m-6 overflow-hidden bg-[#0d0d0d]">
       
-      {/* ── Tactical Sidebar (Left) ─────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[380px] border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 overflow-y-auto custom-scrollbar">
-        <div className="p-8 space-y-10">
+      {/* ── Top Command Bar ─────────────────────────── */}
+      <div className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50">
+        <div className="flex items-center gap-6">
+          <Link href="/assignments" className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="h-6 w-px bg-white/5" />
+          <div className="flex flex-col">
+            <h1 className="text-sm font-black text-white tracking-tight truncate max-w-[300px]">{a.title}</h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={cn("text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md", STATUS_CONFIG[a.status]?.color)}>
+                {STATUS_CONFIG[a.status]?.label || a.status}
+              </span>
+              {a.subject && <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{a.subject}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl mr-2">
+            {[
+              { id: 'document', icon: FileText, label: 'Manuscript' },
+              { id: 'integrity', icon: ShieldCheck, label: 'Integrity Suite' },
+              { id: 'sources', icon: Layers, label: 'Sources' },
+            ].map(tab => (
+              <button 
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeTab === tab.id ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-white"
+                )}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
           
-          {/* Header & Status */}
-          <div className="space-y-4">
-            <Link href="/assignments" className="inline-flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-sky-500 uppercase tracking-widest transition-colors mb-2">
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Theater
-            </Link>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                 <span className={cn("px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ring-1 ring-inset shadow-sm", STATUS_CONFIG[a.status]?.color)}>
-                  {STATUS_CONFIG[a.status]?.label || a.status}
-                </span>
-                {a.subject && <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">{a.subject}</span>}
-              </div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-tight tracking-tight">{a.title}</h1>
-            </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleExport('pdf')} disabled={a.status !== 'completed'} className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
+              <FileText className="w-4 h-4" />
+            </button>
+            <button onClick={() => handleExport('docx')} disabled={a.status !== 'completed'} className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
+              <FileDown className="w-4 h-4" />
+            </button>
+            <div className="w-px h-6 bg-white/5 mx-1" />
+            <button onClick={() => setIsShareModalOpen(true)} className="btn-primary h-10 px-4 text-[10px]">
+              <Share2 className="w-3.5 h-3.5" /> Share
+            </button>
           </div>
-
-          {/* Research Input Source */}
-          <div className="bg-white dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800 rounded-3xl p-6 shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-sky-400/5 to-transparent rounded-full -mr-8 -mt-8" />
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-4">
-              <FileText className="w-4 h-4 text-sky-500" /> Research Data
-            </h4>
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 leading-relaxed italic mb-4 line-clamp-4 group-hover:line-clamp-none transition-all duration-500">
-               "{a.instructions || 'No specific instructions provided.'}"
-            </p>
-            {a.file_name && (
-              <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl">
-                <div className="p-2 bg-sky-500 text-white rounded-xl"><Download className="w-3.5 h-3.5" /></div>
-                <div className="min-w-0">
-                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{a.file_name}</p>
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Master Source</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Tactical Ops */}
-          <div className="space-y-6">
-            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Zap className="w-4 h-4 text-sky-500" /> Strategic Actions
-            </h4>
-            <div className="grid grid-cols-1 gap-3">
-              <button 
-                onClick={()=>roadmapMutation.mutate()} 
-                disabled={a.status !== 'completed' || roadmapMutation.isPending || refineMutation.isPending} 
-                className="flex items-center gap-4 p-4 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl hover:border-sky-500 transition-all text-left font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <div className="p-2.5 bg-sky-50 dark:bg-sky-900/50 text-sky-500 rounded-xl">
-                  {roadmapMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <CalendarPlus className="w-5 h-5" />}
-                </div>
-                <div className="min-w-0 text-sm">Create Study Plan</div>
-              </button>
-              <button 
-                onClick={()=>transformMutation.mutate()} 
-                disabled={a.status !== 'completed' || transformMutation.isPending || refineMutation.isPending} 
-                className="flex items-center gap-4 p-4 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl hover:border-emerald-500 transition-all text-left font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/50 text-emerald-500 rounded-xl">
-                   {transformMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Cpu className="w-5 h-5" />}
-                </div>
-                <div className="min-w-0 text-sm">Build Workspace</div>
-              </button>
-              <button 
-                onClick={()=>setIsShareModalOpen(true)} 
-                disabled={a.status !== 'completed' || refineMutation.isPending} 
-                className="flex items-center gap-4 p-4 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl hover:border-violet-500 transition-all text-left font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <div className="p-2.5 bg-violet-50 dark:bg-violet-900/50 text-violet-500 rounded-xl">
-                   <Share2 className="w-5 h-5" />
-                </div>
-                <div className="min-w-0 text-sm">Share to Collab Space</div>
-              </button>
-            </div>
-          </div>
-
-          {/* Intelligence Polishing */}
-          <div className="space-y-6">
-            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-sky-500" /> Intelligence Suite
-            </h4>
-            <div className="grid grid-cols-1 gap-3">
-              <button 
-                onClick={()=>humanizeMutation.mutate()} 
-                disabled={a.status !== 'completed' || humanizeMutation.isPending || refineMutation.isPending} 
-                className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl hover:border-sky-500 transition-all text-left font-bold disabled:opacity-40 disabled:cursor-not-allowed group/btn shadow-sm"
-              >
-                <div className="p-2.5 bg-sky-50 dark:bg-sky-900/50 text-sky-500 rounded-xl group-hover/btn:scale-110 transition-transform">
-                  {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserCheck className="w-5 h-5" />}
-                </div>
-                <div className="min-w-0">
-                   <div className="text-sm text-slate-900 dark:text-slate-100">Humanize Draft</div>
-                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vanish Protocol</div>
-                </div>
-              </button>
-              
-              <button 
-                onClick={()=>originalityMutation.mutate()} 
-                disabled={a.status !== 'completed' || originalityMutation.isPending || refineMutation.isPending} 
-                className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl hover:border-violet-500 transition-all text-left font-bold disabled:opacity-40 disabled:cursor-not-allowed group/btn shadow-sm"
-              >
-                <div className="p-2.5 bg-violet-50 dark:bg-violet-900/50 text-violet-500 rounded-xl group-hover/btn:scale-110 transition-transform">
-                   {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                </div>
-                <div className="min-w-0">
-                   <div className="text-sm text-slate-900 dark:text-slate-100">Pure Originality</div>
-                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Anti-Plagiarism</div>
-                </div>
-              </button>
-
-              <button 
-                onClick={()=>detectMutation.mutate()} 
-                disabled={a.status !== 'completed' || detectMutation.isPending || refineMutation.isPending} 
-                className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl hover:border-emerald-500 transition-all text-left font-bold disabled:opacity-40 disabled:cursor-not-allowed group/btn shadow-sm"
-              >
-                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/50 text-emerald-500 rounded-xl group-hover/btn:scale-110 transition-transform">
-                   {detectMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldAlert className="w-5 h-5" />}
-                </div>
-                <div className="min-w-0">
-                   <div className="text-sm text-slate-900 dark:text-slate-100">Scan Integrity</div>
-                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Double Audit</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Exports */}
-          <div className="pt-4">
-             <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => handleExport('pdf')} disabled={a.status !== 'completed' || refineMutation.isPending} className="p-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-black rounded-xl hover:opacity-90 transition-all uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed">Export PDF</button>
-                <button onClick={() => handleExport('docx')} disabled={a.status !== 'completed' || refineMutation.isPending} className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-black rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed">Word Doc</button>
-             </div>
-          </div>
-
         </div>
       </div>
 
-      {/* ── Document Canvas (Right) ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950 overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
         
-        {/* Mobile Header (Hidden on LG) */}
-        <div className="lg:hidden px-6 py-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
-           <Link href="/assignments" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"><ArrowLeft className="w-5 h-5" /></Link>
-           <h1 className="text-sm font-black truncate px-4">{a.title}</h1>
-           <div className={cn("px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest", STATUS_CONFIG[a.status]?.color)}>{a.status}</div>
-        </div>
-
-        {/* Scrollable Document Area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar relative px-6 py-12 md:px-24 xl:px-32">
-          <div className="max-w-4xl mx-auto pb-80 md:pb-48">
+        {/* ── Main Canvas ─────────────────────────── */}
+        <main className="flex-1 overflow-y-auto custom-scrollbar relative">
+          <div className="max-w-4xl mx-auto px-8 py-16 md:px-16">
             
-            {a.status === 'completed' ? (
-              <div className="space-y-16 animate-in fade-in duration-1000 slide-in-from-bottom-4">
-                
-                {/* AI Document Container */}
-                <div className="relative group">
-                   <div className="absolute -inset-4 bg-gradient-to-b from-sky-400/5 to-transparent blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000 -z-10" />
-                   <div className="prose-ai max-w-none text-slate-800 dark:text-slate-200">
-                     <ReactMarkdown>{a.ai_response}</ReactMarkdown>
-                   </div>
-                </div>
-
-                {/* Refinement History Bubbles */}
-                {visibleHistory.length > 0 && (
-                   <div className="pt-16 border-t border-slate-100 dark:border-slate-800 space-y-8">
-                      <div className="flex items-center gap-4">
-                        <span className="text-[10px] font-black text-slate-300 dark:text-slate-700 uppercase tracking-[0.3em]">Tactical Iterations</span>
-                        <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1" />
+            {activeTab === 'document' && (
+              <div className="space-y-12">
+                {a.status === 'completed' ? (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="prose-ai prose-invert max-w-none"
+                  >
+                    <ReactMarkdown>{a.ai_response}</ReactMarkdown>
+                  </motion.div>
+                ) : a.status === 'processing' ? (
+                  <div className="h-[50vh] flex flex-col items-center justify-center text-center space-y-8">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-orange-500 blur-3xl opacity-20 animate-pulse" />
+                      <div className="w-24 h-24 bg-[#111] border border-white/10 rounded-[2.5rem] shadow-2xl flex items-center justify-center relative">
+                        <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
                       </div>
-                      
-                      <div className="space-y-6">
-                        {visibleHistory.map((m: any, i: number) => (
-                          <div key={i} className={cn("flex flex-col gap-2", m.role === 'assistant' ? "items-start" : "items-end")}>
-                            <div className={cn(
-                              "max-w-[85%] px-6 py-5 rounded-[2rem] text-sm font-bold leading-relaxed shadow-sm",
-                              m.role === 'assistant' 
-                                ? "bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-tl-none" 
-                                : "bg-sky-500 text-white rounded-tr-none shadow-sky-200 dark:shadow-none"
-                            )}>
-                                {m.role === 'assistant' ? <ReactMarkdown className="prose-sm">{m.content}</ReactMarkdown> : m.content}
-                            </div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">{m.role === 'assistant' ? 'FlowAI Synthesis' : 'Command Intent'}</span>
-                          </div>
-                        ))}
-                      </div>
-                   </div>
-                )}
-              </div>
-            ) : a.status === 'processing' ? (
-              <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-8">
-                 <div className="relative">
-                    <div className="absolute inset-0 bg-sky-500 blur-3xl opacity-20 animate-pulse" />
-                    <div className="w-24 h-24 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] shadow-2xl flex items-center justify-center relative">
-                       <Loader2 className="w-10 h-10 text-sky-500 animate-spin" />
                     </div>
-                 </div>
-                 <div className="space-y-2">
-                    <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Engaging Synthesis Engine</h3>
-                    <p className="text-slate-500 font-bold text-sm uppercase tracking-widest">Constructing Masterpiece Architecture...</p>
-                 </div>
-              </div>
-            ) : (
-              <div className="h-[60vh] flex flex-col items-center justify-center text-center p-8 border-4 border-dashed border-slate-100 dark:border-slate-900 rounded-[4rem] group hover:border-sky-500/20 transition-all duration-700">
-                 <Zap className="w-20 h-20 text-slate-200 dark:text-slate-800 mb-8 transition-transform group-hover:scale-110 group-hover:text-sky-500 duration-700" />
-                 <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">Masterpiece Foundationalized</h2>
-                 <p className="text-slate-500 max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your research input is loaded. Initialize the intelligence protocol to generate the ultimate synthesis.</p>
-                 <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="btn-primary px-12 py-5 text-xl font-black rounded-3xl shadow-2xl shadow-sky-500/20 hover:-translate-y-1 transition-all active:scale-95 flex items-center gap-3">
-                    <Sparkles className="w-6 h-6" /> {solveMutation.isPending ? 'Engaging Core...' : 'Initialize Intelligence'}
-                 </button>
+                    <div className="space-y-3">
+                      <h3 className="text-3xl font-black text-white tracking-tight">Synthesizing...</h3>
+                      <p className="text-slate-500 font-bold text-sm uppercase tracking-[0.2em] max-w-xs mx-auto leading-relaxed">
+                        FlowAI is constructing your high-fidelity academic masterpiece.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[50vh] flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-white/5 rounded-[4rem] group hover:border-orange-500/20 transition-all duration-700">
+                    <Sparkles className="w-20 h-20 text-white/5 mb-8 transition-transform group-hover:scale-110 group-hover:text-orange-500 duration-700" />
+                    <h2 className="text-3xl font-black text-white tracking-tight mb-4">Initialization Complete</h2>
+                    <p className="text-slate-500 max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your instructions and materials are staged. Engage the synthesis engine to generate the solution.</p>
+                    <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="btn-primary px-12 py-5 text-lg font-black rounded-3xl shadow-2xl shadow-orange-500/20 hover:-translate-y-1 transition-all active:scale-95 flex items-center gap-3">
+                      {solveMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Zap className="w-6 h-6" />}
+                      {solveMutation.isPending ? 'Engaging Core...' : 'Initialize Intelligence'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </div>
 
-        {/* ── Floating Command Island ─────────────────────────── */}
-        {a.status === 'completed' && (
-          <div className="absolute bottom-[88px] md:bottom-10 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] md:w-full max-w-2xl z-40">
-            
-            {/* Specialized Intelligence Pills */}
-            <div className={cn(
-              "flex items-center gap-2 mb-3 px-4 transition-all duration-500",
-              showSpecialized ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-            )}>
-              <button 
-                onClick={()=>detectMutation.mutate()} 
-                disabled={detectMutation.isPending || refineMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/30 backdrop-blur-xl rounded-2xl text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all shadow-xl shadow-emerald-500/10"
-              >
-                 {detectMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-                 Integrity Scan
-              </button>
-              <button 
-                onClick={()=>humanizeMutation.mutate()} 
-                disabled={humanizeMutation.isPending || refineMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-sky-500/10 dark:bg-sky-500/20 border border-sky-500/30 backdrop-blur-xl rounded-2xl text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest hover:bg-sky-500 hover:text-white transition-all shadow-xl shadow-sky-500/10"
-              >
-                 {humanizeMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
-                 Humanize
-              </button>
-              <button 
-                onClick={()=>originalityMutation.mutate()} 
-                disabled={originalityMutation.isPending || refineMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-500/10 dark:bg-violet-500/20 border border-violet-500/30 backdrop-blur-xl rounded-2xl text-[10px] font-black text-violet-600 dark:text-violet-400 uppercase tracking-widest hover:bg-violet-500 hover:text-white transition-all shadow-xl shadow-violet-500/10"
-              >
-                 {originalityMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                 Originality
-              </button>
-            </div>
+            {activeTab === 'integrity' && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* AI Integrity Pair */}
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-lg font-bold text-white">AI Integrity</h4>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">Scan your document for AI probability and engage removal protocols to ensure human-like fidelity.</p>
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <button 
+                        onClick={() => detectMutation.mutate()}
+                        disabled={a.status !== 'completed' || detectMutation.isPending}
+                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-sky-500/50 transition-all group disabled:opacity-30"
+                      >
+                        {detectMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin text-sky-400" /> : <ShieldAlert className="w-6 h-6 text-slate-600 group-hover:text-sky-400 transition-colors" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Detector</span>
+                      </button>
+                      <button 
+                        onClick={() => humanizeMutation.mutate()}
+                        disabled={a.status !== 'completed' || humanizeMutation.isPending}
+                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-emerald-500/50 transition-all group disabled:opacity-30"
+                      >
+                        {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin text-emerald-400" /> : <UserCheck className="w-6 h-6 text-slate-600 group-hover:text-emerald-400 transition-colors" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Remover</span>
+                      </button>
+                    </div>
+                  </div>
 
-            <div className={cn(
-              "bg-white/80 dark:bg-slate-900/80 backdrop-blur-3xl border-2 border-white dark:border-slate-800 rounded-[2rem] md:rounded-[2.5rem] p-2 md:p-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-none flex items-center gap-1.5 md:gap-2 group focus-within:ring-4 ring-sky-500/10 transition-all",
-              refineMutation.isPending && "opacity-50 pointer-events-none scale-95"
-            )}>
-              <button 
-                onClick={() => setShowSpecialized(!showSpecialized)}
-                className={cn(
-                  "ml-3 h-10 w-10 md:h-12 md:w-12 rounded-2xl flex items-center justify-center transition-all",
-                  showSpecialized ? "bg-sky-500 text-white rotate-45" : "bg-sky-50 dark:bg-sky-900/50 text-sky-500 hover:bg-sky-100 dark:hover:bg-sky-900/80"
+                  {/* Originality Pair */}
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-lg font-bold text-white">Originality Shield</h4>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">Verify academic originality across global databases and activate shield protocols to eliminate plagiarism risk.</p>
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <button 
+                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-violet-500/50 transition-all group opacity-50 cursor-not-allowed"
+                        title="Coming Soon"
+                      >
+                        <Search className="w-6 h-6 text-slate-600" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Checker</span>
+                      </button>
+                      <button 
+                        onClick={() => originalityMutation.mutate()}
+                        disabled={a.status !== 'completed' || originalityMutation.isPending}
+                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-orange-500/50 transition-all group disabled:opacity-30"
+                      >
+                        {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin text-orange-400" /> : <RotateCcw className="w-6 h-6 text-slate-600 group-hover:text-orange-400 transition-colors" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Remover</span>
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="p-10 rounded-[3rem] bg-orange-500 shadow-2xl shadow-orange-500/20 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-3xl rounded-full -mr-32 -mt-32" />
+                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black text-white tracking-tight">Full Integrity Audit</h3>
+                      <p className="text-white/80 text-sm font-bold">Generate a comprehensive heatmap report of your assignment's integrity.</p>
+                    </div>
+                    <button 
+                      onClick={() => detectMutation.mutate()}
+                      disabled={a.status !== 'completed' || detectMutation.isPending}
+                      className="h-14 px-10 bg-white text-orange-600 font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50"
+                    >
+                      Initialize Full Audit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'sources' && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Instructions Card */}
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Core Instructions</h4>
+                    <p className="text-sm font-medium text-slate-300 leading-relaxed line-clamp-[12]">
+                      {a.instructions || 'No textual instructions provided.'}
+                    </p>
+                  </div>
+
+                  {/* Attached Sources */}
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Initialization Sources</h4>
+                    <div className="space-y-3">
+                      {a.file_name && (
+                        <div className="flex items-center gap-4 p-4 bg-[#0d0d0d] border border-white/5 rounded-2xl">
+                          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{a.file_name}</p>
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Master PDF</p>
+                          </div>
+                        </div>
+                      )}
+                      {a.sources?.filter((s: any) => s.file_type === 'image').map((src: any, i: number) => (
+                        <div key={src.id} className="flex items-center gap-4 p-4 bg-[#0d0d0d] border border-white/5 rounded-2xl">
+                          <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center overflow-hidden shrink-0">
+                            <img src={src.file} alt="" className="w-full h-full object-cover opacity-80" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{src.file_name || `Image Source ${i + 1}`}</p>
+                            <p className="text-[9px] font-black text-violet-400 uppercase tracking-widest">Visual Source</p>
+                          </div>
+                        </div>
+                      ))}
+                      {!a.file_name && !a.sources?.length && (
+                        <p className="text-xs text-slate-600 font-bold py-6 text-center">No file sources attached.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {a.resource_titles?.length > 0 && (
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-5">Linked Library Resources</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {a.resource_titles.map((r: any) => (
+                        <div key={r.id} className="flex items-center gap-3 p-4 bg-[#0d0d0d] border border-white/5 rounded-2xl">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{r.title}</p>
+                            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{r.type}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
-                title="Intelligence Suite Protocols"
-              >
-                <Wand2 className="w-5 h-5 md:w-6 h-6" />
-              </button>
-              
+              </div>
+            )}
+
+          </div>
+        </main>
+
+        {/* ── Chat/Refinement Island ─────────────────────────── */}
+        {a.status === 'completed' && activeTab === 'document' && (
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-40">
+            <div className="bg-[#111]/80 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-2 shadow-2xl focus-within:border-orange-500/50 transition-all flex items-center gap-2 group">
+              <div className="ml-3 p-3 bg-orange-500/10 text-orange-500 rounded-2xl group-focus-within:bg-orange-500 group-focus-within:text-white transition-all">
+                <Sparkles className="w-5 h-5" />
+              </div>
               <input 
                 value={refinePrompt} 
                 onChange={e=>setRefinePrompt(e.target.value)} 
                 onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&refineMutation.mutate()} 
-                placeholder="Direct FlowAI..." 
-                className="flex-1 bg-transparent border-none focus:outline-none text-slate-900 dark:text-white font-bold placeholder:text-slate-400 text-sm md:text-base py-3 px-2 min-w-0" 
+                placeholder="Request edits, adjustments, or tone shifts..." 
+                className="flex-1 bg-transparent border-none focus:outline-none text-white font-bold placeholder:text-slate-600 text-sm py-4 px-2 min-w-0" 
               />
-              
-              {/* Tactical Export Shortcuts */}
-              <div className="flex items-center gap-1.5 pr-1 font-black">
-                <button 
-                  onClick={() => handleExport('pdf')} 
-                  className="h-9 md:h-10 px-2.5 md:px-3 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-900/40 text-slate-400 hover:text-sky-500 rounded-xl md:rounded-2xl transition-all text-[9px] md:text-[10px] uppercase tracking-widest border border-slate-100 dark:border-slate-700 hover:border-sky-200 dark:hover:border-sky-800"
-                  title="Quick PDF Masterpiece"
-                >
-                   <FileText className="w-3.5 h-3.5" /> <span className="hidden sm:inline">PDF</span>
-                </button>
-                <button 
-                  onClick={() => handleExport('docx')} 
-                  className="h-9 md:h-10 px-2.5 md:px-3 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 text-slate-400 hover:text-emerald-500 rounded-xl md:rounded-2xl transition-all text-[9px] md:text-[10px] uppercase tracking-widest border border-slate-100 dark:border-slate-700 hover:border-emerald-200 dark:hover:border-emerald-800"
-                  title="Quick Word Synthesis"
-                >
-                   <FileDown className="w-3.5 h-3.5" /> <span className="hidden sm:inline">DOCX</span>
-                </button>
-              </div>
-
-              <button onClick={()=>refineMutation.mutate()} disabled={!refinePrompt || refineMutation.isPending} 
+              <button 
+                onClick={()=>refineMutation.mutate()} 
+                disabled={!refinePrompt || refineMutation.isPending} 
                 className={cn(
-                  "h-14 w-14 rounded-[1.75rem] flex items-center justify-center shrink-0 transition-all shadow-lg active:scale-90",
-                  refinePrompt ? "bg-sky-500 text-white shadow-sky-500/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700"
-                )}>
-                {refineMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Sparkles className="w-6 h-6" />}
+                  "h-12 px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all",
+                  refinePrompt ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "bg-white/5 text-slate-600"
+                )}
+              >
+                {refineMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
               </button>
             </div>
           </div>
         )}
-
       </div>
 
-      {/* ── Intelligence Audit Report Modal ────────────────── */}
+      {/* ── Audit Modal (Simplified copy from original) ────────────────── */}
       <AnimatePresence>
         {isAuditModalOpen && auditReport && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 lg:p-12">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12">
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setIsAuditModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              className="absolute inset-0 bg-[#0d0d0d]/80 backdrop-blur-md"
             />
-            
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-5xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-[0_32px_128px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col border border-white/20"
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-5xl bg-[#111] rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col"
             >
-              {/* Modal Header */}
-              <div className="p-8 pb-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-4">
-                   <div className="p-3 bg-emerald-500 text-white rounded-2xl shadow-lg shadow-emerald-500/20">
-                      <ShieldAlert className="w-6 h-6" />
-                   </div>
-                   <div>
-                      <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Mission Audit Report</h2>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Integrity Scan Complete</p>
-                   </div>
-                </div>
-                <button onClick={() => setIsAuditModalOpen(false)} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl text-slate-400 hover:text-slate-600 transition-all font-bold">Close Port</button>
-              </div>
-
-              {/* Modal Content */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  
-                  {/* Left Column: Metrics & Charts */}
-                  <div className="lg:col-span-4 space-y-6">
-                    {/* Score Rings */}
-                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 space-y-8">
-                       <div className="space-y-4">
-                          <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                             <span>AI Probability</span>
-                             <span className={cn(auditReport.ai_score > 50 ? "text-rose-500" : "text-emerald-500")}>{auditReport.ai_score}%</span>
-                          </div>
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${auditReport.ai_score}%` }} transition={{ duration: 1, ease: "easeOut" }} className={cn("h-full", auditReport.ai_score > 50 ? "bg-rose-500" : "bg-emerald-500")} />
-                          </div>
-                       </div>
-                       
-                       <div className="space-y-4">
-                          <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                             <span>Originality Score</span>
-                             <span className="text-sky-500">{auditReport.originality_score}%</span>
-                          </div>
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${auditReport.originality_score}%` }} transition={{ duration: 1, ease: "easeOut", delay: 0.3 }} className="h-full bg-sky-500" />
-                          </div>
-                       </div>
-
-                       <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                          <div className="flex items-center gap-3 mb-4">
-                             <Activity className="w-5 h-5 text-emerald-500" />
-                             <span className="text-sm font-bold text-slate-900 dark:text-white">Linguistic Fidelity</span>
-                          </div>
-                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Audit Verdict</div>
-                          <div className={cn(
-                             "px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-center shadow-sm",
-                             auditReport.verdict?.toLowerCase().includes('safe') ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
-                          )}>
-                             {auditReport.verdict || 'Analysis Inconclusive'}
-                          </div>
-                       </div>
+               <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                       <ShieldAlert className="w-6 h-6" />
                     </div>
-
-                    {/* Mission Summary */}
-                    <div className="p-6 bg-sky-500/5 border border-sky-500/20 rounded-[2rem] space-y-3">
-                       <h4 className="text-[10px] font-black text-sky-500 uppercase tracking-widest">Mission Summary</h4>
-                       <p className="text-xs font-bold leading-relaxed text-slate-600 dark:text-slate-400">
-                          {auditReport.summary || 'Synthesizing detailed audit parameters...'}
-                       </p>
+                    <div>
+                       <h2 className="text-2xl font-black text-white tracking-tight">Mission Audit Report</h2>
+                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Full Integrity Heatmap</p>
                     </div>
-                  </div>
-
-                  {/* Right Column: Heatmap Text */}
-                  <div className="lg:col-span-8 space-y-6">
-                     <div className="bg-white dark:bg-slate-950 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-inner min-h-[400px]">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-8 flex items-center gap-2">
-                           <Layers className="w-4 h-4" /> Tactical Heatmap Analysis
-                        </h4>
-                        
-                        <div className="text-sm font-bold leading-loose text-slate-800 dark:text-slate-300 space-y-2">
-                           {auditReport.segments?.map((seg: any, idx: number) => (
-                             <span 
-                                key={idx} 
-                                className={cn(
-                                   "inline px-0.5 rounded transition-all cursor-help relative group/seg",
-                                   seg.type === 'ai' ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-b-2 border-rose-500/30" : 
-                                   seg.type === 'plagiarism' ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-b-2 border-violet-500/30" :
-                                   "hover:bg-emerald-500/5"
-                                )}
-                                title={seg.reason}
-                             >
-                                {seg.text}
-                                {seg.type !== 'human' && (
-                                   <div className="absolute bottom-full left-0 mb-2 w-48 p-3 bg-slate-900 text-[10px] text-white rounded-xl opacity-0 group-hover/seg:opacity-100 pointer-events-none transition-opacity z-50 shadow-2xl font-black uppercase tracking-widest border border-white/10">
-                                      <div className={cn("mb-1", seg.type === 'ai' ? "text-rose-400" : "text-violet-400")}>
-                                         Audit Flag: {seg.type.toUpperCase()} ({seg.probability}%)
-                                      </div>
-                                      <div className="text-[9px] text-slate-400 lowercase italic tracking-normal">{seg.reason}</div>
-                                   </div>
-                                )}
-                             </span>
-                           ))}
+                 </div>
+                 <button onClick={() => setIsAuditModalOpen(false)} className="px-6 py-2 rounded-xl bg-white/5 text-slate-400 font-bold text-xs hover:bg-white/10 transition-all">Dismiss</button>
+               </div>
+               
+               <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                     <div className="space-y-6">
+                        <div className="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-4">
+                           <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                              <span>AI Probability</span>
+                              <span className="text-orange-500">{auditReport.ai_score}%</span>
+                           </div>
+                           <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                              <div className="h-full bg-orange-500" style={{ width: `${auditReport.ai_score}%` }} />
+                           </div>
+                        </div>
+                        <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
+                           <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Verdict</h4>
+                           <p className="text-lg font-black text-white">{auditReport.verdict || 'Ready for Submission'}</p>
                         </div>
                      </div>
+                     <div className="lg:col-span-2 p-8 rounded-3xl bg-[#0d0d0d] border border-white/5 font-medium leading-loose text-sm text-slate-400">
+                        {auditReport.segments?.map((seg: any, idx: number) => (
+                           <span key={idx} className={cn(
+                              "inline px-0.5 rounded",
+                              seg.type === 'ai' ? "bg-orange-500/20 text-orange-400 border-b border-orange-500/50" : "hover:bg-white/5"
+                           )} title={seg.reason}>
+                              {seg.text}
+                           </span>
+                        ))}
+                     </div>
                   </div>
-
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="p-8 bg-slate-50 dark:bg-slate-800/30 text-center">
-                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em]">This report is mission-advisory. Exercise ultimate academic judgement.</p>
-              </div>
+               </div>
             </motion.div>
           </div>
         )}

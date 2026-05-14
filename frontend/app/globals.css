@@ -14,6 +14,13 @@
   --bg-card: #111111;
   --bg-card-2: #1a1a1a;
   --border: rgba(255,255,255,0.08);
+  
+  /* [NEW] Studley Premium Tokens */
+  --glass-bg: rgba(17, 17, 17, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --grad-primary: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  --grad-surface: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
 }
 
 * { box-sizing: border-box; }

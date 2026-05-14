@@ -47,7 +47,35 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         ).distinct()
 
     def perform_create(self, serializer):
+        from .models import AssignmentSource
+        
+        # Check if any content is provided
+        instructions = self.request.data.get('instructions', '').strip()
+        file = self.request.FILES.get('file')
+        images = self.request.FILES.getlist('image_sources')
+        
+        if not instructions and not file and not images:
+             from rest_framework.exceptions import ValidationError
+             raise ValidationError('Initialization failure: No textual, visual, or document sources provided.')
+
         assignment = serializer.save(user=self.request.user)
+        
+        # Track main PDF as a source
+        if assignment.file:
+            AssignmentSource.objects.get_or_create(
+                assignment=assignment,
+                file=assignment.file,
+                file_type='pdf'
+            )
+            
+        # Track additional image sources
+        for img in images:
+            AssignmentSource.objects.create(
+                assignment=assignment,
+                file=img,
+                file_type='image'
+            )
+
         if assignment.due_date:
             self._create_deadline(assignment)
 
@@ -131,21 +159,55 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def solve(self, request, pk=None):
-        """Trigger AI to solve the assignment using linked resources."""
+        """
+        Premium Synthesis Engine: Triggers multi-modal AI processing.
+        Supports text instructions, primary PDF, additional PDFs, and images.
+        """
         assignment = self.get_object()
-        if not assignment.instructions.strip() and assignment.file:
-            try:
-                from library.pdf_extractor import extract_pdf_text
-                text = extract_pdf_text(assignment.file.path)
-                if text:
-                    assignment.instructions = text[:6000]
-                    assignment.save(update_fields=['instructions'])
-            except Exception as e:
-                logger.warning(f'Could not extract text from assignment file: {e}')
-
+        
+        # --- Step 1: Build textual context from all PDF sources ---
+        # If no text instructions, try to extract from all attached PDFs
         if not assignment.instructions.strip():
-            return Response({'error': 'Assignment instructions are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            extracted_texts = []
+            
+            # Try primary file first
+            if assignment.file:
+                try:
+                    from library.pdf_extractor import extract_pdf_text
+                    text = extract_pdf_text(assignment.file.path)
+                    if text:
+                        extracted_texts.append(text[:4000])
+                except Exception as e:
+                    logger.warning(f'Primary PDF extraction failed: {e}')
+            
+            # Also extract from any additional PDF sources
+            for source in assignment.sources.filter(file_type='pdf'):
+                try:
+                    from library.pdf_extractor import extract_pdf_text
+                    text = extract_pdf_text(source.file.path)
+                    if text:
+                        extracted_texts.append(text[:2000])
+                except Exception as e:
+                    logger.warning(f'Source PDF extraction failed ({source.id}): {e}')
+            
+            if extracted_texts:
+                assignment.instructions = '\n\n---\n\n'.join(extracted_texts)
+                assignment.save(update_fields=['instructions'])
 
+        # --- Step 2: Validate - must have text OR image sources ---
+        has_images = assignment.sources.filter(file_type='image').exists()
+        if not assignment.instructions.strip() and not has_images:
+            return Response(
+                {'error': 'Cannot synthesize: No text instructions, PDF content, or image sources found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # For image-only assignments, inject a placeholder so AI knows to focus on visuals
+        if not assignment.instructions.strip() and has_images:
+            assignment.instructions = f"[Image-only assignment: '{assignment.title}'. Analyze the attached visual sources and provide a comprehensive academic response to the questions/content depicted in the images.]"
+            assignment.save(update_fields=['instructions'])
+
+        # --- Step 3: Mark as processing and call AI ---
         assignment.status = 'processing'
         assignment.save(update_fields=['status'])
 
@@ -154,14 +216,17 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             ai = AIService()
             result = ai.solve_assignment(assignment)
 
-            assignment.ai_response = result['response']
-            assignment.ai_overview = result['overview']
+            assignment.ai_response = result.get('response', '')
+            assignment.ai_overview = result.get('overview', '')
+            if result.get('outline'):
+                assignment.ai_outline = result['outline']
             assignment.status = 'completed'
             assignment.save()
             return Response(self.get_serializer(assignment).data)
         except Exception as e:
+            logger.error(f'Synthesis engine failure for assignment {assignment.id}: {e}')
             assignment.status = 'error'
-            assignment.save()
+            assignment.save(update_fields=['status'])
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
@@ -188,6 +253,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def humanize(self, request, pk=None):
+        """Engage Vanish Protocol to bypass AI detection."""
         assignment = self.get_object()
         try:
             from ai_assistant.services import AIService
@@ -199,7 +265,32 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         except Exception as e: return Response({'error': str(e)}, status=500)
 
     @action(detail=True, methods=['post'])
+    def originality(self, request, pk=None):
+        """Engage Originality Shield to remove plagiarism markers."""
+        assignment = self.get_object()
+        try:
+            from ai_assistant.services import AIService
+            ai = AIService()
+            result = ai.remove_plagiarism(assignment)
+            assignment.ai_response = result['response']
+            assignment.save()
+            return Response(self.get_serializer(assignment).data)
+        except Exception as e: return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['post'])
+    def detect(self, request, pk=None):
+        """Perform a deep-fidelity linguistic audit for AI and plagiarism."""
+        assignment = self.get_object()
+        try:
+            from ai_assistant.services import AIService
+            ai = AIService()
+            result = ai.detect_assignment(assignment)
+            return Response(result)
+        except Exception as e: return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['post'])
     def roadmap(self, request, pk=None):
+        """Generate a study roadmap for the assignment content."""
         assignment = self.get_object()
         try:
             from ai_assistant.services import AIService
