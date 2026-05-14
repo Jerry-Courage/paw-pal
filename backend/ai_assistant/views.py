@@ -24,7 +24,7 @@ from .agent import FlowAgent
 from .podcast import generate_tts_file, SUPPORTED_VOICES
 from core.throttling import AIRateThrottle
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 
 def _get_history(session, exclude_last=True):

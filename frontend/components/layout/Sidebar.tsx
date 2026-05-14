@@ -62,13 +62,12 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
       {/* Logo */}
       <div className="px-5 py-6 border-b border-white/5">
         <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-            <Brain className="w-4 h-4 text-orange-400" />
+          <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+            <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <span className="text-sm font-black text-white tracking-tight uppercase">Flow</span>
-            <span className="text-sm font-black text-orange-500 tracking-tight uppercase">State</span>
-          </div>
+          <span className="text-sm font-black text-white uppercase tracking-tight">
+            NITE <span className="text-orange-500">Mind</span>
+          </span>
         </Link>
       </div>
 

@@ -9,7 +9,7 @@ from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFail
 from .models import Resource
 from asgiref.sync import sync_to_async
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 class QueryParameterJWTAuthentication(JWTAuthentication):
     """

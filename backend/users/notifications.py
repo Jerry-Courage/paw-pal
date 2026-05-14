@@ -43,7 +43,7 @@ def create_notification(user, type: str, title: str, body: str, link: str = ''):
         
     except Exception as e:
         import logging
-        logger = logging.getLogger('flowstate')
+        logger = logging.getLogger('nitemind')
         logger.error(f"Failed to create notification for {user.email}: {e}")
 
 

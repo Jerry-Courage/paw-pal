@@ -4,7 +4,7 @@ from library.models import Resource
 from library.tasks import process_resource_task
 import logging
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 class Command(BaseCommand):
     help = 'Runs the AI synthesis for a specific Resource via the GitHub Imperial Engine.'

@@ -8,7 +8,7 @@ import io
 import logging
 from typing import Dict, List, Any
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 # Minimum image dimensions to avoid tiny icons/bullets
 MIN_IMAGE_WIDTH = 80

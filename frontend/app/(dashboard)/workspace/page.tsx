@@ -37,7 +37,7 @@ export default function WorkspacePortal() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
         <div>
           <h1 className="text-xl font-black text-white tracking-tight uppercase">Collab Space</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Collaborative group study with <span className="text-violet-400">FlowAI</span> as your third member.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Collaborative group study with <span className="text-violet-400">NITE AI</span> as your third member.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={() => setShowJoin(true)}
@@ -64,7 +64,7 @@ export default function WorkspacePortal() {
             <MessageSquare className="w-8 h-8 text-violet-400" />
           </div>
           <h3 className="font-black text-lg text-white mb-2">The studio is quiet</h3>
-          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Create a space for your study group. Sync your library, mention Flow, and master anything together.</p>
+          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Create a space for your study group. Sync your library, mention NITE, and master anything together.</p>
           <button onClick={() => setShowCreate(true)} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95">
             Create Your First Studio
           </button>

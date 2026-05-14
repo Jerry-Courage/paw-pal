@@ -236,7 +236,7 @@ INSTRUCTIONS:
         
         if not final_script:
             final_script = [
-                {"speaker": "A", "text": "Welcome back to FlowCast. We're breaking down some complex material today."},
+                {"speaker": "A", "text": "Welcome back to NITECast. We're breaking down some complex material today."},
                 {"speaker": "B", "text": "That's right! There was a brief signal interruption, but we've got the core material ready."},
                 {"speaker": "A", "text": "Let's dive straight into the primary concepts from your notes."}
             ]

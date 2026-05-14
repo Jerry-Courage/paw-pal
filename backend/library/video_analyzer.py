@@ -5,7 +5,7 @@ import tempfile
 from django.core.files.base import ContentFile
 from io import BytesIO
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 class VideoAnalyzer:
     """

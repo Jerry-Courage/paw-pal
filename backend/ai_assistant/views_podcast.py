@@ -385,9 +385,28 @@ class PodcastChunkAudioView(APIView):
             if not success:
                 return Response({'error': 'TTS failed'}, status=500)
                 
-        # Optimized FileResponse for media streaming
+        # Optimized FileResponse with Range support for iOS/Safari
+        file_size = os.path.getsize(file_path)
+        range_header = request.META.get('HTTP_RANGE')
+        
+        if range_header:
+            from core.media_server import range_re_match
+            start, end = range_re_match(range_header)
+            if start is not None:
+                if end is None: end = file_size - 1
+                start = max(0, min(start, file_size - 1))
+                end = max(start, min(end, file_size - 1))
+                
+                f = open(file_path, 'rb')
+                f.seek(start)
+                response = FileResponse(f, status=206, content_type='audio/mpeg')
+                response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+                response['Content-Length'] = end - start + 1
+                response['Accept-Ranges'] = 'bytes'
+                return response
+
         response = FileResponse(open(file_path, 'rb'), content_type='audio/mpeg')
-        response['Content-Length'] = os.path.getsize(file_path)
+        response['Content-Length'] = file_size
         response['Accept-Ranges'] = 'bytes'
         return response
 

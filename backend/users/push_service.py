@@ -4,7 +4,7 @@ from pywebpush import webpush, WebPushException
 from django.conf import settings
 from .models import PushSubscription
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 class PushService:
     @staticmethod

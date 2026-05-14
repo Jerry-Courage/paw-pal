@@ -12,7 +12,7 @@ from django.utils import timezone
 from .models import Assignment
 from .serializers import AssignmentSerializer
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 class AssignmentViewSet(viewsets.ModelViewSet):
     """

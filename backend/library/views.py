@@ -19,7 +19,7 @@ from .pdf_extractor import extract_pdf_text
 from ai_assistant.services import AIService
 from core.throttling import UploadRateThrottle, AIRateThrottle
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 def trigger_github_synthesis(resource_id):
     """
@@ -190,7 +190,7 @@ class GenerateFlashcardsView(APIView):
         public_cards = Flashcard.objects.filter(resource=resource, is_public=True) if hasattr(Flashcard, 'is_public') else None
         # Fallback: check if they are owned by a curator
         if not public_cards:
-            public_cards = Flashcard.objects.filter(resource=resource, owner__username='flowstate_curator')
+            public_cards = Flashcard.objects.filter(resource=resource, owner__username='nitemind_curator')
             
         if public_cards.exists():
             from .serializers import FlashcardSerializer
@@ -281,7 +281,7 @@ class GenerateQuizView(APIView):
 
         # [PREMIUM UPGRADE] Instant Curated Quiz
         # If public quiz exists for this resource, return it
-        curated_quiz = Quiz.objects.filter(resource=resource, owner__username='flowstate_curator', format=fmt).first()
+        curated_quiz = Quiz.objects.filter(resource=resource, owner__username='nitemind_curator', format=fmt).first()
         if curated_quiz:
             return Response(QuizSerializer(curated_quiz).data)
 
@@ -402,12 +402,12 @@ class AnkiExportView(APIView):
             flashcards = Flashcard.objects.filter(owner=request.user)
 
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="flowstate_flashcards.csv"'
+        response['Content-Disposition'] = 'attachment; filename="nitemind_flashcards.csv"'
 
         writer = csv.writer(response)
         # Anki format: Front, Back, Tags
         for fc in flashcards:
-            tags = f"flowstate {fc.subject} {fc.difficulty}".strip()
+            tags = f"nitemind {fc.subject} {fc.difficulty}".strip()
             writer.writerow([fc.question, fc.answer, tags])
 
         return response

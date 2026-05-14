@@ -8,7 +8,7 @@ from django.core.cache import cache
 from asgiref.sync import sync_to_async
 from .services import AIService, FLOWAI_SYSTEM_PROMPT
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 AGENT_SYSTEM_PROMPT = f"""{FLOWAI_SYSTEM_PROMPT}
 

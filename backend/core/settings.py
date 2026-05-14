@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-flowstate-dev-key-change-in-production')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-nitemind-dev-key-change-in-production')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
@@ -59,7 +59,7 @@ MIDDLEWARE = [
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'flowstate-cache',
+        'LOCATION': 'nitemind-cache',
     }
 }
 
@@ -178,7 +178,7 @@ else:
     # On Render (and other cloud platforms), use /tmp for media storage
     # since the app directory may not be writable. /tmp persists within a session.
     _render_media = os.getenv('RENDER_MEDIA_ROOT', '')
-    MEDIA_ROOT = Path(_render_media) if _render_media else (Path('/tmp/flowstate_media') if os.getenv('RENDER') else BASE_DIR / 'media')
+    MEDIA_ROOT = Path(_render_media) if _render_media else (Path('/tmp/nitemind_media') if os.getenv('RENDER') else BASE_DIR / 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -297,15 +297,15 @@ LOGGING = {
     'root': {'handlers': ['console'], 'level': 'INFO'},
     'loggers': {
         'django': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
-        'flowstate': {'handlers': ['console'], 'level': 'DEBUG', 'propagate': False},
+        'nitemind': {'handlers': ['console'], 'level': 'DEBUG', 'propagate': False},
     },
 }
 
 # ─── Unfold Admin ─────────────────────────────────────────────────────────────
 UNFOLD = {
-    'SITE_TITLE': 'FlowState Admin',
-    'SITE_HEADER': 'FlowState',
-    'SITE_SUBHEADER': 'AI Study Platform',
+    'SITE_TITLE': 'NITE Mind Admin',
+    'SITE_HEADER': 'NITE Mind',
+    'SITE_SUBHEADER': 'New Intelligence Tech Era',
     'SITE_URL': 'http://localhost:3000',
     'SITE_ICON': None,
     'SITE_SYMBOL': 'bolt',
@@ -392,7 +392,7 @@ UNFOLD = {
 
 # ─── DJANGO Q BACKGROUND WORKER ─────────────────────────────────────────────
 Q_CLUSTER = {
-    'name': 'flowstate_worker',
+    'name': 'nitemind_worker',
     'orm': 'default',
     'timeout': 600,
     'retry': 700,

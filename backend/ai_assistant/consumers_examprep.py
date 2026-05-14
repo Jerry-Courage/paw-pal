@@ -11,7 +11,7 @@ import os
 import websockets
 from channels.generic.websocket import AsyncWebsocketConsumer
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
 GEMINI_LIVE_WS_URL = (

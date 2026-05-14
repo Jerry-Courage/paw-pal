@@ -2,9 +2,9 @@ import logging
 from django.conf import settings
 from django.core.files.base import ContentFile
 
-logger = logging.getLogger('flowstate')
-print("!!! IMPERIAL WORKER LOADED: tasks.py is LIVE !!!")
-logger.error("!!! IMPERIAL WORKER HEARTBEAT: tasks.py initialized !!!")
+logger = logging.getLogger('nitemind')
+print("!!! NITE WORKER LOADED: tasks.py is LIVE !!!")
+logger.error("!!! NITE WORKER HEARTBEAT: tasks.py initialized !!!")
 
 def create_vector_embeddings(resource, text):
     if not text or len(text.strip()) < 50:
@@ -76,10 +76,10 @@ def process_resource_task(res_id):
     """
     from library.models import Resource
     res_init = Resource.objects.get(id=res_id)
-    res_init.status_text = "🧬 Imperial Engine Initializing..."
+    res_init.status_text = "🧬 NITE Engine Initializing..."
     res_init.status = 'processing'
     res_init.save(update_fields=['status_text', 'status'])
-    print(f"--- [TASK START] Resource {res_id} entered the Imperial processing line ---")
+    print(f"--- [TASK START] Resource {res_id} entered the NITE processing line ---")
     
     try:
         from library.models import Resource, ResourceImage

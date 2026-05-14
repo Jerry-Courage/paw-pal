@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
 
+import SplashScreen from '@/components/ui/SplashScreen'
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -45,14 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [status])
 
   if (status === 'loading' || status === 'unauthenticated') {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#0d0d0d]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-600">Loading...</p>
-        </div>
-      </div>
-    )
+    return <SplashScreen />
   }
 
   // Full-viewport pages: no padding, just offset for TopNav

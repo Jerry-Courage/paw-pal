@@ -98,7 +98,7 @@ function MermaidChart({ chart }: { chart: string }) {
     clean = clean.replace(/\[""/g, '["').replace(/""\]/g, '"]')
 
     if (!clean || clean.length < 5) {
-      setError('Empty diagram — ask FlowAI to regenerate it.')
+      setError('Empty diagram — ask NITE AI to regenerate it.')
       return
     }
     setRawCode(clean)
@@ -155,7 +155,7 @@ function MermaidChart({ chart }: { chart: string }) {
         } catch (e2: any) {
           // both attempts failed
         }
-        setError('Diagram syntax error — ask FlowAI to regenerate it.')
+        setError('Diagram syntax error — ask NITE AI to regenerate it.')
         document.querySelectorAll('[id^="dmermaid-"]').forEach(el => el.remove())
       }
     })
@@ -1004,7 +1004,7 @@ function AIChat() {
               <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
                 <Sparkles className="w-7 h-7 text-orange-400" />
               </div>
-              <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Hi, I'm FlowAI</h1>
+              <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Hi, I'm NITE AI</h1>
               <p className="text-slate-500 text-sm max-w-xs mb-8 leading-relaxed">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
@@ -1082,7 +1082,7 @@ function AIChat() {
                   value={input}
                   onChange={handleInput}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask FlowAI anything..."
+                  placeholder="Ask NITE AI anything..."
                   className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] sm:text-base text-white placeholder-slate-600 py-3 sm:py-4 px-2 min-h-[50px] sm:min-h-[56px] max-h-[160px]"
                   style={{ lineHeight: '1.5' }}
                   rows={1}

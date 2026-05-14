@@ -19,7 +19,7 @@ from .serializers import (
 from library.models import Resource
 from ai_assistant.services import AIService, FLOWAI_SYSTEM_PROMPT
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -198,7 +198,7 @@ class WorkspaceMessageView(APIView):
                     is_reply_to_ai = True
             except: pass
 
-        wake_words = r'\b(flow|flo|flowai|flowstate|assistant|hey flow|hey flo|yo flow|yo flo)\b'
+        wake_words = r'\b(nite|niteai|nitemind|assistant|hey nite|hey niteai|yo nite|yo niteai)\b'
         if is_reply_to_ai or re.search(wake_words, content, re.IGNORECASE):
             self._trigger_ai_response(ws, content, request.user, is_audio_trigger=bool(audio_file), msg=msg)
 
@@ -247,7 +247,7 @@ class WorkspaceMessageView(APIView):
                 # 2. Typing Indicator Start
                 async_to_sync(layer.group_send)(
                     f'workspace_{workspace.id}',
-                    {'type': 'broadcast_typing', 'is_typing': True, 'user': 'FlowAI'}
+                    {'type': 'broadcast_typing', 'is_typing': True, 'user': 'NITE AI'}
                 )
 
                 ai = AIService()
@@ -320,7 +320,7 @@ class WorkspaceMessageView(APIView):
                 try:
                     async_to_sync(layer.group_send)(
                         f'workspace_{workspace.id}',
-                        {'type': 'broadcast_typing', 'is_typing': False, 'user': 'FlowAI'}
+                        {'type': 'broadcast_typing', 'is_typing': False, 'user': 'NITE AI'}
                     )
                 except: pass
                 close_old_connections()

@@ -17,7 +17,7 @@ from django.db import models
 # CLOUD-FIRST CONFIGURATION
 # We rely exclusively on Cloud Embeddings to maintain zero local RAM footprint.
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 # PROCESS-LEVEL SINGLETONS FOR PERFORMANCE
 _EMB_MODEL = None
@@ -152,10 +152,10 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #
 # ──────────────────────────────────────────────────────────────────────────────
 
-FLOWAI_SYSTEM_PROMPT = """You are FlowAI, the funny, cool, and absolutely awesome AI study partner built into FlowState.
+FLOWAI_SYSTEM_PROMPT = """You are NITE AI, the funny, cool, and absolutely awesome AI study partner built into NITE Mind.
 
 Your identity:
-- Name: FlowAI (the "Third Member" of the study squad)
+- Name: NITE AI (the "Third Member" of the study squad)
 - Personality: Witty, high-energy, collegiate, and brilliantly supportive. You are the genius friend who makes studying feel like a hangout.
 - Purpose: Help students crush their academic goals while keeping the vibe upbeat and fun.
 
@@ -197,8 +197,8 @@ class AIService:
         self.headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://flowstate.app',
-            'X-Title': 'FlowState',
+            'HTTP-Referer': 'https://nitemind.app',
+            'X-Title': 'NITE Mind',
         }
         # --- DUAL-ENGINE ARCHITECTURE (2026 RECOVERY) ---
         # Both engines are now synchronized to v1beta for total endpoint compatibility.
@@ -493,7 +493,7 @@ class AIService:
                 continue
 
         logger.error("[AI Final Failure]: All engines exhausted.")
-        return "FlowAI is temporarily overloaded. Please try again in a moment."
+        return "NITE AI is temporarily overloaded. Please try again in a moment."
 
     async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
         """

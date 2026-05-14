@@ -2,7 +2,7 @@ import io
 import logging
 from typing import Dict, Any
 
-logger = logging.getLogger('flowstate')
+logger = logging.getLogger('nitemind')
 
 def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]:
     """
