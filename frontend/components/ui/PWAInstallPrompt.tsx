@@ -83,10 +83,10 @@ export default function PWAInstallPrompt() {
           {/* Header */}
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg flex-shrink-0">
-              <Image src="/images/logo-icon.png" alt="FlowState" width={56} height={56} className="w-full h-full object-cover" />
+              <Image src="/images/logo-icon.png" alt="NITE Mind" width={56} height={56} className="w-full h-full object-cover" />
             </div>
             <div>
-              <p className="font-black text-slate-900 dark:text-white text-base leading-tight">Install FlowState</p>
+              <p className="font-black text-slate-900 dark:text-white text-base leading-tight">Install NITE Mind</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Add to your home screen for the best experience</p>
             </div>
           </div>

@@ -45,7 +45,7 @@ export default function FocusTimer({ session, onClose }: Props) {
             setCompleted(true)
             if (mode === 'focus') logTime(defaultMinutes)
             if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('FlowState', {
+              new Notification('NITE Mind', {
                 body: mode === 'focus' ? '🎉 Focus session complete! Time for a break.' : '⚡ Break over. Back to work!',
                 icon: '/favicon.ico',
               })

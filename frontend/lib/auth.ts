@@ -58,5 +58,5 @@ export const authOptions: NextAuthOptions = {
     error: '/login',   // Redirect errors back to login, not /api/auth/error
   },
   session: { strategy: 'jwt' },
-  secret: process.env.NEXTAUTH_SECRET || 'flowstate-fallback-secret',
+  secret: process.env.NEXTAUTH_SECRET || 'nitemind-fallback-secret',
 }

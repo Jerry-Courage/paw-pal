@@ -68,7 +68,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
   const prev = () => { if (step > 0) setStep(s => s - 1) }
 
   const finish = async () => {
-    localStorage.setItem('flowstate_onboarded', 'true')
+    localStorage.setItem('nitemind_onboarded', 'true')
     try { await authApi.updateOnboarding('completed') } catch {}
     onComplete()
     router.push('/dashboard')
@@ -125,7 +125,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                   <Brain className="w-12 h-12 text-white" />
                 </div>
                 <h1 className="text-3xl font-black text-white mb-3 tracking-tight">
-                  Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400">FlowState</span>
+                  Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400">NITE Mind</span>
                 </h1>
                 <p className="text-slate-400 text-base leading-relaxed mb-10 max-w-xs">
                   Your AI-powered study companion. Let's set up your space in under a minute.
@@ -218,7 +218,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
             {/* ── GOALS ── */}
             {step === 3 && (
               <div>
-                <StepHeader icon={Sparkles} title="What are your goals?" subtitle="We'll optimise FlowState for you" />
+                <StepHeader icon={Sparkles} title="What are your goals?" subtitle="We'll optimise NITE Mind for you" />
                 <div className="grid grid-cols-2 gap-3">
                   {GOALS.map(g => (
                     <button key={g.id} onClick={() => toggleGoal(g.id)}
@@ -251,7 +251,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 mb-8 text-left space-y-3">
                   {[
                     { icon: '📚', text: 'Upload docs to your Library' },
-                    { icon: '🤖', text: 'Ask FlowAI anything' },
+                    { icon: '🤖', text: 'Ask NITE AI anything' },
                     { icon: '👥', text: 'Create a study group' },
                   ].map(tip => (
                     <div key={tip.text} className="flex items-center gap-3">
@@ -273,7 +273,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
           onClick={isLast ? finish : next}
           className="w-full py-4 rounded-2xl bg-primary text-white font-black text-base flex items-center justify-center gap-2 shadow-xl shadow-primary/30 active:scale-[0.98] transition-transform"
         >
-          {isLast ? 'Enter FlowState' : step === 0 ? 'Get Started' : 'Continue'}
+          {isLast ? 'Enter NITE Mind' : step === 0 ? 'Get Started' : 'Continue'}
           {isLast ? <ChevronRight className="w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
         </button>
         {step > 0 && !isLast && (
