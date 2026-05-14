@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     startupImage: '/images/logo-pwa.png',
   },
   icons: {
-    icon: '/images/logo-pwa.png',
+    icon: '/images/logo-icon.png',
     apple: '/images/logo-pwa.png',
   },
   other: {
