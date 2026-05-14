@@ -287,18 +287,18 @@ function RichContent({ content }: { content: string }) {
             rehypePlugins={[rehypeKatex]}
             components={{
               // Headings
-              h1: ({ children }) => <h1 className="text-xl font-black text-white mt-5 mb-2 tracking-tight">{children}</h1>,
-              h2: ({ children }) => <h2 className="text-lg font-black text-white mt-4 mb-2 tracking-tight">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-base font-bold text-white mt-3 mb-1.5">{children}</h3>,
+              h1: ({ children }) => <h1 className="text-2xl font-black text-white mt-8 mb-4 tracking-tight border-b border-white/5 pb-2">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-xl font-black text-white mt-6 mb-3 tracking-tight">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-lg font-bold text-white mt-4 mb-2">{children}</h3>,
               // Paragraphs
-              p: ({ children }) => <p className="text-slate-200 leading-relaxed mb-3 last:mb-0">{children}</p>,
+              p: ({ children }) => <p className="text-slate-300 leading-relaxed mb-5 last:mb-0 text-[16px]">{children}</p>,
               // Lists
               ul: ({ children }) => <ul className="my-3 space-y-1.5 pl-0">{children}</ul>,
               ol: ({ children }) => <ol className="my-3 space-y-1.5 pl-0 list-none">{children}</ol>,
               li: ({ children }) => (
-                <li className="flex gap-2.5 items-start text-slate-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 shrink-0" />
-                  <span className="flex-1 leading-relaxed">{children}</span>
+                <li className="flex gap-3 items-start text-slate-300 mb-2 last:mb-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5 shrink-0 shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
+                  <span className="flex-1 leading-relaxed text-[15px]">{children}</span>
                 </li>
               ),
               // Code — intercept mermaid code blocks here too
@@ -310,7 +310,7 @@ function RichContent({ content }: { content: string }) {
                 }
                 const isInline = !className
                 if (isInline) return (
-                  <code className="px-1.5 py-0.5 bg-white/10 text-orange-300 rounded-md text-[0.85em] font-mono">{children}</code>
+                  <code className="px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-md text-[0.9em] font-mono font-medium">{children}</code>
                 )
                 return (
                   <div className="my-3 rounded-xl overflow-hidden border border-white/8">
@@ -431,14 +431,14 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
 
       {/* Bubble Container */}
       <div className={cn(
-        'flex flex-col gap-2 min-w-0 max-w-[85%] sm:max-w-[75%]',
+        'flex flex-col gap-2 min-w-0 flex-1',
         isUser ? 'items-end' : 'items-start'
       )}>
         <div className={cn(
-          'rounded-3xl px-5 py-3.5 relative overflow-hidden transition-all duration-300',
+          'relative transition-all duration-300',
           isUser
-            ? 'bg-[#1a1a1a] border border-white/8 text-slate-100 rounded-tr-sm shadow-xl'
-            : 'bg-white/[0.03] backdrop-blur-md border border-white/8 text-slate-200 rounded-tl-sm shadow-2xl'
+            ? 'rounded-3xl px-5 py-3.5 bg-[#1a1a1a] border border-white/8 text-slate-100 rounded-tr-sm shadow-xl max-w-[85%] sm:max-w-[75%]'
+            : 'w-full py-2 text-slate-200'
         )}>
           {/* Subtle background glow for AI */}
           {!isUser && <div className="absolute -top-10 -right-10 w-24 h-24 bg-orange-500/5 blur-[40px] pointer-events-none" />}
@@ -1021,7 +1021,7 @@ function AIChat() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
+            <div className="max-w-5xl mx-auto px-4 py-8 space-y-12 animate-fade-in">
               {messages.map((msg, i) => (
                 <MessageBubble 
                   key={i} 
@@ -1041,7 +1041,7 @@ function AIChat() {
         <div className="p-4 sm:p-5 bg-[#0d0d0d] border-t border-white/5 flex-shrink-0 relative z-20"
           style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))' }}
         >
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             
             {/* Attached file preview */}
             {attachedFile && (
