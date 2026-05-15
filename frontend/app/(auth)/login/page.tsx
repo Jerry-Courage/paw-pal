@@ -49,7 +49,7 @@ function LoginForm() {
              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
           <span className="text-xl font-black text-white uppercase tracking-tight">
-            NITE <span className="text-orange-500">Mind</span>
+            Flow <span className="text-orange-500">State</span>
           </span>
         </Link>
 
