@@ -64,7 +64,7 @@ export default function WorkspacePortal() {
             <MessageSquare className="w-8 h-8 text-violet-400" />
           </div>
           <h3 className="font-black text-lg text-white mb-2">The studio is quiet</h3>
-          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Create a space for your study group. Sync your library, mention NITE, and master anything together.</p>
+          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Create a space for your study group. Sync your library, mention Flow, and master anything together.</p>
           <button onClick={() => setShowCreate(true)} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95">
             Create Your First Studio
           </button>

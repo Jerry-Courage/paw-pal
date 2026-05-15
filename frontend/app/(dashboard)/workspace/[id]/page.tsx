@@ -583,7 +583,7 @@ export default function WorkspaceCollaborationStudio() {
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-slate-400">Start the conversation</p>
-                <p className="text-xs text-slate-600 mt-1">Send a message or mention NITE for AI assistance</p>
+                <p className="text-xs text-slate-600 mt-1">Send a message or mention Flow for AI assistance</p>
               </div>
             </div>
           ) : (
@@ -707,7 +707,7 @@ export default function WorkspaceCollaborationStudio() {
                     setInputText(e.target.value)
                     handleUserTyping()
                   }}
-                  placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message or ask NITE..."}
+                  placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message or ask Flow..."}
                   disabled={isRecording}
                   className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-slate-600 disabled:opacity-50 min-w-0"
                 />
@@ -721,7 +721,7 @@ export default function WorkspaceCollaborationStudio() {
               </div>
             </form>
             <p className="text-center text-[10px] text-slate-600 mt-2 max-w-4xl mx-auto">
-              {isRecording ? "Tap mic to stop & send" : "Mention NITE for AI · Swipe message to reply"}
+              {isRecording ? "Tap mic to stop & send" : "Mention Flow for AI · Swipe message to reply"}
             </p>
           </div>
         </div>

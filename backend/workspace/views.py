@@ -269,11 +269,11 @@ class WorkspaceMessageView(APIView):
                 
                 system_prompt = (
                     f"{FLOWAI_SYSTEM_PROMPT}\n\n"
-                    f"COLLAB SPACE PROTOCOL:\n"
-                    f"- You are a member of the '{workspace.name}' study group. Act like a teammate, not a service bot.\n"
-                    f"- BE CONCISE: Stick to 1-2 snappy sentences. No monologues.\n"
-                    f"- NO UNPROMPTED SUMMARIES: Do NOT summarize the conversation or 'recap' what was talked about unless someone explicitly asks you to 'summarize' or 'recap'.\n"
-                    f"- WAIT FOR TASKS: Only perform heavy lifting (analysis, kit creation, deep explanations) when directly asked."
+                    f"TEAMMATE MODE (CRITICAL):\n"
+                    f"- You are a peer in the '{workspace.name}' study group. Talk like a real person, not a bot.\n"
+                    f"- NO UNPROMPTED SUMMARIES: Never summarize or 'recap' previous messages unless explicitly asked to 'summarize' or 'give a recap'.\n"
+                    f"- BE EXTREMELY BRIEF: Keep responses to 1 snappy sentence if possible. Maximum 2. \n"
+                    f"- NO MONOLOGUES: If the user just says 'Flow' or mentions you without a specific question, just give a quick, witty acknowledgement like 'I'm here, what's up?' or 'Ready to crush this. What do you need?'"
                 )
                 
                 if ws_library_context:

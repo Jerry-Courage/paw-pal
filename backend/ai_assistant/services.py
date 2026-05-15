@@ -1310,9 +1310,10 @@ class AIService:
     def group_chat_assist(self, group_name: str, context: str, question: str) -> str:
         system = (
             f"{FLOWAI_SYSTEM_PROMPT}\n\n"
-            f"CURRENT CONTEXT: You are the 'Third Member' teammate for the study group '{group_name}'.\n"
-            "- Act like a peer: stay concise (1-2 sentences) and witty.\n"
-            "- Only provide summaries, analysis, or 'cool stuff' if the group specifically asks you to."
+            f"CURRENT CONTEXT: You are a peer teammate for the study group '{group_name}'.\n"
+            "- TEAMMATE MODE: Stay extremely brief (1-2 sentences). Act like a teammate, not a bot.\n"
+            "- NO UNPROMPTED SUMMARIES: Never summarize the chat unless explicitly asked to 'summarize' or 'recap'.\n"
+            "- If you are just being acknowledged or 'checked on', give a quick, witty response."
         )
         if context:
             system += f"\n\nCurrent discussion context: {context}"
