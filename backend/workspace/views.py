@@ -203,11 +203,13 @@ class WorkspaceMessageView(APIView):
         # We only trigger when used as a direct address/name, not in normal sentences
         # like "good night", "last night", "knight in armor", etc.
         wake_words = (
-            r'\b(nite(?:ai|mind)?|nite\s+ai|nite\s+mind)\b'           # typed: nite, niteai, nitemind
-            r'|(?:^|[\s,!?])(?:hey|yo|ok|okay|hi)\s+(nite|night|niteai|nitemind)\b'  # hey/yo nite/night
-            r'|\b(night\s*ai|night\s*mind|nightmind)\b'                # STT: night ai, night mind
-            r'|\bnite[,!?]'                                             # nite followed by punctuation
-            r'|\bassistant\b'                                           # generic: assistant
+            r'\b(flow(?:ai|state)?|flow\s+ai|flow\s+state)\b'         # typed: flow, flowai, flowstate
+            r'|(?:^|[\s,!?])(?:hey|yo|ok|okay|hi)\s+(flow|flowai|flowstate)\b'  # hey/yo flow
+            r'|\b(nite(?:ai|mind)?|nite\s+ai|nite\s+mind)\b'           # legacy/brand: nite
+            r'|(?:^|[\s,!?])(?:hey|yo|ok|okay|hi)\s+(nite|night|niteai|nitemind)\b'
+            r'|\b(night\s*ai|night\s*mind|nightmind)\b'                # STT
+            r'|\bflow[,!?]'                                             # flow followed by punctuation
+            r'|\bassistant\b'                                           # generic
         )
         if is_reply_to_ai or re.search(wake_words, content, re.IGNORECASE):
             self._trigger_ai_response(ws, content, request.user, is_audio_trigger=bool(audio_file), msg=msg)
@@ -267,14 +269,17 @@ class WorkspaceMessageView(APIView):
                 
                 system_prompt = (
                     f"{FLOWAI_SYSTEM_PROMPT}\n\n"
-                    f"WORKSPACE CONTEXT: You are in the '{workspace.name}' collab space. "
+                    f"COLLAB SPACE PROTOCOL:\n"
+                    f"- You are a member of the '{workspace.name}' study group. Act like a teammate, not a service bot.\n"
+                    f"- BE CONCISE: Stick to 1-2 snappy sentences. No monologues.\n"
+                    f"- NO UNPROMPTED SUMMARIES: Do NOT summarize the conversation or 'recap' what was talked about unless someone explicitly asks you to 'summarize' or 'recap'.\n"
+                    f"- WAIT FOR TASKS: Only perform heavy lifting (analysis, kit creation, deep explanations) when directly asked."
                 )
                 
                 if ws_library_context:
                     system_prompt += (
                         f"\n\nSHARED KNOWLEDGE BASE:\n{ws_library_context}\n\n"
-                        "Use the above shared library context as your ground truth for this space. "
-                        "When students ask about 'our notes' or 'shared resources', refer to this data."
+                        "Refer to this shared context ONLY if the group asks about their shared notes or resources."
                     )
                 
                 # Get history

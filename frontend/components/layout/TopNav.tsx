@@ -56,7 +56,7 @@ export default function TopNav() {
              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
           <span className="text-base font-black text-white uppercase tracking-tight hidden sm:block">
-            NITE <span className="text-orange-500">Mind</span>
+            Flow <span className="text-orange-500">State</span>
           </span>
         </Link>
 
@@ -143,7 +143,7 @@ export default function TopNav() {
                   <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-sm font-black text-white uppercase tracking-tight">
-                  NITE <span className="text-orange-500">Mind</span>
+                  Flow <span className="text-orange-500">State</span>
                 </span>
               </Link>
               <button onClick={() => setMobileOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all">

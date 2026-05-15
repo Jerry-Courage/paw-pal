@@ -1,3 +1,4 @@
+import re
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -99,8 +100,16 @@ class GroupMessageView(generics.ListCreateAPIView):
         group = get_object_or_404(StudyGroup, pk=self.kwargs['group_id'])
         msg = serializer.save(group=group, sender=self.request.user)
 
-        # Auto AI response if message mentions @FlowAI
-        if '@FlowAI' in msg.content or '@flowai' in msg.content.lower():
+        # Auto AI response if message mentions Flow, Flow AI, or STT variations like 'night'
+        trigger_pattern = (
+            r'\b(flow(?:ai|state)?|flow\s+ai|flow\s+state)\b'
+            r'|(?:^|[\s,!?])(?:hey|yo|ok|okay|hi)\s+(flow|flowai|flowstate)\b'
+            r'|\b(nite(?:ai|mind)?|nite\s+ai|nite\s+mind)\b'
+            r'|\b(night\s*ai|night\s*mind|nightmind)\b'
+            r'|\bflow[,!?]'
+            r'|\bassistant\b'
+        )
+        if re.search(trigger_pattern, msg.content, re.IGNORECASE):
             ai = AIService()
             try:
                 reply = ai.group_chat_assist(group.name, '', msg.content)

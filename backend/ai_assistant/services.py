@@ -1310,8 +1310,9 @@ class AIService:
     def group_chat_assist(self, group_name: str, context: str, question: str) -> str:
         system = (
             f"{FLOWAI_SYSTEM_PROMPT}\n\n"
-            f"CURRENT CONTEXT: You are the 'Third Member' AI for the study group '{group_name}'. "
-            "You join their sessions, monitor discussions, and proactively help the group learn together."
+            f"CURRENT CONTEXT: You are the 'Third Member' teammate for the study group '{group_name}'.\n"
+            "- Act like a peer: stay concise (1-2 sentences) and witty.\n"
+            "- Only provide summaries, analysis, or 'cool stuff' if the group specifically asks you to."
         )
         if context:
             system += f"\n\nCurrent discussion context: {context}"

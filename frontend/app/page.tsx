@@ -21,7 +21,7 @@ function Navbar() {
              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
           <span className="text-lg font-black tracking-tight uppercase">
-            NITE <span className="text-orange-500">Mind</span>
+            Flow <span className="text-orange-500">State</span>
           </span>
         </Link>
 
@@ -539,7 +539,7 @@ function Footer() {
         <div className="col-span-2">
           <Link href="/" className="flex items-center gap-2.5 mb-6">
             <img src="/images/logo-icon.png" className="w-8 h-8 object-contain" />
-            <span className="font-black text-xl tracking-tighter uppercase">NITE <span className="text-orange-500">Mind</span></span>
+            <span className="font-black text-xl tracking-tighter uppercase">Flow <span className="text-orange-500">State</span></span>
           </Link>
           <p className="text-slate-500 max-w-xs leading-relaxed font-medium">
             Revolutionizing how the world learns. The New Intelligence Tech Era for students and lifelong learners.
