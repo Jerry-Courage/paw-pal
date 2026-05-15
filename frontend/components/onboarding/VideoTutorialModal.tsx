@@ -104,7 +104,7 @@ export default function VideoTutorialModal({ isOpen, onClose }: Props) {
                     <div className="p-2 bg-primary/10 rounded-xl">
                       <Brain className="w-6 h-6 text-primary" />
                     </div>
-                    Mastering NITE Mind
+                    Mastering Flow State
                   </h2>
                   <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Quick guide to your new AI study space</p>
                 </div>

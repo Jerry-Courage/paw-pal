@@ -257,7 +257,7 @@ class WorkspaceMessageView(APIView):
                 # 2. Typing Indicator Start
                 async_to_sync(layer.group_send)(
                     f'workspace_{workspace.id}',
-                    {'type': 'broadcast_typing', 'is_typing': True, 'user': 'NITE AI'}
+                    {'type': 'broadcast_typing', 'is_typing': True, 'user': 'Flow AI'}
                 )
 
                 ai = AIService()
@@ -330,7 +330,7 @@ class WorkspaceMessageView(APIView):
                 try:
                     async_to_sync(layer.group_send)(
                         f'workspace_{workspace.id}',
-                        {'type': 'broadcast_typing', 'is_typing': False, 'user': 'NITE AI'}
+                        {'type': 'broadcast_typing', 'is_typing': False, 'user': 'Flow AI'}
                     )
                 except: pass
                 close_old_connections()

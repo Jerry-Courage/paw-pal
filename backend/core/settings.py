@@ -303,8 +303,8 @@ LOGGING = {
 
 # ─── Unfold Admin ─────────────────────────────────────────────────────────────
 UNFOLD = {
-    'SITE_TITLE': 'NITE Mind Admin',
-    'SITE_HEADER': 'NITE Mind',
+    'SITE_TITLE': 'Flow State Admin',
+    'SITE_HEADER': 'Flow State',
     'SITE_SUBHEADER': 'New Intelligence Tech Era',
     'SITE_URL': 'http://localhost:3000',
     'SITE_ICON': None,

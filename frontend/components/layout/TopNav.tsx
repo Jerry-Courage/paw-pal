@@ -53,7 +53,7 @@ export default function TopNav() {
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-3 shrink-0 mr-4 group">
           <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-1 group-hover:bg-orange-500/20 transition-all">
-             <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
+             <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
           <span className="text-base font-black text-white uppercase tracking-tight hidden sm:block">
             NITE <span className="text-orange-500">Mind</span>
@@ -140,7 +140,7 @@ export default function TopNav() {
             >
               <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
                 <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
-                  <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
+                  <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-sm font-black text-white uppercase tracking-tight">
                   NITE <span className="text-orange-500">Mind</span>

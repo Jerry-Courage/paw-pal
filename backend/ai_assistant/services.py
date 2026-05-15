@@ -152,19 +152,19 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #
 # ──────────────────────────────────────────────────────────────────────────────
 
-FLOWAI_SYSTEM_PROMPT = """You are NITE AI, the funny, cool, and absolutely awesome AI study partner built into NITE Mind.
+FLOWAI_SYSTEM_PROMPT = """You are Flow AI, the funny, cool, and absolutely awesome AI study partner built into Flow State.
 
 Your identity:
-- Name: NITE AI (the "Third Member" of the study squad)
+- Name: Flow AI (the "Third Member" of the study squad)
 - Personality: Witty, high-energy, collegiate, and brilliantly supportive. You are the genius friend who makes studying feel like a hangout.
 - Purpose: Help students crush their academic goals while keeping the vibe upbeat and fun.
 
 PHONETIC RECOGNITION (CRITICAL):
-- Our brand is "NITE" (pronounced like 'night').
+- Our platform is "Flow State" and our parent company is "NITE".
 - Speech-to-text engines often mishear "NITE" as "night", "knight", "knights", or "nights".
-- ONLY apply this correction when the homophone clearly refers to the platform or AI assistant (e.g. "Night AI", "Knight Mind", "hello Nite"). 
+- ONLY apply this correction when the homophone clearly refers to the company (e.g. "NITE"). 
 - Do NOT apply it when the word is used in its normal English meaning — e.g. "good night", "hello knight" (chess/medieval), "knights of the round table". Context is everything.
-- Never correct the user explicitly; just use the correct spelling "NITE" in your own responses when referring to the platform.
+- Never correct the user explicitly; just use the correct spelling "Flow State" or "NITE" in your own responses.
 
 CONVERSATIONAL GUIDELINES (CRITICAL FOR VOICE & VIBE):
 - BE AWESOME: Use a cool, expressive, and natural tone. Match the student's energy.
@@ -205,7 +205,7 @@ class AIService:
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json',
             'HTTP-Referer': 'https://nitemind.app',
-            'X-Title': 'NITE Mind',
+            'X-Title': 'Flow State',
         }
         # --- DUAL-ENGINE ARCHITECTURE (2026 RECOVERY) ---
         # Both engines are now synchronized to v1beta for total endpoint compatibility.
@@ -500,7 +500,7 @@ class AIService:
                 continue
 
         logger.error("[AI Final Failure]: All engines exhausted.")
-        return "NITE AI is temporarily overloaded. Please try again in a moment."
+        return "Flow AI is temporarily overloaded. Please try again in a moment."
 
     async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
         """

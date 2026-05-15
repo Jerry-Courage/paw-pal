@@ -112,9 +112,9 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
           <div className="relative z-10 px-6 py-8 flex flex-col items-center">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center justify-center overflow-hidden p-1.5">
-                <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
+                <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
               </div>
-              <span className="text-base font-black text-white tracking-[0.2em] uppercase">NITE Mind</span>
+              <span className="text-base font-black text-white tracking-[0.2em] uppercase">Flow State</span>
             </div>
             
             <div className="w-full max-w-md h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -315,14 +315,14 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                     
                     <h1 className="text-4xl font-black text-white mb-4 tracking-tight">Mission Initialized!</h1>
                     <p className="text-slate-400 text-lg leading-relaxed mb-10 max-w-sm mx-auto">
-                      Your NITE Mind is tuned and ready to transform how you study.
+                      Your Flow State is tuned and ready to transform how you study.
                     </p>
 
                     <div className="bg-white/[0.03] border border-white/5 rounded-[2.5rem] p-8 text-left space-y-5">
                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-1">Getting Started</h4>
                       {[
                         { icon: '📁', text: 'Sync your study materials', sub: 'Upload any file or URL' },
-                        { icon: '✨', text: 'Chat with NITE AI', sub: 'Your dedicated study partner' },
+                        { icon: '✨', text: 'Chat with Flow AI', sub: 'Your dedicated study partner' },
                         { icon: '📈', text: 'Track your progress', sub: 'Weekly goals and mastery' },
                       ].map((tip, i) => (
                         <motion.div 
@@ -357,7 +357,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
               onClick={isLast ? handleFinish : next}
               className="w-full py-5 rounded-[2rem] bg-orange-500 text-white font-black text-lg flex items-center justify-center gap-3 shadow-2xl shadow-orange-500/20 active:scale-[0.98] transition-all hover:bg-orange-400 hover:shadow-orange-500/40"
             >
-              {isLast ? 'Enter NITE Mind' : step === 0 ? "Let's Go" : 'Continue'}
+              {isLast ? 'Enter Flow State' : step === 0 ? "Let's Go" : 'Continue'}
               {isLast ? <Rocket className="w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
             </button>
             

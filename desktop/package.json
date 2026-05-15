@@ -1,7 +1,7 @@
 {
   "name": "nitemind-desktop",
   "version": "1.0.0",
-  "description": "NITE Mind — AI Study Platform Desktop App",
+  "description": "Flow State — AI Study Platform Desktop App",
   "main": "src/main.js",
   "homepage": "https://github.com/Jerry-Courage/paw-pal",
   "author": {
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "com.nitemind.app",
-    "productName": "NITE Mind",
+    "productName": "Flow State",
     "copyright": "Copyright © 2026 Jerry Courage",
     "icon": "assets/icon",
     "files": [

@@ -37,7 +37,7 @@ export default function WorkspacePortal() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
         <div>
           <h1 className="text-xl font-black text-white tracking-tight uppercase">Collab Space</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Collaborative group study with <span className="text-violet-400">NITE AI</span> as your third member.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Collaborative group study with <span className="text-violet-400">Flow AI</span> as your third member.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={() => setShowJoin(true)}

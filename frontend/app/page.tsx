@@ -18,7 +18,7 @@ function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-all overflow-hidden p-0.5">
-             <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
+             <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
           <span className="text-lg font-black tracking-tight uppercase">
             NITE <span className="text-orange-500">Mind</span>
@@ -64,7 +64,7 @@ function Hero() {
         {/* Headline */}
         <h1 className="text-6xl md:text-8xl font-black leading-[0.95] mb-8 tracking-tighter">
           Master any subject<br />
-          <span className="text-orange-500">with NITE Mind.</span>
+          <span className="text-orange-500">with Flow State.</span>
         </h1>
 
         {/* Subtext */}
@@ -91,7 +91,7 @@ function Hero() {
                     <Brain className="w-10 h-10 text-orange-500" />
                  </div>
                  <h3 className="text-2xl font-black text-white mb-2">Live AI Exam Simulation</h3>
-                 <p className="text-slate-500 max-w-sm text-sm">Coming this fall: Real-time voice interaction with NITE AI to simulate high-pressure exams.</p>
+                 <p className="text-slate-500 max-w-sm text-sm">Coming this fall: Real-time voice interaction with Flow AI to simulate high-pressure exams.</p>
               </div>
            </div>
         </div>
@@ -187,14 +187,14 @@ function FeaturesGrid() {
       accent: 'text-orange-400',
       bg: 'bg-orange-500/10',
       title: 'Live AI Exam Prep',
-      desc: 'Simulate high-pressure exam sessions with real-time voice interaction. NITE AI quizzes you live and gives instant verbal feedback.',
+      desc: 'Simulate high-pressure exam sessions with real-time voice interaction. Flow AI quizzes you live and gives instant verbal feedback.',
     },
     {
       icon: Radio,
       accent: 'text-pink-400',
       bg: 'bg-pink-500/10',
       title: 'Voice Study Sessions',
-      desc: 'Hands-free studying. Discuss your materials with NITE AI while walking, driving, or relaxing. Natural voice flow.',
+      desc: 'Hands-free studying. Discuss your materials with Flow AI while walking, driving, or relaxing. Natural voice flow.',
     },
     {
       icon: Layers,
@@ -222,7 +222,7 @@ function FeaturesGrid() {
       accent: 'text-amber-400',
       bg: 'bg-amber-500/10',
       title: 'Interactive Mind Maps',
-      desc: 'See the big picture. NITE Mind auto-generates visual concept maps to show how topics connect.',
+      desc: 'See the big picture. Flow State auto-generates visual concept maps to show how topics connect.',
     },
   ]
 
@@ -272,7 +272,7 @@ function SpotlightTutor() {
             <span className="text-orange-500">read your notes.</span>
           </h2>
           <p className="text-slate-400 text-lg leading-relaxed mb-8">
-            Unlike generic chatbots, NITE AI is trained on your exact material. Ask it to explain a concept from your lecture, quiz you on a specific chapter, or simplify a complex formula.
+            Unlike generic chatbots, Flow AI is trained on your exact material. Ask it to explain a concept from your lecture, quiz you on a specific chapter, or simplify a complex formula.
           </p>
           <ul className="space-y-4 mb-10">
             {[
@@ -300,7 +300,7 @@ function SpotlightTutor() {
                 <Brain className="w-5 h-5 text-orange-400" />
               </div>
               <div>
-                <p className="text-sm font-black text-white">NITE AI Tutor</p>
+                <p className="text-sm font-black text-white">Flow AI Tutor</p>
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Active · Trained on Notes</p>
               </div>
             </div>
@@ -352,7 +352,7 @@ function ComparisonTable() {
     <section className="py-28 px-6">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
-          <p className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Why NITE Mind</p>
+          <p className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Why Flow State</p>
           <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter mb-4">
             The difference is night and day.
           </h2>
@@ -362,7 +362,7 @@ function ComparisonTable() {
           <div className="grid grid-cols-3 bg-[#161616]">
             <div className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Feature</div>
             <div className="px-8 py-6 text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2">
-              <img src="/images/logo-icon.png" className="w-4 h-4 object-contain" /> NITE Mind
+              <img src="/images/logo-icon.png" className="w-4 h-4 object-contain" /> Flow State
             </div>
             <div className="px-8 py-6 text-[10px] font-black text-slate-600 uppercase tracking-widest">Traditional</div>
           </div>
@@ -400,14 +400,14 @@ function Testimonials() {
       role: 'Medical Student · Year 2',
       initials: 'AK',
       color: 'bg-orange-500/10 text-orange-400',
-      quote: 'I uploaded 3 months of anatomy notes and NITE Mind built me a complete revision plan. The live voice prep actually simulated my oral exams perfectly.',
+      quote: 'I uploaded 3 months of anatomy notes and Flow State built me a complete revision plan. The live voice prep actually simulated my oral exams perfectly.',
     },
     {
       name: 'Marcus L.',
       role: 'CS Undergrad · Stanford',
       initials: 'ML',
       color: 'bg-sky-500/10 text-sky-400',
-      quote: 'The AI tutor actually understands my lecture slides. I stopped spending hours on Stack Overflow and just ask NITE AI instead. It explains everything.',
+      quote: 'The AI tutor actually understands my lecture slides. I stopped spending hours on Stack Overflow and just ask Flow AI instead. It explains everything.',
     },
     {
       name: 'Priya S.',
@@ -520,7 +520,7 @@ function CTASection() {
             <span className="text-orange-500">everything?</span>
           </h2>
           <p className="relative text-slate-400 text-lg mb-14 max-w-xl leading-relaxed font-medium">
-            Experience the most advanced AI study partner ever built. Start your journey with NITE Mind today.
+            Experience the most advanced AI study partner ever built. Start your journey with Flow State today.
           </p>
           <Link href="/signup" className="relative btn-primary text-lg px-12 py-5 rounded-2xl font-black shadow-2xl shadow-orange-500/30">
             Start for Free <ArrowRight className="w-5 h-5 ml-2" />
@@ -562,7 +562,7 @@ function Footer() {
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-6 mt-20 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] font-black text-slate-700 uppercase tracking-widest">
-        <p>© {new Date().getFullYear()} NITE Mind. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} NITE. All rights reserved.</p>
         <p>Built with ❤️ for the future of education.</p>
       </div>
     </footer>

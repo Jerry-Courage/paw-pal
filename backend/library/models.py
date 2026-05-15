@@ -35,7 +35,7 @@ class Resource(models.Model):
     cover_image = models.ImageField(upload_to='resources/covers/', null=True, blank=True)
     thumbnail_url = models.URLField(blank=True)
     is_public = models.BooleanField(default=False, db_index=True)
-    author_name = models.CharField(max_length=200, default='NITE Mind Curator')
+    author_name = models.CharField(max_length=200, default='Flow State Curator')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -59,7 +59,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'NITE Mind',
+    title: 'Flow State',
     icon: path.join(__dirname, '../assets/icon.png'),
     backgroundColor: '#0f172a',
     show: false,
@@ -96,7 +96,7 @@ function createWindow() {
 
   // Handle page title changes
   mainWindow.webContents.on('page-title-updated', (e, title) => {
-    mainWindow.setTitle(title || 'NITE Mind')
+    mainWindow.setTitle(title || 'Flow State')
   })
 }
 
@@ -107,12 +107,12 @@ function createTray() {
   tray = new Tray(icon.resize({ width: 16, height: 16 }))
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open NITE Mind', click: () => { mainWindow?.show(); mainWindow?.focus() } },
+    { label: 'Open Flow State', click: () => { mainWindow?.show(); mainWindow?.focus() } },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ])
 
-  tray.setToolTip('NITE Mind')
+  tray.setToolTip('Flow State')
   tray.setContextMenu(contextMenu)
   tray.on('click', () => { mainWindow?.show(); mainWindow?.focus() })
 }
@@ -121,7 +121,7 @@ function createTray() {
 function createMenu() {
   const template = [
     ...(process.platform === 'darwin' ? [{
-      label: 'NITE Mind',
+      label: 'Flow State',
       submenu: [
         { role: 'about' },
         { type: 'separator' },
@@ -246,7 +246,7 @@ function setupAutoUpdater() {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Available',
-      message: `NITE Mind ${info.version} is available. Download now?`,
+      message: `Flow State ${info.version} is available. Download now?`,
       buttons: ['Download', 'Later'],
     }).then(result => {
       if (result.response === 0) autoUpdater.downloadUpdate()
@@ -257,7 +257,7 @@ function setupAutoUpdater() {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Ready',
-      message: 'Update downloaded. Restart NITE Mind to apply it.',
+      message: 'Update downloaded. Restart Flow State to apply it.',
       buttons: ['Restart Now', 'Later'],
     }).then(result => {
       if (result.response === 0) autoUpdater.quitAndInstall()

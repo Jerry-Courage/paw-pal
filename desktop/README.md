@@ -1,6 +1,6 @@
-# NITE Mind Desktop
+# Flow State Desktop
 
-Electron wrapper for the NITE Mind web app.
+Electron wrapper for the Flow State web app.
 
 ## Setup
 

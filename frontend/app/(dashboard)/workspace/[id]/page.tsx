@@ -1245,7 +1245,7 @@ function MessageBubble({
         {showAvatar && (
           <div className={cn("flex items-center gap-1.5 mb-1 px-1", isMe ? 'flex-row-reverse' : '')}>
             <span className="text-[11px] font-medium text-slate-400">
-              {isAI ? 'NITE AI' : message.author?.username || 'Member'}
+              {isAI ? 'Flow AI' : message.author?.username || 'Member'}
             </span>
             <span className="text-[10px] text-slate-600">
               {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

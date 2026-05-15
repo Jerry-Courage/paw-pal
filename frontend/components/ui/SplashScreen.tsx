@@ -28,7 +28,7 @@ export default function SplashScreen() {
               transition={{ duration: 1, ease: 'easeOut' }}
               className="relative z-10 w-24 h-24 bg-orange-500/5 border border-orange-500/10 rounded-[2.5rem] flex items-center justify-center shadow-2xl overflow-hidden p-4"
             >
-              <img src="/images/logo-icon.png" alt="NITE Mind" className="w-full h-full object-contain" />
+              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
               
               {/* Pulsing Aura */}
               <motion.div
@@ -67,7 +67,7 @@ export default function SplashScreen() {
               transition={{ duration: 0.8, delay: 0.3 }}
               className="text-2xl font-black text-white tracking-widest uppercase mb-4"
             >
-              NITE Mind
+              Flow State
             </motion.h1>
             
             <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden mx-auto">
