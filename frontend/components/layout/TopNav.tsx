@@ -52,10 +52,10 @@ export default function TopNav() {
         <div className="h-14 flex items-center px-4 md:px-6 gap-4">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-3 shrink-0 mr-4 group">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-1 group-hover:bg-orange-500/20 transition-all">
+          <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5 group-hover:bg-orange-500/20 transition-all shadow-lg shadow-orange-500/5">
              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
-          <span className="text-base font-black text-white uppercase tracking-tight hidden sm:block">
+          <span className="text-lg font-black text-white uppercase tracking-tight hidden sm:block">
             Flow <span className="text-orange-500">State</span>
           </span>
         </Link>
@@ -138,11 +138,11 @@ export default function TopNav() {
             <div className="flex items-center justify-between px-5 border-b border-white/5"
               style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)', paddingBottom: '16px' }}
             >
-              <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-                <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+              <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileOpen(false)}>
+                <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/5">
                   <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
                 </div>
-                <span className="text-sm font-black text-white uppercase tracking-tight">
+                <span className="text-base font-black text-white uppercase tracking-tight">
                   Flow <span className="text-orange-500">State</span>
                 </span>
               </Link>

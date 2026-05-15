@@ -62,10 +62,10 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
       {/* Logo */}
       <div className="px-5 py-6 border-b border-white/5">
         <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+          <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden group-hover:bg-orange-500/20 transition-all shadow-lg shadow-orange-500/5">
             <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
-          <span className="text-sm font-black text-white uppercase tracking-tight">
+          <span className="text-base font-black text-white uppercase tracking-tight">
             Flow <span className="text-orange-500">State</span>
           </span>
         </Link>

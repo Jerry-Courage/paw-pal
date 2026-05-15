@@ -111,10 +111,10 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         {!isLast && (
           <div className="relative z-10 px-6 py-8 flex flex-col items-center">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center justify-center overflow-hidden p-1.5">
+              <div className="w-12 h-12 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/5">
                 <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
               </div>
-              <span className="text-base font-black text-white tracking-[0.2em] uppercase">Flow State</span>
+              <span className="text-lg font-black text-white tracking-[0.2em] uppercase">Flow State</span>
             </div>
             
             <div className="w-full max-w-md h-1.5 bg-white/5 rounded-full overflow-hidden">

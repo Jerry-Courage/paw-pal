@@ -45,10 +45,10 @@ function LoginForm() {
       <div className="flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 mb-12 group w-fit">
-          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden p-0.5">
+          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/5">
              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
-          <span className="text-xl font-black text-white uppercase tracking-tight">
+          <span className="text-2xl font-black text-white uppercase tracking-tight">
             Flow <span className="text-orange-500">State</span>
           </span>
         </Link>

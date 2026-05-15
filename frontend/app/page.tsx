@@ -16,11 +16,11 @@ function Navbar() {
     <nav className="fixed top-0 w-full z-50 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-all overflow-hidden p-0.5">
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-all overflow-hidden shadow-lg shadow-orange-500/5">
              <img src="/images/logo-icon.png" alt="Flow State" className="w-full h-full object-contain" />
           </div>
-          <span className="text-lg font-black tracking-tight uppercase">
+          <span className="text-xl font-black tracking-tight uppercase">
             Flow <span className="text-orange-500">State</span>
           </span>
         </Link>
@@ -361,8 +361,8 @@ function ComparisonTable() {
         <div className="rounded-[2.5rem] overflow-hidden bg-[#111]">
           <div className="grid grid-cols-3 bg-[#161616]">
             <div className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Feature</div>
-            <div className="px-8 py-6 text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2">
-              <img src="/images/logo-icon.png" className="w-4 h-4 object-contain" /> Flow State
+            <div className="px-8 py-6 text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-2.5">
+              <img src="/images/logo-icon.png" className="w-5 h-5 object-contain" /> Flow State
             </div>
             <div className="px-8 py-6 text-[10px] font-black text-slate-600 uppercase tracking-widest">Traditional</div>
           </div>
@@ -537,9 +537,11 @@ function Footer() {
     <footer className="py-20 border-t border-white/5">
       <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-12 text-sm">
         <div className="col-span-2">
-          <Link href="/" className="flex items-center gap-2.5 mb-6">
-            <img src="/images/logo-icon.png" className="w-8 h-8 object-contain" />
-            <span className="font-black text-xl tracking-tighter uppercase">Flow <span className="text-orange-500">State</span></span>
+          <Link href="/" className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center overflow-hidden">
+              <img src="/images/logo-icon.png" className="w-full h-full object-contain" />
+            </div>
+            <span className="font-black text-2xl tracking-tighter uppercase">Flow <span className="text-orange-500">State</span></span>
           </Link>
           <p className="text-slate-500 max-w-xs leading-relaxed font-medium">
             Revolutionizing how the world learns. The New Intelligence Tech Era for students and lifelong learners.

@@ -82,8 +82,8 @@ export default function PWAInstallPrompt() {
 
           {/* Header */}
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg flex-shrink-0">
-              <Image src="/images/logo-icon.png" alt="Flow State" width={56} height={56} className="w-full h-full object-cover" />
+            <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg flex-shrink-0 bg-orange-500/5">
+              <Image src="/images/logo-icon.png" alt="Flow State" width={64} height={64} className="w-full h-full object-contain" />
             </div>
             <div>
               <p className="font-black text-slate-900 dark:text-white text-base leading-tight">Install Flow State</p>
