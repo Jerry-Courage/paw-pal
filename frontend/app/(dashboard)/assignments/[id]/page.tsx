@@ -15,6 +15,9 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm'
 import Link from 'next/link'
 import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
 
@@ -131,25 +134,25 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
     <div className="flex flex-col h-[calc(100vh-64px)] -m-4 md:-m-6 overflow-hidden bg-[#0d0d0d]">
       
       {/* ── Top Command Bar ─────────────────────────── */}
-      <div className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50">
-        <div className="flex items-center gap-6">
-          <Link href="/assignments" className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white">
-            <ArrowLeft className="w-5 h-5" />
+      <header className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
+        <div className="flex items-center gap-2 md:gap-6 min-w-0">
+          <Link href="/assignments" className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white shrink-0">
+            <ArrowLeft className="w-4 h-4 md:w-5 h-5" />
           </Link>
-          <div className="h-6 w-px bg-white/5" />
-          <div className="flex flex-col">
-            <h1 className="text-sm font-black text-white tracking-tight truncate max-w-[300px]">{a.title}</h1>
+          <div className="h-6 w-px bg-white/5 hidden sm:block" />
+          <div className="flex flex-col min-w-0">
+            <h1 className="text-xs md:text-sm font-black text-white tracking-tight truncate max-w-[150px] sm:max-w-[300px]">{a.title}</h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className={cn("text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md", STATUS_CONFIG[a.status]?.color)}>
+              <span className={cn("text-[7px] md:text-[8px] font-black uppercase tracking-widest px-1 md:px-1.5 py-0.5 rounded-md", STATUS_CONFIG[a.status]?.color)}>
                 {STATUS_CONFIG[a.status]?.label || a.status}
               </span>
-              {a.subject && <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{a.subject}</span>}
+              {a.subject && <span className="text-[7px] md:text-[8px] font-black text-slate-600 uppercase tracking-widest truncate">{a.subject}</span>}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl mr-2">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="hidden lg:flex items-center gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl mr-2">
             {[
               { id: 'document', icon: FileText, label: 'Manuscript' },
               { id: 'integrity', icon: ShieldCheck, label: 'Integrity Suite' },
@@ -159,7 +162,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
                   activeTab === tab.id ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-white"
                 )}
               >
@@ -169,26 +172,60 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
             ))}
           </div>
           
-          <div className="flex items-center gap-2">
-            <button onClick={() => handleExport('pdf')} disabled={a.status !== 'completed'} className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
-              <FileText className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <button onClick={() => handleExport('pdf')} disabled={a.status !== 'completed'} className="p-2 md:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
+              <FileText className="w-3.5 h-3.5 md:w-4 h-4" />
             </button>
-            <button onClick={() => handleExport('docx')} disabled={a.status !== 'completed'} className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
-              <FileDown className="w-4 h-4" />
+            <button onClick={() => handleExport('docx')} disabled={a.status !== 'completed'} className="p-2 md:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
+              <FileDown className="w-3.5 h-3.5 md:w-4 h-4" />
             </button>
-            <div className="w-px h-6 bg-white/5 mx-1" />
-            <button onClick={() => setIsShareModalOpen(true)} className="btn-primary h-10 px-4 text-[10px]">
-              <Share2 className="w-3.5 h-3.5" /> Share
+            <button 
+              onClick={() => {
+                if (a.ai_response) {
+                  navigator.clipboard.writeText(a.ai_response)
+                  toast.success('Copied to clipboard')
+                }
+              }} 
+              disabled={a.status !== 'completed'} 
+              className="p-2 md:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30"
+              title="Copy to clipboard"
+            >
+              <Copy className="w-3.5 h-3.5 md:w-4 h-4" />
+            </button>
+            <div className="hidden sm:block w-px h-6 bg-white/5 mx-1" />
+            <button onClick={() => setIsShareModalOpen(true)} className="btn-primary h-9 md:h-10 px-3 md:px-4 text-[9px] md:text-[10px] whitespace-nowrap">
+              <Share2 className="w-3 md:w-3.5 h-3 md:h-3.5" /> Share
             </button>
           </div>
         </div>
+      </header>
+
+      {/* Mobile Tabs */}
+      <div className="lg:hidden flex items-center justify-around bg-[#111] border-b border-white/5 px-2 py-2 shrink-0">
+        {[
+          { id: 'document', icon: FileText, label: 'Manus' },
+          { id: 'integrity', icon: ShieldCheck, label: 'Integrity' },
+          { id: 'sources', icon: Layers, label: 'Sources' },
+        ].map(tab => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={cn(
+              "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all min-w-[70px]",
+              activeTab === tab.id ? "text-orange-500 bg-orange-500/5" : "text-slate-500"
+            )}
+          >
+            <tab.icon className="w-4 h-4" />
+            <span className="text-[9px] font-black uppercase tracking-widest">{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         
         {/* ── Main Canvas ─────────────────────────── */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar relative">
-          <div className="max-w-4xl mx-auto px-8 py-16 md:px-16">
+        <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-[#0a0a0a]">
+          <div className="max-w-4xl mx-auto px-5 py-10 md:px-16 md:py-16 pb-32 md:pb-40">
             
             {activeTab === 'document' && (
               <div className="space-y-12">
@@ -196,9 +233,21 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="prose-ai prose-invert max-w-none"
+                    className="prose-ai prose-invert max-w-none prose-p:leading-relaxed prose-headings:tracking-tight"
                   >
-                    <ReactMarkdown>{a.ai_response}</ReactMarkdown>
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkMath, remarkGfm]} 
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: ({node, ...props}) => <p className="mb-6 last:mb-0" {...props} />,
+                        h1: ({node, ...props}) => <h1 className="text-3xl font-black mb-6 mt-10" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-2xl font-black mb-4 mt-8" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-xl font-black mb-3 mt-6" {...props} />,
+                        code: ({node, ...props}) => <code className="bg-orange-500/10 text-orange-400 px-1.5 py-0.5 rounded-md text-[0.9em] font-mono" {...props} />
+                      }}
+                    >
+                      {a.ai_response}
+                    </ReactMarkdown>
                   </motion.div>
                 ) : a.status === 'processing' ? (
                   <div className="h-[50vh] flex flex-col items-center justify-center text-center space-y-8">
@@ -381,23 +430,23 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
 
         {/* ── Chat/Refinement Island ─────────────────────────── */}
         {a.status === 'completed' && activeTab === 'document' && (
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-40">
-            <div className="bg-[#111]/80 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-2 shadow-2xl focus-within:border-orange-500/50 transition-all flex items-center gap-2 group">
-              <div className="ml-3 p-3 bg-orange-500/10 text-orange-500 rounded-2xl group-focus-within:bg-orange-500 group-focus-within:text-white transition-all">
-                <Sparkles className="w-5 h-5" />
+          <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-40">
+            <div className="bg-[#161616]/90 backdrop-blur-3xl border border-white/10 rounded-3xl md:rounded-[2.5rem] p-1.5 md:p-2 shadow-2xl focus-within:border-orange-500/50 transition-all flex items-center gap-2 group">
+              <div className="ml-2 p-2.5 md:p-3 bg-orange-500/10 text-orange-500 rounded-xl md:rounded-2xl group-focus-within:bg-orange-500 group-focus-within:text-white transition-all">
+                <Sparkles className="w-4 h-4 md:w-5 h-5" />
               </div>
               <input 
                 value={refinePrompt} 
                 onChange={e=>setRefinePrompt(e.target.value)} 
                 onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&refineMutation.mutate()} 
-                placeholder="Request edits, adjustments, or tone shifts..." 
-                className="flex-1 bg-transparent border-none focus:outline-none text-white font-bold placeholder:text-slate-600 text-sm py-4 px-2 min-w-0" 
+                placeholder="Ask AI to refine or edit..." 
+                className="flex-1 bg-transparent border-none focus:outline-none text-white font-bold placeholder:text-slate-600 text-xs md:text-sm py-3 md:py-4 px-1 min-w-0" 
               />
               <button 
                 onClick={()=>refineMutation.mutate()} 
                 disabled={!refinePrompt || refineMutation.isPending} 
                 className={cn(
-                  "h-12 px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all",
+                  "h-10 md:h-12 px-4 md:px-6 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all",
                   refinePrompt ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "bg-white/5 text-slate-600"
                 )}
               >

@@ -338,5 +338,18 @@
     margin: 1.5rem 0;
     overflow-x: auto;
   }
+
+  /* KaTeX responsiveness */
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+  }
+  .katex-display::-webkit-scrollbar {
+    height: 3px;
+  }
+  .katex-display::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+  }
 }
 
