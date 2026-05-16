@@ -2410,7 +2410,10 @@ class AIService:
             "[A short, witty note about the linguistic 'Vanish' protocol applied.]"
         )
         
-        raw_response = self.chat_sync([{'role': 'user', 'content': prompt}])
+        raw_response = self.chat_sync([
+            {'role': 'system', 'content': "You are a high-fidelity document rewriter. Return only the requested draft and comment. Do not repeat instructions."},
+            {'role': 'user', 'content': prompt}
+        ], forced_model='google/gemini-2.0-flash-001')
         return self._process_structured_response(assignment, raw_response, "I've applied the High-Intensity 'Vanish v2.5' protocol.")
 
     def remove_plagiarism(self, assignment) -> dict:
@@ -2441,12 +2444,21 @@ class AIService:
         draft = assignment.ai_response
         comment = default_comment
         
+        # 1. Standard Dual-Marker Split
         if "---DRAFT---" in raw_response and "---COMMENT---" in raw_response:
             parts = raw_response.split("---COMMENT---")
             draft_part = parts[0].replace("---DRAFT---", "").strip()
             comment_part = parts[1].strip()
             if draft_part: draft = draft_part
             if comment_part: comment = comment_part
+        # 2. Single Marker Logic (Resilience)
+        elif "---DRAFT---" in raw_response:
+            draft = raw_response.split("---DRAFT---")[1].strip()
+        elif "---COMMENT---" in raw_response:
+            draft_candidate = raw_response.split("---COMMENT---")[0].strip()
+            if len(draft_candidate) > 200: draft = draft_candidate
+            comment = raw_response.split("---COMMENT---")[1].strip()
+        # 3. No Marker Fallback (Document Detection)
         elif len(raw_response) > 500:
             draft = raw_response
             
