@@ -162,11 +162,16 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             # Start receiving loop
             self.gemini_task = asyncio.create_task(self._receive_from_gemini())
 
-            # Trigger initial greeting for podcast Q&A so the AI speaks first
-            if self.technique == 'podcast_qa':
-                await self._send_text_to_gemini(
-                    "Hello! I've just joined the live Q&A. Please greet me warmly as the host and ask for my question."
-                )
+            # Trigger initial greeting so the AI speaks first based on the mode
+            greetings = {
+                'feynman': "Hi! I'm ready to learn. I don't know much about this topic yet. How should we start?",
+                'podcast_qa': "Hello! I've just joined the live Q&A. Please greet me warmly as the host and ask for my question.",
+                'active_recall': "Hi! I'm ready for my active recall session. Please ask me the first question.",
+                'socratic': "Hello! Let's explore this topic. Please ask me an initial thought-provoking question to start.",
+                'free_chat': "Hello! I'm ready for our open session. Please greet me energetically and ask how we're studying today.",
+            }
+            initial_text = greetings.get(self.technique, "Hello! Let's begin.")
+            await self._send_text_to_gemini(initial_text)
 
         except Exception as e:
             logger.error(f'[ExamPrep] Failed to connect to Gemini: {e}')
