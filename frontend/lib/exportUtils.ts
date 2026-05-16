@@ -38,68 +38,54 @@ export async function exportAssignment(
 
   try {
     if (fmt === 'pdf') {
-      const { jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageW = doc.internal.pageSize.getWidth()
-      const margin = 20
-      const maxW = pageW - margin * 2
-      let y = margin
-
-      const addPage = () => { doc.addPage(); y = margin }
-      const checkY = (n = 10) => { if (y + n > 278) addPage() }
-
-      const write = (text: string, font: 'bold' | 'normal', size: number, rgb: [number, number, number], indent = 0, lh = 6) => {
-        doc.setFont('helvetica', font)
-        doc.setFontSize(size)
-        doc.setTextColor(...rgb)
-        const lines = doc.splitTextToSize(sanitizePdf(text), maxW - indent)
-        checkY(lines.length * lh)
-        doc.text(lines, margin + indent, y)
-        y += lines.length * lh + 2
+      const element = document.getElementById('assignment-content-to-export')
+      if (!element) {
+        toast.error('Could not locate assignment content for export')
+        return
       }
 
-      // Header
-      write(title, 'bold', 20, [15, 23, 42], 0, 9); y += 2
-      write(`Subject: ${subject || 'General'}`, 'normal', 9, [100, 116, 139]); y += 2
-      doc.setDrawColor(220, 220, 220)
-      doc.line(margin, y, pageW - margin, y); y += 6
-
-      // Body
-      for (const raw of content.split('\n')) {
-        const l = raw.trim()
-        if (!l) { y += 3; continue }
-        if (isTableSep(l)) continue
-
-        const clean = pdfClean(l)
-
-        if (isTableRow(l)) {
-          const cells = l.split('|').map(c => pdfClean(c.trim())).filter(Boolean)
-          write(cells.join('   |   '), 'normal', 9, [71, 85, 105])
-        } else if (l.startsWith('### ')) {
-          y += 2; write(clean, 'bold', 11, [51, 65, 85], 0, 6)
-        } else if (l.startsWith('## ')) {
-          y += 4; write(clean, 'bold', 13, [30, 41, 59], 0, 7)
-        } else if (l.startsWith('# ')) {
-          y += 6; write(clean, 'bold', 16, [15, 23, 42], 0, 8)
-        } else if (l.startsWith('- ') || l.startsWith('* ')) {
-          write(`\u2022 ${clean.slice(2)}`, 'normal', 10, [71, 85, 105], 4, 5.5)
-        } else if (/^\d+\.\s/.test(l)) {
-          write(clean, 'normal', 10, [71, 85, 105], 4, 5.5)
-        } else {
-          write(clean, 'normal', 10, [55, 65, 81], 0, 5.5)
+      // We clone the node to make it light-themed for printing so it looks like a normal document
+      const printContainer = document.createElement('div')
+      printContainer.innerHTML = `
+        <div style="font-family: Arial, sans-serif; color: black; padding: 20px;">
+          <h1 style="font-size: 24pt; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">${title}</h1>
+          <div style="color: #666; margin-bottom: 30px;">Subject: ${subject}</div>
+          ${element.innerHTML}
+        </div>
+      `
+      
+      // Override dark mode text colors in the clone
+      const allElements = printContainer.getElementsByTagName('*')
+      for (let i = 0; i < allElements.length; i++) {
+        const el = allElements[i] as HTMLElement
+        el.style.color = 'black'
+        if (el.tagName === 'TABLE') {
+          el.style.borderCollapse = 'collapse'
+          el.style.width = '100%'
+          el.style.marginBottom = '20px'
+        }
+        if (el.tagName === 'TH' || el.tagName === 'TD') {
+          el.style.border = '1px solid #ccc'
+          el.style.padding = '8px'
         }
       }
 
-      // Page numbers
-      const pageCount = (doc.internal as any).getNumberOfPages()
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i)
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(160, 170, 180)
-        doc.text(`Page ${i} of ${pageCount}`, pageW - margin, 290, { align: 'right' })
+      try {
+        const html2pdf = (await import('html2pdf.js')).default
+        const opt = {
+          margin:       15,
+          filename:     `${safe}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }
+        
+        await html2pdf().set(opt).from(printContainer).save()
+        toast.success('Downloaded perfectly formatted PDF')
+      } catch (err) {
+        console.error(err)
+        toast.error('Failed to generate PDF')
       }
-
-      doc.save(`${safe}.pdf`)
-      toast.success('Downloaded as PDF')
 
     } else {
       // Word — clean HTML with no Word XML namespaces (they cause character garbling)

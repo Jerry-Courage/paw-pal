@@ -251,6 +251,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
               <div className="space-y-12">
                 {a.status === 'completed' ? (
                   <motion.div 
+                    id="assignment-content-to-export"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="prose-ai prose-invert max-w-none prose-p:leading-relaxed prose-headings:tracking-tight"
