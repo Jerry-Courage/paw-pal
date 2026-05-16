@@ -313,54 +313,28 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
 
             {activeTab === 'sanitization' && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* AI Humanizer Card */}
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Zap className="w-12 h-12 text-emerald-500" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-                        <UserCheck className="w-5 h-5" />
-                      </div>
-                      <h4 className="text-lg font-bold text-white tracking-tight">AI Humanizer</h4>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Rewrite your work to sound like a human and bypass all AI detectors.
-                    </p>
-                    <button 
-                      onClick={() => humanizeMutation.mutate()}
-                      disabled={a.status !== 'completed' || humanizeMutation.isPending}
-                      className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
-                    >
-                      {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                      {humanizeMutation.isPending ? 'Humanizing...' : 'Run AI Humanizer'}
-                    </button>
+                {/* AI Humanizer Card - Full Width */}
+                <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Zap className="w-16 h-16 text-emerald-500" />
                   </div>
-
-                  {/* Originality Shield Card */}
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <ShieldCheck className="w-12 h-12 text-violet-500" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                      <UserCheck className="w-5 h-5" />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <h4 className="text-lg font-bold text-white tracking-tight">Originality Shield</h4>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Change the writing structure to ensure it passes all plagiarism checks.
-                    </p>
-                    <button 
-                      onClick={() => originalityMutation.mutate()}
-                      disabled={a.status !== 'completed' || originalityMutation.isPending}
-                      className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-violet-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-violet-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
-                    >
-                      {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      {originalityMutation.isPending ? 'Removing...' : 'Run Originality Shield'}
-                    </button>
+                    <h4 className="text-lg font-bold text-white tracking-tight">AI Humanizer</h4>
                   </div>
+                  <p className="text-sm text-slate-400 font-medium leading-relaxed max-w-xl">
+                    Rewrite your work to sound like a human and bypass all AI detectors. Formulas and technical terms are kept intact.
+                  </p>
+                  <button 
+                    onClick={() => humanizeMutation.mutate()}
+                    disabled={a.status !== 'completed' || humanizeMutation.isPending}
+                    className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
+                  >
+                    {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                    {humanizeMutation.isPending ? 'Humanizing...' : 'Run AI Humanizer'}
+                  </button>
                 </div>
               </div>
             )}

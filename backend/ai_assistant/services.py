@@ -2393,24 +2393,22 @@ class AIService:
         Specialized 'Vanish v2.5' protocol: High-intensity evasion.
         Uses linguistic chaos and phatic markers to achieve a 100% human signature.
         """
-        latex_guard = "CRITICAL: You MUST preserve all mathematical formulas, LaTeX symbols (e.g., $\\tau$, $\\Delta$, \\gamma), and technical notation EXACTLY as they appear. Do not change formula spacing or symbols."
+        latex_guard = "CRITICAL RULES - YOU MUST FOLLOW THESE OR YOU FAIL:\n1. PRESERVE ALL FORMULAS: Every LaTeX/math formula (e.g., $\\tau$, $\\Delta t$, \\gamma, \\frac{}) must remain EXACTLY as-is. Do not touch them.\n2. PRESERVE ALL HEADINGS: Keep every section heading exactly as written. Do not rename, rephrase, or creatively re-title any headings.\n3. USE STANDARD MARKDOWN ONLY: Use only standard markdown (##, ###, **bold**, *italic*, - list). Do not invent new syntax or use special characters.\n4. DO NOT add asterisks (*) around words except for standard bold/italic markdown."
         prompt = (
-            f"You are the FlowAI Humanizer (Ghost Protocol v6 - ABSOLUTE). Your mission is the total linguistic 'sanitization' of '{assignment.title}'. "
-            "You must bypass every state-of-the-art detector (Turnitin, GPTZero, etc.) by mimicking a brilliant, but naturally organic human voice.\n\n"
+            f"You are a document humanizer. Your ONLY job is to rewrite the body text of '{assignment.title}' so it sounds like a real human wrote it, while bypassing AI detectors like Turnitin and GPTZero.\n\n"
             f"{latex_guard}\n\n"
-            "GHOST PROTOCOL STRATEGY:\n"
-            "1. BURSTINESS: Follow a short, punchy sentence with a long, winding, complex one. Robotic writing has even sentence lengths; yours must be chaotic but intelligent.\n"
-            "2. COGNITIVE DRIFT: Humans don't just dump facts. They interpret. Use phrases like 'The way I see it...', 'This basically means...', 'It's almost as if...'. Add subtle, thoughtful asides.\n"
-            "3. RHYTHM BREAKERS: AI is too linear. Start some paragraphs with direct observations. Avoid starting multiple sentences with the same word.\n"
-            "4. VOCABULARY TEXTURE: Mix high-fidelity technical terms with direct, earthy language. Instead of 'utilize', use 'use'. Instead of 'subsequently', use 'after that'.\n"
-            "5. NO AI FINGERPRINTS: Forbidden: 'In conclusion', 'Moreover', 'Furthermore', 'Crucial', 'Essential'. Use natural transitions like 'So moving on...', 'The interesting part is...', 'This leads us to...'.\n\n"
-            f"DOCUMENT TO RECONSTRUCT:\n{assignment.ai_response}\n\n"
-            "INSTRUCTIONS: Perform an ABSOLUTE rewrite. Make it sound like a human who is thinking while they write. "
-            "Return exactly two parts split by markers:\n"
+            "HOW TO HUMANIZE (apply to body paragraphs only, not headings or formulas):\n"
+            "1. SENTENCE VARIETY: Mix short punchy sentences with longer flowing ones. Never keep the same rhythm for more than 2 sentences.\n"
+            "2. HUMAN VOICE: Add natural interpretations like 'The way I see it...', 'This basically means...', 'Worth noting here...'\n"
+            "3. VOCABULARY: Replace overly formal words. 'utilize' → 'use', 'subsequently' → 'after that', 'demonstrate' → 'show'\n"
+            "4. BANNED WORDS: Never use 'Moreover', 'Furthermore', 'In conclusion', 'It is important to note', 'Crucial', 'Essential'. Replace with natural transitions.\n"
+            "5. KEEP MEANING: The academic content and all facts must be preserved exactly.\n\n"
+            f"DOCUMENT TO REWRITE:\n{assignment.ai_response}\n\n"
+            "Now write the humanized version. Return exactly two sections:\n"
             "---DRAFT---\n"
-            "[The Ghost Protocol humanized document with ALL FORMULAS PRESERVED]\n"
+            "[Full humanized document using standard markdown]\n"
             "---COMMENT---\n"
-            "[A short, sharp note about the Ghost Protocol v6 engaged.]"
+            "[One sentence: what you changed]"
         )
         
         raw_response = self.chat_sync([
