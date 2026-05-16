@@ -22,17 +22,6 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     serializer_class = AssignmentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def dispatch(self, request, *args, **kwargs):
-        """Standard dispatch override for tracking and manual failsafe routing."""
-        # Failsafe Manual Route for synthesis signal (Required due to persistent DRF routing collisions)
-        if 'download_intelligence' in request.path and request.method == 'GET':
-            request = self.initialize_request(request, *args, **kwargs)
-            self.request = request
-            self.args = args
-            self.kwargs = kwargs
-            return self.download_intelligence(request, *args, **kwargs)
-            
-        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         from django.db.models import Q
@@ -432,7 +421,8 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         doc.save(buffer)
         buffer.seek(0)
         response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        response['Content-Disposition'] = f'attachment; filename="{assignment.title}.docx"'
+        filename = self._safe_filename(assignment.title)
+        response['Content-Disposition'] = f'attachment; filename="{filename}.docx"'
         return response
 
     def _safe_filename(self, title):
