@@ -259,10 +259,20 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         } else if (msg.type === 'audio') {
           const pcm = base64ToPcmFloat(msg.data)
           playAudioChunk(pcm)
-        } else if (msg.type === 'transcript_user') {
-          setTranscript(prev => [...prev, { role: 'user', text: msg.text, ts: Date.now() }])
-        } else if (msg.type === 'transcript_ai') {
-          setTranscript(prev => [...prev, { role: 'ai', text: msg.text, ts: Date.now() }])
+        } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
+          const role = msg.type === 'transcript_user' ? 'user' : 'ai'
+          setTranscript(prev => {
+            if (prev.length === 0) return [{ role, text: msg.text, ts: Date.now() }]
+            const last = prev[prev.length - 1]
+            // Coalesce chunks if same role and within a short timeframe (e.g. active stream)
+            if (last.role === role && (Date.now() - last.ts < 2000)) {
+              return [
+                ...prev.slice(0, -1),
+                { ...last, text: last.text + msg.text, ts: Date.now() }
+              ]
+            }
+            return [...prev, { role, text: msg.text, ts: Date.now() }]
+          })
         } else if (msg.type === 'session_report') {
           setReport(msg.report)
           setPhase('report')
