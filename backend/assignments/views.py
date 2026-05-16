@@ -429,3 +429,134 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     def _safe_filename(self, title):
         if not title: return "assignment"
         return re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')[:50]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STANDALONE EXPORT VIEW
+# Using a plain @api_view instead of ViewSet.as_view() to guarantee the URL
+# always resolves. ViewSet.as_view() outside the router can silently 404.
+# ─────────────────────────────────────────────────────────────────────────────
+
+from rest_framework.decorators import api_view, permission_classes as pc
+from rest_framework.permissions import IsAuthenticated
+
+def _safe_filename_util(title):
+    if not title: return "assignment"
+    return re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')[:50]
+
+
+@api_view(['GET'])
+@pc([IsAuthenticated])
+def export_assignment(request, pk):
+    """Standalone export view — guaranteed URL resolution, no ViewSet routing."""
+    assignment = get_object_or_404(Assignment, pk=pk)
+
+    # Auth: must be owner OR workspace member with access
+    if assignment.user != request.user:
+        try:
+            from workspace.models import WorkspaceMember
+            has_access = WorkspaceMember.objects.filter(
+                workspace__messages__shared_assignment=assignment,
+                user=request.user
+            ).exists()
+        except Exception:
+            has_access = False
+        if not has_access:
+            return Response({'error': 'Unauthorized'}, status=403)
+
+    export_format = request.query_params.get('format', 'pdf').lower()
+
+    if export_format == 'txt':
+        content = f"{assignment.title}\n\n{assignment.ai_response}"
+        resp = HttpResponse(content, content_type='text/plain')
+        resp['Content-Disposition'] = f'attachment; filename="{_safe_filename_util(assignment.title)}.txt"'
+        return resp
+
+    if export_format == 'docx':
+        try:
+            from docx import Document
+            doc = Document()
+            doc.add_heading(assignment.title, 0)
+            doc.add_paragraph(assignment.ai_response or '')
+            buf = io.BytesIO()
+            doc.save(buf)
+            buf.seek(0)
+            resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            resp['Content-Disposition'] = f'attachment; filename="{_safe_filename_util(assignment.title)}.docx"'
+            return resp
+        except ImportError:
+            return Response({'error': 'Word export not available. python-docx not installed.'}, status=500)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+    # Default: PDF
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_LEFT
+        from reportlab.lib.colors import HexColor
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle('T', parent=styles['Heading1'], fontSize=22, spaceAfter=24,
+                                     textColor=HexColor('#0f172a'), fontName='Helvetica-Bold')
+        h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=15, spaceBefore=18,
+                                  spaceAfter=10, textColor=HexColor('#1e293b'), fontName='Helvetica-Bold')
+        h3_style = ParagraphStyle('H3', parent=styles['Heading3'], fontSize=12, spaceBefore=12,
+                                  spaceAfter=6, textColor=HexColor('#334155'), fontName='Helvetica-Bold')
+        body_style = ParagraphStyle('B', parent=styles['Normal'], fontSize=11, leading=17,
+                                    alignment=TA_LEFT, textColor=HexColor('#374151'), spaceAfter=8)
+        list_style = ParagraphStyle('L', parent=body_style, leftIndent=18, spaceAfter=5)
+
+        def parse_md(text):
+            if not text: return []
+            story = []
+            for line in text.split('\n'):
+                line = line.strip()
+                if not line:
+                    story.append(Spacer(1, 6))
+                    continue
+                line = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', line)
+                line = re.sub(r'\*(.*?)\*', r'<i>\1</i>', line)
+                if line.startswith('### '):
+                    story.append(Paragraph(line[4:], h3_style))
+                elif line.startswith('## '):
+                    story.append(Paragraph(line[3:], h2_style))
+                elif line.startswith('# '):
+                    story.append(Paragraph(line[2:], h2_style))
+                elif line.startswith(('- ', '* ')):
+                    story.append(Paragraph(f"• {line[2:]}", list_style))
+                elif re.match(r'^\d+\.\s', line):
+                    story.append(Paragraph(line, list_style))
+                else:
+                    story.append(Paragraph(line, body_style))
+            return story
+
+        story = [Paragraph(assignment.title, title_style), Spacer(1, 4)]
+        meta = ParagraphStyle('M', parent=body_style, fontSize=9, textColor=HexColor('#64748b'))
+        story.append(Paragraph(f"Subject: {assignment.subject or 'General'}", meta))
+        story.append(Spacer(1, 20))
+        story.extend(parse_md(assignment.ai_response or ''))
+
+        def footer(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 8)
+            canvas.setStrokeColor(HexColor('#e2e8f0'))
+            canvas.line(72, 50, 523, 50)
+            canvas.drawRightString(523, 40, f"Page {doc.page}")
+            canvas.restoreState()
+
+        doc.build(story, onFirstPage=footer, onLaterPages=footer)
+        buf.seek(0)
+        resp = HttpResponse(buf.read(), content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{_safe_filename_util(assignment.title)}.pdf"'
+        return resp
+
+    except ImportError:
+        return Response({'error': 'PDF export not available. reportlab not installed.'}, status=500)
+    except Exception as e:
+        logger.error(f'PDF export failed for assignment {pk}: {e}')
+        return Response({'error': str(e)}, status=500)
