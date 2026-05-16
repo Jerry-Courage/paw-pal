@@ -47,9 +47,16 @@ export async function exportAssignment(
       // We clone the node to make it light-themed for printing so it looks like a normal document
       const printContainer = document.createElement('div')
       printContainer.innerHTML = `
-        <div style="font-family: Arial, sans-serif; color: black; padding: 20px;">
-          <h1 style="font-size: 24pt; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">${title}</h1>
-          <div style="color: #666; margin-bottom: 30px;">Subject: ${subject}</div>
+        <style>
+          .print-export-wrapper h1 { font-size: 16pt !important; font-weight: 700 !important; margin-top: 16px !important; margin-bottom: 12px !important; }
+          .print-export-wrapper h2 { font-size: 14pt !important; font-weight: 700 !important; margin-top: 14px !important; margin-bottom: 10px !important; }
+          .print-export-wrapper h3 { font-size: 12pt !important; font-weight: 600 !important; margin-top: 12px !important; margin-bottom: 8px !important; }
+          .print-export-wrapper p, .print-export-wrapper li, .print-export-wrapper td, .print-export-wrapper th { font-size: 10.5pt !important; line-height: 1.5 !important; }
+          .print-export-wrapper code { font-size: 9pt !important; }
+        </style>
+        <div class="print-export-wrapper" style="font-family: 'Inter', Arial, sans-serif; color: #111; padding: 20px;">
+          <h1 style="font-size: 20pt !important; font-weight: 800 !important; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px !important; margin-top: 0 !important;">${title}</h1>
+          <div style="color: #666; font-size: 10pt; margin-bottom: 30px;">Subject: ${subject}</div>
           ${element.innerHTML}
         </div>
       `
