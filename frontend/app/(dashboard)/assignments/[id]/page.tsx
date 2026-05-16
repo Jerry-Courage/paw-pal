@@ -296,9 +296,6 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
             {activeTab === 'integrity' && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* AI Integrity Pair */}
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
                   {/* AI Integrity Pair */}
                   <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -386,7 +383,6 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       </button>
                     </div>
                   </div>
-
                 </div>
 
                 <div className="p-10 rounded-[3rem] bg-orange-500 shadow-2xl shadow-orange-500/20 relative overflow-hidden">
