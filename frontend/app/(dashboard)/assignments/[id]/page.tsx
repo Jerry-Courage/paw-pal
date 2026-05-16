@@ -134,14 +134,152 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   );
 
   if (!a) return (
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { assignmentsApi } from '@/lib/api'
+import {
+  ArrowLeft, Sparkles, FileText, Download, Loader2,
+  CheckCircle2, Clock, AlertCircle, Cpu, CalendarPlus,
+  Zap, Wand2, ArrowRight, FileDown, UserCheck, ShieldCheck,
+  Activity, ShieldAlert, BadgeCheck, Layers, Share2, 
+  Trash2, Search, MoreVertical, Copy, RotateCcw
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm'
+import Link from 'next/link'
+import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
+
+const sanitizeMath = (content: string) => {
+  if (!content) return ''
+  return content
+    .replace(/\\\[/g, '$$$$')
+    .replace(/\\\]/g, '$$$$')
+    .replace(/\\\(/g, '$$')
+    .replace(/\\\)/g, '$$')
+    .replace(/\[\s+/g, '$$$$ ')
+    .replace(/\s+\]/g, ' $$$$')
+}
+
+const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
+  pending:    { color: 'text-slate-500 bg-slate-500/10 border-slate-500/20',   label: 'Pending', icon: Clock },
+  processing: { color: 'text-sky-400 bg-sky-400/10 border-sky-400/20',       label: 'AI Working', icon: Loader2 },
+  completed:  { color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', label: 'Completed', icon: CheckCircle2 },
+  error:      { color: 'text-rose-400 bg-rose-400/10 border-rose-400/20',     label: 'Error', icon: AlertCircle },
+}
+
+export default function AssignmentDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
+  const qc = useQueryClient()
+  const id = parseInt(params.id)
+  
+  const [refinePrompt, setRefinePrompt] = useState('')
+  const [activeTab, setActiveTab] = useState<'document' | 'integrity' | 'sources'>('document')
+  const [auditReport, setAuditReport] = useState<any>(null)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const { data: assignment, isLoading } = useQuery({ 
+    queryKey: ['assignment', id], 
+    queryFn: () => assignmentsApi.get(id).then(r => r.data),
+    refetchInterval: (query: any) => query.state.data?.status === 'processing' ? 2500 : false
+  })
+  
+  const a = assignment
+
+  const solveMutation = useMutation({ 
+    mutationFn: () => assignmentsApi.solve(id), 
+    onSuccess: () => qc.invalidateQueries({ queryKey:['assignment', id] }) 
+  })
+  
+  const refineMutation = useMutation({ 
+    mutationFn: () => assignmentsApi.refine(id, refinePrompt), 
+    onSuccess: (res) => { 
+      qc.invalidateQueries({ queryKey:['assignment', id] })
+      setRefinePrompt('')
+      toast.success('Solution refined.')
+      if (res.data?.action === 'export_pdf') handleExport('pdf')
+      if (res.data?.action === 'export_docx') handleExport('docx')
+    } 
+  })
+
+  const humanizeMutation = useMutation({
+    mutationFn: () => assignmentsApi.humanize(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey:['assignment', id] })
+      toast.success("Applied 'Vanish' Protocol (AI Remover)")
+    }
+  })
+  
+  const originalityMutation = useMutation({
+    mutationFn: () => assignmentsApi.originality(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey:['assignment', id] })
+      toast.success("Engaged 'Originality Shield' (Plagiarism Remover)")
+    }
+  })
+
+  const detectMutation = useMutation({
+    mutationFn: () => assignmentsApi.detect(id),
+    onSuccess: (res) => {
+      setAuditReport(res.data)
+      setIsAuditModalOpen(true)
+      toast.success("Mission Audit Complete!")
+    }
+  })
+
+  const handleExport = async (fmt: 'pdf' | 'docx') => {
+    let downloadTriggered = false
+    try {
+      const res = await assignmentsApi.export(id, fmt)
+      if (res.data) {
+        const url = window.URL.createObjectURL(new Blob([res.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', `${a.title.replace(/\s+/g, '_')}.${fmt}`)
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
+        downloadTriggered = true
+        toast.success(`Successfully exported as ${fmt.toUpperCase()}`)
+      }
+    } catch (err) {
+      if (!downloadTriggered) toast.error(`Failed to export as ${fmt.toUpperCase()}`)
+    }
+  }
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex flex-col items-center gap-6">
+        <div className="relative">
+          <div className="absolute inset-0 bg-orange-500 blur-2xl opacity-20 animate-pulse" />
+          <Loader2 className="w-12 h-12 text-orange-500 animate-spin relative z-10" />
+        </div>
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
+      </div>
+    </div>
+  );
+
+  if (!a) return (
     <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
       <AlertCircle className="w-12 h-12 text-rose-500 opacity-20" />
       <p className="text-slate-500 font-bold">Assignment not found in initialization records.</p>
       <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
     </div>
   );
-  return (<>
-      <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
+
       <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
         <div style={{ height: 'env(safe-area-inset-top)' }} />
         <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
@@ -534,6 +672,5 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         assignmentTitle={a.title}
       />
     </div>
-    </>
   );
 }
