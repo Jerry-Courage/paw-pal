@@ -131,7 +131,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
       </div>
     </div>
-  )
+  );
 
   if (!a) return (
     <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
@@ -139,7 +139,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       <p className="text-slate-500 font-bold">Assignment not found in initialization records.</p>
       <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
     </div>
-  )
+  );
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
       <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
