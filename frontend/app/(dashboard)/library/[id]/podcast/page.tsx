@@ -644,6 +644,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             })}
           </div>
         </div>
+      </div>
       )}
 
       {/* ── Player bar ── */}
