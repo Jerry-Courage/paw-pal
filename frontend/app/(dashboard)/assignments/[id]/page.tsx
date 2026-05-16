@@ -569,19 +569,36 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500/40" /> Plagiarism</div>
                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-white/10" /> Human</div>
                         </div>
-                        <div className="mt-8 lg:mt-4 lg:max-h-[65vh] overflow-y-auto pr-4 custom-scrollbar whitespace-pre-wrap font-serif text-base md:text-xl leading-relaxed tracking-tight">
+                        <div className="mt-8 lg:mt-4 lg:max-h-[65vh] overflow-y-auto pr-4 custom-scrollbar font-serif text-base md:text-xl leading-relaxed tracking-tight">
                            {auditReport.segments?.map((seg: any, idx: number) => {
                               const isHeading = seg.text.trim().startsWith('#');
+                              const isListItem = seg.text.trim().startsWith('* ') || seg.text.trim().startsWith('- ');
+                              
                               return (
-                                <span key={idx} className={cn(
-                                   "inline rounded transition-all duration-300",
-                                   isHeading ? "block text-white font-black mt-8 mb-4 tracking-tighter" : "",
+                                <div key={idx} className={cn(
+                                   "inline transition-all duration-300 rounded",
+                                   isHeading || isListItem ? "block my-4" : "",
                                    seg.type === 'ai' ? "bg-orange-500/10 text-orange-200/90 border-b-2 border-orange-500/40" : 
                                    seg.type === 'plagiarism' ? "bg-rose-500/10 text-rose-200/90 border-b-2 border-rose-500/40" : 
                                    "text-slate-300"
                                 )} title={seg.reason}>
-                                   {seg.text}
-                                </span>
+                                   <ReactMarkdown 
+                                     remarkPlugins={[remarkMath, remarkGfm]} 
+                                     rehypePlugins={[rehypeKatex]}
+                                     components={{
+                                       p: ({node, ...props}) => <span {...props} />,
+                                       h1: ({node, ...props}) => <span className="text-3xl font-black block mb-4 mt-8" {...props} />,
+                                       h2: ({node, ...props}) => <span className="text-2xl font-black block mb-3 mt-6" {...props} />,
+                                       h3: ({node, ...props}) => <span className="text-xl font-black block mb-2 mt-4" {...props} />,
+                                       h4: ({node, ...props}) => <span className="text-lg font-black block mb-2 mt-4" {...props} />,
+                                       ul: ({node, ...props}) => <ul className="list-disc ml-6 my-2" {...props} />,
+                                       li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                                       code: ({node, ...props}) => <code className="bg-white/10 px-1 rounded font-mono text-[0.9em]" {...props} />
+                                     }}
+                                   >
+                                     {sanitizeMath(seg.text)}
+                                   </ReactMarkdown>
+                                </div>
                               );
                            })}
                         </div>
