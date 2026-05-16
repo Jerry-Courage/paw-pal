@@ -45,7 +45,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   const id = parseInt(params.id)
   
   const [refinePrompt, setRefinePrompt] = useState('')
-  const [activeTab, setActiveTab] = useState<'document' | 'integrity' | 'sources'>('document')
+  const [activeTab, setActiveTab] = useState<'document' | 'sanitization' | 'sources'>('document')
   const [auditReport, setAuditReport] = useState<any>(null)
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
@@ -236,8 +236,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       {/* Mobile Tabs */}
       <div className="lg:hidden flex items-center justify-around bg-[#111] border-b border-white/5 px-2 py-2 shrink-0">
         {[
-          { id: 'document', icon: FileText, label: 'Manus' },
-          { id: 'integrity', icon: ShieldCheck, label: 'Integrity' },
+          { id: 'document', icon: FileText, label: 'Draft' },
+          { id: 'sanitization', icon: ShieldCheck, label: 'Clean' },
           { id: 'sources', icon: Layers, label: 'Sources' },
         ].map(tab => (
           <button 
@@ -311,7 +311,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       <h4 className="text-lg font-bold text-white tracking-tight">AI Humanizer</h4>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Rewrite your draft to bypass AI detectors and sound completely natural.
+                      Rewrite your work to sound like a human and bypass all AI detectors.
                     </p>
                     <button 
                       onClick={() => humanizeMutation.mutate()}
@@ -319,7 +319,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
                     >
                       {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                      {humanizeMutation.isPending ? 'Working...' : 'Run Humanizer'}
+                      {humanizeMutation.isPending ? 'Humanizing...' : 'Run AI Humanizer'}
                     </button>
                   </div>
 
@@ -335,7 +335,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       <h4 className="text-lg font-bold text-white tracking-tight">Originality Shield</h4>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Change the structure of your work to ensure it passes all plagiarism checks.
+                      Change the writing structure to ensure it passes all plagiarism checks.
                     </p>
                     <button 
                       onClick={() => originalityMutation.mutate()}
@@ -343,7 +343,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-violet-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-violet-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
                     >
                       {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      {originalityMutation.isPending ? 'Working...' : 'Run Plagiarism Remover'}
+                      {originalityMutation.isPending ? 'Removing...' : 'Run Originality Shield'}
                     </button>
                   </div>
                 </div>
