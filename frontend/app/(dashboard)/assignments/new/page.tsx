@@ -250,10 +250,10 @@ export default function NewAssignmentPage() {
             </div>
             
             {/* Footer */}
-            <div className="px-8 sm:px-10 py-8 bg-white/2 border-t border-white/5 flex items-center justify-between">
-              <p className="hidden sm:block text-[10px] font-black text-slate-600 uppercase tracking-widest">Initialization takes approx. 20s</p>
+            <div className="px-8 sm:px-12 py-12 bg-white/2 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <p className="hidden sm:block text-[10px] font-black text-slate-600 uppercase tracking-widest">Process takes ~20s</p>
               <div className="flex gap-4 w-full sm:w-auto">
-                <Link href="/assignments" className="flex-1 sm:flex-none h-14 px-8 rounded-2xl border border-white/10 text-slate-400 font-bold hover:bg-white/5 transition-all flex items-center justify-center">Cancel</Link>
+                <Link href="/assignments" className="flex-1 sm:flex-none h-14 px-10 rounded-2xl border border-white/10 text-slate-400 font-bold hover:bg-white/5 transition-all flex items-center justify-center">Cancel</Link>
                 <button 
                   onClick={()=>createMutation.mutate()} 
                   disabled={createMutation.isPending || !title.trim() || (!instructions.trim() && !pdfFile && imageFiles.length === 0)} 
