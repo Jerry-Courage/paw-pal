@@ -2393,22 +2393,24 @@ class AIService:
         Specialized 'Vanish v2.5' protocol: High-intensity evasion.
         Uses linguistic chaos and phatic markers to achieve a 100% human signature.
         """
+        latex_guard = "CRITICAL: You MUST preserve all mathematical formulas, LaTeX symbols (e.g., $\\tau$, $\\Delta$, \\gamma), and technical notation EXACTLY as they appear. Do not change formula spacing or symbols."
         prompt = (
-            f"You are the FlowAI Humanizer (Ghost Protocol v5 - ULTIMATE). Your mission is the absolute linguistic deconstruction and humanization of '{assignment.title}'. "
-            "Your goal is to bypass every state-of-the-art detector (Turnitin, GPTZero, etc.) by mimicking a unique, brilliant, but organic human voice.\n\n"
+            f"You are the FlowAI Humanizer (Ghost Protocol v6 - ABSOLUTE). Your mission is the total linguistic 'sanitization' of '{assignment.title}'. "
+            "You must bypass every state-of-the-art detector (Turnitin, GPTZero, etc.) by mimicking a brilliant, but naturally organic human voice.\n\n"
+            f"{latex_guard}\n\n"
             "GHOST PROTOCOL STRATEGY:\n"
-            "1. SEMANTIC DRIFT: AI is too linear. You must drift. Start a thought, use a parenthetical aside (like this), and then bring it back. Humans have messy logic paths.\n"
-            "2. STYLISTIC ANOMALIES: AI avoids 'clunky' but natural human phrasing. Intentionally use slightly less efficient sentences. Instead of 'This suggests that...', use 'What this really boils down to is...'.\n"
-            "3. RHYTHM DESTRUCTION: Use extreme 'Burstiness'. Follow a 4-word sentence with a 35-word one. Never allow a robotic rhythm to form.\n"
-            "4. VOCABULARY IMPERFECTION: AI uses 'perfect' academic words consistently. You must mix high-level technical terms with 'earthy', direct language. Use 'Basically', 'Actually', 'Wait', 'So'.\n"
-            "5. NO AI FINGERPRINTS: Absolutely forbidden: 'In conclusion', 'Moreover', 'Furthermore', 'Crucial', 'Essential', 'It is important to note'. Use natural transitions like 'And another thing...', 'So moving on to...', 'The interesting part here is...'.\n\n"
+            "1. BURSTINESS: Follow a short, punchy sentence with a long, winding, complex one. Robotic writing has even sentence lengths; yours must be chaotic but intelligent.\n"
+            "2. COGNITIVE DRIFT: Humans don't just dump facts. They interpret. Use phrases like 'The way I see it...', 'This basically means...', 'It's almost as if...'. Add subtle, thoughtful asides.\n"
+            "3. RHYTHM BREAKERS: AI is too linear. Start some paragraphs with direct observations. Avoid starting multiple sentences with the same word.\n"
+            "4. VOCABULARY TEXTURE: Mix high-fidelity technical terms with direct, earthy language. Instead of 'utilize', use 'use'. Instead of 'subsequently', use 'after that'.\n"
+            "5. NO AI FINGERPRINTS: Forbidden: 'In conclusion', 'Moreover', 'Furthermore', 'Crucial', 'Essential'. Use natural transitions like 'So moving on...', 'The interesting part is...', 'This leads us to...'.\n\n"
             f"DOCUMENT TO RECONSTRUCT:\n{assignment.ai_response}\n\n"
-            "INSTRUCTIONS: Perform an ULTIMATE rewrite. If it sounds like a perfect AI summary, you have failed. Make it sound like a human who is thinking while they write. "
+            "INSTRUCTIONS: Perform an ABSOLUTE rewrite. Make it sound like a human who is thinking while they write. "
             "Return exactly two parts split by markers:\n"
             "---DRAFT---\n"
-            "[The Ghost Protocol humanized document]\n"
+            "[The Ghost Protocol humanized document with ALL FORMULAS PRESERVED]\n"
             "---COMMENT---\n"
-            "[A short, sharp note about the Ghost Protocol v5 engaged.]"
+            "[A short, sharp note about the Ghost Protocol v6 engaged.]"
         )
         
         raw_response = self.chat_sync([
@@ -2422,23 +2424,28 @@ class AIService:
         Specialized 'Originality Shield v2.5': Radical semantic flipping.
         Performs deep structural inversion to ensure absolute originality.
         """
+        latex_guard = "CRITICAL: You MUST preserve all mathematical formulas, LaTeX symbols (e.g., $\\tau$, $\\Delta$, \\gamma), and technical notation EXACTLY as they appear."
         prompt = (
-            f"You are the FlowAI Originality Master (Shield Protocol v2.5). Your mission is a RADICAL structural flip of '{assignment.title}' "
-            "to guarantee 0% plagiarism while preserving 100% of the intellectual value.\n\n"
-            "1. DEEP SEMANTIC FLIP: Ensure no two consecutive words match the original. Use completely unique linguistic substitutions.\n"
-            "2. PERSPECTIVE SHIFT: Rewrite sections from a different logical starting point. If the original started with the 'effect', start with the 'cause'.\n"
-            "3. STRUCTURAL BREAK: Completely dismantle the original paragraph order. If there were 5 sections, find a way to merge or split them into a new, superior flow.\n\n"
+            f"You are the FlowAI Originality Master (Shield Protocol v3.0). Your mission is a RADICAL structural inversion of '{assignment.title}' "
+            "to guarantee 0% plagiarism while preserving 100% of the academic depth.\n\n"
+            f"{latex_guard}\n\n"
+            "1. SEMANTIC INVERSION: Ensure no two consecutive words match the original. Use completely unique linguistic substitutions and fresh analogies.\n"
+            "2. LOGICAL RE-ORDERING: Rewrite sections from a different conceptual starting point. Dismantle the original flow and create a superior one.\n"
+            "3. FRESH SYNTHESIS: Re-synthesize every argument into a brand-new original sentence. No phrase from the original should survive.\n\n"
             f"DOCUMENT TO PROCESS:\n{assignment.ai_response}\n\n"
-            "INSTRUCTIONS: Rewrite the FULL document. Re-synthesize every argument into a brand-new original sentence. "
+            "INSTRUCTIONS: Rewrite the FULL document. Return ONLY the markers and the content. "
             "Return exactly two parts split by markers:\n"
             "---DRAFT---\n"
-            "[The unique markdown document]\n"
+            "[The unique markdown document with ALL FORMULAS PRESERVED]\n"
             "---COMMENT---\n"
-            "[A short, friendly note about the 'Radical Shield' engaged.]"
+            "[A short, friendly note about the 'Originality Shield v3' engaged.]"
         )
         
-        raw_response = self.chat_sync([{'role': 'user', 'content': prompt}])
-        return self._process_structured_response(assignment, raw_response, "I've engaged the Radical 'Originality Shield v2'.")
+        raw_response = self.chat_sync([
+            {'role': 'system', 'content': "You are an expert document rewriter. You never explain your process; you only provide the requested output markers."},
+            {'role': 'user', 'content': prompt}
+        ], forced_model='google/gemini-2.0-flash-001')
+        return self._process_structured_response(assignment, raw_response, "I've engaged the Radical 'Originality Shield v3'.")
 
     def _process_structured_response(self, assignment, raw_response: str, default_comment: str) -> dict:
         """Shared logic to parse DRAFT/COMMENT markers and update history."""
