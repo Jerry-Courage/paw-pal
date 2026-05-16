@@ -297,56 +297,89 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                   
                   {/* AI Integrity Pair */}
                   <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
+                  {/* AI Integrity Pair */}
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <ShieldAlert className="w-12 h-12 text-sky-500" />
+                    </div>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20">
                         <UserCheck className="w-5 h-5" />
                       </div>
-                      <h4 className="text-lg font-bold text-white">AI Integrity</h4>
+                      <h4 className="text-lg font-bold text-white tracking-tight">AI Integrity</h4>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed">Scan your document for AI probability and engage removal protocols to ensure human-like fidelity.</p>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                      Linguistic fingerprinting to detect AI patterns and engage high-fidelity humanization protocols.
+                    </p>
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <button 
                         onClick={() => detectMutation.mutate()}
                         disabled={a.status !== 'completed' || detectMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-sky-500/50 transition-all group disabled:opacity-30"
+                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-sky-500/50 hover:bg-sky-500/5 transition-all group disabled:opacity-30 relative"
                       >
-                        {detectMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin text-sky-400" /> : <ShieldAlert className="w-6 h-6 text-slate-600 group-hover:text-sky-400 transition-colors" />}
+                        {detectMutation.isPending ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
+                            <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
+                          </div>
+                        ) : null}
+                        <ShieldAlert className="w-6 h-6 text-slate-600 group-hover:text-sky-400 transition-colors" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Detector</span>
                       </button>
                       <button 
                         onClick={() => humanizeMutation.mutate()}
                         disabled={a.status !== 'completed' || humanizeMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-emerald-500/50 transition-all group disabled:opacity-30"
+                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group disabled:opacity-30 relative"
                       >
-                        {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin text-emerald-400" /> : <UserCheck className="w-6 h-6 text-slate-600 group-hover:text-emerald-400 transition-colors" />}
+                        {humanizeMutation.isPending ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
+                            <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                          </div>
+                        ) : null}
+                        <UserCheck className="w-6 h-6 text-slate-600 group-hover:text-emerald-400 transition-colors" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Remover</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Originality Shield Pair */}
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
+                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <ShieldCheck className="w-12 h-12 text-violet-500" />
+                    </div>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
                         <ShieldCheck className="w-5 h-5" />
                       </div>
-                      <h4 className="text-lg font-bold text-white">Originality Shield</h4>
+                      <h4 className="text-lg font-bold text-white tracking-tight">Originality Shield</h4>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed">Verify academic originality across global databases and activate shield protocols to eliminate plagiarism risk.</p>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                      Cross-database plagiarism verification and structural re-synthesis for absolute originality.
+                    </p>
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <button 
-                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-violet-500/50 transition-all group opacity-50 cursor-not-allowed"
-                        title="Coming Soon"
+                        onClick={() => detectMutation.mutate()}
+                        disabled={a.status !== 'completed' || detectMutation.isPending}
+                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group disabled:opacity-30 relative"
                       >
-                        <Search className="w-6 h-6 text-slate-600" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Checker</span>
+                        {detectMutation.isPending ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
+                            <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+                          </div>
+                        ) : null}
+                        <Search className="w-6 h-6 text-slate-600 group-hover:text-violet-400 transition-colors" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Checker</span>
                       </button>
                       <button 
                         onClick={() => originalityMutation.mutate()}
                         disabled={a.status !== 'completed' || originalityMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0d] border border-white/5 hover:border-orange-500/50 transition-all group disabled:opacity-30"
+                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all group disabled:opacity-30 relative"
                       >
-                        {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin text-orange-400" /> : <RotateCcw className="w-6 h-6 text-slate-600 group-hover:text-orange-400 transition-colors" />}
+                        {originalityMutation.isPending ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
+                            <Loader2 className="w-5 h-5 animate-spin text-orange-400" />
+                          </div>
+                        ) : null}
+                        <RotateCcw className="w-6 h-6 text-slate-600 group-hover:text-orange-400 transition-colors" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Remover</span>
                       </button>
                     </div>
@@ -496,32 +529,58 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                  <button onClick={() => setIsAuditModalOpen(false)} className="px-6 py-2 rounded-xl bg-white/5 text-slate-400 font-bold text-xs hover:bg-white/10 transition-all">Dismiss</button>
                </div>
                
-               <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                     <div className="space-y-6">
-                        <div className="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-4">
-                           <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
+               <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar bg-[#0a0a0a]">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8">
+                     <div className="lg:col-span-1 space-y-4 md:space-y-6">
+                        {/* AI Confidence */}
+                        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4 shadow-xl">
+                           <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
                               <span>AI Probability</span>
-                              <span className="text-orange-500">{auditReport.ai_score}%</span>
+                              <span className={cn("px-2 py-0.5 rounded-md", auditReport.ai_score > 50 ? "bg-orange-500 text-white" : "bg-emerald-500 text-white")}>
+                                {auditReport.ai_score}%
+                              </span>
                            </div>
-                           <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                              <div className="h-full bg-orange-500" style={{ width: `${auditReport.ai_score}%` }} />
+                           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div className={cn("h-full transition-all duration-1000", auditReport.ai_score > 50 ? "bg-orange-500" : "bg-emerald-500")} style={{ width: `${auditReport.ai_score}%` }} />
                            </div>
                         </div>
-                        <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
-                           <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Verdict</h4>
-                           <p className="text-lg font-black text-white">{auditReport.verdict || 'Ready for Submission'}</p>
+
+                        {/* Originality Score */}
+                        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4 shadow-xl">
+                           <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                              <span>Originality</span>
+                              <span className="text-violet-400">{auditReport.originality_score || 0}%</span>
+                           </div>
+                           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div className="h-full bg-violet-500 transition-all duration-1000" style={{ width: `${auditReport.originality_score || 0}%` }} />
+                           </div>
+                        </div>
+
+                        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-3">
+                           <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Linguistic Verdict</h4>
+                           <p className="text-sm font-bold text-white leading-tight">{auditReport.verdict || 'Verification Success'}</p>
+                           <p className="text-[10px] text-slate-500 font-medium leading-relaxed">{auditReport.summary || 'Document follows standard academic patterns.'}</p>
                         </div>
                      </div>
-                     <div className="lg:col-span-2 p-8 rounded-3xl bg-[#0d0d0d] border border-white/5 font-medium leading-loose text-sm text-slate-400">
-                        {auditReport.segments?.map((seg: any, idx: number) => (
-                           <span key={idx} className={cn(
-                              "inline px-0.5 rounded",
-                              seg.type === 'ai' ? "bg-orange-500/20 text-orange-400 border-b border-orange-500/50" : "hover:bg-white/5"
-                           )} title={seg.reason}>
-                              {seg.text}
-                           </span>
-                        ))}
+                     
+                     <div className="lg:col-span-3 p-6 md:p-8 rounded-[2rem] bg-white/5 border border-white/10 font-medium leading-relaxed text-sm text-slate-400 relative">
+                        <div className="absolute top-4 right-6 flex items-center gap-4 text-[8px] font-black uppercase tracking-widest text-slate-600">
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500/40" /> AI Marker</div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500/40" /> Plagiarism</div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-white/10" /> Human</div>
+                        </div>
+                        <div className="mt-4 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
+                           {auditReport.segments?.map((seg: any, idx: number) => (
+                              <span key={idx} className={cn(
+                                 "inline px-0.5 rounded transition-all duration-300",
+                                 seg.type === 'ai' ? "bg-orange-500/10 text-orange-200/80 border-b-2 border-orange-500/30" : 
+                                 seg.type === 'plagiarism' ? "bg-rose-500/10 text-rose-200/80 border-b-2 border-rose-500/30" : 
+                                 "hover:bg-white/5"
+                              )} title={seg.reason}>
+                                 {seg.text}{" "}
+                              </span>
+                           ))}
+                        </div>
                      </div>
                   </div>
                </div>
