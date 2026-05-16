@@ -497,10 +497,10 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
               {liveMode === 'connecting' ? (
                 <div className="text-center opacity-50 text-sm animate-pulse">Connecting to host...</div>
-              ) : liveTranscript.length === 0 ? (
+              ) : liveTranscript.filter(e => e.role === 'ai').length === 0 ? (
                 <div className="text-center opacity-50 text-sm animate-pulse">Listening... Ask your question!</div>
               ) : (
-                liveTranscript.slice(-3).map((entry, i) => (
+                liveTranscript.filter(e => e.role === 'ai').slice(-3).map((entry, i) => (
                   <div key={i} className={cn("flex flex-col animate-in fade-in slide-in-from-bottom-2", entry.role === 'ai' ? "items-start" : "items-end")}>
                     <span className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", entry.role === 'ai' ? "text-violet-400" : "text-orange-400")}>
                       {entry.role === 'ai' ? 'Host' : 'You'}

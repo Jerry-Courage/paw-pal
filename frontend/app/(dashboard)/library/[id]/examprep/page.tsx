@@ -692,12 +692,12 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         {/* Floating Transcript (Bottom area) */}
         <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent z-20 flex flex-col justify-end pb-4">
           <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
-            {transcript.length === 0 ? (
+            {transcript.filter(e => e.role === 'ai').length === 0 ? (
               <div className="text-center opacity-50 text-sm">
                 {isRecording ? "Listening..." : "Microphone off"}
               </div>
             ) : (
-              transcript.slice(-3).map((entry, i) => (
+              transcript.filter(e => e.role === 'ai').slice(-3).map((entry, i) => (
                 <div key={i} className={cn(
                   "flex flex-col animate-in fade-in slide-in-from-bottom-2",
                   entry.role === 'ai' ? "items-start" : "items-end"
