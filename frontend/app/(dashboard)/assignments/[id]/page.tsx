@@ -140,8 +140,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
     </div>
   );
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
+  return (<>
+      <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
       <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
         <div style={{ height: 'env(safe-area-inset-top)' }} />
         <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
@@ -534,5 +534,6 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         assignmentTitle={a.title}
       />
     </div>
-  )
+    </>
+  );
 }
