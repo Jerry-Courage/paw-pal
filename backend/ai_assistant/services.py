@@ -2524,10 +2524,36 @@ class AIService:
             end = clean_json.rfind('}')
             if start != -1 and end != -1:
                 clean_json = clean_json[start:end+1]
+            
+            # --- CRITICAL FIX: Sanitize literal newlines and control characters ---
+            # AI often returns literal newlines in JSON strings, which breaks json.loads
+            # We'll escape them manually
+            import re
+            
+            # 1. Escape literal newlines inside double-quoted strings
+            # This regex finds text inside double quotes and replaces literal newlines with \n
+            def escape_newlines(match):
+                s = match.group(0)
+                return s.replace('\n', '\\n').replace('\r', '\\r')
+            
+            clean_json = re.sub(r'"(.*?)"', escape_newlines, clean_json, flags=re.DOTALL)
+            
+            # 2. Remove other invalid control characters (00-1F) except tab, newline, return (though we handled those)
+            clean_json = "".join(ch for ch in clean_json if ord(ch) >= 32 or ch in '\n\r\t')
                 
             return json.loads(clean_json)
         except Exception as e:
             logger.error(f"Detection Audit JSON Failure for {assignment.id}. Error: {e} | Raw preview: {raw_response[:200]}")
+            # Try a desperate fallback: just replace all literal newlines and try one more time
+            try:
+                if raw_response:
+                    desperate_json = raw_response.replace('\n', '\\n').replace('\r', '\\r')
+                    start = desperate_json.find('{')
+                    end = desperate_json.rfind('}')
+                    if start != -1 and end != -1:
+                        return json.loads(desperate_json[start:end+1])
+            except: pass
+            
             return {
                 'ai_score': 0, 'originality_score': 100, 'readability': 0, 
                 'segments': [{'text': assignment.ai_response[:500] if assignment.ai_response else "Audit process failed.", 'type': 'human', 'probability': 0, 'reason': 'Audit engine parse error.'}],
