@@ -2464,6 +2464,7 @@ class AIService:
         """
         Linguistic Audit Protocol to detect AI and Plagiarism.
         Analyzes perplexity, burstiness, and semantic originality.
+        Uses high-fidelity Gemini 2.0 for strict JSON schema compliance.
         """
         prompt = (
             f"You are the FlowAI Intelligence Auditor. Your mission is to perform a deep-fidelity audit of the document "
@@ -2477,36 +2478,50 @@ class AIService:
             "2. Assign a probability (0-100) and type ('ai', 'plagiarism', or 'human') to each segment.\n"
             "3. Provide overall scores (0-100) for AI and Originality.\n"
             "4. Provide a final 'Verdict' and a brief 'Mission Summary'.\n\n"
-            "RETURN ONLY RAW JSON in this format:\n"
+            "CRITICAL: RETURN ONLY RAW JSON. NO MARKDOWN. NO PREAMBLE. NO COMMENTS.\n"
+            "FORMAT:\n"
             "{\n"
-            "  'ai_score': number,\n"
-            "  'originality_score': number,\n"
-            "  'readability': number,\n"
-            "  'segments': [{ 'text': string, 'type': 'ai'|'plagiarism'|'human', 'probability': number, 'reason': string }],\n"
-            "  'verdict': string,\n"
-            "  'summary': string\n"
+            "  \"ai_score\": number,\n"
+            "  \"originality_score\": number,\n"
+            "  \"readability\": number,\n"
+            "  \"segments\": [{ \"text\": string, \"type\": \"ai\"|\"plagiarism\"|\"human\", \"probability\": number, \"reason\": string }],\n"
+            "  \"verdict\": string,\n"
+            "  \"summary\": string\n"
             "}"
         )
         
+        raw_response = ""
         try:
-            raw_response = self.chat_sync([{'role': 'system', 'content': "Return only valid JSON. No markdown backticks."}, {'role': 'user', 'content': prompt}])
+            # Use Gemini 2.0 Flash for superior schema following
+            raw_response = self.chat_sync([
+                {'role': 'system', 'content': "You are a JSON-only response engine. Return only valid, minified JSON. Do not use markdown blocks."},
+                {'role': 'user', 'content': prompt}
+            ], forced_model='google/gemini-2.0-flash-001')
+
             import json
             import re
             
-            # Use regex to find the JSON block even if conversational filler is present
-            match = re.search(r'(\{.*\})', raw_response, re.DOTALL)
-            if match:
-                clean_json = match.group(1)
-            else:
-                clean_json = raw_response.strip().replace('```json', '').replace('```', '')
+            # Robust JSON Extraction
+            clean_json = raw_response.strip()
+            # Remove markdown code blocks if AI ignored system prompt
+            clean_json = re.sub(r'^```json\s*', '', clean_json, flags=re.IGNORECASE | re.MULTILINE)
+            clean_json = re.sub(r'^```\s*', '', clean_json, flags=re.IGNORECASE | re.MULTILINE)
+            clean_json = re.sub(r'\s*```$', '', clean_json, flags=re.MULTILINE)
+            
+            # Find the actual JSON object bounds
+            start = clean_json.find('{')
+            end = clean_json.rfind('}')
+            if start != -1 and end != -1:
+                clean_json = clean_json[start:end+1]
                 
             return json.loads(clean_json)
         except Exception as e:
-            logger.error(f"Detection Audit JSON Failure for {assignment.id}. Raw response: {raw_response[:500]}... Error: {e}")
+            logger.error(f"Detection Audit JSON Failure for {assignment.id}. Error: {e} | Raw preview: {raw_response[:200]}")
             return {
                 'ai_score': 0, 'originality_score': 100, 'readability': 0, 
-                'segments': [{'text': assignment.ai_response[:500] if assignment.ai_response else "No text found.", 'type': 'human', 'probability': 0, 'reason': 'Audit failed.'}],
-                'verdict': 'Audit Unavailable', 'summary': f"The synthesis engine could not parse the audit protocol. (Error: {str(e)[:50]})"
+                'segments': [{'text': assignment.ai_response[:500] if assignment.ai_response else "Audit process failed.", 'type': 'human', 'probability': 0, 'reason': 'Audit engine parse error.'}],
+                'verdict': 'Audit Unavailable', 
+                'summary': f"The audit engine encountered a structural parsing error. (Technical Info: {str(e)[:40]})"
             }
 
     def solve_math_problem(self, problem: str, context: str = "") -> dict:
