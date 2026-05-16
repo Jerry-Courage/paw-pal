@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   // Full-viewport pages: no padding, just offset for TopNav
-  const isFullViewport = pathname.startsWith('/workspace/') || pathname.includes('/assignments/')
+  const isFullViewport = pathname.startsWith('/workspace/') || (pathname.includes('/assignments/') && !pathname.endsWith('/new'))
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
