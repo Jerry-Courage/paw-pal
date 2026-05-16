@@ -501,20 +501,22 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         )}
       </div>
 
-      {/* ── Audit Modal (Simplified copy from original) ────────────────── */}
+      {/* ── Audit Modal ────────────────── */}
       <AnimatePresence>
         {isAuditModalOpen && auditReport && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12 overflow-y-auto custom-scrollbar">
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setIsAuditModalOpen(false)}
-              className="absolute inset-0 bg-[#0d0d0d]/80 backdrop-blur-md"
+              className="fixed inset-0 bg-[#0d0d0d]/90 backdrop-blur-xl"
             />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-5xl bg-[#111] rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-6xl bg-[#111] rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col my-auto"
             >
-               <div className="p-8 border-b border-white/5 flex items-center justify-between">
+               <div className="p-8 border-b border-white/5 flex items-center justify-between shrink-0">
                  <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
                        <ShieldAlert className="w-6 h-6" />
@@ -527,11 +529,11 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                  <button onClick={() => setIsAuditModalOpen(false)} className="px-6 py-2 rounded-xl bg-white/5 text-slate-400 font-bold text-xs hover:bg-white/10 transition-all">Dismiss</button>
                </div>
                
-               <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar bg-[#0a0a0a]">
-                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8">
-                     <div className="lg:col-span-1 space-y-4 md:space-y-6">
+               <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar bg-[#0a0a0a]">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
+                     <div className="lg:col-span-4 space-y-4 md:space-y-6">
                         {/* AI Confidence */}
-                        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4 shadow-xl">
+                        <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4 shadow-xl">
                            <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
                               <span>AI Probability</span>
                               <span className={cn("px-2 py-0.5 rounded-md", auditReport.ai_score > 50 ? "bg-orange-500 text-white" : "bg-emerald-500 text-white")}>
@@ -544,7 +546,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                         </div>
 
                         {/* Originality Score */}
-                        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4 shadow-xl">
+                        <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4 shadow-xl">
                            <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
                               <span>Originality</span>
                               <span className="text-violet-400">{auditReport.originality_score || 0}%</span>
@@ -554,30 +556,34 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                            </div>
                         </div>
 
-                        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-3">
+                        <div className="p-6 md:p-8 rounded-[2rem] bg-white/5 border border-white/10 space-y-4">
                            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Linguistic Verdict</h4>
-                           <p className="text-sm font-bold text-white leading-tight">{auditReport.verdict || 'Verification Success'}</p>
-                           <p className="text-[10px] text-slate-500 font-medium leading-relaxed">{auditReport.summary || 'Document follows standard academic patterns.'}</p>
+                           <p className="text-base md:text-lg font-black text-white leading-tight tracking-tight">{auditReport.verdict || 'Verification Success'}</p>
+                           <p className="text-xs text-slate-500 font-medium leading-relaxed">{auditReport.summary || 'Document follows standard academic patterns.'}</p>
                         </div>
                      </div>
                      
-                     <div className="lg:col-span-3 p-6 md:p-8 rounded-[2rem] bg-white/5 border border-white/10 font-medium leading-relaxed text-sm text-slate-400 relative">
-                        <div className="absolute top-4 right-6 flex items-center gap-4 text-[8px] font-black uppercase tracking-widest text-slate-600">
+                     <div className="lg:col-span-8 p-6 md:p-12 rounded-[2rem] bg-white/5 border border-white/10 relative">
+                        <div className="absolute top-4 right-8 flex items-center gap-6 text-[8px] font-black uppercase tracking-widest text-slate-600">
                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500/40" /> AI Marker</div>
                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500/40" /> Plagiarism</div>
                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-white/10" /> Human</div>
                         </div>
-                        <div className="mt-4 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
-                           {auditReport.segments?.map((seg: any, idx: number) => (
-                              <span key={idx} className={cn(
-                                 "inline px-0.5 rounded transition-all duration-300",
-                                 seg.type === 'ai' ? "bg-orange-500/10 text-orange-200/80 border-b-2 border-orange-500/30" : 
-                                 seg.type === 'plagiarism' ? "bg-rose-500/10 text-rose-200/80 border-b-2 border-rose-500/30" : 
-                                 "hover:bg-white/5"
-                              )} title={seg.reason}>
-                                 {seg.text}{" "}
-                              </span>
-                           ))}
+                        <div className="mt-8 lg:mt-4 lg:max-h-[65vh] overflow-y-auto pr-4 custom-scrollbar whitespace-pre-wrap font-serif text-base md:text-xl leading-relaxed tracking-tight">
+                           {auditReport.segments?.map((seg: any, idx: number) => {
+                              const isHeading = seg.text.trim().startsWith('#');
+                              return (
+                                <span key={idx} className={cn(
+                                   "inline rounded transition-all duration-300",
+                                   isHeading ? "block text-white font-black mt-8 mb-4 tracking-tighter" : "",
+                                   seg.type === 'ai' ? "bg-orange-500/10 text-orange-200/90 border-b-2 border-orange-500/40" : 
+                                   seg.type === 'plagiarism' ? "bg-rose-500/10 text-rose-200/90 border-b-2 border-rose-500/40" : 
+                                   "text-slate-300"
+                                )} title={seg.reason}>
+                                   {seg.text}
+                                </span>
+                              );
+                           })}
                         </div>
                      </div>
                   </div>
