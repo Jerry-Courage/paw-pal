@@ -48,7 +48,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   // ── Live Q&A state ────────────────────────────────────────────────
   const [liveMode, setLiveMode] = useState<'off' | 'connecting' | 'active'>('off')
   const [liveAiSpeaking, setLiveAiSpeaking] = useState(false)
-  const [liveTranscript, setLiveTranscript] = useState<string[]>([])
+  const [liveTranscript, setLiveTranscript] = useState<{role: 'user'|'ai', text: string, ts: number}[]>([])
   const liveWsRef = useRef<WebSocket | null>(null)
   const liveMicProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const liveMicStreamRef = useRef<MediaStream | null>(null)
@@ -233,8 +233,19 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
           startLiveMic()
         } else if (msg.type === 'audio') {
           playLiveAudio(msg.data)
-        } else if (msg.type === 'transcript_ai') {
-          setLiveTranscript(prev => [...prev, msg.text])
+        } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
+          const role = msg.type === 'transcript_user' ? 'user' : 'ai'
+          setLiveTranscript(prev => {
+            if (prev.length === 0) return [{ role, text: msg.text, ts: Date.now() }]
+            const last = prev[prev.length - 1]
+            if (last.role === role && (Date.now() - last.ts < 2000)) {
+              return [
+                ...prev.slice(0, -1),
+                { ...last, text: last.text + msg.text, ts: Date.now() }
+              ]
+            }
+            return [...prev, { role, text: msg.text, ts: Date.now() }]
+          })
         } else if (msg.type === 'error') {
           toast.error(msg.message)
           endLiveQA()
@@ -448,7 +459,63 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Main content — split layout on desktop, stacked on mobile */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+      {liveMode !== 'off' ? (
+        <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-[#0d0d0d]">
+          {/* Dynamic Orb Animations */}
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes orbPulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
+            @keyframes orbWave { 0% { transform: scale(1); opacity: 0.5; border-width: 2px; } 100% { transform: scale(2.2); opacity: 0; border-width: 0px; } }
+            @keyframes orbRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            .orb-ai { background: radial-gradient(circle at 30% 30%, #c084fc, #8b5cf6, #4338ca, #1e1b4b); box-shadow: 0 0 80px 20px rgba(139, 92, 246, 0.5), inset 0 0 50px rgba(255, 255, 255, 0.6); animation: orbPulse 1.5s ease-in-out infinite, orbRotate 8s linear infinite; }
+            .orb-user { background: radial-gradient(circle at 30% 30%, #fb923c, #ea580c, #991b1b, #450a0a); box-shadow: 0 0 50px 10px rgba(234, 88, 12, 0.3), inset 0 0 30px rgba(255, 255, 255, 0.3); animation: orbPulse 3s ease-in-out infinite, orbRotate 15s linear infinite reverse; }
+            .orb-idle { background: radial-gradient(circle at 30% 30%, #475569, #1e293b, #0f172a); box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1); animation: orbRotate 20s linear infinite; }
+            .orb-ring { position: absolute; inset: 0; border-radius: 50%; animation: orbWave 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite; }
+            .orb-ring.ai { border: 2px solid rgba(167, 139, 250, 0.8); }
+            .orb-ring.user { border: 2px solid rgba(251, 146, 60, 0.4); animation-duration: 2.5s; }
+            .orb-ring:nth-child(2) { animation-delay: 0.6s; }
+            .orb-ring:nth-child(3) { animation-delay: 1.2s; }
+          `}} />
+
+          {/* Background glow */}
+          <div className={cn("absolute inset-0 opacity-20 transition-all duration-1000", liveAiSpeaking ? "bg-[radial-gradient(circle_at_center,#6d28d9,transparent_60%)]" : "bg-[radial-gradient(circle_at_center,#9a3412,transparent_50%)]")} />
+
+          {/* The Orb */}
+          <div className="relative w-40 h-40 md:w-56 md:h-56 flex items-center justify-center z-10 mb-20">
+            <div className="absolute inset-0">
+              <div className={cn("orb-ring", liveAiSpeaking ? "ai" : "user")} />
+              <div className={cn("orb-ring", liveAiSpeaking ? "ai" : "user")} />
+              <div className={cn("orb-ring", liveAiSpeaking ? "ai" : "user")} />
+            </div>
+            
+            <div className={cn("w-full h-full rounded-full transition-all duration-700 ease-in-out relative z-10", liveAiSpeaking ? "orb-ai scale-110" : "orb-user scale-100")}>
+              <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_60%_20%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
+            </div>
+          </div>
+
+          {/* Floating Transcript */}
+          <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent z-20 flex flex-col justify-end pb-4">
+            <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
+              {liveMode === 'connecting' ? (
+                <div className="text-center opacity-50 text-sm animate-pulse">Connecting to host...</div>
+              ) : liveTranscript.length === 0 ? (
+                <div className="text-center opacity-50 text-sm animate-pulse">Listening... Ask your question!</div>
+              ) : (
+                liveTranscript.slice(-3).map((entry, i) => (
+                  <div key={i} className={cn("flex flex-col animate-in fade-in slide-in-from-bottom-2", entry.role === 'ai' ? "items-start" : "items-end")}>
+                    <span className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", entry.role === 'ai' ? "text-violet-400" : "text-orange-400")}>
+                      {entry.role === 'ai' ? 'Host' : 'You'}
+                    </span>
+                    <div className={cn("text-sm md:text-base font-medium leading-relaxed max-w-[85%]", entry.role === 'ai' ? "text-white" : "text-slate-300 text-right")}>
+                      {entry.text}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
         {/* ── LEFT: Image + speaker avatars ── */}
         <div className="w-full lg:w-[48%] shrink-0 flex flex-col p-4 lg:p-6 gap-3 lg:border-r lg:border-white/5">
@@ -577,7 +644,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             })}
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Player bar ── */}
       <div className="border-t border-white/5 bg-[#111] px-4 lg:px-8 py-4 shrink-0 z-10">
