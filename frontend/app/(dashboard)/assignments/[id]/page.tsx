@@ -21,6 +21,17 @@ import remarkGfm from 'remark-gfm'
 import Link from 'next/link'
 import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
 
+const sanitizeMath = (content: string) => {
+  if (!content) return ''
+  return content
+    .replace(/\\\[/g, '$$$$')
+    .replace(/\\\]/g, '$$$$')
+    .replace(/\\\(/g, '$$')
+    .replace(/\\\)/g, '$$')
+    .replace(/\[\s+/g, '$$$$ ')
+    .replace(/\s+\]/g, ' $$$$')
+}
+
 const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
   pending:    { color: 'text-slate-500 bg-slate-500/10 border-slate-500/20',   label: 'Pending', icon: Clock },
   processing: { color: 'text-sky-400 bg-sky-400/10 border-sky-400/20',       label: 'AI Working', icon: Loader2 },
@@ -131,10 +142,12 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   )
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] -m-4 md:-m-6 overflow-hidden bg-[#0d0d0d]">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
       
-      {/* ── Top Command Bar ─────────────────────────── */}
-      <header className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
+      {/* ── Top Command Bar (Replacing global TopNav) ───────────────── */}
+      <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
+        <div style={{ height: 'env(safe-area-inset-top)' }} />
+        <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-2 md:gap-6 min-w-0">
           <Link href="/assignments" className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white shrink-0">
             <ArrowLeft className="w-4 h-4 md:w-5 h-5" />
@@ -246,7 +259,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                         code: ({node, ...props}) => <code className="bg-orange-500/10 text-orange-400 px-1.5 py-0.5 rounded-md text-[0.9em] font-mono" {...props} />
                       }}
                     >
-                      {a.ai_response}
+                      {sanitizeMath(a.ai_response)}
                     </ReactMarkdown>
                   </motion.div>
                 ) : a.status === 'processing' ? (

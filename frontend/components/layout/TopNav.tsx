@@ -41,6 +41,9 @@ export default function TopNav() {
   const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
   const totalUnread = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
 
+  const isAssignmentDetail = pathname.includes('/assignments/') && pathname.split('/').length > 2
+  if (isAssignmentDetail) return null
+
   return (
     <>
       <header
