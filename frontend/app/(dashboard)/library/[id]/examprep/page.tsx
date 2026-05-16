@@ -603,65 +603,113 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           <Square className="w-3.5 h-3.5 fill-current" /> End Session
         </button>
       </div>
+      
+      {/* Dynamic Orb Animations */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes orbPulse {
+          0% { transform: scale(0.95); opacity: 0.8; }
+          50% { transform: scale(1.05); opacity: 1; }
+          100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        @keyframes orbWave {
+          0% { transform: scale(1); opacity: 0.5; border-width: 2px; }
+          100% { transform: scale(2.2); opacity: 0; border-width: 0px; }
+        }
+        @keyframes orbRotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .orb-ai {
+          background: radial-gradient(circle at 30% 30%, #c084fc, #8b5cf6, #4338ca, #1e1b4b);
+          box-shadow: 0 0 80px 20px rgba(139, 92, 246, 0.5), inset 0 0 50px rgba(255, 255, 255, 0.6);
+          animation: orbPulse 1.5s ease-in-out infinite, orbRotate 8s linear infinite;
+        }
+        .orb-user {
+          background: radial-gradient(circle at 30% 30%, #fb923c, #ea580c, #991b1b, #450a0a);
+          box-shadow: 0 0 50px 10px rgba(234, 88, 12, 0.3), inset 0 0 30px rgba(255, 255, 255, 0.3);
+          animation: orbPulse 3s ease-in-out infinite, orbRotate 15s linear infinite reverse;
+        }
+        .orb-idle {
+          background: radial-gradient(circle at 30% 30%, #475569, #1e293b, #0f172a);
+          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1);
+          animation: orbRotate 20s linear infinite;
+        }
+        .orb-ring {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          animation: orbWave 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+        }
+        .orb-ring.ai { border: 2px solid rgba(167, 139, 250, 0.8); }
+        .orb-ring.user { border: 2px solid rgba(251, 146, 60, 0.4); animation-duration: 2.5s; }
+        .orb-ring:nth-child(2) { animation-delay: 0.6s; }
+        .orb-ring:nth-child(3) { animation-delay: 1.2s; }
+      `}} />
 
-      {/* AI speaking indicator */}
-      {isAiSpeaking && (
-        <div className="flex items-center gap-2 px-5 py-2 bg-violet-500/8 border-b border-violet-500/15 shrink-0">
-          <Volume2 className="w-3.5 h-3.5 text-violet-400 animate-pulse" />
-          <span className="text-xs text-violet-400 font-medium">AI is speaking...</span>
-          <div className="flex gap-0.5 ml-1">
-            {[0,1,2,3].map(i => (
-              <div key={i} className="w-0.5 bg-violet-400 rounded-full animate-bounce"
-                style={{ height: `${8 + (i % 3) * 4}px`, animationDelay: `${i * 0.1}s` }} />
-            ))}
+      {/* Main Orb Canvas */}
+      <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden">
+        {/* Background glow */}
+        <div className={cn(
+          "absolute inset-0 opacity-20 transition-all duration-1000",
+          isAiSpeaking ? "bg-[radial-gradient(circle_at_center,#6d28d9,transparent_60%)]" 
+          : isRecording ? "bg-[radial-gradient(circle_at_center,#9a3412,transparent_50%)]"
+          : "bg-transparent"
+        )} />
+
+        {/* The Orb */}
+        <div className="relative w-40 h-40 md:w-56 md:h-56 flex items-center justify-center z-10 mb-20">
+          {/* Concentric rings when speaking */}
+          {(isAiSpeaking || isRecording) && (
+            <div className="absolute inset-0">
+              <div className={cn("orb-ring", isAiSpeaking ? "ai" : "user")} />
+              <div className={cn("orb-ring", isAiSpeaking ? "ai" : "user")} />
+              <div className={cn("orb-ring", isAiSpeaking ? "ai" : "user")} />
+            </div>
+          )}
+          
+          {/* Core Orb */}
+          <div className={cn(
+            "w-full h-full rounded-full transition-all duration-700 ease-in-out relative z-10",
+            isAiSpeaking ? "orb-ai scale-110" 
+            : isRecording ? "orb-user scale-100" 
+            : "orb-idle scale-95 opacity-50"
+          )}>
+            {/* Inner dynamic texture/sheen */}
+            <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_60%_20%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
           </div>
         </div>
-      )}
 
-      {/* Transcript */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scrollbar-hide">
-        {transcript.filter(e => e.role === 'ai').length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-6">
-            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center animate-pulse">
-              <Mic className="w-7 h-7 text-red-400" />
-            </div>
-            {technique === 'free_chat' ? (
-              <div className="space-y-2">
-                <p className="text-white font-black text-lg">Open Session — You're live</p>
-                <p className="text-slate-500 text-sm leading-relaxed">
-                  Tell the AI what you want to do. Examples:
-                </p>
-                <div className="space-y-1.5 text-left max-w-xs mx-auto">
-                  {[
-                    '"Quiz battle with my classmate John, 30 seconds per question"',
-                    '"Debate me on climate change — take the opposing side"',
-                    '"Explain photosynthesis like I\'m 10 years old"',
-                    '"Fire rapid-fire questions at me for 5 minutes"',
-                  ].map((ex, i) => (
-                    <p key={i} className="text-xs text-slate-600 italic">{ex}</p>
-                  ))}
-                </div>
+        {/* Floating Transcript (Bottom area) */}
+        <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent z-20 flex flex-col justify-end pb-4">
+          <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
+            {transcript.length === 0 ? (
+              <div className="text-center opacity-50 text-sm">
+                {isRecording ? "Listening..." : "Microphone off"}
               </div>
             ) : (
-              <div>
-                <p className="text-white font-black text-lg">You're live</p>
-                <p className="text-slate-500 text-sm mt-1">Start speaking about the material</p>
-              </div>
+              transcript.slice(-3).map((entry, i) => (
+                <div key={i} className={cn(
+                  "flex flex-col animate-in fade-in slide-in-from-bottom-2",
+                  entry.role === 'ai' ? "items-start" : "items-end"
+                )}>
+                  <span className={cn(
+                    "text-[9px] font-black uppercase tracking-widest mb-0.5",
+                    entry.role === 'ai' ? "text-violet-400" : "text-orange-400"
+                  )}>
+                    {entry.role === 'ai' ? 'Albert Bot' : 'You'}
+                  </span>
+                  <div className={cn(
+                    "text-sm md:text-base font-medium leading-relaxed max-w-[85%]",
+                    entry.role === 'ai' ? "text-white" : "text-slate-300 text-right"
+                  )}>
+                    {entry.text}
+                  </div>
+                </div>
+              ))
             )}
+            <div ref={transcriptEndRef} />
           </div>
-        ) : (
-          transcript.filter(entry => entry.role === 'ai').map((entry, i) => (
-            <div key={i} className="flex gap-3 flex-row">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5 bg-violet-600 text-white">
-                AI
-              </div>
-              <div className="max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed bg-violet-500/10 border border-violet-500/20 text-violet-100 rounded-tl-sm">
-                {entry.text}
-              </div>
-            </div>
-          ))
-        )}
-        <div ref={transcriptEndRef} />
+        </div>
       </div>
 
       {/* Mic status bar */}

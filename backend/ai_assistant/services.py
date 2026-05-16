@@ -2295,27 +2295,52 @@ class AIService:
 
         logger.info(f"[Synthesis] Initializing high-fidelity engine for: {assignment.title} (Images: {has_images})")
         
-        # Use Flash 2.0 for everything assignment related - it handles vision and long context perfectly
-        response = self.chat_sync(messages, forced_model='google/gemini-2.0-flash-001')
+        # Use Flash 2.0 as primary, fallback to Triple-Engine if rate limited
+        try:
+            response = self.chat_sync(messages, forced_model='google/gemini-2.0-flash-001')
+            if not response:
+                raise ValueError("Empty response from primary model")
+        except Exception as e:
+            logger.warning(f"[Synthesis] Primary model failed, falling back to Triple-Engine: {e}")
+            # If images are present, we might lose them in standard fallback if it hits Sonnet (unless we adapt it), 
+            # but getting text is better than a hard crash.
+            response = self.chat_sync(messages)
+            if not response:
+                response = "Error: Synthesis engines exhausted. Please try again later."
 
         # 4. Post-Synthesis: Metadata Generation
         # Generate overview
         overview_prompt = "In 2 concise sentences, summarize the core synthesis strategy used to complete this assignment. Mention if visual data was integrated."
-        overview = self.chat_sync([
-            {'role': 'system', 'content': "Be extremely concise. Professional tone."},
-            {'role': 'assistant', 'content': response},
-            {'role': 'user', 'content': overview_prompt},
-        ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
+        try:
+            overview = self.chat_sync([
+                {'role': 'system', 'content': "Be extremely concise. Professional tone."},
+                {'role': 'assistant', 'content': response},
+                {'role': 'user', 'content': overview_prompt},
+            ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
+        except Exception as e:
+            logger.warning(f"[Synthesis] Overview primary failed: {e}")
+            overview = self.chat_sync([
+                {'role': 'system', 'content': "Be extremely concise. Professional tone."},
+                {'role': 'assistant', 'content': response},
+                {'role': 'user', 'content': overview_prompt},
+            ])
 
         # Generate structured outline for UI navigation
         outline_prompt = (
             "Extract the main sections as a JSON array for a navigation menu. "
             "Return ONLY: [{\"section\": \"Section Title\", \"summary\": \"Brief gist\"}]"
         )
-        outline_raw = self.chat_sync([
-            {'role': 'assistant', 'content': response},
-            {'role': 'user', 'content': outline_prompt},
-        ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
+        try:
+            outline_raw = self.chat_sync([
+                {'role': 'assistant', 'content': response},
+                {'role': 'user', 'content': outline_prompt},
+            ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
+        except Exception as e:
+            logger.warning(f"[Synthesis] Outline primary failed: {e}")
+            outline_raw = self.chat_sync([
+                {'role': 'assistant', 'content': response},
+                {'role': 'user', 'content': outline_prompt},
+            ])
         outline = self._parse_json(outline_raw, [])
 
         return {
