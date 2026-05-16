@@ -283,15 +283,30 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                     </ReactMarkdown>
                   </motion.div>
                 ) : a.status === 'processing' ? (
-                      Writing your draft...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-5 h-5" />
-                      Create Draft
-                    </>
-                  )}
-                </button>
+                  <div className="h-[50vh] flex flex-col items-center justify-center text-center space-y-8">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-orange-500 blur-3xl opacity-20 animate-pulse" />
+                      <div className="w-24 h-24 bg-[#111] border border-white/10 rounded-[2.5rem] shadow-2xl flex items-center justify-center relative">
+                        <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <h3 className="text-3xl font-black text-white tracking-tight">Working...</h3>
+                      <p className="text-slate-500 font-bold text-sm uppercase tracking-widest max-w-xs mx-auto leading-relaxed">
+                        FlowAI is writing your draft.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[50vh] flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-white/5 rounded-[4rem] group hover:border-orange-500/20 transition-all duration-700">
+                    <Sparkles className="w-20 h-20 text-white/5 mb-8 transition-transform group-hover:scale-110 group-hover:text-orange-500 duration-700" />
+                    <h2 className="text-3xl font-black text-white tracking-tight mb-4">Ready to Generate</h2>
+                    <p className="text-slate-500 max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your materials are ready. Click below to generate your initial draft.</p>
+                    <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="btn-primary px-12 py-5 text-lg font-black rounded-3xl shadow-2xl shadow-orange-500/20 hover:-translate-y-1 transition-all active:scale-95 flex items-center gap-3">
+                      {solveMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Zap className="w-6 h-6" />}
+                      {solveMutation.isPending ? 'Working...' : 'Create Draft'}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
