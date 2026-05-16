@@ -60,19 +60,28 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   const a = assignment
 
   const solveMutation = useMutation({ 
-    mutationFn: () => assignmentsApi.solve(id), 
-    onSuccess: () => qc.invalidateQueries({ queryKey:['assignment', id] }) 
+    mutationFn: () => assignmentsApi.solve(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey:['assignment', id] })
+      toast.success('Mission Accomplished!')
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Synthesis failed.')
+    }
   })
   
   const refineMutation = useMutation({ 
-    mutationFn: () => assignmentsApi.refine(id, refinePrompt), 
+    mutationFn: (prompt: string) => assignmentsApi.refine(id, prompt), 
     onSuccess: (res) => { 
       qc.invalidateQueries({ queryKey:['assignment', id] })
       setRefinePrompt('')
       toast.success('Solution refined.')
       if (res.data?.action === 'export_pdf') handleExport('pdf')
       if (res.data?.action === 'export_docx') handleExport('docx')
-    } 
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Refinement failed.')
+    }
   })
 
   const humanizeMutation = useMutation({
@@ -80,6 +89,9 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey:['assignment', id] })
       toast.success("Applied 'Vanish' Protocol (AI Remover)")
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Humanization failed.')
     }
   })
   
@@ -88,6 +100,9 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey:['assignment', id] })
       toast.success("Engaged 'Originality Shield' (Plagiarism Remover)")
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Originality shield failed.')
     }
   })
 
@@ -97,6 +112,9 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       setAuditReport(res.data)
       setIsAuditModalOpen(true)
       toast.success("Mission Audit Complete!")
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Audit failed.')
     }
   })
 

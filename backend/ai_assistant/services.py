@@ -2410,7 +2410,7 @@ class AIService:
             "[A short, friendly note about the high-intensity 'Vanish' protocol applied.]"
         )
         
-        raw_response = self.chat([{'role': 'user', 'content': prompt}])
+        raw_response = self.chat_sync([{'role': 'user', 'content': prompt}])
         return self._process_structured_response(assignment, raw_response, "I've applied the High-Intensity 'Vanish v2' protocol.")
 
     def remove_plagiarism(self, assignment) -> dict:
