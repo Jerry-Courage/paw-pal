@@ -2390,38 +2390,37 @@ class AIService:
 
     def humanize_assignment(self, assignment) -> dict:
         """
-        Specialized 'Vanish v2' protocol: High-intensity evasion.
+        Specialized 'Vanish v2.5' protocol: High-intensity evasion.
         Uses linguistic chaos and phatic markers to achieve a 100% human signature.
         """
         prompt = (
-            f"You are the FlowAI Humanizer (Vanish Protocol v2). Your mission is to perform a high-intensity rewrite of '{assignment.title}' "
-            "to achieve a 100% human linguistic signature and bypass all state-of-the-art auditors.\n\n"
-            "AGRESSIVE STRATEGY:\n"
-            "1. LINGUISTIC CHAOS: Radically vary sentence length. Mix 30-word complex explanations with 3-word punchy conclusions.\n"
-            "2. PHATIC MARKERS: Use human-exclusive 'voice' connectors such as 'Essentially...', 'Interestingly enough...', 'The thing is...', 'Actually...', 'Looking back at it...'.\n"
-            "3. STYLISTIC INFLECTIONS: Occasionally use natural stylistics that AI avoids, such as starting a sentence with 'And' or 'But', or using a dash for emphasis—like this.\n"
-            "4. SEMANTIC VARIANCE: Avoid predictable transitions. If you've used a list, transform it into a flowing narrative.\n\n"
+            f"You are the FlowAI Humanizer (Vanish Protocol v2.5). Your mission is to perform a surgical rewrite of '{assignment.title}' "
+            "to achieve a 100% human linguistic signature and bypass all state-of-the-art AI detectors.\n\n"
+            "HUMANIZATION STRATEGY (VANISH):\n"
+            "1. LINGUISTIC BURSTINESS: AI is too consistent. You must vary sentence lengths radically. Follow a 40-word complex sentence with a 4-word punchy one.\n"
+            "2. COGNITIVE PHRASING: Use 'human' connectors like 'Truth be told...', 'The interesting part is...', 'Essentially...', 'Actually...'.\n"
+            "3. STRUCTURAL IMPERFECTION: Avoid perfectly balanced lists or paragraphs. Use dashes—like this—for organic emphasis. Occasionally start sentences with 'And' or 'But'.\n"
+            "4. TONAL NUANCE: Inject a clear, consistent 'voice' that sounds like a brilliant but slightly informal academic student.\n\n"
             f"DOCUMENT TO HUMANIZE:\n{assignment.ai_response}\n\n"
-            "INSTRUCTIONS: Rewrite the FULL document. Ensure everything sounds authentic, organic, and nuanced. "
+            "INSTRUCTIONS: Rewrite the FULL document. Ensure everything sounds authentic and organic. "
             "Return exactly two parts split by markers:\n"
             "---DRAFT---\n"
             "[The humanized markdown document]\n"
             "---COMMENT---\n"
-            "[A short, friendly note about the high-intensity 'Vanish' protocol applied.]"
+            "[A short, witty note about the linguistic 'Vanish' protocol applied.]"
         )
         
         raw_response = self.chat_sync([{'role': 'user', 'content': prompt}])
-        return self._process_structured_response(assignment, raw_response, "I've applied the High-Intensity 'Vanish v2' protocol.")
+        return self._process_structured_response(assignment, raw_response, "I've applied the High-Intensity 'Vanish v2.5' protocol.")
 
     def remove_plagiarism(self, assignment) -> dict:
         """
-        Specialized 'Originality Shield v2': Radical semantic flipping.
+        Specialized 'Originality Shield v2.5': Radical semantic flipping.
         Performs deep structural inversion to ensure absolute originality.
         """
         prompt = (
-            f"You are the FlowAI Originality Master (Shield Protocol v2). Your mission is a RADICAL structural flip of '{assignment.title}' "
+            f"You are the FlowAI Originality Master (Shield Protocol v2.5). Your mission is a RADICAL structural flip of '{assignment.title}' "
             "to guarantee 0% plagiarism while preserving 100% of the intellectual value.\n\n"
-            "AGRESSIVE STRATEGY:\n"
             "1. DEEP SEMANTIC FLIP: Ensure no two consecutive words match the original. Use completely unique linguistic substitutions.\n"
             "2. PERSPECTIVE SHIFT: Rewrite sections from a different logical starting point. If the original started with the 'effect', start with the 'cause'.\n"
             "3. STRUCTURAL BREAK: Completely dismantle the original paragraph order. If there were 5 sections, find a way to merge or split them into a new, superior flow.\n\n"

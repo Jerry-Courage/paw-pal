@@ -260,6 +260,8 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             ai = AIService()
             result = ai.humanize_assignment(assignment)
             assignment.ai_response = result['response']
+            assignment.ai_overview = result['overview']
+            assignment.chat_history = result.get('chat_history', [])
             assignment.save()
             return Response(self.get_serializer(assignment).data)
         except Exception as e: return Response({'error': str(e)}, status=500)
@@ -273,6 +275,8 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             ai = AIService()
             result = ai.remove_plagiarism(assignment)
             assignment.ai_response = result['response']
+            assignment.ai_overview = result['overview']
+            assignment.chat_history = result.get('chat_history', [])
             assignment.save()
             return Response(self.get_serializer(assignment).data)
         except Exception as e: return Response({'error': str(e)}, status=500)
