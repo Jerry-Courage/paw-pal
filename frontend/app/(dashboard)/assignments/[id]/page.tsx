@@ -121,25 +121,29 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
     }
   }
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center h-[80vh]">
-      <div className="flex flex-col items-center gap-6">
-        <div className="relative">
-          <div className="absolute inset-0 bg-orange-500 blur-2xl opacity-20 animate-pulse" />
-          <Loader2 className="w-12 h-12 text-orange-500 animate-spin relative z-10" />
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[80vh]">
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-orange-500 blur-2xl opacity-20 animate-pulse" />
+            <Loader2 className="w-12 h-12 text-orange-500 animate-spin relative z-10" />
+          </div>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
         </div>
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
       </div>
-    </div>
-  );
+    )
+  }
 
-  if (!a) return (
-    <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
-      <AlertCircle className="w-12 h-12 text-rose-500 opacity-20" />
-      <p className="text-slate-500 font-bold">Assignment not found in initialization records.</p>
-      <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
-    </div>
-  );
+  if (!a) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+        <AlertCircle className="w-12 h-12 text-rose-500 opacity-20" />
+        <p className="text-slate-500 font-bold">Assignment not found in initialization records.</p>
+        <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#0d0d0d]">
