@@ -116,6 +116,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             return self._export_txt(assignment)
         return self._export_pdf(assignment)
 
+    @action(detail=True, methods=['post'])
     def share(self, request, pk=None):
         """Transmit assignment intelligence to a target Workspace."""
         assignment = self.get_object()
