@@ -500,12 +500,12 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
               <input 
                 value={refinePrompt} 
                 onChange={e=>setRefinePrompt(e.target.value)} 
-                onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&refineMutation.mutate()} 
+                onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&refineMutation.mutate(refinePrompt)} 
                 placeholder="Ask AI to refine or edit..." 
                 className="flex-1 bg-transparent border-none focus:outline-none text-white font-bold placeholder:text-slate-600 text-xs md:text-sm py-3 md:py-4 px-1 min-w-0" 
               />
               <button 
-                onClick={()=>refineMutation.mutate()} 
+                onClick={()=>refineMutation.mutate(refinePrompt)} 
                 disabled={!refinePrompt || refineMutation.isPending} 
                 className={cn(
                   "h-10 md:h-12 px-4 md:px-6 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all",
