@@ -80,7 +80,7 @@ export default function NewAssignmentPage() {
               <div className="w-6 h-6 rounded-md bg-orange-500/10 flex items-center justify-center">
                 <Sparkles className="w-3 h-3 text-orange-500" />
               </div>
-              <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Initialization Chamber</span>
+              <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Create</span>
             </div>
             <h1 className="text-3xl font-black text-white tracking-tight">New Assignment</h1>
           </div>
@@ -97,7 +97,7 @@ export default function NewAssignmentPage() {
               <section className="space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 font-black text-sm border border-orange-500/20">1</div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">Assignment Identity</h3>
+                  <h3 className="text-lg font-bold text-white tracking-tight">Basic Information</h3>
                 </div>
                 
                 <div className="space-y-5 pl-11">
@@ -133,7 +133,7 @@ export default function NewAssignmentPage() {
               <section className="space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 font-black text-sm border border-sky-500/20">2</div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">Intelligence Context</h3>
+                  <h3 className="text-lg font-bold text-white tracking-tight">Details & Materials</h3>
                 </div>
                 
                 <div className="space-y-6 pl-11">
@@ -225,7 +225,7 @@ export default function NewAssignmentPage() {
                 <section className="space-y-6">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 font-black text-sm border border-emerald-500/20">3</div>
-                    <h3 className="text-lg font-bold text-white tracking-tight">Linked Knowledge</h3>
+                    <h3 className="text-lg font-bold text-white tracking-tight">Connected Resources</h3>
                   </div>
                   
                   <div className="pl-11 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
@@ -267,7 +267,7 @@ export default function NewAssignmentPage() {
                   ) : (
                     <>
                       <Sparkles className="w-5 h-5" />
-                      Initialize Synthesis
+                      Create Assignment
                     </>
                   )}
                 </button>
@@ -279,13 +279,13 @@ export default function NewAssignmentPage() {
         {/* Info Sidebar */}
         <div className="space-y-6">
           <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-orange-500 to-orange-600 shadow-2xl shadow-orange-500/20">
-            <h4 className="text-white font-black text-xl tracking-tight mb-4 leading-tight">FlowAI Synthesis Protocol</h4>
+            <h4 className="text-white font-black text-xl tracking-tight mb-4 leading-tight">How it works</h4>
             <ul className="space-y-4">
               {[
-                'Multi-modal input processing (PDF + Images)',
-                'High-fidelity academic structuring',
-                'Automated integrity suite verification',
-                'Structured output ready for export'
+                'Upload PDFs and images for context',
+                'Get a well-structured academic draft',
+                'AI and Plagiarism removal built-in',
+                'Download ready-to-submit documents'
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center shrink-0 mt-0.5">

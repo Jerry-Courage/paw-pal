@@ -186,8 +186,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         <div className="flex items-center gap-2 md:gap-3">
           <div className="hidden lg:flex items-center gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl mr-2">
             {[
-              { id: 'document', icon: FileText, label: 'Manuscript' },
-              { id: 'sanitization', icon: ShieldCheck, label: 'Sanitization' },
+              { id: 'document', icon: FileText, label: 'Draft' },
+              { id: 'sanitization', icon: ShieldCheck, label: 'Clean Draft' },
               { id: 'sources', icon: Layers, label: 'Sources' },
             ].map(tab => (
               <button 
@@ -283,30 +283,15 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                     </ReactMarkdown>
                   </motion.div>
                 ) : a.status === 'processing' ? (
-                  <div className="h-[50vh] flex flex-col items-center justify-center text-center space-y-8">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-orange-500 blur-3xl opacity-20 animate-pulse" />
-                      <div className="w-24 h-24 bg-[#111] border border-white/10 rounded-[2.5rem] shadow-2xl flex items-center justify-center relative">
-                        <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <h3 className="text-3xl font-black text-white tracking-tight">Synthesizing...</h3>
-                      <p className="text-slate-500 font-bold text-sm uppercase tracking-[0.2em] max-w-xs mx-auto leading-relaxed">
-                        FlowAI is constructing your high-fidelity academic masterpiece.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-[50vh] flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-white/5 rounded-[4rem] group hover:border-orange-500/20 transition-all duration-700">
-                    <Sparkles className="w-20 h-20 text-white/5 mb-8 transition-transform group-hover:scale-110 group-hover:text-orange-500 duration-700" />
-                    <h2 className="text-3xl font-black text-white tracking-tight mb-4">Initialization Complete</h2>
-                    <p className="text-slate-500 max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your instructions and materials are staged. Engage the synthesis engine to generate the solution.</p>
-                    <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="btn-primary px-12 py-5 text-lg font-black rounded-3xl shadow-2xl shadow-orange-500/20 hover:-translate-y-1 transition-all active:scale-95 flex items-center gap-3">
-                      {solveMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Zap className="w-6 h-6" />}
-                      {solveMutation.isPending ? 'Engaging Core...' : 'Initialize Intelligence'}
-                    </button>
-                  </div>
+                      Writing your draft...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-5 h-5" />
+                      Create Draft
+                    </>
+                  )}
+                </button>
                 )}
               </div>
             )}
@@ -326,7 +311,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       <h4 className="text-lg font-bold text-white tracking-tight">AI Humanizer</h4>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Ghost Protocol v5: Aggressive linguistic reconstruction to bypass high-fidelity academic detectors.
+                      Rewrite your draft to bypass AI detectors and sound completely natural.
                     </p>
                     <button 
                       onClick={() => humanizeMutation.mutate()}
@@ -334,7 +319,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
                     >
                       {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                      {humanizeMutation.isPending ? 'Ghost Protocol Engaged...' : 'Engage Vanish Protocol'}
+                      {humanizeMutation.isPending ? 'Working...' : 'Run Humanizer'}
                     </button>
                   </div>
 
@@ -350,7 +335,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       <h4 className="text-lg font-bold text-white tracking-tight">Originality Shield</h4>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Radical structural flip to ensure zero matching patterns and absolute intellectual originality.
+                      Change the structure of your work to ensure it passes all plagiarism checks.
                     </p>
                     <button 
                       onClick={() => originalityMutation.mutate()}
@@ -358,7 +343,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-violet-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-violet-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
                     >
                       {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      {originalityMutation.isPending ? 'Shield Protocol Engaged...' : 'Engage Shield Protocol'}
+                      {originalityMutation.isPending ? 'Working...' : 'Run Plagiarism Remover'}
                     </button>
                   </div>
                 </div>
