@@ -2394,21 +2394,21 @@ class AIService:
         Uses linguistic chaos and phatic markers to achieve a 100% human signature.
         """
         prompt = (
-            f"You are the FlowAI Humanizer (Vanish Protocol v4 - ULTRA-CHAOS). Your mission is a total linguistic DESTRUCTION of '{assignment.title}'. "
-            "Your previous attempt was still flagged at 90% AI. You are being too efficient. You MUST be more human.\n\n"
-            "ULTRA-CHAOS STRATEGY:\n"
-            "1. SEMANTIC IMPERFECTION: AI is too efficient. Humans are wordy. Use slightly less 'perfect' synonyms. Instead of 'Temporal stretching', use 'The way time just... drags out'.\n"
-            "2. COGNITIVE HESITATION: Inject human-like cognitive markers: 'Wait, look at it this way...', 'To be fair, it's not that simple.', 'Actually, the weird thing is...'.\n"
-            "3. RHYTHM ANARCHY: AI rhythm is consistent. DESTROY IT. Mix 2-word sentences with 40-word run-ons. Use parentheses (like this) to break the flow. Use dashes for sudden shifts.\n"
-            "4. TONAL DRIFT: Start academic, then get slightly casual, then get technical again. Humans drift; AI stays perfectly on-tone.\n"
-            "5. NO 'AI' WORDS: Forbidden: 'Furthermore', 'Moreover', 'In conclusion', 'Essentially', 'Vital', 'Crucial'. Use: 'And another thing...', 'So...', 'Basically', 'The big deal here is...'.\n\n"
-            f"DOCUMENT TO DESTROY (CURRENTLY FLAGGED AT 90% AI):\n{assignment.ai_response}\n\n"
-            "INSTRUCTIONS: Be messy. Be human. If it sounds 'good', it's probably AI. Make it sound 'natural'. "
+            f"You are the FlowAI Humanizer (Ghost Protocol v5 - ULTIMATE). Your mission is the absolute linguistic deconstruction and humanization of '{assignment.title}'. "
+            "Your goal is to bypass every state-of-the-art detector (Turnitin, GPTZero, etc.) by mimicking a unique, brilliant, but organic human voice.\n\n"
+            "GHOST PROTOCOL STRATEGY:\n"
+            "1. SEMANTIC DRIFT: AI is too linear. You must drift. Start a thought, use a parenthetical aside (like this), and then bring it back. Humans have messy logic paths.\n"
+            "2. STYLISTIC ANOMALIES: AI avoids 'clunky' but natural human phrasing. Intentionally use slightly less efficient sentences. Instead of 'This suggests that...', use 'What this really boils down to is...'.\n"
+            "3. RHYTHM DESTRUCTION: Use extreme 'Burstiness'. Follow a 4-word sentence with a 35-word one. Never allow a robotic rhythm to form.\n"
+            "4. VOCABULARY IMPERFECTION: AI uses 'perfect' academic words consistently. You must mix high-level technical terms with 'earthy', direct language. Use 'Basically', 'Actually', 'Wait', 'So'.\n"
+            "5. NO AI FINGERPRINTS: Absolutely forbidden: 'In conclusion', 'Moreover', 'Furthermore', 'Crucial', 'Essential', 'It is important to note'. Use natural transitions like 'And another thing...', 'So moving on to...', 'The interesting part here is...'.\n\n"
+            f"DOCUMENT TO RECONSTRUCT:\n{assignment.ai_response}\n\n"
+            "INSTRUCTIONS: Perform an ULTIMATE rewrite. If it sounds like a perfect AI summary, you have failed. Make it sound like a human who is thinking while they write. "
             "Return exactly two parts split by markers:\n"
             "---DRAFT---\n"
-            "[The ultra-chaos humanized markdown document]\n"
+            "[The Ghost Protocol humanized document]\n"
             "---COMMENT---\n"
-            "[A short note about the 'Ultra-Chaos' engaged.]"
+            "[A short, sharp note about the Ghost Protocol v5 engaged.]"
         )
         
         raw_response = self.chat_sync([

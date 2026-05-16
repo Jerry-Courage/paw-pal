@@ -187,7 +187,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
           <div className="hidden lg:flex items-center gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl mr-2">
             {[
               { id: 'document', icon: FileText, label: 'Manuscript' },
-              { id: 'integrity', icon: ShieldCheck, label: 'Integrity Suite' },
+              { id: 'sanitization', icon: ShieldCheck, label: 'Sanitization' },
               { id: 'sources', icon: Layers, label: 'Sources' },
             ].map(tab => (
               <button 
@@ -311,54 +311,34 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
               </div>
             )}
 
-            {activeTab === 'integrity' && (
+            {activeTab === 'sanitization' && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* AI Integrity Pair */}
+                  {/* AI Humanizer Card */}
                   <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <ShieldAlert className="w-12 h-12 text-sky-500" />
+                      <Zap className="w-12 h-12 text-emerald-500" />
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
                         <UserCheck className="w-5 h-5" />
                       </div>
-                      <h4 className="text-lg font-bold text-white tracking-tight">AI Integrity</h4>
+                      <h4 className="text-lg font-bold text-white tracking-tight">AI Humanizer</h4>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Linguistic fingerprinting to detect AI patterns and engage high-fidelity humanization protocols.
+                      Ghost Protocol v5: Aggressive linguistic reconstruction to bypass high-fidelity academic detectors.
                     </p>
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <button 
-                        onClick={() => detectMutation.mutate()}
-                        disabled={a.status !== 'completed' || detectMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-sky-500/50 hover:bg-sky-500/5 transition-all group disabled:opacity-30 relative"
-                      >
-                        {detectMutation.isPending ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
-                            <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
-                          </div>
-                        ) : null}
-                        <ShieldAlert className="w-6 h-6 text-slate-600 group-hover:text-sky-400 transition-colors" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Detector</span>
-                      </button>
-                      <button 
-                        onClick={() => humanizeMutation.mutate()}
-                        disabled={a.status !== 'completed' || humanizeMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group disabled:opacity-30 relative"
-                      >
-                        {humanizeMutation.isPending ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
-                            <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
-                          </div>
-                        ) : null}
-                        <UserCheck className="w-6 h-6 text-slate-600 group-hover:text-emerald-400 transition-colors" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Remover</span>
-                      </button>
-                    </div>
+                    <button 
+                      onClick={() => humanizeMutation.mutate()}
+                      disabled={a.status !== 'completed' || humanizeMutation.isPending}
+                      className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
+                    >
+                      {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                      {humanizeMutation.isPending ? 'Ghost Protocol Engaged...' : 'Engage Vanish Protocol'}
+                    </button>
                   </div>
 
-                  {/* Originality Shield Pair */}
+                  {/* Originality Shield Card */}
                   <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                       <ShieldCheck className="w-12 h-12 text-violet-500" />
@@ -370,52 +350,15 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                       <h4 className="text-lg font-bold text-white tracking-tight">Originality Shield</h4>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      Cross-database plagiarism verification and structural re-synthesis for absolute originality.
+                      Radical structural flip to ensure zero matching patterns and absolute intellectual originality.
                     </p>
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <button 
-                        onClick={() => detectMutation.mutate()}
-                        disabled={a.status !== 'completed' || detectMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group disabled:opacity-30 relative"
-                      >
-                        {detectMutation.isPending ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
-                            <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
-                          </div>
-                        ) : null}
-                        <Search className="w-6 h-6 text-slate-600 group-hover:text-violet-400 transition-colors" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Checker</span>
-                      </button>
-                      <button 
-                        onClick={() => originalityMutation.mutate()}
-                        disabled={a.status !== 'completed' || originalityMutation.isPending}
-                        className="flex flex-col items-center gap-3 p-5 rounded-[1.5rem] bg-[#0d0d0d] border border-white/5 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all group disabled:opacity-30 relative"
-                      >
-                        {originalityMutation.isPending ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0d]/80 rounded-[1.5rem] z-10">
-                            <Loader2 className="w-5 h-5 animate-spin text-orange-400" />
-                          </div>
-                        ) : null}
-                        <RotateCcw className="w-6 h-6 text-slate-600 group-hover:text-orange-400 transition-colors" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Remover</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-10 rounded-[3rem] bg-orange-500 shadow-2xl shadow-orange-500/20 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-3xl rounded-full -mr-32 -mt-32" />
-                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-white tracking-tight">Full Integrity Audit</h3>
-                      <p className="text-white/80 text-sm font-bold">Generate a comprehensive heatmap report of your assignment's integrity.</p>
-                    </div>
                     <button 
-                      onClick={() => detectMutation.mutate()}
-                      disabled={a.status !== 'completed' || detectMutation.isPending}
-                      className="h-14 px-10 bg-white text-orange-600 font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50"
+                      onClick={() => originalityMutation.mutate()}
+                      disabled={a.status !== 'completed' || originalityMutation.isPending}
+                      className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-violet-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-violet-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
                     >
-                      Initialize Full Audit
+                      {originalityMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                      {originalityMutation.isPending ? 'Shield Protocol Engaged...' : 'Engage Shield Protocol'}
                     </button>
                   </div>
                 </div>
