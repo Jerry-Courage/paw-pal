@@ -6,9 +6,23 @@ const sanitizePdf = (t: string) => t
   .replace(/\u2013|\u2014/g, '-').replace(/\u2026/g, '...')
   .replace(/\u00A0/g, ' ').replace(/[^\x00-\x7F]/g, '')
 
+// Strip LaTeX delimiters so math reads as plain text
+const stripLatex = (t: string) => t
+  .replace(/\\\(/g, '').replace(/\\\)/g, '')
+  .replace(/\\\[/g, '').replace(/\\\]/g, '')
+
 // HTML-escape text content
 const esc = (t: string) => t
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+const pdfClean = (t: string) => sanitizePdf(stripLatex(t)
+  .replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
+  .replace(/`([^`]+)`/g, '$1').replace(/^#{1,6}\s+/, ''))
+
+const docxFormat = (t: string) => esc(stripLatex(t))
+  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  .replace(/\*(.*?)\*/g, '<em>$1</em>')
+  .replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 4px">$1</code>')
 
 const isTableSep = (l: string) => /^\|[\s\-|:]+\|$/.test(l)
 const isTableRow  = (l: string) => l.startsWith('|') && l.endsWith('|')
@@ -56,13 +70,10 @@ export async function exportAssignment(
         if (!l) { y += 3; continue }
         if (isTableSep(l)) continue
 
-        const clean = sanitizePdf(
-          l.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
-           .replace(/`([^`]+)`/g, '$1').replace(/^#{1,6}\s+/, '')
-        )
+        const clean = pdfClean(l)
 
         if (isTableRow(l)) {
-          const cells = l.split('|').map(c => c.trim()).filter(Boolean)
+          const cells = l.split('|').map(c => pdfClean(c.trim())).filter(Boolean)
           write(cells.join('   |   '), 'normal', 9, [71, 85, 105])
         } else if (l.startsWith('### ')) {
           y += 2; write(clean, 'bold', 11, [51, 65, 85], 0, 6)
@@ -105,23 +116,18 @@ export async function exportAssignment(
         if (isTableSep(l)) continue
 
         if (isTableRow(l)) {
-          const cells = l.split('|').map(c => c.trim()).filter(Boolean)
+          const cells = l.split('|').map(c => docxFormat(c.trim())).filter(Boolean)
           const nextIsSep = isTableSep(lines[i + 1]?.trim() || '')
           if (!inTable) { parts.push('<table border="1" style="border-collapse:collapse;width:100%;margin:12px 0">'); inTable = true }
           const tag = nextIsSep ? 'th' : 'td'
           const style = nextIsSep ? 'style="background:#f1f5f9;padding:7px 10px;font-weight:bold"' : 'style="padding:6px 10px"'
-          parts.push(`<tr>${cells.map(c => `<${tag} ${style}>${esc(c)}</${tag}>`).join('')}</tr>`)
+          parts.push(`<tr>${cells.map(c => `<${tag} ${style}>${c}</${tag}>`).join('')}</tr>`)
           continue
         }
 
         if (inTable) { parts.push('</table>'); inTable = false }
 
-        // Apply bold/italic after escaping so we don't double-escape
-        const escaped = esc(l)
-        const b = escaped
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 4px">$1</code>')
+        const b = docxFormat(l)
 
         if (l.startsWith('### ')) parts.push(`<h3>${b.slice(4)}</h3>`)
         else if (l.startsWith('## ')) parts.push(`<h2>${b.slice(3)}</h2>`)
