@@ -365,10 +365,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const loadExamQuestions = async () => {
     setExamLoading(true)
     try {
-      const [quizRes, practiceRes] = await Promise.all([
-        libraryApi.generateQuiz(resourceId, 'mcq', 'undergrad', 10),
-        libraryApi.generatePracticeQuestions(resourceId, 'medium', 5),
-      ])
+      const quizRes = await libraryApi.generateQuiz(resourceId, 'mcq', 'undergrad', 10)
+      const practiceRes = await libraryApi.generatePracticeQuestions(resourceId, 'medium', 5)
 
       const mcqRaw: any[] = quizRes.data?.questions || []
       const writtenRaw: any[] = Array.isArray(practiceRes.data) ? practiceRes.data : []
@@ -401,8 +399,14 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       while (wi < written.length) combined.push(written[wi++])
 
       setExamQuestions(combined)
+      if (combined.length === 0) {
+        toast.error('Generated zero questions. Please try again.')
+        return false
+      }
+      return true
     } catch (e) {
       toast.error('Failed to load exam questions')
+      return false
     } finally {
       setExamLoading(false)
     }
@@ -919,8 +923,13 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             </div>
             <button
               onClick={async () => {
-                if (examQuestions.length === 0) await loadExamQuestions()
-                startExam()
+                let success = true
+                if (examQuestions.length === 0) {
+                  success = await loadExamQuestions()
+                }
+                if (success) {
+                  startExam()
+                }
               }}
               disabled={examLoading}
               className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2.5 disabled:opacity-50">
