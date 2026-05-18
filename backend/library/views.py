@@ -414,15 +414,29 @@ class AnkiExportView(APIView):
 
 class MathSolverView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    # Support both JSON (base64) and Multipart (direct file upload) requests
+    from rest_framework.parsers import JSONParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, resource_id):
         resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
-        problem = request.data.get('problem')
-        if not problem:
-            return Response({'error': 'No problem provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        problem = request.data.get('problem', '')
+        image_data = request.data.get('image', '')
+        
+        # Check if a file was uploaded directly
+        image_file = request.FILES.get('image_file')
+        if image_file:
+            import base64
+            file_bytes = image_file.read()
+            b64 = base64.b64encode(file_bytes).decode('utf-8')
+            mime = image_file.content_type or 'image/png'
+            image_data = f"data:{mime};base64,{b64}"
+            
+        if not problem and not image_data:
+            return Response({'error': 'No problem statement or image provided.'}, status=status.HTTP_400_BAD_REQUEST)
         
         ai = AIService()
-        solution = ai.solve_math_problem(problem, context=ai._get_resource_context(resource))
+        solution = ai.solve_math_problem(problem, context=ai._get_resource_context(resource), image_data=image_data)
         return Response(solution)
 
 class CloneResourceView(APIView):

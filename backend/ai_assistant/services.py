@@ -2591,43 +2591,66 @@ class AIService:
                 'summary': f"The audit engine encountered a structural parsing error. (Technical Info: {str(e)[:40]})"
             }
 
-    def solve_math_problem(self, problem: str, context: str = "") -> dict:
+    def solve_math_problem(self, problem: str, context: str = "", image_data: str = None) -> dict:
         """
         Specialized Math Solver using Chain-of-Thought reasoning.
-        Breaks down a problem into: Formula -> Steps -> Intuition -> Solution.
+        Supports both text problems and multimodal image uploads.
         """
-        # Hardcore math instructions for the Matrix solver
+        # Stricter math instructions for high-fidelity LaTeX formatting
         system = (
             f"{FLOWAI_SYSTEM_PROMPT}\n\n"
-            "You are the FlowAI Math Master. Your goal is to solve mathematical problems using first principles. "
+            "You are the FlowAI Math Master. Your goal is to solve mathematical problems using first principles and present them with beautiful LaTeX formatting.\n"
             "IMPORTANT RULES:\n"
-            "1. Use LaTeX for ALL mathematical symbols. Formulas MUST be wrapped in $ (inline) or $$ (block).\n"
-            "2. Explain the logical 'Intuition' behind every calculation.\n"
-            "3. If the input is a partial formula or snippet from study notes, deduce its purpose and explain how it is used.\n"
-            "4. Return ONLY a valid JSON object. No conversational filler."
+            "1. Use LaTeX for ALL mathematical expressions, formulas, matrices, integrals, fractions, derivatives, and numbers representing mathematical elements.\n"
+            "2. Formulas MUST be cleanly wrapped: use $$ (block) for complex steps/matrices, and $ (inline) for simple terms.\n"
+            "3. If an image is provided, extract the mathematical equation or word problem perfectly first.\n"
+            "4. Explain the logical 'Intuition' and transition step-by-step behind every calculation.\n"
+            "5. Return ONLY a valid, parseable JSON object matching the requested schema. Do not enclose it in markdown blocks."
         )
         
-        prompt = (
-            f"Problem to solve: \"{problem}\"\n\n"
-        )
-        if context:
-            prompt += f"Background context from study material:\n{context[:10000]}\n\n"
+        content_parts = []
+        
+        # Add problem description if provided
+        if problem:
+            content_parts.append({"type": "text", "text": f"Problem statement or guidance: {problem}"})
+        else:
+            content_parts.append({"type": "text", "text": "Extract and solve the mathematical problem shown in the image."})
             
-        prompt += (
+        # Add background context
+        if context:
+            content_parts.append({"type": "text", "text": f"Background context from study material:\n{context[:6000]}"})
+            
+        # Add image data if provided
+        if image_data:
+            # Normalize base64 schema prefix
+            if not image_data.startswith("data:"):
+                image_data = f"data:image/png;base64,{image_data}"
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": image_data}
+            })
+            
+        # Add JSON instructions
+        instructions = (
             "Provide a step-by-step logical breakdown in this JSON format:\n"
             "{\n"
-            "  \"problem\": \"The mathematical statement\",\n"
+            "  \"problem\": \"The mathematical statement (extracted from the image if present)\",\n"
             "  \"steps\": [\n"
-            "    {\"label\": \"Step Name\", \"formula\": \"LaTeX snippet\", \"explanation\": \"Logical transition intuition\"}\n"
+            "    {\"label\": \"Step Name\", \"formula\": \"LaTeX formula string\", \"explanation\": \"Logical transition intuition\"}\n"
             "  ],\n"
-            "  \"final_answer\": \"Simplified solution\",\n"
+            "  \"final_answer\": \"LaTeX final solution term\",\n"
             "  \"key_theorems\": [\"Theorem|Rule Name\"]\n"
             "}"
         )
+        content_parts.append({"type": "text", "text": instructions})
         
-        # Use a high-reasoning model for the solver
+        messages = [
+            {'role': 'system', 'content': AIService.MATH_SYSTEM_PROMPT if hasattr(AIService, 'MATH_SYSTEM_PROMPT') else system},
+            {'role': 'user', 'content': content_parts}
+        ]
+        
         try:
-            result = self.chat_sync([{'role': 'system', 'content': AIService.MATH_SYSTEM_PROMPT if hasattr(AIService, 'MATH_SYSTEM_PROMPT') else system}, {'role': 'user', 'content': prompt}])
+            result = self.chat_sync(messages)
             return self._parse_json(result, {
                 "problem": "Mathematical Analysis",
                 "steps": [],

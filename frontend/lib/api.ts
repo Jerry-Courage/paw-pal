@@ -99,8 +99,8 @@ export const libraryApi = {
   refetchTranscript: (resourceId: number) =>
     api.post(`/library/resources/${resourceId}/refetch-transcript/`),
   getQuizzes: () => api.get('/library/quizzes/'),
-  solveMath: (id: number, problem: string) =>
-    api.post(`/library/resources/${id}/math/solve/`, { problem }),
+  solveMath: (id: number, problem: string, image?: string) =>
+    api.post(`/library/resources/${id}/math/solve/`, { problem, image }),
   cloneResource: (id: number) =>
     api.post(`/library/resources/${id}/clone/`),
 }

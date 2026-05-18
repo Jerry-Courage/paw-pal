@@ -1,9 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { 
   X, Calculator, Sparkles, Brain, CheckCircle2, 
-  ArrowRight, Info, AlertCircle, Loader2
+  ArrowRight, Info, AlertCircle, Loader2, Camera, Paperclip
 } from 'lucide-react'
 import { libraryApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -37,6 +36,7 @@ interface MathSolverModalProps {
 
 export default function MathSolverModal({ isOpen, onClose, resourceId, initialProblem }: MathSolverModalProps) {
   const [problem, setProblem] = useState('')
+  const [image, setImage] = useState<string | null>(null)
   const [isSolving, setIsSolving] = useState(false)
   const [solution, setSolution] = useState<MathSolution | null>(null)
 
@@ -44,20 +44,55 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
   React.useEffect(() => {
     if (isOpen && initialProblem) {
       setProblem(initialProblem)
+      setImage(null)
       setSolution(null) // Reset previous solution
     }
   }, [isOpen, initialProblem])
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be under 5MB')
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImage(reader.result as string)
+      toast.success('Math image attached!')
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSolve = async () => {
-    if (!problem.trim()) return
+    if (!problem.trim() && !image) return
     setIsSolving(true)
     try {
-      const res = await libraryApi.solveMath(resourceId, problem)
+      const res = await libraryApi.solveMath(resourceId, problem, image || undefined)
       setSolution(res.data)
     } catch (error) {
       toast.error('Could not solve this problem. Try simplifying it.')
     } finally {
       setIsSolving(false)
+    }
+  }
+
+  const renderFormula = (formula: string) => {
+    if (!formula) return ''
+    let clean = formula.trim()
+    if (clean.startsWith('```latex')) {
+      clean = clean.replace(/^```latex/, '').replace(/```$/, '').trim()
+    } else if (clean.startsWith('```')) {
+      clean = clean.replace(/^```/, '').replace(/```$/, '').trim()
+    }
+    clean = clean.replace(/^\$\$?/, '').replace(/\$\$?$/, '').trim()
+    
+    try {
+      return katex.renderToString(clean, { displayMode: true, throwOnError: false, trust: true })
+    } catch {
+      return `<span class="font-mono text-primary">${clean}</span>`
     }
   }
 
@@ -94,26 +129,71 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
             <div className="space-y-6">
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
-                  Describe your problem
+                  Describe your problem or attach an image
                 </label>
-                <textarea
-                  autoFocus
-                  placeholder="e.g. Find the derivative of f(x) = sin(x^2) + 5x..."
-                  className="w-full h-40 p-6 bg-slate-50 dark:bg-slate-950/50 border-2 border-slate-200 dark:border-slate-800 rounded-3xl text-lg font-medium outline-none focus:ring-4 ring-primary/10 focus:border-primary transition-all resize-none"
-                  value={problem}
-                  onChange={(e) => setProblem(e.target.value)}
-                />
+                <div className="relative bg-slate-50 dark:bg-slate-950/50 border-2 border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 transition-all focus-within:border-primary focus-within:ring-4 ring-primary/10">
+                  <textarea
+                    autoFocus
+                    placeholder="Type your problem here (e.g., Solve x² - 4 = 0) or upload a photo of the equation below..."
+                    className="w-full h-32 bg-transparent text-lg font-medium outline-none resize-none placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-0 focus:border-transparent border-none p-0 focus:outline-none"
+                    value={problem}
+                    onChange={(e) => setProblem(e.target.value)}
+                  />
+                  
+                  {/* Image Attachments Tray */}
+                  {image && (
+                    <div className="relative inline-block mt-3 group">
+                      <img src={image} alt="Math problem" className="h-20 w-auto rounded-xl border border-slate-200 dark:border-slate-800 object-cover shadow-lg" />
+                      <button 
+                        onClick={() => setImage(null)}
+                        className="absolute -top-1.5 -right-1.5 p-1 bg-red-500 text-white rounded-full hover:bg-red-400 transition-colors shadow-md"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Actions Row */}
+                  <div className="flex items-center justify-between border-t border-slate-200/50 dark:border-slate-800/50 pt-3 mt-3">
+                    <div className="flex gap-2">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        id="modal-image-file-input" 
+                        onChange={handleImageChange} 
+                      />
+                      <label 
+                        htmlFor="modal-image-file-input"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Paperclip className="w-3.5 h-3.5 text-primary" />
+                        Attach Photo
+                      </label>
+                      <label 
+                        htmlFor="modal-image-file-input"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer sm:flex hidden"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-primary" />
+                        Take Picture
+                      </label>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      AI Multimodal Solver
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="p-6 rounded-3xl bg-primary/5 border border-primary/10 flex gap-4">
                 <Info className="w-6 h-6 text-primary shrink-0" />
                 <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
-                  Tip: Be specific! If this problem relates to a formula in your notes, mentioning it helps the AI provide a more contextual solution.
+                  Tip: Be specific! You can type equations, instructions, or simply submit an image. Pressing enter solves step-by-step.
                 </p>
               </div>
 
               <button
-                disabled={!problem.trim() || isSolving}
+                disabled={(!problem.trim() && !image) || isSolving}
                 onClick={handleSolve}
                 className={cn(
                   "w-full py-5 rounded-full text-white font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-[0.98]",
@@ -139,7 +219,7 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
               <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Problem Result</span>
                 <button 
-                  onClick={() => { setSolution(null); setProblem(''); }}
+                  onClick={() => { setSolution(null); setProblem(''); setImage(null); }}
                   className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
                 >
                   Solve Another
@@ -165,7 +245,7 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
                       <DigitalBlackboard label={step.label} variant="mini">
                         <div 
                           dangerouslySetInnerHTML={{ 
-                            __html: katex.renderToString(step.formula.replace(/\$/g, ''), { displayMode: true, throwOnError: false }) 
+                            __html: renderFormula(step.formula) 
                           }} 
                         />
                       </DigitalBlackboard>
@@ -188,7 +268,7 @@ export default function MathSolverModal({ isOpen, onClose, resourceId, initialPr
                   <div className="text-4xl font-black tracking-tighter overflow-x-auto">
                     <div 
                       dangerouslySetInnerHTML={{ 
-                        __html: katex.renderToString(solution.final_answer.replace(/\$/g, ''), { displayMode: true, throwOnError: false }) 
+                        __html: renderFormula(solution.final_answer) 
                       }} 
                     />
                   </div>
