@@ -3,22 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
-import { ArrowLeft, Sparkles, Loader2, RotateCcw, Brain, Cpu, Database, Network } from 'lucide-react'
+import { ArrowLeft, Sparkles, Loader2, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-
-const BRANCH_COLORS = [
-  'text-violet-400 border-violet-500/30 bg-violet-500/5',
-  'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',
-  'text-amber-400 border-amber-500/30 bg-amber-500/5',
-  'text-sky-400 border-sky-500/30 bg-sky-500/5',
-  'text-rose-400 border-rose-500/30 bg-rose-500/5',
-  'text-indigo-400 border-indigo-500/30 bg-indigo-500/5',
-  'text-teal-400 border-teal-500/30 bg-teal-500/5',
-  'text-orange-400 border-orange-500/30 bg-orange-500/5',
-]
-const BRANCH_ICONS = [Cpu, Network, Database, Brain]
+import NeuralMindMap from '@/components/library/NeuralMindMap'
 
 interface MindMapData {
   center: string
@@ -124,46 +113,8 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Map canvas */}
-      <div className="flex-1 overflow-auto bg-[#0d0d0d] scrollbar-hide">
-        <div className="relative w-full max-w-7xl mx-auto py-10 px-4 sm:px-8">
-          {/* Central hub */}
-          <div className="flex justify-center mb-16 relative z-20">
-            <div className="relative px-8 py-5 bg-[#1a1a1a] border border-orange-500/30 rounded-3xl shadow-xl flex flex-col items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/30 -mt-10">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-[9px] font-black text-orange-500/60 uppercase tracking-widest">Central Topic</div>
-              <h1 className="text-xl sm:text-3xl font-black text-white tracking-tight text-center">{mapData.center}</h1>
-            </div>
-          </div>
-
-          {/* Branches */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 relative z-10">
-            {mapData.branches?.map((branch, i) => {
-              const colorClass = BRANCH_COLORS[i % BRANCH_COLORS.length]
-              const Icon = BRANCH_ICONS[i % BRANCH_ICONS.length]
-              return (
-                <div key={i} className="w-full animate-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${i * 60}ms` }}>
-                  <div className={cn('p-4 rounded-2xl border bg-[#1a1a1a] mb-3', colorClass)}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-current/10 flex items-center justify-center shrink-0">
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <h3 className="font-black text-sm truncate">{branch.topic}</h3>
-                    </div>
-                  </div>
-                  <div className="space-y-2 pl-4 border-l border-white/8">
-                    {branch.subtopics?.map((sub, j) => (
-                      <div key={j} className="px-3 py-2 bg-[#1a1a1a] border border-white/5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:border-orange-500/20 transition-all cursor-default">
-                        {sub}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      <div className="flex-1 relative bg-[#090909]">
+        <NeuralMindMap data={mapData} />
       </div>
     </div>
   )
