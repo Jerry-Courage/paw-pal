@@ -39,7 +39,10 @@ import {
   MoreVertical,
   Pencil,
   Copy as CopyIcon,
-  Pin as PinIcon
+  Pin as PinIcon,
+  Paperclip,
+  Video,
+  X
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -73,6 +76,8 @@ export default function WorkspaceCollaborationStudio() {
   const [recordingDuration, setRecordingDuration] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
@@ -283,7 +288,7 @@ export default function WorkspaceCollaborationStudio() {
 
   const handleSendMessage = async (e?: React.FormEvent, audioBlob?: Blob) => {
     e?.preventDefault()
-    if (!inputText.trim() && !audioBlob) return
+    if (!inputText.trim() && !audioBlob && !attachmentFile) return
 
     const tempText = inputText.trim()
     setInputText('')
@@ -292,23 +297,34 @@ export default function WorkspaceCollaborationStudio() {
     const optimisticId = `opt-${Date.now()}`
     const tempMsg = {
       id: optimisticId,
-      content: tempText || "Voice Note",
+      content: tempText || (audioBlob ? "Voice Note" : "Attachment"),
       author: session?.user,
       created_at: new Date().toISOString(),
       is_ai: false,
       is_optimistic: true,
-      audio_file: audioBlob ? URL.createObjectURL(audioBlob) : null
+      audio_file: audioBlob ? URL.createObjectURL(audioBlob) : null,
+      attachment: attachmentFile ? URL.createObjectURL(attachmentFile) : null,
+      attachment_type: attachmentFile ? (attachmentFile.type.startsWith('video/') ? 'video' : 'image') : null
     }
     setMessages(prev => [...prev, tempMsg])
+    
+    const fileToSend = attachmentFile
+    setAttachmentFile(null)
 
     try {
       let data: string | FormData = tempText
-      if (audioBlob) {
+      if (audioBlob || fileToSend) {
         data = new FormData()
-        data.append('content', tempText || "Voice Note")
-        // Use proper extension based on blob type
-        const extension = audioBlob.type.includes('mp4') ? 'm4a' : 'webm'
-        data.append('audio', audioBlob, `voice_note.${extension}`)
+        data.append('content', tempText || (audioBlob ? "Voice Note" : "Attachment"))
+        if (audioBlob) {
+          // Use proper extension based on blob type
+          const extension = audioBlob.type.includes('mp4') ? 'm4a' : 'webm'
+          data.append('audio', audioBlob, `voice_note.${extension}`)
+        }
+        if (fileToSend) {
+          data.append('attachment', fileToSend)
+          data.append('attachment_type', fileToSend.type.startsWith('video/') ? 'video' : 'image')
+        }
       }
       
       const response = await workspaceApi.sendMessage(Number(id), data, replyingTo?.id)
@@ -684,7 +700,51 @@ export default function WorkspaceCollaborationStudio() {
           </div>
 
           <div className="bg-[#0d0d0d] border-t border-white/5 px-4 sm:px-6 py-3">
+            {attachmentFile && (
+              <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
+                <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
+                  {attachmentFile.type.startsWith('video/') ? (
+                    <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center border border-white/10 shadow-lg">
+                      <Video className="w-6 h-6 text-slate-400" />
+                    </div>
+                  ) : (
+                    <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-white/10 shadow-lg" />
+                  )}
+                  <button
+                    onClick={() => setAttachmentFile(null)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 shadow-md text-white transition-all"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2.5">
+              {/* Attachment button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-white/[0.03] text-slate-500 hover:text-orange-500 hover:bg-white/[0.06]"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*,video/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    if (file.size > 50 * 1024 * 1024) {
+                      toast.error("File size must be under 50MB")
+                      return
+                    }
+                    setAttachmentFile(file)
+                  }
+                }}
+              />
+
               {/* Mic button */}
               <button 
                 type="button"
@@ -1358,30 +1418,43 @@ function MessageBubble({
           ) : (message.audio_file || message.audio_data) ? (
             <AudioPlayer url={message.audio_data || message.audio_file} isMe={isMe} />
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5">
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  h1: ({children}) => <h1 className="text-base font-bold text-white mt-4 mb-2">{children}</h1>,
-                  h2: ({children}) => <h2 className="text-sm font-bold text-white mt-4 mb-2">{children}</h2>,
-                  h3: ({children}) => <h3 className="text-[13px] font-bold text-slate-200 mt-3 mb-1">{children}</h3>,
-                  ul: ({children}) => <ul className="list-disc pl-4 space-y-1 mb-3">{children}</ul>,
-                  ol: ({children}) => <ol className="list-decimal pl-4 space-y-1 mb-3">{children}</ol>,
-                  li: ({children}) => <li className="text-[13px] text-slate-300 leading-normal">{children}</li>,
-                  table: ({children}) => (
-                    <div className="my-4 overflow-x-auto rounded-xl border border-white/5 bg-black/20">
-                      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
-                    </div>
-                  ),
-                  thead: ({children}) => <thead className="bg-white/5 text-slate-400 font-semibold">{children}</thead>,
-                  th: ({children}) => <th className="px-3 py-2 border-b border-white/5">{children}</th>,
-                  td: ({children}) => <td className="px-3 py-2 border-b border-white/5 text-slate-300">{children}</td>,
-                  p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-slate-300 leading-relaxed">{children}</p>,
-                }}
-              >
-                {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
-              </ReactMarkdown>
-            </div>
+            <>
+              {message.attachment && (
+                <div className="mb-2 max-w-sm overflow-hidden rounded-xl border border-white/10">
+                  {message.attachment_type === 'video' ? (
+                    <video src={message.attachment} controls className="w-full h-auto max-h-[300px] object-contain bg-black/40" />
+                  ) : (
+                    <img src={message.attachment} alt="Attachment" className="w-full h-auto max-h-[300px] object-contain bg-black/40 cursor-zoom-in" onClick={() => window.open(message.attachment, '_blank')} />
+                  )}
+                </div>
+              )}
+              {message.content && (
+                <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({children}) => <h1 className="text-base font-bold text-white mt-4 mb-2">{children}</h1>,
+                      h2: ({children}) => <h2 className="text-sm font-bold text-white mt-4 mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="text-[13px] font-bold text-slate-200 mt-3 mb-1">{children}</h3>,
+                      ul: ({children}) => <ul className="list-disc pl-4 space-y-1 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal pl-4 space-y-1 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="text-[13px] text-slate-300 leading-normal">{children}</li>,
+                      table: ({children}) => (
+                        <div className="my-4 overflow-x-auto rounded-xl border border-white/5 bg-black/20">
+                          <table className="w-full text-left border-collapse text-[12px]">{children}</table>
+                        </div>
+                      ),
+                      thead: ({children}) => <thead className="bg-white/5 text-slate-400 font-semibold">{children}</thead>,
+                      th: ({children}) => <th className="px-3 py-2 border-b border-white/5">{children}</th>,
+                      td: ({children}) => <td className="px-3 py-2 border-b border-white/5 text-slate-300">{children}</td>,
+                      p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-slate-300 leading-relaxed">{children}</p>,
+                    }}
+                  >
+                    {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </>
           )}
           
           {/* Pinned resource card */}
@@ -1418,17 +1491,15 @@ function MessageBubble({
                 <button 
                   onClick={async () => {
                     try {
-                      const res = await assignmentsApi.export(message.shared_assignment_data.id, 'pdf')
-                      const url = window.URL.createObjectURL(new Blob([res.data]))
-                      const link = document.createElement('a')
-                      link.href = url
-                      link.setAttribute('download', `${message.shared_assignment_data.title.replace(/\s+/g, '_')}.pdf`)
-                      document.body.appendChild(link)
-                      link.click()
-                      link.remove()
-                      toast.success('Exported as PDF')
+                      toast.loading('Fetching intelligence...', { id: 'export-toast' })
+                      const res = await assignmentsApi.get(message.shared_assignment_data.id)
+                      const a = res.data
+                      toast.loading('Generating perfectly formatted PDF...', { id: 'export-toast' })
+                      const { exportAssignment } = await import('@/lib/exportUtils')
+                      await exportAssignment('pdf', a.title, a.ai_response || '', a.subject || 'General')
+                      toast.dismiss('export-toast')
                     } catch {
-                      toast.error('Failed to export PDF.')
+                      toast.error('Failed to export PDF.', { id: 'export-toast' })
                     }
                   }}
                   className="flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-white/10 border border-white/8 rounded-lg text-[10px] font-medium text-slate-400 hover:text-white transition-all"
@@ -1438,17 +1509,14 @@ function MessageBubble({
                 <button 
                   onClick={async () => {
                     try {
-                      const res = await assignmentsApi.export(message.shared_assignment_data.id, 'docx')
-                      const url = window.URL.createObjectURL(new Blob([res.data]))
-                      const link = document.createElement('a')
-                      link.href = url
-                      link.setAttribute('download', `${message.shared_assignment_data.title.replace(/\s+/g, '_')}.docx`)
-                      document.body.appendChild(link)
-                      link.click()
-                      link.remove()
-                      toast.success('Exported as Word')
+                      toast.loading('Fetching intelligence...', { id: 'export-toast' })
+                      const res = await assignmentsApi.get(message.shared_assignment_data.id)
+                      const a = res.data
+                      const { exportAssignment } = await import('@/lib/exportUtils')
+                      await exportAssignment('docx', a.title, a.ai_response || '', a.subject || 'General')
+                      toast.dismiss('export-toast')
                     } catch {
-                      toast.error('Failed to export Word.')
+                      toast.error('Failed to export Word.', { id: 'export-toast' })
                     }
                   }}
                   className="flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-white/10 border border-white/8 rounded-lg text-[10px] font-medium text-slate-400 hover:text-white transition-all"

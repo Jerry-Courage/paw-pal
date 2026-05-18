@@ -27,6 +27,46 @@ const docxFormat = (t: string) => esc(stripLatex(t))
 const isTableSep = (l: string) => /^\|[\s\-|:]+\|$/.test(l)
 const isTableRow  = (l: string) => l.startsWith('|') && l.endsWith('|')
 
+// Converts simple markdown into HTML chunks using the same logic as docx
+const markdownToHtml = (content: string): string[] => {
+  const lines = content.split('\n')
+  const parts: string[] = []
+  let inTable = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim()
+    if (!l) {
+      if (inTable) { parts.push('</table>'); inTable = false }
+      continue
+    }
+    if (isTableSep(l)) continue
+
+    if (isTableRow(l)) {
+      const cells = l.split('|').map(c => docxFormat(c.trim())).filter(Boolean)
+      const nextIsSep = isTableSep(lines[i + 1]?.trim() || '')
+      if (!inTable) { parts.push('<table border="1" style="border-collapse:collapse;width:100%;margin:12px 0">'); inTable = true }
+      const tag = nextIsSep ? 'th' : 'td'
+      const style = nextIsSep ? 'style="background:#f1f5f9;padding:7px 10px;font-weight:bold"' : 'style="padding:6px 10px"'
+      parts.push(`<tr>${cells.map(c => `<${tag} ${style}>${c}</${tag}>`).join('')}</tr>`)
+      continue
+    }
+
+    if (inTable) { parts.push('</table>'); inTable = false }
+
+    const b = docxFormat(l)
+
+    if (l.startsWith('### ')) parts.push(`<h3>${b.slice(4)}</h3>`)
+    else if (l.startsWith('## ')) parts.push(`<h2>${b.slice(3)}</h2>`)
+    else if (l.startsWith('# ')) parts.push(`<h1>${b.slice(2)}</h1>`)
+    else if (l.startsWith('- ') || l.startsWith('* ')) parts.push(`<li>${b.slice(2)}</li>`)
+    else if (/^\d+\.\s/.test(l)) parts.push(`<li>${b}</li>`)
+    else parts.push(`<p>${b}</p>`)
+  }
+  if (inTable) parts.push('</table>')
+  
+  return parts
+}
+
 export async function exportAssignment(
   fmt: 'pdf' | 'docx',
   title: string,
@@ -38,10 +78,14 @@ export async function exportAssignment(
 
   try {
     if (fmt === 'pdf') {
+      let htmlContent = ''
       const element = document.getElementById('assignment-content-to-export')
-      if (!element) {
-        toast.error('Could not locate assignment content for export')
-        return
+      if (element) {
+        htmlContent = element.innerHTML
+      } else {
+        // Fallback: build HTML dynamically from markdown if the DOM element isn't present
+        // (Used in Collab Space where the full assignment isn't rendered on screen)
+        htmlContent = markdownToHtml(content).join('\n')
       }
 
       // We clone the node to make it light-themed for printing so it looks like a normal document
@@ -57,7 +101,7 @@ export async function exportAssignment(
         <div class="print-export-wrapper" style="font-family: 'Inter', Arial, sans-serif; color: #111; padding: 20px;">
           <h1 style="font-size: 20pt !important; font-weight: 800 !important; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px !important; margin-top: 0 !important;">${title}</h1>
           <div style="color: #666; font-size: 10pt; margin-bottom: 30px;">Subject: ${subject}</div>
-          ${element.innerHTML}
+          ${htmlContent}
         </div>
       `
       
@@ -96,40 +140,7 @@ export async function exportAssignment(
 
     } else {
       // Word — clean HTML with no Word XML namespaces (they cause character garbling)
-      const lines = content.split('\n')
-      const parts: string[] = []
-      let inTable = false
-
-      for (let i = 0; i < lines.length; i++) {
-        const l = lines[i].trim()
-        if (!l) {
-          if (inTable) { parts.push('</table>'); inTable = false }
-          continue
-        }
-        if (isTableSep(l)) continue
-
-        if (isTableRow(l)) {
-          const cells = l.split('|').map(c => docxFormat(c.trim())).filter(Boolean)
-          const nextIsSep = isTableSep(lines[i + 1]?.trim() || '')
-          if (!inTable) { parts.push('<table border="1" style="border-collapse:collapse;width:100%;margin:12px 0">'); inTable = true }
-          const tag = nextIsSep ? 'th' : 'td'
-          const style = nextIsSep ? 'style="background:#f1f5f9;padding:7px 10px;font-weight:bold"' : 'style="padding:6px 10px"'
-          parts.push(`<tr>${cells.map(c => `<${tag} ${style}>${c}</${tag}>`).join('')}</tr>`)
-          continue
-        }
-
-        if (inTable) { parts.push('</table>'); inTable = false }
-
-        const b = docxFormat(l)
-
-        if (l.startsWith('### ')) parts.push(`<h3>${b.slice(4)}</h3>`)
-        else if (l.startsWith('## ')) parts.push(`<h2>${b.slice(3)}</h2>`)
-        else if (l.startsWith('# ')) parts.push(`<h1>${b.slice(2)}</h1>`)
-        else if (l.startsWith('- ') || l.startsWith('* ')) parts.push(`<li>${b.slice(2)}</li>`)
-        else if (/^\d+\.\s/.test(l)) parts.push(`<li>${b}</li>`)
-        else parts.push(`<p>${b}</p>`)
-      }
-      if (inTable) parts.push('</table>')
+      const parts = markdownToHtml(content)
 
       const html = `<!DOCTYPE html>
 <html>

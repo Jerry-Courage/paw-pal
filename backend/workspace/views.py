@@ -133,17 +133,21 @@ class WorkspaceMessageView(APIView):
         ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
         content = request.data.get('content', '').strip()
         audio_file = request.FILES.get('audio')
+        attachment_file = request.FILES.get('attachment')
+        attachment_type = request.data.get('attachment_type')
         
-        if not content and not audio_file:
-            return Response({'error': 'Content or audio required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not content and not audio_file and not attachment_file:
+            return Response({'error': 'Content, audio, or attachment required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # 1. Save user message
         parent_id = request.data.get('parent_id')
         msg = WorkspaceMessage.objects.create(
             workspace=ws, 
             author=request.user, 
-            content=content or "Voice Note",
+            content=content or ("Voice Note" if audio_file else "Attachment"),
             audio_file=audio_file,
+            attachment=attachment_file,
+            attachment_type=attachment_type,
             parent_id=parent_id
         )
 
@@ -230,6 +234,14 @@ class WorkspaceMessageView(APIView):
                 getattr(settings, 'API_URL', 'http://localhost:8000')
             ).rstrip('/')
             data['audio_file'] = f"{backend_url}{msg.audio_file.url}"
+            
+        if msg.attachment:
+            backend_url = (
+                os.environ.get('BACKEND_URL') or
+                os.environ.get('RENDER_EXTERNAL_URL') or
+                getattr(settings, 'API_URL', 'http://localhost:8000')
+            ).rstrip('/')
+            data['attachment'] = f"{backend_url}{msg.attachment.url}"
         
         try:
             async_to_sync(layer.group_send)(

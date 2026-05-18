@@ -49,6 +49,8 @@ class WorkspaceMessage(models.Model):
     shared_assignment = models.ForeignKey('assignments.Assignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='workspace_shares')
     audio_file = models.FileField(upload_to='workspace_audio/', null=True, blank=True)
     audio_data = models.TextField(null=True, blank=True)  # base64 data URI for AI voice notes
+    attachment = models.FileField(upload_to='workspace_attachments/', null=True, blank=True)
+    attachment_type = models.CharField(max_length=20, null=True, blank=True) # 'image', 'video', 'document'
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
 
