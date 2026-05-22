@@ -66,19 +66,22 @@ jobs:
         run: npm ci
         working-directory: desktop
 
+      - name: Install ImageMagick
+        run: brew install imagemagick
+
       - name: Generate icon.icns from PNG
         run: |
           mkdir -p desktop/assets/icon.iconset
-          sips -z 16 16     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16.png
-          sips -z 32 32     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16@2x.png
-          sips -z 32 32     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32.png
-          sips -z 64 64     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32@2x.png
-          sips -z 128 128   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128.png
-          sips -z 256 256   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128@2x.png
-          sips -z 256 256   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256.png
-          sips -z 512 512   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256@2x.png
-          sips -z 512 512   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_512x512.png
-          sips -z 1024 1024 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_512x512@2x.png
+          magick desktop/assets/icon.png -resize 16x16     desktop/assets/icon.iconset/icon_16x16.png
+          magick desktop/assets/icon.png -resize 32x32     desktop/assets/icon.iconset/icon_16x16@2x.png
+          magick desktop/assets/icon.png -resize 32x32     desktop/assets/icon.iconset/icon_32x32.png
+          magick desktop/assets/icon.png -resize 64x64     desktop/assets/icon.iconset/icon_32x32@2x.png
+          magick desktop/assets/icon.png -resize 128x128   desktop/assets/icon.iconset/icon_128x128.png
+          magick desktop/assets/icon.png -resize 256x256   desktop/assets/icon.iconset/icon_128x128@2x.png
+          magick desktop/assets/icon.png -resize 256x256   desktop/assets/icon.iconset/icon_256x256.png
+          magick desktop/assets/icon.png -resize 512x512   desktop/assets/icon.iconset/icon_256x256@2x.png
+          magick desktop/assets/icon.png -resize 512x512   desktop/assets/icon.iconset/icon_512x512.png
+          magick desktop/assets/icon.png -resize 1024x1024 desktop/assets/icon.iconset/icon_512x512@2x.png
           iconutil -c icns desktop/assets/icon.iconset -o desktop/assets/icon.icns
 
       - name: Build Mac DMG (unsigned)
