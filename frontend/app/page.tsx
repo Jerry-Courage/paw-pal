@@ -34,6 +34,9 @@ function Navbar() {
 
         {/* CTA */}
         <div className="flex items-center gap-3">
+          <Link href="/download" className="hidden sm:block text-sm font-semibold text-slate-400 hover:text-white transition-colors px-3 py-2">
+            Download App
+          </Link>
           <Link href="/login" className="hidden sm:block text-sm font-semibold text-slate-400 hover:text-white transition-colors px-3 py-2">
             Login
           </Link>

@@ -6,7 +6,7 @@ import { signOut, useSession } from 'next-auth/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard, Calendar, BookOpen, Sparkles,
-  Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain
+  Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain, Download
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { groupsApi, workspaceApi } from '@/lib/api'
@@ -117,6 +117,12 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
 
       {/* Bottom */}
       <div className="px-3 py-4 border-t border-white/5 space-y-0.5">
+        <Link
+          href="/download"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all"
+        >
+          <Download className="w-4 h-4" /> Desktop App
+        </Link>
         <Link
           href="/settings"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all"
