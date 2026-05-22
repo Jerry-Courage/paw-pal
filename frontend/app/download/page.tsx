@@ -39,7 +39,7 @@ function getPlatforms(release: any) {
       name: 'Windows',
       icon: Monitor,
       version: 'Windows 10 / 11',
-      url: find('-Setup.exe'),
+      url: find('.exe'),
       ext: '.exe',
       color: 'from-sky-500 to-blue-600',
       shadow: 'shadow-sky-500/20',
