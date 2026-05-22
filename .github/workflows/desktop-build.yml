@@ -1,10 +1,15 @@
-name: Build Desktop App
+name: Build & Release Desktop App
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to release (e.g. v1.0.1)'
+        required: true
+        default: 'v1.0.1'
 
 permissions:
   contents: write
@@ -14,103 +19,157 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
         working-directory: desktop
-      - name: Generate icon.ico
-        shell: bash
+
+      - name: Generate icon.ico from PNG
+        shell: pwsh
         run: |
-          npm install -g png-to-ico
-          png-to-ico desktop/assets/icon.png > desktop/assets/icon.ico
+          # Use PowerShell to convert PNG to ICO if it doesn't already exist
+          if (-not (Test-Path "desktop/assets/icon.ico")) {
+            npm install -g png-to-ico 2>$null
+            png-to-ico desktop/assets/icon.png > desktop/assets/icon.ico
+          }
+
       - name: Build Windows installer
         run: npm run build:win
         working-directory: desktop
-      - name: Upload artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: flowstate-windows
           path: desktop/dist/*.exe
+          if-no-files-found: error
 
   build-mac:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
         working-directory: desktop
-      - name: Generate icon.icns
+
+      - name: Generate icon.icns from PNG
         run: |
           mkdir -p desktop/assets/icon.iconset
-          sips -z 16 16   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16.png
-          sips -z 32 32   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16@2x.png
-          sips -z 32 32   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32.png
-          sips -z 64 64   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32@2x.png
-          sips -z 128 128 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128.png
-          sips -z 256 256 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128@2x.png
-          sips -z 256 256 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256.png
-          sips -z 512 512 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256@2x.png
-          sips -z 512 512 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_512x512.png
+          sips -z 16 16     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16.png
+          sips -z 32 32     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32.png
+          sips -z 64 64     desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128.png
+          sips -z 256 256   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256.png
+          sips -z 512 512   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_512x512.png
+          sips -z 1024 1024 desktop/assets/icon.png --out desktop/assets/icon.iconset/icon_512x512@2x.png
           iconutil -c icns desktop/assets/icon.iconset -o desktop/assets/icon.icns
-      - name: Build Mac DMG
+
+      - name: Build Mac DMG (unsigned)
         run: npm run build:mac
         working-directory: desktop
-      - name: Upload artifact
+        env:
+          # Skip notarization — unsigned build for now
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: flowstate-mac
           path: desktop/dist/*.dmg
+          if-no-files-found: error
 
   build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
         working-directory: desktop
+
       - name: Build Linux AppImage
         run: npm run build:linux
         working-directory: desktop
-      - name: Upload artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: flowstate-linux
           path: desktop/dist/*.AppImage
+          if-no-files-found: error
 
   release:
     needs: [build-windows, build-mac, build-linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Get version tag
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: FlowState ${{ github.ref_name }}
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: FlowState ${{ steps.get_tag.outputs.tag }}
           body: |
-            ## FlowState Desktop ${{ github.ref_name }}
+            ## 🚀 FlowState Desktop ${{ steps.get_tag.outputs.tag }}
 
-            Download the installer for your platform below.
+            The FlowState desktop app — study smarter, natively.
 
-            | Platform | File |
-            |----------|------|
-            | Windows | `FlowState-Setup.exe` |
-            | macOS | `FlowState.dmg` |
-            | Linux | `FlowState.AppImage` |
+            ### Download for your platform:
+
+            | Platform | File | Requirements |
+            |----------|------|--------------|
+            | 🪟 Windows | `*-Setup.exe` | Windows 10 / 11 (64-bit) |
+            | 🍎 macOS | `*.dmg` | macOS 11+ (Intel & Apple Silicon) |
+            | 🐧 Linux | `*.AppImage` | Ubuntu, Fedora & more |
+
+            > **macOS users:** Right-click the app → Open if you see a security warning (app is unsigned).
+
           files: |
             artifacts/flowstate-windows/*.exe
             artifacts/flowstate-mac/*.dmg
             artifacts/flowstate-linux/*.AppImage
           token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
