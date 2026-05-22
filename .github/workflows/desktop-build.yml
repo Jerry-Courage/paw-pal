@@ -33,11 +33,10 @@ jobs:
       - name: Generate icon.ico from PNG
         shell: pwsh
         run: |
-          # Use PowerShell to convert PNG to ICO if it doesn't already exist
-          if (-not (Test-Path "desktop/assets/icon.ico")) {
-            npm install -g png-to-ico 2>$null
-            png-to-ico desktop/assets/icon.png > desktop/assets/icon.ico
-          }
+          # Use ImageMagick (pre-installed on GitHub runners) to convert PNG -> ICO
+          magick convert desktop/assets/icon.png `
+            -define icon:auto-resize=256,128,64,48,32,16 `
+            desktop/assets/icon.ico
 
       - name: Build Windows installer
         run: npm run build:win
