@@ -41,8 +41,7 @@ import {
   Copy as CopyIcon,
   Pin as PinIcon,
   Paperclip,
-  Video,
-  X
+  Video
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
