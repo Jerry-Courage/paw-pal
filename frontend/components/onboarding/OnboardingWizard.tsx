@@ -61,18 +61,18 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
   const toggleGoal = (g: string) =>
     setData(d => ({ ...d, goals: d.goals.includes(g) ? d.goals.filter(x => x !== g) : [...d.goals, g] }))
 
-  const next = async () => {
+  const next = () => {
     if (step === STEPS.length - 2) {
-      await updateProfile.mutateAsync().catch(() => {})
+      updateProfile.mutateAsync().catch(() => {})
     }
     if (step < STEPS.length - 1) setStep(s => s + 1)
   }
 
   const prev = () => { if (step > 0) setStep(s => s - 1) }
 
-  const handleFinish = async () => {
+  const handleFinish = () => {
     localStorage.setItem('nitemind_onboarded', 'true')
-    try { await authApi.updateOnboarding('completed') } catch {}
+    authApi.updateOnboarding('completed').catch(() => {})
     setShowTutorial(true)
   }
 

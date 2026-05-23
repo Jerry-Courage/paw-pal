@@ -233,6 +233,8 @@ else:
         'http://127.0.0.1:5000',
         'http://localhost:5002',
         'http://127.0.0.1:5002',
+        'https://flowstate.college',
+        'https://www.flowstate.college',
     ]
     CORS_ALLOW_ALL_ORIGINS = DEBUG
     CORS_URLS_REGEX = r'^/api/.*$|/media/.*$'

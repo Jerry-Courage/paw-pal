@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, X, Zap, Sparkles, BookOpen, Users, Brain, MousePointer2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import axios from 'axios'
+import { authApi } from '@/lib/api'
 
 interface Feature {
   icon: any
@@ -53,13 +53,14 @@ export default function VideoTutorialModal({ isOpen, onClose }: Props) {
   // Fetch config from backend
   useEffect(() => {
     if (isOpen) {
-      axios.get('/api/users/config/')
+      authApi.getConfig()
         .then((res: any) => {
           setVideoUrl(res.data.tutorial_video_url || 'https://www.youtube.com/embed/dQw4w9WgXcQ')
           setIsLoading(false)
         })
         .catch((err: any) => {
           console.error('Failed to fetch tutorial config:', err)
+          setVideoUrl('https://www.youtube.com/embed/dQw4w9WgXcQ')
           setIsLoading(false)
         })
     }
