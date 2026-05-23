@@ -65,7 +65,7 @@ export default function RichNotesViewer({
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-8 pb-32 text-[#e2e2e2]">
+    <div className="w-full px-5 sm:px-8 pt-8 pb-32 text-[#e2e2e2]">
 
       {/* ── Document title ─────────────────────────────────── */}
       <div className="mb-10 pb-6 border-b border-white/[0.08]">
@@ -128,7 +128,7 @@ export default function RichNotesViewer({
 
             // ── Paragraph ──
             p: ({ children }: any) => (
-              <p className="mb-4 text-[15px] leading-[1.85] text-slate-300 last:mb-0">{children}</p>
+              <p className="mb-4 text-[16px] leading-[1.9] text-slate-300 last:mb-0">{children}</p>
             ),
 
             // ── Bold — key terms highlighted like a textbook ──
@@ -170,7 +170,7 @@ export default function RichNotesViewer({
               <ol className="mb-4 space-y-1.5 pl-0 list-none counter-reset-[item]">{children}</ol>
             ),
             li: ({ children }: any) => (
-              <li className="flex gap-2.5 text-[15px] text-slate-300 leading-[1.8]">
+              <li className="flex gap-2.5 text-[16px] text-slate-300 leading-[1.8]">
                 {/* Solid bullet dot matching accent */}
                 <span className={cn('mt-[0.55em] w-[5px] h-[5px] rounded-full shrink-0 opacity-80',
                   accentText.replace('text-', 'bg-')
@@ -269,7 +269,7 @@ export default function RichNotesViewer({
                 </span>
                 <div className="flex-1 min-w-0">
                   <h2 className={cn(
-                    'text-lg sm:text-xl font-bold text-white leading-snug pb-1.5 border-b-2',
+                    'text-xl sm:text-2xl font-bold text-white leading-snug pb-1.5 border-b-2',
                     accentBorder
                   )}>
                     {cleanTitle(section.title)}
@@ -282,7 +282,7 @@ export default function RichNotesViewer({
               <div className="clearfix">
                 {/* Floating image(s) — first image floats right, rest stack below it */}
                 {images.length > 0 && (
-                  <div className="float-right ml-6 mb-4 space-y-3 w-[42%] max-w-[240px] hidden sm:block">
+                  <div className="float-right ml-6 mb-4 space-y-3 w-[38%] max-w-[280px] hidden sm:block">
                     {images.slice(0, 2).map((img: any, i: number) => {
                       const url = resolveUrl(img.url)
                       if (!url) return null
