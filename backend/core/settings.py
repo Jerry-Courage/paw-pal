@@ -237,11 +237,13 @@ else:
     CORS_ALLOW_ALL_ORIGINS = DEBUG
     CORS_URLS_REGEX = r'^/api/.*$|/media/.*$'
 
-# Allow all *.replit.dev and *.repl.co origins for Replit preview environment
+# Allow all *.replit.dev, *.repl.co, and flowstate.college origins
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https://.*\.replit\.dev$',
     r'^https://.*\.repl\.co$',
     r'^https://.*\.worf\.replit\.dev$',
+    r'^https://(www\.)?flowstate\.college$',
+    r'^https://.*\.onrender\.com$',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -256,6 +258,8 @@ else:
         'http://127.0.0.1:5000',
         'http://localhost:5002',
         'http://127.0.0.1:5002',
+        'https://flowstate.college',
+        'https://www.flowstate.college',
     ]
 
 # ─── Production Security ──────────────────────────────────────────────────────
