@@ -38,7 +38,11 @@ export default function SignupPage() {
     password: '', password2: '', university: '',
   })
 
-  useEffect(() => { if (status === 'authenticated') router.push('/dashboard') }, [status, router])
+  // Only redirect if already authenticated when page loads (e.g. back button after login)
+  // Don't use this to handle post-signup redirect — that's done in handleSubmit directly
+  useEffect(() => {
+    if (status === 'authenticated' && step === 0) router.push('/dashboard')
+  }, [status, router, step])
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -82,8 +86,14 @@ export default function SignupPage() {
         redirect: false,
       })
       if (res?.ok) {
+        // Show success state briefly then redirect immediately
+        // Don't use setTimeout — it races with the useEffect session watcher
+        // and causes the stuck-button bug on slow connections
         setStep(2)
-        setTimeout(() => router.push('/dashboard'), 1800)
+        router.push('/dashboard')
+      } else {
+        toast.error('Account created but sign-in failed. Please log in.')
+        router.push('/login')
       }
     } catch (err: any) {
       const data = err.response?.data

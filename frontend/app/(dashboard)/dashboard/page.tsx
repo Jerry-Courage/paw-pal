@@ -56,9 +56,12 @@ export default function DashboardPage() {
   const activeSession = sessions.find((s: any) => s.status === 'active' || s.status === 'scheduled')
 
   const studyStreak  = profileData?.study_streak ?? 0
+  // total_study_time is lifetime hours — use it for the Focus stat display
   const studyTime    = profileData?.total_study_time ?? 0
-  const weeklyGoal   = profileData?.weekly_goal_hours ?? 10
-  const weeklyPct    = Math.min(100, Math.round((studyTime / weeklyGoal) * 100))
+  // Weekly progress comes from analytics (week_hours vs goal_hours), NOT lifetime total
+  const weekHours    = analyticsData?.week_hours ?? 0
+  const weeklyGoal   = analyticsData?.goal_hours ?? profileData?.weekly_goal_hours ?? 10
+  const weeklyPct    = Math.min(100, Math.round((weekHours / Math.max(weeklyGoal, 1)) * 100))
 
   const quickActions = [
     {
@@ -122,7 +125,9 @@ export default function DashboardPage() {
                     style={{ width: `${weeklyPct}%` }}
                   />
                 </div>
-                <span className="text-xs text-slate-600 font-medium">{weeklyPct}% of weekly goal</span>
+                <span className="text-xs text-slate-600 font-medium">
+                  {weekHours}h / {weeklyGoal}h this week
+                </span>
               </div>
             )}
           </div>
