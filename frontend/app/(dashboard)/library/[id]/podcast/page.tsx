@@ -12,6 +12,7 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 const VOICES_A = ['Ava', 'Christopher', 'Brian', 'Guy']
 const VOICES_B = ['Andrew', 'Emma', 'Jenny', 'Aria']
@@ -24,6 +25,7 @@ const SPEAKER_COLORS: Record<string, string> = {
 
 export default function PodcastPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
+  useStudyTimer(true)
 
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],

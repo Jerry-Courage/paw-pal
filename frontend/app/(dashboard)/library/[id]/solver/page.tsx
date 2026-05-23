@@ -14,6 +14,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 interface MathStep {
   label: string
@@ -59,6 +60,7 @@ function KatexDisplay({ formula }: { formula: string }) {
 
 export default function SolverPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
+  useStudyTimer(true)
   const [problem, setProblem] = useState('')
   const [image, setImage] = useState<string | null>(null)
   const [solving, setSolving] = useState(false)

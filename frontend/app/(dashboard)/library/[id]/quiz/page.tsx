@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 
@@ -66,6 +67,7 @@ function normalizeQuestion(q: any): MCQQuestion | null {
 
 export default function QuizPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
+  useStudyTimer(true)
   const [phase, setPhase] = useState<'loading' | 'config' | 'quiz' | 'results'>('loading')
   const [questions, setQuestions] = useState<MCQQuestion[]>([])
   const [count, setCount] = useState(10)

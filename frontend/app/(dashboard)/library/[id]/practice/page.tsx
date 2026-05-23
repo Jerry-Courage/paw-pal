@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
@@ -30,6 +31,7 @@ const SCORE_BG = (s: number) => s >= 80 ? 'bg-emerald-500' : s >= 60 ? 'bg-sky-5
 
 export default function PracticePage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
+  useStudyTimer(true)
   const [phase, setPhase] = useState<'loading' | 'test' | 'results'>('loading')
   const [questions, setQuestions] = useState<Question[]>([])
   const [current, setCurrent] = useState(0)

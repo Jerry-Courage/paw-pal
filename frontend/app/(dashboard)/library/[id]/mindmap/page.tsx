@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import NeuralMindMap from '@/components/library/NeuralMindMap'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 interface MindMapData {
   center: string
@@ -16,6 +17,7 @@ interface MindMapData {
 
 export default function MindMapPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
+  useStudyTimer(true)
   const [mapData, setMapData] = useState<MindMapData | null>(null)
   const [loading, setLoading] = useState(true)
 

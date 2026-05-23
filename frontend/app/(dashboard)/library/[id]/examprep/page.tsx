@@ -12,6 +12,7 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Technique = 'feynman' | 'active_recall' | 'socratic' | 'free_chat'
@@ -144,6 +145,7 @@ function base64ToPcmFloat(b64: string): Float32Array {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
+  useStudyTimer(true)
   const [phase, setPhase] = useState<Phase>('setup')
   const [technique, setTechnique] = useState<Technique>('feynman')
   const [voice, setVoice] = useState<string>('') // empty = auto-select by technique

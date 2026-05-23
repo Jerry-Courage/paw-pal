@@ -10,6 +10,7 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 interface Flashcard {
   id: number
@@ -21,6 +22,7 @@ interface Flashcard {
 export default function FlashcardsPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   const qc = useQueryClient()
+  useStudyTimer(true)
 
   const [phase, setPhase] = useState<'loading' | 'review' | 'results' | 'generating'>('loading')
   const [cards, setCards] = useState<Flashcard[]>([])

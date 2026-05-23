@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useRef } from 'react'
 import { aiApi } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
 const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGeneratorModal'), { ssr: false })
@@ -155,6 +156,9 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const [showMusic, setShowMusic] = useState(false)
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const qc = useQueryClient()
+
+  // Track time spent studying this resource — logs to /auth/log-study/ on leave
+  useStudyTimer(true)
 
   const { data: resource, isLoading, refetch } = useQuery({
     queryKey: ['resource', id],
