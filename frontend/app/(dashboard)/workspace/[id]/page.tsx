@@ -1210,6 +1210,7 @@ function MessageBubble({
   const [editText, setEditText] = useState(message.content)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
 
@@ -1423,7 +1424,12 @@ function MessageBubble({
                   {message.attachment_type === 'video' ? (
                     <video src={message.attachment} controls className="w-full h-auto max-h-[300px] object-contain bg-black/40" />
                   ) : (
-                    <img src={message.attachment} alt="Attachment" className="w-full h-auto max-h-[300px] object-contain bg-black/40 cursor-zoom-in" onClick={() => window.open(message.attachment, '_blank')} />
+                    <img
+                      src={message.attachment}
+                      alt="Attachment"
+                      className="w-full h-auto max-h-[300px] object-contain bg-black/40 cursor-zoom-in active:scale-95 transition-transform"
+                      onClick={() => setLightboxUrl(message.attachment)}
+                    />
                   )}
                 </div>
               )}
@@ -1539,6 +1545,38 @@ function MessageBubble({
           )}
         </div>
       </div>
+
+      {/* ── Image Lightbox ── */}
+      <AnimatePresence>
+        {lightboxUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setLightboxUrl(null)}
+          >
+            {/* Close button */}
+            <button
+              className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all z-10"
+              onClick={() => setLightboxUrl(null)}
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+            {/* Image */}
+            <motion.img
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              src={lightboxUrl}
+              alt="Full size"
+              className="max-w-full max-h-[90vh] rounded-2xl object-contain shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
