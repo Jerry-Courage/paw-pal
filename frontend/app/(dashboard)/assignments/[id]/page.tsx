@@ -151,8 +151,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#0d0d0d] z-50">
-      <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-50 shrink-0">
+    <div className="fixed inset-0 flex flex-col bg-[#0d0d0d] z-50 pt-14">
+      <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-40 shrink-0">
         <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-2 md:gap-6 min-w-0">
           <Link href="/assignments" className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white shrink-0">

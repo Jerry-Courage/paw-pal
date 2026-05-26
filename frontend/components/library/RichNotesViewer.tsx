@@ -57,6 +57,21 @@ export default function RichNotesViewer({
       .trim()
   }
 
+  // Normalize all math notation to KaTeX-compatible delimiters
+  const normalizeMath = (text: string) => {
+    if (!text) return ''
+    return text
+      // Block math: \[...\] → $$...$$
+      .replace(/\\\[([\s\S]*?)\\\]/g, (_: string, m: string) => `\n$$\n${m.trim()}\n$$\n`)
+      // Inline math: \(...\) → $...$
+      .replace(/\\\(([\s\S]*?)\\\)/g, (_: string, m: string) => `$${m.trim()}$`)
+      // Already-correct $$ blocks — leave alone
+      // Single $ that aren't already delimiters — leave alone (handled by remarkMath)
+      // Common bare formula patterns: wrap in $ if not already wrapped
+      // e.g. "= 2x + 3" at start of line after a colon
+      .replace(/(?<=:\s{0,3})((?:[A-Za-z]\s*[=<>≤≥±∓×÷∑∏∫√∞∂∇][^.\n]{2,60}))/g, (_: string, m: string) => `$${m.trim()}$`)
+  }
+
   const resolveUrl = (url: string) => {
     if (!url) return ''
     if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http')) return url
@@ -315,7 +330,7 @@ export default function RichNotesViewer({
                   rehypePlugins={[rehypeKatex]}
                   components={md}
                 >
-                  {cleanContent(section.content)}
+                  {normalizeMath(cleanContent(section.content))}
                 </ReactMarkdown>
 
                 {/* Mobile images — shown below text on small screens */}

@@ -147,10 +147,10 @@ export default function SignupPage() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 mb-8 w-fit">
             <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 bg-[#1a1a1a]">
-              <img src="/images/logo-pwa.png" alt="NITE Mind" className="w-full h-full object-cover" />
+              <img src="/images/logo-pwa.png" alt="FlowState" className="w-full h-full object-cover" />
             </div>
             <span className="text-lg font-black text-white tracking-tight">
-              NITE <span className="text-orange-500">Mind</span>
+              Flow<span className="text-orange-500">State</span>
             </span>
           </Link>
 
