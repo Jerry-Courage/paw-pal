@@ -25,7 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (status !== 'authenticated' || !session) return
     
-    const onboardedLocal = localStorage.getItem('nitemind_onboarded') === 'true'
+    const onboardedLocal = localStorage.getItem('flowstate_onboarded') === 'true'
     const onboardedServer = (session.user as any).onboarded
 
     if (!onboardedLocal && !onboardedServer) {

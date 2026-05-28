@@ -71,9 +71,10 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
   const prev = () => { if (step > 0) setStep(s => s - 1) }
 
   const handleFinish = () => {
-    localStorage.setItem('nitemind_onboarded', 'true')
+    localStorage.setItem('flowstate_onboarded', 'true')
     authApi.updateOnboarding('completed').catch(() => {})
-    setShowTutorial(true)
+    onComplete()
+    router.push('/dashboard')
   }
 
   const isLast = step === STEPS.length - 1
