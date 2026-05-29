@@ -340,8 +340,10 @@ export const workspaceApi = {
 // Payments
 export const paymentsApi = {
   getStatus: () => api.get('/payments/status/'),
-  initialize: (callback_url?: string) => api.post('/payments/initialize/', { callback_url }),
+  initialize: (callback_url?: string, promo_code?: string) =>
+    api.post('/payments/initialize/', { callback_url, promo_code }),
   verify: (reference: string) => api.get(`/payments/verify/?reference=${reference}`),
+  applyPromo: (code: string) => api.post('/payments/promo/', { code }),
 }
   getDueCards: () => api.get('/library/flashcards/due/'),
   reviewCard: (id: number, quality: number) =>
