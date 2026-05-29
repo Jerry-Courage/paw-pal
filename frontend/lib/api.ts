@@ -337,7 +337,12 @@ export const workspaceApi = {
   updateBlock: (id: number, data: any) => api.patch(`/workspace/workspaces/${id}/blocks/${data.block_id || data.id}/`, data),
 }
 
-export const spacedRepetitionApi = {
+// Payments
+export const paymentsApi = {
+  getStatus: () => api.get('/payments/status/'),
+  initialize: (callback_url?: string) => api.post('/payments/initialize/', { callback_url }),
+  verify: (reference: string) => api.get(`/payments/verify/?reference=${reference}`),
+}
   getDueCards: () => api.get('/library/flashcards/due/'),
   reviewCard: (id: number, quality: number) =>
     api.post(`/library/flashcards/${id}/review/`, { quality }),

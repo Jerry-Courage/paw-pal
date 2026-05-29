@@ -94,6 +94,19 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                 return Response({'error': f'File type {ext} not allowed.'}, status=status.HTTP_400_BAD_REQUEST)
             if uploaded_file.size > MAX_FILE_SIZE:
                 return Response({'error': 'File too large. Maximum 50MB.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Freemium gate ────────────────────────────────────────
+        user = request.user
+        if not user.has_active_subscription:
+            notes_used = user.resources.count()
+            if notes_used >= user.FREE_NOTES_LIMIT:
+                return Response({
+                    'error': 'free_limit_reached',
+                    'message': f'You have used all {user.FREE_NOTES_LIMIT} free study kits. Upgrade to Premium for unlimited access.',
+                    'notes_used': notes_used,
+                    'notes_limit': user.FREE_NOTES_LIMIT,
+                }, status=status.HTTP_402_PAYMENT_REQUIRED)
+
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):

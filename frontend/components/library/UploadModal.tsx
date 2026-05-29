@@ -2,16 +2,19 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { libraryApi, API_BASE, getAuthToken } from '@/lib/api'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { libraryApi, paymentsApi, API_BASE, getAuthToken } from '@/lib/api'
 import {
   X, Upload, FileText, Youtube, Code, Presentation, Plus, Loader2,
   Sparkles, CheckCircle2, Brain, HelpCircle, Map,
   Wand2, Radio, ArrowLeft, Check, Headphones,
-  FlaskConical, Layers, Link2, Mic, BookOpen, Calculator
+  FlaskConical, Layers, Link2, Mic, BookOpen, Calculator, Lock
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 const TYPES = [
   { id: 'pdf', label: 'PDF/Word', sub: 'Textbooks, notes', icon: FileText, color: 'text-rose-500 bg-rose-500/10' },
@@ -46,8 +49,18 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState({ progress: 0, text: 'Preparing ingestion...' })
   const [resourceId, setResourceId] = useState<number | null>(null)
+  const [showPaywall, setShowPaywall] = useState(false)
 
   const qc = useQueryClient()
+
+  // Fetch subscription / usage status
+  const { data: subStatus, refetch: refetchSub } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 30000,
+  })
+
+  const atLimit = subStatus?.at_limit === true
 
   const toggleFeature = (id: string) => {
     if (id === 'notes') return
@@ -94,10 +107,15 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
       if (id) { setResourceId(id); setStage('building') }
       else { toast.success('Resource uploaded!'); onClose() }
     },
-    onError: () => {
+    onError: (err: any) => {
       setStage('idle')
       setUploadProgress(0)
-      toast.error('Upload failed. Please try a smaller file.')
+      // Backend freemium gate returns 402
+      if (err?.response?.status === 402) {
+        setShowPaywall(true)
+      } else {
+        toast.error('Upload failed. Please try a smaller file.')
+      }
     },
   })
 
@@ -127,6 +145,8 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
     if (!title) { toast.error('Please add a title.'); return }
     if (type !== 'video' && !file) { toast.error('Please select a file.'); return }
     if (type === 'video' && !url) { toast.error('Please provide a YouTube URL.'); return }
+    // Check free limit before proceeding to features step
+    if (atLimit) { setShowPaywall(true); return }
     setStep('features')
   }
 
@@ -276,6 +296,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
 
   // ── STEP 1: Upload modal ──────────────────────────────────────────
   return (
+    <>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-in fade-in duration-200">
       <div className="bg-[#111] rounded-t-[1.5rem] sm:rounded-2xl w-full max-w-lg shadow-2xl border border-white/8 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
 
@@ -285,9 +306,23 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
             <h2 className="text-base font-black text-white">Please upload your file</h2>
             <p className="text-xs text-slate-500 mt-0.5">We will turn your file into insane study material</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Free usage indicator */}
+            {subStatus && !subStatus.is_premium && (
+              <div className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border',
+                atLimit
+                  ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                  : 'bg-white/5 border-white/8 text-slate-400'
+              )}>
+                {atLimit ? <Lock className="w-3 h-3" /> : <Sparkles className="w-3 h-3 text-orange-400" />}
+                {atLimit ? 'Limit reached' : `${subStatus.notes_used}/${subStatus.notes_limit} free`}
+              </div>
+            )}
+            <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-5 overflow-y-auto flex-1 scrollbar-hide">
@@ -394,12 +429,33 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
           </button>
           <button
             onClick={handleNext}
-            className="px-8 py-2.5 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-95 transition-all shadow-lg shadow-orange-500/20"
+            className={cn(
+              "px-8 py-2.5 rounded-xl text-white font-black text-sm active:scale-95 transition-all shadow-lg",
+              atLimit
+                ? "bg-slate-700 hover:bg-slate-600 shadow-none"
+                : "bg-orange-500 hover:bg-orange-400 shadow-orange-500/20"
+            )}
           >
-            Next
+            {atLimit ? <><Lock className="w-3.5 h-3.5 inline mr-1.5" />Upgrade to Continue</> : 'Next'}
           </button>
         </div>
       </div>
     </div>
+
+    {/* Paywall modal — rendered outside the upload modal stack */}
+    {showPaywall && subStatus && (
+      <PaywallModal
+        notesUsed={subStatus.notes_used}
+        notesLimit={subStatus.notes_limit}
+        onClose={() => setShowPaywall(false)}
+        onSuccess={() => {
+          refetchSub()
+          setShowPaywall(false)
+          // Let them continue to features step after upgrade
+          setStep('features')
+        }}
+      />
+    )}
+  </>
   )
 }

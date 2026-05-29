@@ -7,12 +7,12 @@ import { ArrowLeft, ArrowRight, RotateCcw, ThumbsUp, ThumbsDown, Sparkles, BookO
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { useStudyTracker } from '@/hooks/useStudyTracker'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 type ReviewMode = 'all' | 'due' | 'decks' | 'deck-review'
 
 export default function FlashcardReviewPage() {
-  useStudyTracker(30) // track time spent reviewing flashcards
+  useStudyTimer(true) // track time spent reviewing flashcards
   const [current, setCurrent] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [results, setResults] = useState<Record<number, 'know' | 'skip'>>({})

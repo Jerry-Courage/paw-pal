@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'community',
     'assignments',
     'workspace',
+    'payments',
     'storages',
     'django_q',
     'pgvector',

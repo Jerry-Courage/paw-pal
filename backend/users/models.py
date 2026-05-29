@@ -13,14 +13,38 @@ class User(AbstractUser):
     total_study_time = models.FloatField(default=0)  # hours
     weekly_goal_hours = models.FloatField(default=10)
     last_study_date = models.DateField(null=True, blank=True)
-    onboarding_status = models.JSONField(default=dict, blank=True) # Tracks which tours are seen
+    onboarding_status = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # ── Subscription / Freemium ──────────────────────────────
+    is_premium = models.BooleanField(default=False, db_index=True)
+    subscription_expires_at = models.DateTimeField(null=True, blank=True)
+    paystack_customer_code = models.CharField(max_length=100, blank=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
     def __str__(self):
         return self.email
+
+    @property
+    def has_active_subscription(self) -> bool:
+        """True if user is premium and subscription hasn't expired."""
+        if not self.is_premium:
+            return False
+        if self.subscription_expires_at and self.subscription_expires_at < timezone.now():
+            # Expired — auto-downgrade
+            self.is_premium = False
+            self.save(update_fields=['is_premium'])
+            return False
+        return True
+
+    @property
+    def notes_used(self) -> int:
+        """Count of resources this user has generated (for free tier limit)."""
+        return self.resources.count()
+
+    FREE_NOTES_LIMIT = 5
 
     def validate_streak(self):
         """Reset streak if last study date is too old. Called on user login/fetch."""

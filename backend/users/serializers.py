@@ -26,13 +26,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
+    is_premium = serializers.SerializerMethodField()
+    notes_used = serializers.SerializerMethodField()
+    notes_limit = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'id', 'email', 'username', 'first_name', 'last_name',
             'avatar_url', 'bio', 'university', 'study_streak',
-            'total_study_time', 'weekly_goal_hours', 'onboarding_status', 'created_at'
+            'total_study_time', 'weekly_goal_hours', 'onboarding_status',
+            'created_at', 'is_premium', 'notes_used', 'notes_limit',
         )
         read_only_fields = ('id', 'email', 'study_streak', 'total_study_time', 'created_at')
 
@@ -41,6 +45,15 @@ class UserSerializer(serializers.ModelSerializer):
         if obj.avatar and request:
             return request.build_absolute_uri(obj.avatar.url)
         return None
+
+    def get_is_premium(self, obj):
+        return obj.has_active_subscription
+
+    def get_notes_used(self, obj):
+        return obj.resources.count()
+
+    def get_notes_limit(self, obj):
+        return obj.FREE_NOTES_LIMIT
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
