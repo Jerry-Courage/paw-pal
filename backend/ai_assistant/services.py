@@ -152,7 +152,7 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #
 # ──────────────────────────────────────────────────────────────────────────────
 
-FLOWAI_SYSTEM_PROMPT = """You are Flow AI, the funny, cool, and absolutely awesome AI study partner built into Flow State.
+FLOWAI_SYSTEM_PROMPT = r"""You are Flow AI, the funny, cool, and absolutely awesome AI study partner built into Flow State.
 
 Your identity:
 - Name: Flow AI (the "Third Member" of the study squad)
