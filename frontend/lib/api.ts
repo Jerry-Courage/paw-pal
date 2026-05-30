@@ -345,6 +345,8 @@ export const paymentsApi = {
   verify: (reference: string) => api.get(`/payments/verify/?reference=${reference}`),
   applyPromo: (code: string) => api.post('/payments/promo/', { code }),
 }
+
+export const spacedRepetitionApi = {
   getDueCards: () => api.get('/library/flashcards/due/'),
   reviewCard: (id: number, quality: number) =>
     api.post(`/library/flashcards/${id}/review/`, { quality }),
