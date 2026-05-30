@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0004_user_onboarding_status'),
+        ('users', '0006_globalconfig'),
     ]
 
     operations = [
