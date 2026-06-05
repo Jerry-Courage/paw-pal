@@ -25,7 +25,7 @@ export interface PriceInfo {
 // Amounts chosen to feel like natural local pricing around ~$0.99 USD
 const COUNTRY_PRICE_MAP: Record<string, { currency: string; symbol: string; amount: number }> = {
   // West Africa
-  GH: { currency: 'GHS', symbol: '₵',  amount: 14.99 },
+  GH: { currency: 'GHS', symbol: '₵',  amount: 10.00 },
   NG: { currency: 'NGN', symbol: '₦',  amount: 1499  },
   SN: { currency: 'XOF', symbol: 'CFA', amount: 599  },
   CI: { currency: 'XOF', symbol: 'CFA', amount: 599  },
