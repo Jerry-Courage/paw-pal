@@ -3,19 +3,26 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { plannerApi, libraryApi, aiApi, authApi, workspaceApi } from '@/lib/api'
+import { plannerApi, libraryApi, aiApi, authApi, workspaceApi, paymentsApi } from '@/lib/api'
 import {
   Upload, Sparkles, Clock, Flame, ArrowRight, Play,
   BookOpen, Brain, Target, BarChart2, Zap, Pencil,
   Check, Headphones, LayoutGrid, FileText, TrendingUp,
-  Layers, Plus
+  Layers, Plus, Crown, X
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+import { usePricing } from '@/hooks/usePricing'
+
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 export default function DashboardPage() {
   const { data: session } = useSession()
   const name = session?.user?.name?.split(' ')[0] || 'there'
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [nudgeDismissed, setNudgeDismissed] = useState(false)
+  const { priceInfo } = usePricing()
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -48,6 +55,18 @@ export default function DashboardPage() {
     queryFn: () => workspaceApi.getAll().then(r => r.data),
     staleTime: 30000,
   })
+
+  const { data: subStatus, refetch: refetchSub } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 60000,
+  })
+
+  const isPremium = subStatus?.is_premium ?? false
+  const notesUsed = subStatus?.notes_used ?? 0
+  const notesLimit = subStatus?.notes_limit ?? 5
+  const notesRemaining = subStatus?.notes_remaining ?? notesLimit
+  const showUpgradeNudge = !isPremium && notesUsed >= Math.ceil(notesLimit * 0.4) && !nudgeDismissed
 
   const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
   const totalUnread = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
@@ -101,6 +120,45 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-0 space-y-6">
+
+      {/* ── Premium upgrade nudge ─────────────────────────── */}
+      {showUpgradeNudge && (
+        <div className="relative flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-orange-500/12 to-amber-500/8 border border-orange-500/20">
+          <div className="w-9 h-9 shrink-0 rounded-xl bg-orange-500/15 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-orange-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-white">
+              {notesRemaining === 0
+                ? "You've used all your free study kits"
+                : `${notesRemaining} free kit${notesRemaining !== 1 ? 's' : ''} remaining`}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Unlock <span className="text-white font-bold">unlimited kits, podcasts, AI tutor & voice prep</span> for just {priceInfo.displayShort}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowPaywall(true)}
+            className="shrink-0 flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 active:scale-95"
+          >
+            <Zap className="w-3.5 h-3.5" /> Upgrade
+          </button>
+          <button
+            onClick={() => setNudgeDismissed(true)}
+            className="absolute top-2 right-2 p-1 text-slate-600 hover:text-slate-400 transition-colors"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Premium badge ─────────────────────────────────── */}
+      {isPremium && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500/8 border border-orange-500/15 w-fit">
+          <Crown className="w-3.5 h-3.5 text-orange-400" />
+          <span className="text-xs font-black text-orange-400">Premium Active — unlimited study kits & AI tools</span>
+        </div>
+      )}
 
       {/* ── Hero greeting ─────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl bg-[#111] border border-white/[0.05] p-6 md:p-8">
@@ -261,6 +319,16 @@ export default function DashboardPage() {
           <AIMastery analytics={analyticsData} />
         </div>
       </div>
+
+      {/* Paywall modal */}
+      {showPaywall && subStatus && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          notesUsed={notesUsed}
+          notesLimit={notesLimit}
+          onSuccess={() => { refetchSub(); setShowPaywall(false); setNudgeDismissed(true) }}
+        />
+      )}
     </div>
   )
 }

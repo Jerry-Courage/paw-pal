@@ -1,15 +1,20 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard, Calendar, BookOpen, Sparkles,
-  Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain, Download
+  Settings, LogOut, FileText, LayoutGrid, ChevronLeft, Brain, Download, Zap, Crown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { groupsApi, workspaceApi } from '@/lib/api'
+import { groupsApi, workspaceApi, paymentsApi } from '@/lib/api'
+import { usePricing } from '@/hooks/usePricing'
+import dynamic from 'next/dynamic'
+
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 interface SidebarProps {
   onToggle?: () => void
@@ -31,6 +36,7 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const qc = useQueryClient()
+  const [showPaywall, setShowPaywall] = useState(false)
 
   const { data } = useQuery({
     queryKey: ['groups'],
@@ -41,10 +47,22 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
   const { data: workspacesData } = useQuery({
     queryKey: ['workspaces'],
     queryFn: () => workspaceApi.getAll().then(r => r.data),
-    refetchInterval: 30000, // Sync every 30s
+    refetchInterval: 30000,
   })
   const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
   const totalUnreadWorkspaces = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
+
+  const { data: subStatus, refetch: refetchSub } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 60000,
+  })
+
+  const { priceInfo } = usePricing()
+  const isPremium = subStatus?.is_premium ?? false
+  const notesUsed = subStatus?.notes_used ?? 0
+  const notesLimit = subStatus?.notes_limit ?? 5
+  const notesRemaining = subStatus?.notes_remaining ?? notesLimit
 
   return (
     <aside className="w-64 bg-[#111] border-r border-white/5 flex flex-col h-full flex-shrink-0 relative overflow-hidden">
@@ -117,6 +135,51 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
 
       {/* Bottom */}
       <div className="px-3 py-4 border-t border-white/5 space-y-0.5">
+
+        {/* Premium upgrade card for free users */}
+        {!isPremium && subStatus && (
+          <div className="mb-3 p-3.5 rounded-2xl bg-gradient-to-br from-orange-500/10 to-amber-500/5 border border-orange-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+              <span className="text-xs font-black text-white">Go Premium</span>
+            </div>
+            {/* Usage bar */}
+            <div className="flex gap-1 mb-2">
+              {Array.from({ length: notesLimit }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'h-1 rounded-full flex-1 transition-all',
+                    i < notesUsed
+                      ? notesUsed >= notesLimit ? 'bg-red-500' : 'bg-orange-500'
+                      : 'bg-white/10'
+                  )}
+                />
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 mb-3 leading-relaxed">
+              {notesRemaining > 0
+                ? <><span className="text-white font-bold">{notesRemaining} kit{notesRemaining !== 1 ? 's' : ''}</span> left — unlock unlimited for {priceInfo.displayShort}</>
+                : <>Limit reached — upgrade for <span className="text-orange-400 font-bold">{priceInfo.displayShort}</span> to keep going</>
+              }
+            </p>
+            <button
+              onClick={() => setShowPaywall(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-xs font-black transition-all shadow-lg shadow-orange-500/20 active:scale-95"
+            >
+              <Zap className="w-3 h-3" /> Upgrade — {priceInfo.displayShort}
+            </button>
+          </div>
+        )}
+
+        {/* Premium badge for premium users */}
+        {isPremium && (
+          <div className="mb-2 px-3 py-2.5 rounded-xl flex items-center gap-2 bg-orange-500/8 border border-orange-500/15">
+            <Crown className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+            <span className="text-xs font-black text-orange-400">Premium Active</span>
+          </div>
+        )}
+
         <Link
           href="/download"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all"
@@ -136,6 +199,16 @@ export default function Sidebar({ onToggle, isOpen = true }: SidebarProps) {
           <LogOut className="w-4 h-4" /> Log out
         </button>
       </div>
+
+      {/* Paywall modal */}
+      {showPaywall && subStatus && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          notesUsed={notesUsed}
+          notesLimit={notesLimit}
+          onSuccess={() => { refetchSub(); setShowPaywall(false) }}
+        />
+      )}
     </aside>
   )
 }
