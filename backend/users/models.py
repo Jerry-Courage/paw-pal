@@ -20,6 +20,10 @@ class User(AbstractUser):
     is_premium = models.BooleanField(default=False, db_index=True)
     subscription_expires_at = models.DateTimeField(null=True, blank=True)
     paystack_customer_code = models.CharField(max_length=100, blank=True)
+    total_resources_created = models.PositiveIntegerField(
+        default=0,
+        help_text='Lifetime count of resources created. Never decremented on delete — used for free tier gating.'
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -41,8 +45,8 @@ class User(AbstractUser):
 
     @property
     def notes_used(self) -> int:
-        """Count of resources this user has generated (for free tier limit)."""
-        return self.resources.count()
+        """Lifetime count of resources created. Never decrements on delete."""
+        return self.total_resources_created
 
     FREE_NOTES_LIMIT = 5
 

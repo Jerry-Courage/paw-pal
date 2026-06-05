@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Count, Q, F
 from django.utils import timezone
 
 from .models import Resource, Flashcard, Quiz, Deck, ResourceImage
@@ -98,7 +98,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         # ── Freemium gate ────────────────────────────────────────
         user = request.user
         if not user.has_active_subscription:
-            notes_used = user.resources.count()
+            notes_used = user.total_resources_created
             if notes_used >= user.FREE_NOTES_LIMIT:
                 return Response({
                     'error': 'free_limit_reached',
@@ -116,6 +116,12 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource = serializer.save(owner=self.request.user)
         resource.file_size = resource.file.size if resource.file else 0
         resource.status_text = "🧬 Synthesis Engine Initializing..."
+
+        # Increment lifetime counter — never decremented on delete
+        user = self.request.user
+        user.__class__.objects.filter(pk=user.pk).update(
+            total_resources_created=models.F('total_resources_created') + 1
+        )
 
         # Auto-detect resource_type for PPTX files
         if resource.file:
@@ -469,7 +475,7 @@ class CloneResourceView(APIView):
         # ── Freemium gate (cloning creates a new resource) ───────
         user = request.user
         if not user.has_active_subscription:
-            notes_used = user.resources.count()
+            notes_used = user.total_resources_created
             if notes_used >= user.FREE_NOTES_LIMIT:
                 return Response({
                     'error': 'free_limit_reached',
@@ -492,6 +498,11 @@ class CloneResourceView(APIView):
             ai_notes_json=source.ai_notes_json,
             ai_concepts=source.ai_concepts,
             has_study_kit=source.has_study_kit,
+        )
+
+        # Increment lifetime counter for the cloning user
+        request.user.__class__.objects.filter(pk=request.user.pk).update(
+            total_resources_created=F('total_resources_created') + 1
         )
 
         # Clone extracted images

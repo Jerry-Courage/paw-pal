@@ -280,7 +280,7 @@ class SubscriptionStatusView(APIView):
 
     def get(self, request):
         user = request.user
-        notes_used = user.resources.count()
+        notes_used = user.total_resources_created
         return Response({
             'is_premium': user.has_active_subscription,
             'notes_used': notes_used,

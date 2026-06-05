@@ -50,7 +50,7 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.has_active_subscription
 
     def get_notes_used(self, obj):
-        return obj.resources.count()
+        return obj.total_resources_created
 
     def get_notes_limit(self, obj):
         return obj.FREE_NOTES_LIMIT
