@@ -283,9 +283,21 @@ function GroupChat({ groupId }: { groupId: number }) {
   })
 
   const sendMutation = useMutation({
-    mutationFn: () => groupsApi.sendMessage(groupId, input),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['group-messages', groupId] }); setInput('') },
+    mutationFn: (text: string) => groupsApi.sendMessage(groupId, text),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['group-messages', groupId] })
+      setInput('')
+    },
+    onError: () => {
+      toast.error('Failed to send message. Please try again.')
+    },
   })
+
+  const handleSend = () => {
+    const text = input.trim()
+    if (!text || sendMutation.isPending) return
+    sendMutation.mutate(text)
+  }
 
   const messages = data?.results || []
 
@@ -324,11 +336,11 @@ function GroupChat({ groupId }: { groupId: number }) {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMutation.mutate()}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Message the group... (mention @FlowAI for AI help)"
             className="input flex-1 text-sm"
           />
-          <button onClick={() => sendMutation.mutate()} disabled={!input.trim() || sendMutation.isPending} className="btn-primary p-2.5">
+          <button onClick={handleSend} disabled={!input.trim() || sendMutation.isPending} className="btn-primary p-2.5">
             <Send className="w-4 h-4" />
           </button>
         </div>
