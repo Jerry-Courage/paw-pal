@@ -466,6 +466,18 @@ class CloneResourceView(APIView):
             if not has_access:
                 return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
+        # ── Freemium gate (cloning creates a new resource) ───────
+        user = request.user
+        if not user.has_active_subscription:
+            notes_used = user.resources.count()
+            if notes_used >= user.FREE_NOTES_LIMIT:
+                return Response({
+                    'error': 'free_limit_reached',
+                    'message': f'You have used all {user.FREE_NOTES_LIMIT} free study kits. Upgrade to Premium for unlimited access.',
+                    'notes_used': notes_used,
+                    'notes_limit': user.FREE_NOTES_LIMIT,
+                }, status=status.HTTP_402_PAYMENT_REQUIRED)
+
         # Clone basic fields
         cloned = Resource.objects.create(
             owner=request.user,

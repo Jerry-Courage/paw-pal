@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { libraryApi, getAuthToken, SERVER_URL } from '@/lib/api'
+import { libraryApi, paymentsApi, getAuthToken, SERVER_URL } from '@/lib/api'
 import {
   Upload, Link2, Mic, Search, Sparkles, Trash2, BookOpen,
   FileText, Video, Code2, Layers, Brain, Zap,
-  Folder, ChevronRight, MoreHorizontal
+  Folder, ChevronRight, MoreHorizontal, X
 } from 'lucide-react'
 import { formatBytes, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -18,6 +18,7 @@ import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 const SUBJECT_FILTERS = [
   'All', 'Biology', 'Physics', 'History', 'Mathematics',
@@ -154,6 +155,8 @@ export default function LibraryPage() {
   const [search, setSearch] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [uploadMode, setUploadMode] = useState<'file' | 'paste' | 'record'>('file')
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [nudgeDismissed, setNudgeDismissed] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; resourceId: number | null; title: string }>({
     isOpen: false, resourceId: null, title: ''
   })
@@ -168,6 +171,18 @@ export default function LibraryPage() {
     queryKey: ['curated-resources'],
     queryFn: () => libraryApi.getCuratedResources().then(r => r.data),
   })
+
+  const { data: subStatus, refetch: refetchSub } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 30000,
+  })
+
+  const isPremium = subStatus?.is_premium ?? false
+  const notesUsed = subStatus?.notes_used ?? 0
+  const notesLimit = subStatus?.notes_limit ?? 5
+  // Show nudge when free user has used 60%+ of their limit and hasn't dismissed it
+  const showNudge = !isPremium && notesUsed >= Math.ceil(notesLimit * 0.6) && !nudgeDismissed
 
   // SSE for real-time processing updates
   useEffect(() => {
@@ -308,6 +323,40 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {/* ── Upgrade nudge banner (free users near limit) ─────── */}
+      {showNudge && (
+        <div className="max-w-2xl mx-auto mb-2 -mt-6">
+          <div className="relative flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-orange-500/15 to-amber-500/10 border border-orange-500/25">
+            <div className="w-9 h-9 shrink-0 rounded-xl bg-orange-500/15 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-orange-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-white">
+                {notesUsed >= notesLimit
+                  ? "You've hit your free limit"
+                  : `${notesLimit - notesUsed} free kit${notesLimit - notesUsed !== 1 ? 's' : ''} left`}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Upgrade to Premium for unlimited kits, faster AI, and more.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowPaywall(true)}
+              className="shrink-0 text-xs font-black px-3 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20"
+            >
+              $0.99/mo
+            </button>
+            <button
+              onClick={() => setNudgeDismissed(true)}
+              className="absolute top-2 right-2 p-1 text-slate-600 hover:text-slate-400 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── My Resources (if any) ─────────────────────────────────── */}
       {myResources.length > 0 && (
         <div className="max-w-6xl mx-auto mb-12">
@@ -398,6 +447,16 @@ export default function LibraryPage() {
           onConfirm={() => confirmModal.resourceId && deleteMutation.mutate(confirmModal.resourceId)}
           onClose={() => setConfirmModal({ isOpen: false, resourceId: null, title: '' })}
           isLoading={deleteMutation.isPending}
+        />
+      )}
+
+      {/* Paywall */}
+      {showPaywall && subStatus && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          notesUsed={notesUsed}
+          notesLimit={notesLimit}
+          onSuccess={() => { refetchSub(); setShowPaywall(false); setNudgeDismissed(true) }}
         />
       )}
     </div>

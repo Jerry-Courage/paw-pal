@@ -200,8 +200,9 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '30/hour',
         'user': '2000/hour',
-        'ai': '300/hour',       # Increased limit for AI endpoints
-        'upload': '200/hour',   # Increased limit for file uploads to fix 429s
+        'ai': '100/hour',           # Free tier AI limit
+        'ai_premium': '600/hour',   # Premium tier gets 6x more AI requests
+        'upload': '200/hour',       # Increased limit for file uploads to fix 429s
     },
 }
 
@@ -409,4 +410,14 @@ Q_CLUSTER = {
     'label': 'Django Q',
     'sync': False,
 }
+
+# Scheduled tasks — run by django-q qcluster
+Q_SCHEDULES = [
+    {
+        'name': 'Premium Expiry Reminders',
+        'func': 'payments.views.send_expiry_reminders',
+        'schedule_type': 'H',   # Hourly — the function itself checks the 3-day window
+        'repeats': -1,          # Run forever
+    },
+]
 # Signal: Forced Reload 2026-04-07

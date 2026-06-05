@@ -49,7 +49,7 @@ class InitializePaymentView(APIView):
                 if PromoRedemption.objects.filter(user=user, promo=promo).exists():
                     return Response({'error': 'You have already used this promo code.'}, status=400)
 
-                # Apply promo — grant free days directly
+                # Apply promo — grant free days or percent discount
                 if promo.discount_type == 'free_days':
                     _activate_premium(user, days=promo.discount_value)
                     PromoRedemption.objects.create(user=user, promo=promo)
@@ -61,6 +61,57 @@ class InitializePaymentView(APIView):
                         'is_premium': True,
                         'expires_at': user.subscription_expires_at.isoformat(),
                     })
+                elif promo.discount_type == 'percent_off':
+                    # percent_off: reduce the charge amount and proceed to Paystack
+                    discount_pct = min(promo.discount_value, 100)
+                    discounted_cents = max(1, int(PLAN_PRICE_CENTS * (1 - discount_pct / 100)))
+                    PromoRedemption.objects.create(user=user, promo=promo)
+                    promo.times_used += 1
+                    promo.save(update_fields=['times_used'])
+                    # Fall through to Paystack with discounted amount
+                    callback_url = request.data.get(
+                        'callback_url',
+                        f"{os.environ.get('FRONTEND_URL', 'https://flowstate-frontend-7irq.onrender.com')}/dashboard?payment=success"
+                    )
+                    payload = {
+                        'email': user.email,
+                        'amount': discounted_cents,
+                        'currency': 'USD',
+                        'callback_url': callback_url,
+                        'metadata': {
+                            'user_id': user.id,
+                            'username': user.username,
+                            'plan': 'premium_monthly',
+                            'promo_code': promo_code_str,
+                        },
+                        'channels': ['card'],
+                    }
+                    try:
+                        resp = requests.post(
+                            'https://api.paystack.co/transaction/initialize',
+                            headers=_paystack_headers(),
+                            json=payload,
+                            timeout=10,
+                        )
+                        data = resp.json()
+                        if data.get('status'):
+                            ref = data['data']['reference']
+                            PaymentTransaction.objects.create(
+                                user=user, email=user.email, reference=ref,
+                                amount=str(discounted_cents / 100), currency='USD', status='pending',
+                            )
+                            return Response({
+                                'authorization_url': data['data']['authorization_url'],
+                                'access_code': data['data']['access_code'],
+                                'reference': ref,
+                                'promo_applied': True,
+                                'discount_pct': discount_pct,
+                                'message': f'{discount_pct}% discount applied!',
+                            })
+                        return Response({'error': data.get('message', 'Payment init failed')}, status=502)
+                    except Exception as e:
+                        logger.error(f"[Paystack] Initialize error with promo: {e}")
+                        return Response({'error': 'Payment service unavailable'}, status=503)
             except PromoCode.DoesNotExist:
                 return Response({'error': 'Invalid promo code.'}, status=400)
 
@@ -261,6 +312,14 @@ class ApplyPromoCodeView(APIView):
                 'is_premium': True,
                 'expires_at': user.subscription_expires_at.isoformat(),
             })
+
+        if promo.discount_type == 'percent_off':
+            # percent_off via standalone endpoint: not valid without a payment flow.
+            # Redirect caller to use /payments/initialize/ with the promo code instead.
+            return Response({
+                'error': 'This promo code gives a discount on payment. Use it at checkout.',
+                'requires_payment': True,
+            }, status=400)
 
         return Response({'error': 'Unsupported promo type.'}, status=400)
 

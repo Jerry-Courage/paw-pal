@@ -3,14 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { authApi } from '@/lib/api'
-import { User, Bell, Shield, Palette, Upload, Check, Loader2 } from 'lucide-react'
+import { authApi, paymentsApi } from '@/lib/api'
+import { User, Bell, Shield, Palette, Upload, Check, Loader2, Sparkles, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 const TABS = [
   { id: 'profile',       label: 'Profile',       icon: User },
+  { id: 'billing',       label: 'Billing',        icon: CreditCard },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'appearance',    label: 'Appearance',    icon: Palette },
   { id: 'security',      label: 'Security',      icon: Shield },
@@ -27,7 +31,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tab pills */}
-      <div className="flex gap-1 p-1 bg-white/3 rounded-2xl w-fit">
+      <div className="flex gap-1 p-1 bg-white/3 rounded-2xl w-fit flex-wrap">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
@@ -41,6 +45,7 @@ export default function SettingsPage() {
 
       <div>
         {tab === 'profile'       && <ProfileSettings />}
+        {tab === 'billing'       && <BillingSettings />}
         {tab === 'notifications' && <NotificationSettings />}
         {tab === 'appearance'    && <AppearanceSettings />}
         {tab === 'security'      && <SecuritySettings />}
@@ -128,6 +133,163 @@ function ProfileSettings() {
           {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : saved ? <><Check className="w-4 h-4" /> Saved!</> : 'Save Changes'}
         </button>
       </div>
+    </div>
+  )
+}
+
+function BillingSettings() {
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const { data: sub, refetch } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 30000,
+  })
+
+  const isPremium = sub?.is_premium ?? false
+  const notesUsed = sub?.notes_used ?? 0
+  const notesLimit = sub?.notes_limit ?? 5
+  const notesRemaining = sub?.notes_remaining ?? notesLimit
+  const expiresAt = sub?.subscription_expires_at
+    ? new Date(sub.subscription_expires_at)
+    : null
+
+  const formatExpiry = (d: Date) =>
+    d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+
+  const daysLeft = expiresAt
+    ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 86400000))
+    : null
+
+  const handleRenew = () => setShowPaywall(true)
+
+  return (
+    <div className="space-y-4">
+      {/* Plan card */}
+      <div className={cn(
+        'rounded-2xl p-6 border',
+        isPremium
+          ? 'bg-gradient-to-br from-orange-500/10 to-amber-500/5 border-orange-500/25'
+          : 'bg-[#1a1a1a] border-white/8'
+      )}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              'w-11 h-11 rounded-xl flex items-center justify-center',
+              isPremium ? 'bg-orange-500/15' : 'bg-white/5'
+            )}>
+              {isPremium
+                ? <Sparkles className="w-5 h-5 text-orange-400" />
+                : <CreditCard className="w-5 h-5 text-slate-400" />
+              }
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">
+                {isPremium ? 'Premium Plan' : 'Free Plan'}
+              </p>
+              {isPremium && expiresAt ? (
+                <p className={cn(
+                  'text-xs mt-0.5',
+                  daysLeft !== null && daysLeft <= 5 ? 'text-orange-400 font-bold' : 'text-slate-400'
+                )}>
+                  {daysLeft !== null && daysLeft <= 5
+                    ? `⏰ Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`
+                    : `Active until ${formatExpiry(expiresAt)}`
+                  }
+                </p>
+              ) : !isPremium ? (
+                <p className="text-xs text-slate-500 mt-0.5">$0.99 / month to unlock unlimited</p>
+              ) : null}
+            </div>
+          </div>
+
+          {isPremium ? (
+            <button
+              onClick={handleRenew}
+              className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 transition-colors"
+            >
+              Renew
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowPaywall(true)}
+              className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Upgrade
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Usage card */}
+      <div className="bg-[#1a1a1a] rounded-2xl p-6 border border-white/8 space-y-4">
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Usage</h2>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-400 font-medium">Study Kits</span>
+            <span className="text-xs font-black text-white">
+              {isPremium ? `${notesUsed} used` : `${notesUsed} / ${notesLimit}`}
+            </span>
+          </div>
+          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all',
+                isPremium
+                  ? 'bg-orange-500'
+                  : notesUsed >= notesLimit
+                    ? 'bg-red-500'
+                    : notesUsed >= notesLimit * 0.8
+                      ? 'bg-orange-500'
+                      : 'bg-emerald-500'
+              )}
+              style={{ width: isPremium ? '100%' : `${Math.min(100, (notesUsed / notesLimit) * 100)}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-600 mt-1.5">
+            {isPremium
+              ? 'Unlimited study kits included'
+              : notesRemaining > 0
+                ? `${notesRemaining} free kit${notesRemaining !== 1 ? 's' : ''} remaining`
+                : 'Limit reached — upgrade to continue'
+            }
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-t border-white/5">
+          <div>
+            <p className="text-xs font-bold text-white">AI Requests / hour</p>
+            <p className="text-[10px] text-slate-600 mt-0.5">Rate limit for AI features</p>
+          </div>
+          <span className={cn(
+            'text-xs font-black px-2 py-1 rounded-lg',
+            isPremium
+              ? 'bg-orange-500/10 text-orange-400'
+              : 'bg-white/5 text-slate-400'
+          )}>
+            {isPremium ? '600 / hr' : '100 / hr'}
+          </span>
+        </div>
+      </div>
+
+      {/* Payment history note */}
+      <div className="bg-[#1a1a1a] rounded-2xl p-5 border border-white/8">
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Payments are processed securely via Paystack. Each payment grants 30 days of Premium access.
+          Your subscription does <span className="text-white font-bold">not</span> auto-renew — you'll receive a reminder 3 days before expiry.
+        </p>
+      </div>
+
+      {showPaywall && sub && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          notesUsed={notesUsed}
+          notesLimit={notesLimit}
+          onSuccess={() => { refetch(); setShowPaywall(false) }}
+        />
+      )}
     </div>
   )
 }
