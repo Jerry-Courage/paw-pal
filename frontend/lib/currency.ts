@@ -66,24 +66,54 @@ const COUNTRY_PRICE_MAP: Record<string, { currency: string; symbol: string; amou
 const PAYSTACK_SUPPORTED = new Set(['USD', 'GHS', 'NGN', 'ZAR', 'KES', 'GBP', 'EUR'])
 
 const CACHE_KEY = 'fs_price_info'
-const CACHE_TTL = 1000 * 60 * 60 * 6 // 6 hours
+const CACHE_TTL = 1000 * 60 * 60 * 24 // 24 hours
 
 async function detectCountry(): Promise<string> {
+  // Try multiple providers in order
+  const providers = [
+    async () => {
+      const res = await fetch('https://ipapi.co/country/', { signal: AbortSignal.timeout(4000) })
+      if (res.ok) {
+        const text = (await res.text()).trim().toUpperCase()
+        if (/^[A-Z]{2}$/.test(text)) return text
+      }
+      return null
+    },
+    async () => {
+      const res = await fetch('https://api.country.is/', { signal: AbortSignal.timeout(4000) })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.country) return data.country.toUpperCase()
+      }
+      return null
+    },
+    async () => {
+      const res = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(4000) })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.country_code) return data.country_code.toUpperCase()
+      }
+      return null
+    },
+  ]
+
+  for (const provider of providers) {
+    try {
+      const result = await provider()
+      if (result) return result
+    } catch {}
+  }
+
+  // Last resort: use browser locale to guess region (not country, but better than nothing)
   try {
-    const res = await fetch('https://ipapi.co/country/', { signal: AbortSignal.timeout(3000) })
-    if (res.ok) {
-      const text = (await res.text()).trim().toUpperCase()
-      if (/^[A-Z]{2}$/.test(text)) return text
+    const locale = navigator.language || ''
+    // e.g. "en-GH" → "GH"
+    const parts = locale.split('-')
+    if (parts.length > 1 && /^[A-Z]{2}$/.test(parts[1].toUpperCase())) {
+      return parts[1].toUpperCase()
     }
   } catch {}
-  // Fallback to a second provider
-  try {
-    const res = await fetch('https://api.country.is/', { signal: AbortSignal.timeout(3000) })
-    if (res.ok) {
-      const data = await res.json()
-      if (data?.country) return data.country.toUpperCase()
-    }
-  } catch {}
+
   return 'US'
 }
 
