@@ -9,6 +9,7 @@ import {
   Clock, MessageSquare, TrendingUp, Award
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePricing } from '@/hooks/usePricing'
 
 // ─── Navbar ────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -457,6 +458,8 @@ function Testimonials() {
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
 function Pricing() {
+  const { priceInfo } = usePricing()
+
   return (
     <section id="pricing" className="py-28 px-6">
       <div className="max-w-5xl mx-auto text-center">
@@ -464,14 +467,15 @@ function Pricing() {
         <h2 className="text-4xl md:text-7xl font-black text-white tracking-tighter mb-16">Simple pricing.</h2>
 
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
+          {/* Free tier */}
           <div className="p-10 rounded-[3rem] bg-[#1a1a1a]/50 flex flex-col">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Free</p>
             <div className="flex items-end gap-1 mb-8">
-              <span className="text-6xl font-black text-white">$0</span>
+              <span className="text-6xl font-black text-white">{priceInfo.symbol}0</span>
               <span className="text-slate-500 mb-2 font-bold">/mo</span>
             </div>
             <ul className="space-y-4 flex-1 mb-10">
-              {['5 documents/mo', 'Basic study kits', '20 AI messages/day', 'Limited Voice Prep'].map(item => (
+              {['5 study kits', 'Basic AI notes & quizzes', '100 AI requests/hr', 'Limited Voice Prep'].map(item => (
                 <li key={item} className="flex items-center gap-3 text-sm text-slate-400 font-medium">
                   <CheckCircle2 className="w-5 h-5 text-slate-700" /> {item}
                 </li>
@@ -482,24 +486,36 @@ function Pricing() {
             </Link>
           </div>
 
+          {/* Premium tier */}
           <div className="relative p-10 rounded-[3rem] bg-orange-500/5 overflow-hidden flex flex-col border border-orange-500/20">
             <div className="absolute top-0 right-0 p-6">
                <span className="bg-orange-500 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-xl">Best Value</span>
             </div>
-            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-4">Pro</p>
-            <div className="flex items-end gap-1 mb-8">
-              <span className="text-6xl font-black text-white">$9</span>
+            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-4">Premium</p>
+            <div className="flex items-end gap-1 mb-1">
+              <span className="text-6xl font-black text-white">{priceInfo.display}</span>
               <span className="text-slate-500 mb-2 font-bold">/mo</span>
             </div>
+            {/* Show USD equivalent for non-USD countries */}
+            {priceInfo.currency !== 'USD' && (
+              <p className="text-xs text-slate-600 mb-7 font-medium">≈ $0.99 USD / month</p>
+            )}
+            {priceInfo.currency === 'USD' && <div className="mb-8" />}
             <ul className="space-y-4 flex-1 mb-10">
-              {['Unlimited uploads', 'Full AI study kits', 'Unlimited AI Tutor', 'Live Voice Exam Prep', 'Memory-Sync Technology'].map(item => (
+              {[
+                'Unlimited study kits',
+                'Full AI study kits — notes, quizzes, flashcards',
+                'Unlimited AI Tutor (600 req/hr)',
+                'Live Voice Exam Prep',
+                'Priority AI processing',
+              ].map(item => (
                 <li key={item} className="flex items-center gap-3 text-sm text-slate-200 font-bold">
                   <CheckCircle2 className="w-5 h-5 text-orange-500" /> {item}
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="btn-primary w-full text-center py-4 rounded-2xl font-black shadow-2xl shadow-orange-500/20">
-              Get Pro Now <ArrowRight className="w-4 h-4" />
+            <Link href="/signup" className="btn-primary w-full text-center py-4 rounded-2xl font-black shadow-2xl shadow-orange-500/20 flex items-center justify-center gap-2">
+              Get Premium — {priceInfo.displayShort} <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>

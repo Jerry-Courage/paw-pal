@@ -121,10 +121,25 @@ class InitializePaymentView(APIView):
             f"{os.environ.get('FRONTEND_URL', 'https://flowstate-frontend-7irq.onrender.com')}/dashboard?payment=success"
         )
 
+        # Support geo-based currency from frontend
+        req_currency = request.data.get('currency', 'USD').upper()
+        req_amount = request.data.get('amount')
+        SUPPORTED_CURRENCIES = {'USD', 'GHS', 'NGN', 'ZAR', 'KES', 'GBP', 'EUR'}
+        if req_currency not in SUPPORTED_CURRENCIES:
+            req_currency = 'USD'
+
+        if req_amount:
+            try:
+                amount_cents = int(float(req_amount) * 100)
+            except (ValueError, TypeError):
+                amount_cents = PLAN_PRICE_CENTS
+        else:
+            amount_cents = PLAN_PRICE_CENTS
+
         payload = {
             'email': user.email,
-            'amount': PLAN_PRICE_CENTS,
-            'currency': 'USD',
+            'amount': amount_cents,
+            'currency': req_currency,
             'callback_url': callback_url,
             'metadata': {
                 'user_id': user.id,

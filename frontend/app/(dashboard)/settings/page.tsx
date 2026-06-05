@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
+import { usePricing } from '@/hooks/usePricing'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
@@ -147,6 +148,8 @@ function BillingSettings() {
     staleTime: 30000,
   })
 
+  const { priceInfo } = usePricing()
+
   const isPremium = sub?.is_premium ?? false
   const notesUsed = sub?.notes_used ?? 0
   const notesLimit = sub?.notes_limit ?? 5
@@ -199,7 +202,7 @@ function BillingSettings() {
                   }
                 </p>
               ) : !isPremium ? (
-                <p className="text-xs text-slate-500 mt-0.5">$0.99 / month to unlock unlimited</p>
+                <p className="text-xs text-slate-500 mt-0.5">{priceInfo.displayShort} to unlock unlimited</p>
               ) : null}
             </div>
           </div>
@@ -216,7 +219,7 @@ function BillingSettings() {
               onClick={() => setShowPaywall(true)}
               className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20"
             >
-              <Sparkles className="w-3.5 h-3.5" /> Upgrade
+              <Sparkles className="w-3.5 h-3.5" /> {priceInfo.displayShort}
             </button>
           )}
         </div>

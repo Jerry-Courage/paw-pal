@@ -16,6 +16,7 @@ import ProcessingView from '@/components/library/ProcessingView'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
+import { usePricing } from '@/hooks/usePricing'
 
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
@@ -184,6 +185,8 @@ export default function LibraryPage() {
   // Show nudge when free user has used 60%+ of their limit and hasn't dismissed it
   const showNudge = !isPremium && notesUsed >= Math.ceil(notesLimit * 0.6) && !nudgeDismissed
 
+  const { priceInfo } = usePricing()
+
   // SSE for real-time processing updates
   useEffect(() => {
     const resources = (data?.results || []) as any[]
@@ -344,7 +347,7 @@ export default function LibraryPage() {
               onClick={() => setShowPaywall(true)}
               className="shrink-0 text-xs font-black px-3 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20"
             >
-              $0.99/mo
+              {priceInfo.displayShort}
             </button>
             <button
               onClick={() => setNudgeDismissed(true)}

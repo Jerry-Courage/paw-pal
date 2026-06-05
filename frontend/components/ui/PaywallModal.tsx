@@ -9,6 +9,7 @@ import {
 import { paymentsApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { usePricing } from '@/hooks/usePricing'
 
 interface PaywallModalProps {
   onClose: () => void
@@ -32,10 +33,17 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
   const [promoOpen, setPromoOpen]   = useState(false)
   const [promoLoading, setPromoLoading] = useState(false)
 
+  const { priceInfo } = usePricing()
+
   const handlePay = async () => {
     setLoading(true)
     try {
-      const res = await paymentsApi.initialize(undefined, promoCode || undefined)
+      const res = await paymentsApi.initialize(
+        undefined,
+        promoCode || undefined,
+        priceInfo.paystackCurrency,
+        priceInfo.amount,
+      )
 
       // Promo code was applied directly (free days) — no popup needed
       if (res.data.promo_applied) {
@@ -97,6 +105,11 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
         toast.success(res.data.message || 'Promo applied!')
         onSuccess?.()
         onClose()
+      } else if (res.data.requires_payment) {
+        // percent_off promo — proceed to payment with promo pre-filled
+        setPromoOpen(false)
+        toast.info('Discount applied at checkout!')
+        await handlePay()
       }
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Invalid promo code.'
@@ -157,7 +170,7 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
               Unlock unlimited study kits, podcasts, and AI tools for just
             </p>
             <div className="mt-3 flex items-baseline justify-center gap-1">
-              <span className="text-4xl font-black text-white">$0.99</span>
+              <span className="text-4xl font-black text-white">{priceInfo.display}</span>
               <span className="text-slate-500 text-sm font-medium">/ month</span>
             </div>
           </div>
@@ -188,7 +201,7 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
                   {verifying ? 'Confirming payment…' : 'Opening payment…'}
                 </>
               ) : (
-                <><Sparkles className="w-4 h-4" /> Upgrade to Premium — $0.99/mo</>
+                <><Sparkles className="w-4 h-4" /> Upgrade to Premium — {priceInfo.displayShort}</>
               )}
             </button>
 
