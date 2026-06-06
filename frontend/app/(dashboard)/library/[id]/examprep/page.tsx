@@ -304,20 +304,26 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const startMic = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+        audio: {
+          sampleRate: { ideal: 16000 },
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
       })
       streamRef.current = stream
 
-      // Use AudioContext at native rate, resample properly
+      // Create a dedicated AudioContext for mic capture only
+      // Do NOT reuse audioCtxRef (that's for AI playback) — they must be separate
       const ctx = new AudioContext()
       const source = ctx.createMediaStreamSource(stream)
-      // Use smaller buffer for lower latency
-      const processor = ctx.createScriptProcessor(2048, 1, 1)
+      const processor = ctx.createScriptProcessor(4096, 1, 1)
       processorRef.current = processor
 
       processor.onaudioprocess = async (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        const float32 = e.inputBuffer.getChannelData(0).slice() // copy buffer
+        const float32 = e.inputBuffer.getChannelData(0).slice()
         try {
           const pcm16 = await resampleTo16k(float32, ctx.sampleRate)
           const b64 = int16ToBase64(pcm16)
@@ -325,21 +331,32 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
           }
         } catch (err) {
-          // Resampling failed, skip this chunk
+          // Resampling failed, skip chunk
         }
       }
 
+      // Connect source → processor only
+      // Do NOT connect processor → ctx.destination — that routes mic to speakers
+      // causing echo AND can cause the browser to pause onaudioprocess
       source.connect(processor)
-      processor.connect(ctx.destination)
+      // processor must be connected to something for onaudioprocess to fire
+      // connect to a silent gain node (volume 0) instead of destination
+      const silentGain = ctx.createGain()
+      silentGain.gain.value = 0
+      processor.connect(silentGain)
+      silentGain.connect(ctx.destination)
+
       setIsRecording(true)
     } catch (e) {
-      toast.error('Microphone access denied')
+      toast.error('Microphone access denied. Please allow mic permission and try again.')
     }
   }
 
   const stopMic = () => {
     processorRef.current?.disconnect()
+    processorRef.current = null
     streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
     setIsRecording(false)
   }
 
