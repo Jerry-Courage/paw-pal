@@ -227,6 +227,27 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     if (!resource) return
     setIsConnecting(true)
 
+    // ── Request mic access FIRST, inside the user gesture ──────────────────
+    // Browsers require a user gesture to grant getUserMedia.
+    // If we wait until the WS 'ready' message, the gesture is gone and it fails silently.
+    let micStream: MediaStream | null = null
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: { ideal: 16000 },
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      })
+      streamRef.current = micStream
+    } catch (e) {
+      toast.error('Microphone access denied. Please allow mic permission and try again.')
+      setIsConnecting(false)
+      return
+    }
+
     try {
       const token = await getAuthToken()
       const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
@@ -247,7 +268,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           technique,
           resource_title: resource.title,
           resource_context: context,
-          ...(voice ? { voice } : {}),  // pass voice override if user selected one
+          ...(voice ? { voice } : {}),
         }))
       }
 
@@ -257,7 +278,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         if (msg.type === 'ready') {
           setIsConnecting(false)
           setPhase('session')
-          startMic()
+          // Mic stream already acquired — just wire up the processor
+          activateMicProcessor(streamRef.current!)
         } else if (msg.type === 'audio') {
           const pcm = base64ToPcmFloat(msg.data)
           playAudioChunk(pcm)
@@ -301,21 +323,9 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   }
 
   // ── Mic capture ────────────────────────────────────────────────────────────
-  const startMic = async () => {
+  // Called AFTER mic stream is already acquired (inside the button click gesture)
+  const activateMicProcessor = (stream: MediaStream) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: { ideal: 16000 },
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      })
-      streamRef.current = stream
-
-      // Create a dedicated AudioContext for mic capture only
-      // Do NOT reuse audioCtxRef (that's for AI playback) — they must be separate
       const ctx = new AudioContext()
       const source = ctx.createMediaStreamSource(stream)
       const processor = ctx.createScriptProcessor(4096, 1, 1)
@@ -335,12 +345,9 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         }
       }
 
-      // Connect source → processor only
-      // Do NOT connect processor → ctx.destination — that routes mic to speakers
-      // causing echo AND can cause the browser to pause onaudioprocess
       source.connect(processor)
-      // processor must be connected to something for onaudioprocess to fire
-      // connect to a silent gain node (volume 0) instead of destination
+      // Connect to a silent gain node — required for onaudioprocess to fire,
+      // but volume 0 so mic audio doesn't play back through speakers
       const silentGain = ctx.createGain()
       silentGain.gain.value = 0
       processor.connect(silentGain)
@@ -348,7 +355,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
       setIsRecording(true)
     } catch (e) {
-      toast.error('Microphone access denied. Please allow mic permission and try again.')
+      toast.error('Failed to start mic processing. Please try again.')
     }
   }
 

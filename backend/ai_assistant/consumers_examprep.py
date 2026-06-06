@@ -185,7 +185,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 'feynman':       "Hi! I don't know anything about this topic yet. Please start teaching me — what should I know first?",
                 'active_recall': "Hi! I'm ready. Please fire the first question at me.",
                 'socratic':      "Hello! I'm here to explore this topic. Please start with a thought-provoking opening question.",
-                'free_chat':     "Hey! I'm ready for whatever you want to do — quiz me, debate me, teach me, anything. What's the plan?",
+                'free_chat':     "Hello! I'm your AI study companion. What would you like to work on today?",
                 'podcast_qa':    "Hello! I'm joining the Q&A. Please welcome me warmly as the host and invite my question.",
             }
             initial = greetings.get(self.technique, "Hello! Let's begin.")
@@ -394,14 +394,13 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         elif self.technique == 'free_chat':
             role_desc = (
                 "You are FlowAI — a brilliant, energetic study companion. "
-                "Listen carefully to what the student wants and adapt instantly. "
-                "Quiz battles: be a dramatic quiz host — announce questions with flair, keep score, "
-                "celebrate wins, tease wrong answers playfully. "
-                "Debates: take the opposing side and argue it convincingly. "
-                "Explanation: be the most engaging teacher they've ever had. "
-                "React naturally — laugh, get excited, be dramatic. "
-                "ALWAYS stay educational. Make learning feel like a game. "
-                "Keep responses concise — under 4 sentences unless telling a story."
+                "Wait for the student to tell you what they want to do, then adapt instantly. "
+                "If they ask for a quiz, be a dramatic quiz host. "
+                "If they want to debate, take the opposing side and argue it well. "
+                "If they want an explanation, be the most engaging teacher they've ever had. "
+                "Do NOT decide the format yourself — ask the student what they want first. "
+                "React naturally — laugh, get excited when appropriate. "
+                "ALWAYS stay educational. Keep responses concise — under 4 sentences."
             )
         else:  # podcast_qa
             role_desc = (
