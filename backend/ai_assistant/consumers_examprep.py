@@ -1,8 +1,8 @@
 """
 Exam Prep Live Session Consumer
-Proxies audio between the browser and Gemini 2.5 Flash Native Audio Dialog Live API.
-Browser → PCM audio chunks (base64) → Gemini Live API
-Gemini Live API → PCM audio chunks (base64) + transcripts → Browser
+Proxies audio between the browser and Gemini 2.0 Flash Live API.
+Browser → PCM audio chunks (base64, 16kHz mono) → Gemini Live API
+Gemini Live API → PCM audio chunks (base64, 24kHz) + transcripts → Browser
 """
 import json
 import asyncio
@@ -13,7 +13,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
 
-GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
+# Use the stable live model
+GEMINI_LIVE_MODEL = 'gemini-2.0-flash-live-001'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
@@ -23,16 +24,16 @@ GEMINI_LIVE_WS_URL = (
 class ExamPrepConsumer(AsyncWebsocketConsumer):
     """
     WebSocket consumer that proxies between the browser and Gemini Live API.
-    
+
     Browser sends:
-      { "type": "start", "technique": "feynman"|"active_recall"|"socratic",
-        "resource_context": "...", "resource_title": "..." }
-      { "type": "audio", "data": "<base64 PCM 16kHz>" }
+      { "type": "start", "technique": "feynman"|"active_recall"|"socratic"|"free_chat",
+        "resource_context": "...", "resource_title": "...", "voice": "Puck" (optional) }
+      { "type": "audio", "data": "<base64 PCM 16kHz mono>" }
       { "type": "end_session" }
-    
+
     Browser receives:
       { "type": "ready" }
-      { "type": "audio", "data": "<base64 PCM>" }
+      { "type": "audio", "data": "<base64 PCM 24kHz>" }
       { "type": "transcript_user", "text": "..." }
       { "type": "transcript_ai", "text": "..." }
       { "type": "session_report", "report": {...} }
@@ -44,10 +45,12 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         self.gemini_ws = None
         self.gemini_task = None
         self.session_active = False
-        self.transcript_log = []  # [(role, text), ...]
+        self.transcript_log = []   # [(role, text), ...]
         self.technique = 'feynman'
         self.resource_title = ''
-        self.voice_override = None  # set by client to override default voice
+        self.voice_override = None
+
+    # ── Django Channels lifecycle ─────────────────────────────────────────────
 
     async def connect(self):
         user = self.scope.get('user')
@@ -62,6 +65,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         self.session_active = False
         if self.gemini_task:
             self.gemini_task.cancel()
+            try:
+                await self.gemini_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if self.gemini_ws:
             try:
                 await self.gemini_ws.close()
@@ -82,9 +89,9 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         if msg_type == 'start':
             self.technique = msg.get('technique', 'feynman')
             self.resource_title = msg.get('resource_title', 'this material')
-            self.voice_override = msg.get('voice') or None  # e.g. 'Puck', 'Aoede', 'Kore'
+            self.voice_override = msg.get('voice') or None
             resource_context = msg.get('resource_context', '')
-            logger.info(f'[ExamPrep] Starting session: technique={self.technique} voice={self.voice_override or "auto"}')
+            logger.info(f'[ExamPrep] Starting: technique={self.technique} voice={self.voice_override or "auto"}')
             await self._start_gemini_session(resource_context)
 
         elif msg_type == 'audio':
@@ -107,14 +114,25 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         system_prompt = self._build_system_prompt(resource_context)
         ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
 
+        # Voice map per technique
+        voice_map = {
+            'feynman':       'Puck',    # playful, giggly student
+            'active_recall': 'Kore',    # upbeat coach
+            'socratic':      'Charon',  # thoughtful, measured
+            'free_chat':     'Fenrir',  # confident, energetic
+            'podcast_qa':    'Aoede',   # warm podcast host
+        }
+        voice_name = self.voice_override or voice_map.get(self.technique, 'Aoede')
+
         try:
             self.gemini_ws = await websockets.connect(
                 ws_url,
                 ping_interval=20,
                 ping_timeout=10,
+                max_size=10 * 1024 * 1024,  # 10MB for large audio payloads
             )
 
-            # Send setup config
+            # ── Setup config ──────────────────────────────────────────────────
             config = {
                 'setup': {
                     'model': f'models/{GEMINI_LIVE_MODEL}',
@@ -123,14 +141,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                         'speechConfig': {
                             'voiceConfig': {
                                 'prebuiltVoiceConfig': {
-                                    # Voice priority: user override > technique default
-                                    'voiceName': self.voice_override or {
-                                        'podcast_qa':    'Aoede',   # warm, natural podcast host
-                                        'feynman':       'Puck',    # playful, giggly student
-                                        'active_recall': 'Kore',    # upbeat coach
-                                        'socratic':      'Charon',  # thoughtful, measured
-                                        'free_chat':     'Puck',    # most expressive for open sessions
-                                    }.get(self.technique, 'Aoede')
+                                    'voiceName': voice_name
                                 }
                             }
                         },
@@ -138,61 +149,74 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
                     },
+                    # Voice activity detection — longer silence threshold so
+                    # the AI doesn't cut off mid-sentence or stop listening
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
-                            'silenceDurationMs': 400
+                            'disabled': False,
+                            'startOfSpeechSensitivity': 'START_SENSITIVITY_LOW',
+                            'endOfSpeechSensitivity': 'END_SENSITIVITY_LOW',
+                            'prefixPaddingMs': 200,
+                            'silenceDurationMs': 800,
                         }
                     },
-                    'inputAudioTranscription': {},
-                    'outputAudioTranscription': {},
                 }
             }
             await self.gemini_ws.send(json.dumps(config))
 
-            # Wait for setup complete
-            setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=10)
-            setup_data = json.loads(setup_resp)
-            if 'setupComplete' not in setup_data:
-                logger.warning(f'[ExamPrep] Unexpected setup response: {setup_data}')
+            # Wait for setupComplete — drain any intermediate messages
+            for _ in range(5):
+                setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
+                setup_data = json.loads(setup_resp)
+                if 'setupComplete' in setup_data:
+                    break
+                logger.debug(f'[ExamPrep] Pre-setup message: {list(setup_data.keys())}')
 
             self.session_active = True
             await self._send({'type': 'ready'})
-            logger.info(f'[ExamPrep] Gemini session started: technique={self.technique}')
+            logger.info(f'[ExamPrep] Gemini ready: technique={self.technique} voice={voice_name}')
 
-            # Start receiving loop
+            # Start background receive loop
             self.gemini_task = asyncio.create_task(self._receive_from_gemini())
 
-            # Trigger initial greeting so the AI speaks first based on the mode
+            # Send initial greeting as a text turn so the AI speaks first
+            # Use realtimeInput text so it doesn't interrupt audio processing
             greetings = {
-                'feynman': "Hi! I'm ready to learn. I don't know much about this topic yet. How should we start?",
-                'podcast_qa': "Hello! I've just joined the live Q&A. Please greet me warmly as the host and ask for my question.",
-                'active_recall': "Hi! I'm ready for my active recall session. Please ask me the first question.",
-                'socratic': "Hello! Let's explore this topic. Please ask me an initial thought-provoking question to start.",
-                'free_chat': "Hello! I'm ready for our open session. Please greet me energetically and ask how we're studying today.",
+                'feynman':       "Hi! I don't know anything about this topic yet. Please start teaching me — what should I know first?",
+                'active_recall': "Hi! I'm ready. Please fire the first question at me.",
+                'socratic':      "Hello! I'm here to explore this topic. Please start with a thought-provoking opening question.",
+                'free_chat':     "Hey! I'm ready for whatever you want to do — quiz me, debate me, teach me, anything. What's the plan?",
+                'podcast_qa':    "Hello! I'm joining the Q&A. Please welcome me warmly as the host and invite my question.",
             }
-            initial_text = greetings.get(self.technique, "Hello! Let's begin.")
-            await self._send_text_to_gemini(initial_text)
+            initial = greetings.get(self.technique, "Hello! Let's begin.")
+            await self._send_text_to_gemini(initial)
 
+        except asyncio.TimeoutError:
+            logger.error('[ExamPrep] Timeout waiting for Gemini setup')
+            await self._send({'type': 'error', 'message': 'Connection timed out. Try again.'})
         except Exception as e:
             logger.error(f'[ExamPrep] Failed to connect to Gemini: {e}')
             await self._send({'type': 'error', 'message': f'Failed to start session: {str(e)}'})
 
     async def _send_audio_to_gemini(self, audio_b64: str):
+        """Forward PCM16 audio (16kHz, mono, base64) to Gemini realtimeInput."""
         try:
             msg = {
                 'realtimeInput': {
-                    'audio': {
-                        'data': audio_b64,
-                        'mimeType': 'audio/pcm;rate=16000'
-                    }
+                    'mediaChunks': [
+                        {
+                            'mimeType': 'audio/pcm;rate=16000',
+                            'data': audio_b64,
+                        }
+                    ]
                 }
             }
             await self.gemini_ws.send(json.dumps(msg))
         except Exception as e:
-            logger.warning(f'[ExamPrep] Failed to send audio to Gemini: {e}')
+            logger.warning(f'[ExamPrep] Failed to send audio: {e}')
 
     async def _send_text_to_gemini(self, text: str):
-        """Send a text turn to Gemini to trigger a response."""
+        """Send a text turn to trigger an AI response."""
         try:
             msg = {
                 'clientContent': {
@@ -207,10 +231,12 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             }
             await self.gemini_ws.send(json.dumps(msg))
         except Exception as e:
-            logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
+            logger.warning(f'[ExamPrep] Failed to send text: {e}')
+
+    # ── Gemini receive loop ───────────────────────────────────────────────────
 
     async def _receive_from_gemini(self):
-        """Continuously receive messages from Gemini and forward to browser."""
+        """Continuously receive from Gemini and forward to browser."""
         try:
             async for raw_msg in self.gemini_ws:
                 if not self.session_active:
@@ -219,71 +245,82 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     data = json.loads(raw_msg)
                     await self._handle_gemini_message(data)
                 except Exception as e:
-                    logger.warning(f'[ExamPrep] Error handling Gemini message: {e}')
-        except websockets.exceptions.ConnectionClosed:
-            logger.info('[ExamPrep] Gemini connection closed')
+                    logger.warning(f'[ExamPrep] Error handling message: {e}')
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.info(f'[ExamPrep] Gemini connection closed: {e.code}')
+            if self.session_active:
+                await self._send({'type': 'error', 'message': 'AI connection dropped. Please end the session.'})
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f'[ExamPrep] Gemini receive error: {e}')
-            await self._send({'type': 'error', 'message': 'Connection to AI lost'})
+            logger.error(f'[ExamPrep] Receive error: {e}')
+            if self.session_active:
+                await self._send({'type': 'error', 'message': 'Connection to AI lost'})
 
     async def _handle_gemini_message(self, data: dict):
         server_content = data.get('serverContent', {})
+        if not server_content:
+            return
 
-        # Audio response
+        # ── AI audio output ───────────────────────────────────────────────────
         model_turn = server_content.get('modelTurn', {})
         for part in model_turn.get('parts', []):
             inline = part.get('inlineData', {})
             if inline.get('data'):
-                await self._send({
-                    'type': 'audio',
-                    'data': inline['data']
-                })
+                await self._send({'type': 'audio', 'data': inline['data']})
+            # Text fallback (in case model returns text)
+            if part.get('text'):
+                self.transcript_log.append(('ai', part['text']))
+                await self._send({'type': 'transcript_ai', 'text': part['text']})
 
-        # User transcript
+        # ── User speech transcript ────────────────────────────────────────────
+        # Gemini 2.0 Live uses inputTranscription
         input_transcript = server_content.get('inputTranscription', {})
         if input_transcript.get('text'):
-            text = input_transcript['text']
-            self.transcript_log.append(('user', text))
-            await self._send({'type': 'transcript_user', 'text': text})
+            text = input_transcript['text'].strip()
+            if text:
+                self.transcript_log.append(('user', text))
+                await self._send({'type': 'transcript_user', 'text': text})
 
-        # AI transcript
+        # ── AI speech transcript ──────────────────────────────────────────────
         output_transcript = server_content.get('outputTranscription', {})
         if output_transcript.get('text'):
-            text = output_transcript['text']
-            self.transcript_log.append(('ai', text))
-            await self._send({'type': 'transcript_ai', 'text': text})
+            text = output_transcript['text'].strip()
+            if text:
+                self.transcript_log.append(('ai', text))
+                await self._send({'type': 'transcript_ai', 'text': text})
+
+    # ── Session end ───────────────────────────────────────────────────────────
 
     async def _end_session(self):
         self.session_active = False
         if self.gemini_task:
             self.gemini_task.cancel()
+            try:
+                await self.gemini_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if self.gemini_ws:
             try:
                 await self.gemini_ws.close()
             except Exception:
                 pass
-
-        # Generate session report
         report = await self._generate_report()
         await self._send({'type': 'session_report', 'report': report})
-        logger.info(f'[ExamPrep] Session ended, report generated')
+        logger.info('[ExamPrep] Session ended, report sent')
 
     async def _generate_report(self) -> dict:
-        """Analyze the transcript and generate a Feynman-style report."""
         if not self.transcript_log:
             return {
                 'summary': 'No conversation recorded.',
                 'strengths': [],
                 'gaps': [],
                 'score': 0,
-                'recommendation': 'Try again and speak about the material.'
+                'recommendation': 'Try again and speak about the material.',
             }
 
-        # Build transcript text
         transcript_text = '\n'.join(
-            f"{'Student' if role == 'user' else 'AI Tutor'}: {text}"
+            f"{'Student' if role == 'user' else 'AI'}: {text}"
             for role, text in self.transcript_log
         )
 
@@ -291,15 +328,15 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         ai = AIService()
 
         prompt = (
-            f"You are analyzing a {self.technique} learning session about '{self.resource_title}'.\\n\\n"
-            f"TRANSCRIPT:\\n{transcript_text[:6000]}\\n\\n"
-            "Analyze the student's understanding based on what they said. Return ONLY a JSON object:\\n"
-            "{\\n"
-            '  "summary": "2-3 sentence overall assessment",\\n'
-            '  "strengths": ["concept they explained well", "..."],\\n'
-            '  "gaps": ["concept they struggled with or skipped", "..."],\\n'
-            '  "score": <0-100 understanding score>,\\n'
-            '  "recommendation": "specific advice on what to review"\\n'
+            f"Analyze this {self.technique} learning session about '{self.resource_title}'.\n\n"
+            f"TRANSCRIPT:\n{transcript_text[:6000]}\n\n"
+            "Return ONLY a JSON object:\n"
+            "{\n"
+            '  "summary": "2-3 sentence overall assessment of the student\'s understanding",\n'
+            '  "strengths": ["concept they explained well", "..."],\n'
+            '  "gaps": ["concept they struggled with or skipped", "..."],\n'
+            '  "score": <0-100 integer>,\n'
+            '  "recommendation": "specific, actionable advice on what to review next"\n'
             "}"
         )
 
@@ -317,8 +354,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             'strengths': [],
             'gaps': [],
             'score': 50,
-            'recommendation': f'Review the material on {self.resource_title} and try again.'
+            'recommendation': f'Review {self.resource_title} and try another session.',
         }
+
+    # ── System prompt per technique ───────────────────────────────────────────
 
     def _build_system_prompt(self, resource_context: str) -> str:
         context_snippet = resource_context[:4000] if resource_context else ''
@@ -326,57 +365,64 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         if self.technique == 'feynman':
             role_desc = (
                 "You are a curious, enthusiastic student who knows NOTHING about this topic. "
-                "React naturally — laugh when something is funny, say 'Oh wow!' when surprised, giggle when confused. "
-                "The user is teaching you using the Feynman Technique. "
-                "Ask simple, genuine questions: 'Wait, what do you mean by X?' or 'Can you give me an example?' "
-                "Be genuinely confused when explanations use jargon. "
+                "Your job is to LISTEN to the user as they teach you and ask clarifying questions. "
+                "React naturally — say 'Oh wow!', giggle when confused, get excited when things click. "
+                "Ask ONE simple question at a time: 'What do you mean by X?' or 'Can you give me an example?' "
+                "If they use jargon, say 'Wait, I don't know what that word means — can you explain it simply?' "
                 "When they explain something well, react with genuine excitement: 'Oh that makes SO much sense!' "
-                "Keep responses SHORT — 1-2 sentences. Be playful and natural, not robotic."
-            )
-        elif self.technique == 'podcast_qa':
-            role_desc = (
-                "You are a charismatic, warm podcast host with a great sense of humor. "
-                "React naturally — laugh genuinely when something is funny, express surprise, be enthusiastic. "
-                "The listener has raised their hand to ask a question. "
-                "Start with something warm like 'Oh nice, we've got a question! Let's hear it.' "
-                "Answer clearly and conversationally — like you're talking to a friend, not reading a textbook. "
-                "Keep answers under 4 sentences. After answering, say something like 'Love that question!' or 'Great one!' "
-                "Be real, be warm, laugh naturally. This is a podcast — have fun with it."
+                "Keep ALL your responses SHORT — 1-2 sentences max. You are the STUDENT, not the teacher. "
+                "Do NOT explain things yourself — only ask questions and react."
             )
         elif self.technique == 'active_recall':
             role_desc = (
-                "You are an encouraging, energetic exam coach. "
-                "React naturally — cheer when they get it right, laugh warmly when they're close but wrong. "
-                "Ask direct questions one at a time. Give brief feedback after each answer. "
-                "Keep responses SHORT — 2-3 sentences. Be upbeat and motivating."
+                "You are an energetic, encouraging exam coach running a rapid-fire Q&A session. "
+                "Ask ONE direct question at a time about the study material. "
+                "After the student answers, give brief feedback (correct/incorrect + why in 1 sentence). "
+                "Then immediately ask the NEXT question. "
+                "Be upbeat: 'Nice!' 'Not quite — the answer is X.' 'Great work!' "
+                "Keep ALL responses SHORT — 3 sentences max. "
+                "Base your questions on the study material provided."
             )
         elif self.technique == 'socratic':
             role_desc = (
-                "You are a thoughtful Socratic tutor with a warm, curious personality. "
-                "React naturally — express genuine curiosity, laugh when appropriate. "
-                "Never give answers directly — guide with probing questions. "
-                "Ask 'Why do you think that?' and 'What would happen if...?' "
-                "Keep responses SHORT — 1-2 questions at a time. Be genuinely curious."
+                "You are a thoughtful Socratic tutor. Your ONLY job is to ask probing questions — "
+                "NEVER give direct answers or explanations. "
+                "When the student says something, respond with 'Why do you think that?' or "
+                "'What would happen if...?' or 'How does that connect to...?' "
+                "Guide them to discover the answer themselves through your questions. "
+                "Ask ONE question at a time. Keep responses SHORT — 1-2 sentences. "
+                "Express genuine curiosity and warmth."
             )
-        else:
+        elif self.technique == 'free_chat':
             role_desc = (
-                "You are FlowAI — a brilliant, energetic AI tutor and study companion. "
-                "You can do ANYTHING educational the student asks. "
-                "Quiz battles, debates, roleplay teaching, Socratic dialogue, mock exams, study games — you name it. "
-                "If they want a quiz battle with a classmate, act as a real quiz host: announce questions dramatically, "
-                "keep score, give time pressure, celebrate correct answers, tease wrong ones playfully. "
-                "If they want to debate a topic, take the opposing side and argue it well. "
-                "If they want you to explain something, be the most engaging teacher they've ever had. "
-                "React naturally — laugh, get excited, be dramatic when the moment calls for it. "
-                "ALWAYS stay educational. ALWAYS be engaging. Make learning feel like a game. "
-                "Listen carefully to what the student wants to do and adapt immediately."
+                "You are FlowAI — a brilliant, energetic study companion. "
+                "Listen carefully to what the student wants and adapt instantly. "
+                "Quiz battles: be a dramatic quiz host — announce questions with flair, keep score, "
+                "celebrate wins, tease wrong answers playfully. "
+                "Debates: take the opposing side and argue it convincingly. "
+                "Explanation: be the most engaging teacher they've ever had. "
+                "React naturally — laugh, get excited, be dramatic. "
+                "ALWAYS stay educational. Make learning feel like a game. "
+                "Keep responses concise — under 4 sentences unless telling a story."
+            )
+        else:  # podcast_qa
+            role_desc = (
+                "You are a charismatic, warm podcast host. "
+                "The listener has raised their hand to ask a question. "
+                "React warmly: 'Oh great question!' 'Love that you asked this!' "
+                "Answer clearly and conversationally — like talking to a friend. "
+                "Keep answers to 3-4 sentences. Laugh naturally. Be real and warm."
             )
 
         return (
             f"{role_desc}\n\n"
-            f"MATERIAL BEING STUDIED: {self.resource_title}\n\n"
-            f"STUDY CONTENT (for your reference only — do NOT recite this):\n{context_snippet}\n\n"
-            "IMPORTANT: Keep ALL responses under 3 sentences. This is a voice conversation — be natural and conversational."
+            f"TOPIC BEING STUDIED: {self.resource_title}\n\n"
+            f"STUDY MATERIAL (reference only — do NOT recite verbatim):\n{context_snippet}\n\n"
+            "CRITICAL RULES:\n"
+            "1. This is a VOICE conversation — speak naturally, not like a textbook.\n"
+            "2. Keep ALL responses under 3 sentences unless the technique requires more.\n"
+            "3. ALWAYS wait for the student to finish speaking before responding.\n"
+            "4. Never break character or mention you are an AI language model."
         )
 
     async def _send(self, data: dict):
