@@ -5,6 +5,7 @@ from .views import (
     SetWeeklyGoalView, NotificationsView, NotificationDetailView, 
     UpdateOnboardingView, PushSubscriptionView, GlobalConfigView
 )
+from .oauth_views import GoogleOAuthView, GitHubOAuthView
 
 urlpatterns = [
     path('config/', GlobalConfigView.as_view(), name='global-config'),
@@ -20,4 +21,7 @@ urlpatterns = [
     path('notifications/<int:pk>/', NotificationDetailView.as_view(), name='notification-detail'),
     path('push-notifications/', PushSubscriptionView.as_view(), name='push-subscription'),
     path('onboarding/update/', UpdateOnboardingView.as_view(), name='update-onboarding'),
+    # OAuth social login
+    path('oauth/google/', GoogleOAuthView.as_view(), name='oauth-google'),
+    path('oauth/github/', GitHubOAuthView.as_view(), name='oauth-github'),
 ]
