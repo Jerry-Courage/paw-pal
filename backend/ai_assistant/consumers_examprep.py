@@ -13,8 +13,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
 
-# Use the stable live model
-GEMINI_LIVE_MODEL = 'gemini-2.0-flash-live-001'
+# Use the native audio model — better quality, lower latency
+GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
@@ -203,12 +203,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         try:
             msg = {
                 'realtimeInput': {
-                    'mediaChunks': [
-                        {
-                            'mimeType': 'audio/pcm;rate=16000',
-                            'data': audio_b64,
-                        }
-                    ]
+                    'audio': {
+                        'data': audio_b64,
+                        'mimeType': 'audio/pcm;rate=16000'
+                    }
                 }
             }
             await self.gemini_ws.send(json.dumps(msg))
