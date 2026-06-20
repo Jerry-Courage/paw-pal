@@ -85,6 +85,7 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user, account }) {
+      // Initial sign-in: populate token from user object
       if (user) {
         token.accessToken  = (user as any).accessToken
         token.refreshToken = (user as any).refreshToken
@@ -93,8 +94,32 @@ export const authOptions: NextAuthOptions = {
         token.name         = (user as any).username || user.name
         token.picture      = (user as any).avatar_url || user.image
         token.onboarded    = (user as any).onboarding_status?.completed || false
+        // Store expiry: access token lifetime is 1 day
+        token.accessTokenExpires = Date.now() + 24 * 60 * 60 * 1000 - 60_000 // 1 min buffer
+        return token
       }
-      return token
+
+      // Return token as-is if it's still valid
+      if (Date.now() < (token.accessTokenExpires as number)) {
+        return token
+      }
+
+      // Access token expired — try to refresh it
+      try {
+        const res = await axios.post(`${API_URL}/auth/token/refresh/`, {
+          refresh: token.refreshToken,
+        })
+        return {
+          ...token,
+          accessToken: res.data.access,
+          // simplejwt with ROTATE_REFRESH_TOKENS=True issues a new refresh token
+          refreshToken: res.data.refresh ?? token.refreshToken,
+          accessTokenExpires: Date.now() + 24 * 60 * 60 * 1000 - 60_000,
+        }
+      } catch {
+        // Refresh failed — force re-login by returning a token with an error flag
+        return { ...token, error: 'RefreshAccessTokenError' }
+      }
     },
 
     async session({ session, token }) {
@@ -103,6 +128,7 @@ export const authOptions: NextAuthOptions = {
       session.user.name    = token.name as string
       session.user.image   = token.picture as string
       ;(session.user as any).onboarded = token.onboarded
+      ;(session as any).error = token.error
       return session
     },
   },

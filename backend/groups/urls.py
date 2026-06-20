@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     GroupListCreateView, GroupDetailView, JoinLeaveGroupView,
     GroupSessionListCreateView, GroupTaskView, GroupTaskDetailView,
-    GroupMessageView,
+    GroupMessageView, GroupDocumentView, GroupDocumentDetailView,
 )
 
 urlpatterns = [
@@ -13,4 +13,6 @@ urlpatterns = [
     path('<int:group_id>/tasks/', GroupTaskView.as_view()),
     path('<int:group_id>/tasks/<int:pk>/', GroupTaskDetailView.as_view()),
     path('<int:group_id>/messages/', GroupMessageView.as_view()),
+    path('<int:group_id>/documents/', GroupDocumentView.as_view()),
+    path('<int:group_id>/documents/<int:pk>/', GroupDocumentDetailView.as_view()),
 ]

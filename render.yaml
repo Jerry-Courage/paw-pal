@@ -67,13 +67,19 @@ services:
         fromService:
           type: web
           name: paw-pal-backend
-          property: host
+          property: hostWithScheme
+          suffix: /api
+      - key: API_URL
+        fromService:
+          type: web
+          name: paw-pal-backend
+          property: hostWithScheme
           suffix: /api
       - key: NEXTAUTH_URL
         fromService:
           type: web
           name: paw-pal-frontend
-          property: host
+          property: hostWithScheme
       - key: NEXTAUTH_SECRET
         generateValue: true
 

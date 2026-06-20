@@ -78,8 +78,14 @@ class WorkspaceConsumer(AsyncWebsocketConsumer):
         )
 
     async def broadcast_chat_message(self, event):
-        # Send to all workers in the room
-        await self.send(text_data=json.dumps(event))
+        # The 'message' key contains the full serialized message dict.
+        # Merge it with the event type so the frontend receives a flat object
+        # with both `type` and all message fields at the top level.
+        payload = {'type': event['type']}
+        message = event.get('message') or {}
+        if isinstance(message, dict):
+            payload.update(message)
+        await self.send(text_data=json.dumps(payload))
 
     async def broadcast_typing(self, event):
         await self.send(text_data=json.dumps(event))

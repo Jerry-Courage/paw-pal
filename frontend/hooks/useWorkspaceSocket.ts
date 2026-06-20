@@ -22,7 +22,10 @@ export function useWorkspaceSocket(workspaceId: number) {
     if (!session?.accessToken || socketRef.current) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = process.env.NEXT_PUBLIC_API_URL?.replace('http://', '').replace('https://', '') || 'localhost:8000'
+    // Strip protocol AND the /api path suffix so we get the raw backend host
+    const host = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/api\/?$/, '')
     const socketUrl = `${protocol}//${host}/ws/workspace/${workspaceId}/?token=${session.accessToken}`
 
     const ws = new WebSocket(socketUrl)

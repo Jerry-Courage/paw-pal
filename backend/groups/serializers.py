@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument
 from users.serializers import UserSerializer
 
 
@@ -74,3 +74,17 @@ class GroupMessageSerializer(serializers.ModelSerializer):
         if not obj.is_ai and obj.sender.avatar and request:
             return request.build_absolute_uri(obj.sender.avatar.url)
         return None
+
+
+class GroupDocumentSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GroupDocument
+        fields = ('id', 'group', 'title', 'content', 'author_name', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'author_name')
+
+    def get_author_name(self, obj):
+        if obj.author:
+            return obj.author.get_full_name() or obj.author.username
+        return 'Unknown'

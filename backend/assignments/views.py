@@ -14,6 +14,205 @@ from .serializers import AssignmentSerializer
 
 logger = logging.getLogger('nitemind')
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LaTeX → Human-Readable Converter
+# Applied to ai_response text before any export (PDF, DOCX, TXT).
+# Converts LaTeX math syntax into Unicode symbols so exported documents
+# are readable and suitable for academic submission.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Subscript / superscript digit maps for limit notation
+_SUBSCRIPT = str.maketrans('0123456789+-=()abcdefghijklmnopqrstuvwxyz',
+                            '₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐ' + 'b' + 'cdₑfgₕᵢⱼₖₗₘₙₒₚ' + 'q' + 'ᵣₛₜᵤᵥ' + 'w' + 'ₓ' + 'yz')
+_SUPERSCRIPT = str.maketrans('0123456789+-=()abcdefghijklmnopqrstuvwxyz',
+                              '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖ' + 'q' + 'ʳˢᵗᵘᵛʷˣʸᶻ')
+
+
+def _to_sub(s: str) -> str:
+    return s.translate(_SUBSCRIPT)
+
+
+def _to_sup(s: str) -> str:
+    return s.translate(_SUPERSCRIPT)
+
+
+def latex_to_readable(text: str) -> str:
+    """
+    Convert LaTeX math expressions in *text* to human-readable Unicode equivalents.
+
+    Handles:
+    - Display math:  $$...$$ and \\[...\\]
+    - Inline math:   $...$ and \\(...\\)
+    - \\frac{a}{b}  → (a/b)
+    - \\sqrt{x}     → √(x)
+    - \\int_{a}^{b} → ∫ₐᵇ
+    - \\sum_{i}^{n} → Σᵢⁿ
+    - \\prod_{i}^{n}→ Πᵢⁿ
+    - \\lim_{x→0}   → lim_{x→0}
+    - \\binom{n}{k} → C(n,k)
+    - Greek letters, operators, relations, arrows, sets, misc symbols
+    - Superscripts ^{...} and subscripts _{...}
+    """
+    if not text:
+        return text
+
+    # ── 1. Structural commands processed first (order matters) ───────────────
+
+    # \frac{numerator}{denominator}  →  (num/den)
+    def _frac(m):
+        num = latex_to_readable(m.group(1))
+        den = latex_to_readable(m.group(2))
+        return f'({num}/{den})'
+    text = re.sub(r'\\frac\{([^{}]*)\}\{([^{}]*)\}', _frac, text)
+
+    # \sqrt[n]{x}  →  ⁿ√(x)   or   \sqrt{x}  →  √(x)
+    def _sqrt(m):
+        n = m.group(1)
+        inner = latex_to_readable(m.group(2))
+        prefix = _to_sup(n) if n else ''
+        return f'{prefix}√({inner})'
+    text = re.sub(r'\\sqrt(?:\[([^\]]*)\])?\{([^{}]*)\}', _sqrt, text)
+
+    # \binom{n}{k}  →  C(n, k)
+    def _binom(m):
+        return f'C({latex_to_readable(m.group(1))}, {latex_to_readable(m.group(2))})'
+    text = re.sub(r'\\binom\{([^{}]*)\}\{([^{}]*)\}', _binom, text)
+
+    # \int_{lower}^{upper}  →  ∫ₗₒwₑᵣᵘᵖᵖᵉʳ
+    # \sum, \prod, \lim with optional limits
+    def _big_op(symbol):
+        def _replace(m):
+            sub = _to_sub(m.group(1)) if m.group(1) else ''
+            sup = _to_sup(m.group(2)) if m.group(2) else ''
+            return f'{symbol}{sub}{sup} '
+        return _replace
+
+    text = re.sub(r'\\int_\{([^{}]*)\}\^\{([^{}]*)\}', _big_op('∫'), text)
+    text = re.sub(r'\\int_\{([^{}]*)\}',                lambda m: f'∫{_to_sub(m.group(1))} ', text)
+    text = re.sub(r'\\int\^\{([^{}]*)\}',               lambda m: f'∫{_to_sup(m.group(1))} ', text)
+    text = re.sub(r'\\int\b',                            '∫', text)
+
+    text = re.sub(r'\\sum_\{([^{}]*)\}\^\{([^{}]*)\}',  _big_op('Σ'), text)
+    text = re.sub(r'\\sum_\{([^{}]*)\}',                 lambda m: f'Σ{_to_sub(m.group(1))} ', text)
+    text = re.sub(r'\\sum\b',                            'Σ', text)
+
+    text = re.sub(r'\\prod_\{([^{}]*)\}\^\{([^{}]*)\}', _big_op('Π'), text)
+    text = re.sub(r'\\prod_\{([^{}]*)\}',                lambda m: f'Π{_to_sub(m.group(1))} ', text)
+    text = re.sub(r'\\prod\b',                           'Π', text)
+
+    text = re.sub(r'\\lim_\{([^{}]*)\}',                 lambda m: f'lim({latex_to_readable(m.group(1))}) ', text)
+    text = re.sub(r'\\lim\b',                            'lim', text)
+
+    # Superscript: x^{expr} or x^n  (single char)
+    text = re.sub(r'\^\{([^{}]+)\}', lambda m: _to_sup(m.group(1)), text)
+    text = re.sub(r'\^([0-9a-zA-Z])', lambda m: _to_sup(m.group(1)), text)
+
+    # Subscript: x_{expr} or x_n  (single char)
+    text = re.sub(r'_\{([^{}]+)\}', lambda m: _to_sub(m.group(1)), text)
+    text = re.sub(r'_([0-9a-zA-Z])', lambda m: _to_sub(m.group(1)), text)
+
+    # \text{...}  →  just the inner text
+    text = re.sub(r'\\text\{([^{}]*)\}', r'\1', text)
+
+    # \left( \right)  →  ( )   etc.
+    text = re.sub(r'\\left\s*([({[\|])', r'\1', text)
+    text = re.sub(r'\\right\s*([)}\]|])', r'\1', text)
+    text = re.sub(r'\\left\.', '', text)
+    text = re.sub(r'\\right\.', '', text)
+
+    # ── 2. Symbol table (order: longer commands before shorter prefixes) ──────
+    _SYMBOLS = [
+        # Greek uppercase
+        (r'\\Gamma\b',    'Γ'),  (r'\\Delta\b',   'Δ'),  (r'\\Theta\b',   'Θ'),
+        (r'\\Lambda\b',   'Λ'),  (r'\\Xi\b',      'Ξ'),  (r'\\Pi\b',      'Π'),
+        (r'\\Sigma\b',    'Σ'),  (r'\\Upsilon\b', 'Υ'),  (r'\\Phi\b',     'Φ'),
+        (r'\\Psi\b',      'Ψ'),  (r'\\Omega\b',   'Ω'),
+        # Greek lowercase
+        (r'\\alpha\b',    'α'),  (r'\\beta\b',    'β'),  (r'\\gamma\b',   'γ'),
+        (r'\\delta\b',    'δ'),  (r'\\epsilon\b', 'ε'),  (r'\\varepsilon\b','ε'),
+        (r'\\zeta\b',     'ζ'),  (r'\\eta\b',     'η'),  (r'\\theta\b',   'θ'),
+        (r'\\vartheta\b', 'θ'),  (r'\\iota\b',    'ι'),  (r'\\kappa\b',   'κ'),
+        (r'\\lambda\b',   'λ'),  (r'\\mu\b',      'μ'),  (r'\\nu\b',      'ν'),
+        (r'\\xi\b',       'ξ'),  (r'\\pi\b',      'π'),  (r'\\varpi\b',   'π'),
+        (r'\\rho\b',      'ρ'),  (r'\\varrho\b',  'ρ'),  (r'\\sigma\b',   'σ'),
+        (r'\\varsigma\b', 'ς'),  (r'\\tau\b',     'τ'),  (r'\\upsilon\b', 'υ'),
+        (r'\\phi\b',      'φ'),  (r'\\varphi\b',  'φ'),  (r'\\chi\b',     'χ'),
+        (r'\\psi\b',      'ψ'),  (r'\\omega\b',   'ω'),
+        # Operators & relations
+        (r'\\times\b',    '×'),  (r'\\div\b',     '÷'),  (r'\\pm\b',      '±'),
+        (r'\\mp\b',       '∓'),  (r'\\cdot\b',    '·'),  (r'\\bullet\b',  '•'),
+        (r'\\circ\b',     '∘'),  (r'\\star\b',    '★'),  (r'\\ast\b',     '*'),
+        (r'\\oplus\b',    '⊕'),  (r'\\otimes\b',  '⊗'),  (r'\\odot\b',    '⊙'),
+        (r'\\leq\b',      '≤'),  (r'\\geq\b',     '≥'),  (r'\\neq\b',     '≠'),
+        (r'\\le\b',       '≤'),  (r'\\ge\b',      '≥'),  (r'\\ne\b',      '≠'),
+        (r'\\ll\b',       '≪'),  (r'\\gg\b',      '≫'),  (r'\\approx\b',  '≈'),
+        (r'\\sim\b',      '∼'),  (r'\\simeq\b',   '≃'),  (r'\\cong\b',    '≅'),
+        (r'\\equiv\b',    '≡'),  (r'\\propto\b',  '∝'),  (r'\\perp\b',    '⊥'),
+        (r'\\parallel\b', '∥'),  (r'\\angle\b',   '∠'),  (r'\\therefore\b','∴'),
+        (r'\\because\b',  '∵'),
+        # Set / logic
+        (r'\\in\b',       '∈'),  (r'\\notin\b',   '∉'),  (r'\\subset\b',  '⊂'),
+        (r'\\supset\b',   '⊃'),  (r'\\subseteq\b','⊆'),  (r'\\supseteq\b','⊇'),
+        (r'\\cup\b',      '∪'),  (r'\\cap\b',     '∩'),  (r'\\emptyset\b','∅'),
+        (r'\\varnothing\b','∅'), (r'\\forall\b',  '∀'),  (r'\\exists\b',  '∃'),
+        (r'\\nexists\b',  '∄'),  (r'\\neg\b',     '¬'),  (r'\\lnot\b',    '¬'),
+        (r'\\land\b',     '∧'),  (r'\\lor\b',     '∨'),  (r'\\wedge\b',   '∧'),
+        (r'\\vee\b',      '∨'),
+        # Arrows
+        (r'\\rightarrow\b','→'), (r'\\leftarrow\b','←'), (r'\\leftrightarrow\b','↔'),
+        (r'\\Rightarrow\b','⇒'), (r'\\Leftarrow\b','⇐'), (r'\\Leftrightarrow\b','⇔'),
+        (r'\\to\b',       '→'),  (r'\\gets\b',    '←'),  (r'\\mapsto\b',  '↦'),
+        (r'\\uparrow\b',  '↑'),  (r'\\downarrow\b','↓'), (r'\\updownarrow\b','↕'),
+        # Misc math
+        (r'\\infty\b',    '∞'),  (r'\\partial\b', '∂'),  (r'\\nabla\b',   '∇'),
+        (r'\\hbar\b',     'ℏ'),  (r'\\ell\b',     'ℓ'),  (r'\\Re\b',      'ℜ'),
+        (r'\\Im\b',       'ℑ'),  (r'\\aleph\b',   'ℵ'),
+        (r'\\cdots\b',    '⋯'),  (r'\\ldots\b',   '…'),  (r'\\vdots\b',   '⋮'),
+        (r'\\ddots\b',    '⋱'),  (r'\\dots\b',    '…'),
+        (r'\\prime\b',    '′'),  (r'\\degree\b',  '°'),
+        # Number sets
+        (r'\\mathbb\{R\}','ℝ'),  (r'\\mathbb\{Z\}','ℤ'),  (r'\\mathbb\{N\}','ℕ'),
+        (r'\\mathbb\{Q\}','ℚ'),  (r'\\mathbb\{C\}','ℂ'),  (r'\\mathbb\{P\}','ℙ'),
+        # Trig / functions (remove backslash, keep name)
+        (r'\\sin\b',  'sin'),   (r'\\cos\b',  'cos'),   (r'\\tan\b',  'tan'),
+        (r'\\sec\b',  'sec'),   (r'\\csc\b',  'csc'),   (r'\\cot\b',  'cot'),
+        (r'\\arcsin\b','arcsin'),(r'\\arccos\b','arccos'),(r'\\arctan\b','arctan'),
+        (r'\\sinh\b', 'sinh'),  (r'\\cosh\b', 'cosh'),  (r'\\tanh\b', 'tanh'),
+        (r'\\log\b',  'log'),   (r'\\ln\b',   'ln'),    (r'\\exp\b',  'exp'),
+        (r'\\det\b',  'det'),   (r'\\dim\b',  'dim'),   (r'\\ker\b',  'ker'),
+        (r'\\max\b',  'max'),   (r'\\min\b',  'min'),   (r'\\sup\b',  'sup'),
+        (r'\\inf\b',  'inf'),   (r'\\arg\b',  'arg'),   (r'\\gcd\b',  'gcd'),
+        (r'\\lcm\b',  'lcm'),   (r'\\mod\b',  'mod'),
+        # Spacing / formatting commands — strip silently
+        (r'\\,', ' '), (r'\\;', ' '), (r'\\:', ' '), (r'\\!', ''),
+        (r'\\quad\b', '  '), (r'\\qquad\b', '   '),
+        (r'\\\\', '\n'),          # LaTeX line break
+        (r'\\newline\b', '\n'),
+    ]
+
+    for pattern, replacement in _SYMBOLS:
+        text = re.sub(pattern, replacement, text)
+
+    # ── 3. Strip remaining unknown backslash commands ─────────────────────────
+    # e.g. \mathbf{x} → x,  \overline{AB} → AB
+    text = re.sub(r'\\[a-zA-Z]+\{([^{}]*)\}', r'\1', text)
+    # Bare unknown commands with no braces: \foo → (nothing)
+    text = re.sub(r'\\[a-zA-Z]+\b', '', text)
+
+    # ── 4. Strip math delimiters ──────────────────────────────────────────────
+    # Display math: $$...$$ and \[...\]  → content on its own line
+    text = re.sub(r'\$\$(.+?)\$\$', lambda m: f'\n{m.group(1).strip()}\n', text, flags=re.DOTALL)
+    text = re.sub(r'\\\[(.+?)\\\]',  lambda m: f'\n{m.group(1).strip()}\n', text, flags=re.DOTALL)
+    # Inline math: $...$ and \(...\)
+    text = re.sub(r'\$(.+?)\$',      lambda m: m.group(1).strip(), text)
+    text = re.sub(r'\\\((.+?)\\\)',  lambda m: m.group(1).strip(), text)
+
+    # ── 5. Strip any leftover lone braces ─────────────────────────────────────
+    text = re.sub(r'(?<!\\)[{}]', '', text)
+
+    return text
+
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Unified ViewSet for all Assignment operations including creation, 
@@ -296,7 +495,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
     # --- Export Helper Methods ---
 
     def _export_txt(self, assignment):
-        content = f"{assignment.title}\n\n{assignment.ai_response}"
+        content = f"{assignment.title}\n\n{latex_to_readable(assignment.ai_response or '')}"
         response = HttpResponse(content, content_type='text/plain')
         response['Content-Disposition'] = f'attachment; filename="{assignment.title}.txt"'
         return response
@@ -394,7 +593,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         ))
         story.append(Spacer(1, 24))
         
-        story.extend(parse_content(assignment.ai_response))
+        story.extend(parse_content(latex_to_readable(assignment.ai_response or '')))
         
         def add_footer(canvas, doc):
             canvas.saveState()
@@ -417,7 +616,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         from docx import Document
         doc = Document()
         doc.add_heading(assignment.title, 0)
-        doc.add_paragraph(assignment.ai_response)
+        doc.add_paragraph(latex_to_readable(assignment.ai_response or ''))
         buffer = io.BytesIO()
         doc.save(buffer)
         buffer.seek(0)
@@ -467,7 +666,7 @@ def export_assignment(request, pk):
     export_format = request.query_params.get('format', 'pdf').lower()
 
     if export_format == 'txt':
-        content = f"{assignment.title}\n\n{assignment.ai_response}"
+        content = f"{assignment.title}\n\n{latex_to_readable(assignment.ai_response or '')}"
         resp = HttpResponse(content, content_type='text/plain')
         resp['Content-Disposition'] = f'attachment; filename="{_safe_filename_util(assignment.title)}.txt"'
         return resp
@@ -477,7 +676,7 @@ def export_assignment(request, pk):
             from docx import Document
             doc = Document()
             doc.add_heading(assignment.title, 0)
-            doc.add_paragraph(assignment.ai_response or '')
+            doc.add_paragraph(latex_to_readable(assignment.ai_response or ''))
             buf = io.BytesIO()
             doc.save(buf)
             buf.seek(0)
@@ -539,7 +738,7 @@ def export_assignment(request, pk):
         meta = ParagraphStyle('M', parent=body_style, fontSize=9, textColor=HexColor('#64748b'))
         story.append(Paragraph(f"Subject: {assignment.subject or 'General'}", meta))
         story.append(Spacer(1, 20))
-        story.extend(parse_md(assignment.ai_response or ''))
+        story.extend(parse_md(latex_to_readable(assignment.ai_response or '')))
 
         def footer(canvas, doc):
             canvas.saveState()

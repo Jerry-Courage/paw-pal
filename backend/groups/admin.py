@@ -81,3 +81,13 @@ class GroupMessageAdmin(admin.ModelAdmin):
             return format_html('<span style="color:#0EA5E9;font-weight:600;">✦ AI</span>')
         return '—'
     is_ai_badge.short_description = 'AI'
+
+
+from .models import GroupDocument
+
+@admin.register(GroupDocument)
+class GroupDocumentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'group', 'author', 'created_at', 'updated_at')
+    list_filter = ('group',)
+    search_fields = ('title', 'content', 'group__name', 'author__email')
+    readonly_fields = ('created_at', 'updated_at')

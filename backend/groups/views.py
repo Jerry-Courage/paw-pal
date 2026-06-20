@@ -3,10 +3,10 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument
 from .serializers import (
     StudyGroupSerializer, GroupSessionSerializer,
-    GroupTaskSerializer, GroupMessageSerializer
+    GroupTaskSerializer, GroupMessageSerializer, GroupDocumentSerializer
 )
 from ai_assistant.services import AIService
 
@@ -119,3 +119,25 @@ class GroupMessageView(generics.ListCreateAPIView):
 
     def get_serializer_context(self):
         return {'request': self.request}
+
+
+class GroupDocumentView(generics.ListCreateAPIView):
+    """List and create documents for a group."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = GroupDocumentSerializer
+
+    def get_queryset(self):
+        return GroupDocument.objects.filter(group_id=self.kwargs['group_id'])
+
+    def perform_create(self, serializer):
+        group = get_object_or_404(StudyGroup, pk=self.kwargs['group_id'])
+        serializer.save(group=group, author=self.request.user)
+
+
+class GroupDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a single group document."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = GroupDocumentSerializer
+
+    def get_queryset(self):
+        return GroupDocument.objects.filter(group_id=self.kwargs['group_id'])

@@ -12,6 +12,13 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   const session = await getSession()
+  // If the refresh token itself has expired, sign the user out immediately
+  if ((session as any)?.error === 'RefreshAccessTokenError') {
+    if (typeof window !== 'undefined' && !(window as any)._isRedirecting) {
+      (window as any)._isRedirecting = true
+      await signOut({ callbackUrl: '/login', redirect: true })
+    }
+  }
   if (session?.accessToken) {
     config.headers.Authorization = `Bearer ${session.accessToken}`
   }
@@ -368,7 +375,7 @@ export const communityApi = {
     api.post(`/community/posts/${postId}/comments/`, { content }),
   likeComment: (id: number) => api.post(`/community/comments/${id}/like/`),
   getAIAnswer: (postId: number) => api.post(`/community/posts/${postId}/ai-answer/`),
-  deletePost: (id: number) => api.delete('/community/posts/${id}/'),
+  deletePost: (id: number) => api.delete(`/community/posts/${id}/`),
   getRooms: () => api.get('/community/rooms/'),
   createRoom: (data: any) => api.post('/community/rooms/', data),
   joinRoom: (id: number) => api.post(`/community/rooms/${id}/join/`),

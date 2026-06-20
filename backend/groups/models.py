@@ -70,3 +70,22 @@ class GroupMessage(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+
+class GroupDocument(models.Model):
+    """Shared collaborative document within a study group."""
+    group = models.ForeignKey(StudyGroup, on_delete=models.CASCADE, related_name='documents')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, related_name='group_documents'
+    )
+    title = models.CharField(max_length=300)
+    content = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'{self.group.name} — {self.title}'

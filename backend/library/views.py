@@ -120,7 +120,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         # Increment lifetime counter — never decremented on delete
         user = self.request.user
         user.__class__.objects.filter(pk=user.pk).update(
-            total_resources_created=models.F('total_resources_created') + 1
+            total_resources_created=F('total_resources_created') + 1
         )
 
         # Auto-detect resource_type for PPTX files

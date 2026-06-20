@@ -110,11 +110,17 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
     onError: (err: any) => {
       setStage('idle')
       setUploadProgress(0)
-      // Backend freemium gate returns 402
-      if (err?.response?.status === 402) {
+      const status = err?.response?.status
+      const data   = err?.response?.data
+
+      // Backend freemium gate returns 402 with error: 'free_limit_reached'
+      if (status === 402 || data?.error === 'free_limit_reached') {
+        refetchSub() // refresh usage count so the badge updates
         setShowPaywall(true)
+      } else if (status === 413 || data?.error?.toLowerCase?.()?.includes('too large') || data?.error?.toLowerCase?.()?.includes('file too large')) {
+        toast.error('File is too large. Maximum size is 50 MB.')
       } else {
-        toast.error('Upload failed. Please try a smaller file.')
+        toast.error(data?.error || data?.detail || 'Upload failed. Please check your file and try again.')
       }
     },
   })
@@ -145,7 +151,8 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
     if (!title) { toast.error('Please add a title.'); return }
     if (type !== 'video' && !file) { toast.error('Please select a file.'); return }
     if (type === 'video' && !url) { toast.error('Please provide a YouTube URL.'); return }
-    // Check free limit before proceeding to features step
+    // Check free limit before proceeding — show paywall immediately instead of letting the
+    // request go through and getting a confusing error back from the server
     if (atLimit) { setShowPaywall(true); return }
     setStep('features')
   }
