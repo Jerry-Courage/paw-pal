@@ -23,6 +23,15 @@ except Exception as e:
     print(f'Skipping pgvector enable: {e}')
 "
 
-python manage.py migrate --noinput
-python manage.py clear_dead_tasks || true
-python manage.py seed_discovery || true
+# NOTE: migrate intentionally runs at startup (in render.yaml startCommand),
+# not here — Render's internal DB DNS is not available during the build phase.
+python -c "
+import os, subprocess
+try:
+    import psycopg2
+    psycopg2.connect(os.getenv('DATABASE_URL')).close()
+    subprocess.run(['python', 'manage.py', 'clear_dead_tasks'], check=False)
+    subprocess.run(['python', 'manage.py', 'seed_discovery'], check=False)
+except Exception as e:
+    print(f'Skipping post-migrate steps (DB not reachable at build time): {e}')
+"

@@ -5,7 +5,7 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "daphne -b 0.0.0.0 -p $PORT core.asgi:application"
+    startCommand: "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT core.asgi:application"
     rootDir: backend
     envVars:
       - key: DATABASE_URL
