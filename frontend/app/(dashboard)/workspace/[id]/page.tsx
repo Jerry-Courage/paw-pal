@@ -336,6 +336,18 @@ export default function WorkspaceCollaborationStudio() {
 
   const startRecording = async () => {
     try {
+      // Check if browser supports getUserMedia at all
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('Microphone not supported in this browser. Try Chrome or Firefox.')
+        return
+      }
+
+      // Check if we're on HTTPS (required for mic access in production)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        toast.error('Microphone requires a secure connection (HTTPS). Please use the app over HTTPS.')
+        return
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = getSupportedMimeType()
       const recorder = new MediaRecorder(stream, { mimeType })
@@ -355,8 +367,18 @@ export default function WorkspaceCollaborationStudio() {
       timerRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1)
       }, 1000)
-    } catch (err) {
-      console.error("Recording failed", err)
+    } catch (err: any) {
+      console.error('Recording failed', err)
+      // Give the user a clear, actionable error message
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        toast.error('Microphone access denied. Please allow microphone permission in your browser settings and try again.')
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        toast.error('No microphone found. Please connect a microphone and try again.')
+      } else if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') {
+        toast.error('Microphone is in use by another app. Close other apps using the mic and try again.')
+      } else {
+        toast.error('Could not start recording. Please check your microphone and try again.')
+      }
     }
   }
 

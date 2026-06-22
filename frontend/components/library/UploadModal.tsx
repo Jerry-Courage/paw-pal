@@ -82,12 +82,20 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
         const myResource = data.find((r: any) => r.id === resourceId)
         if (myResource) {
           setProcessingStatus({ progress: myResource.progress || 0, text: myResource.text || 'Building your study kit...' })
-          if (myResource.status === 'ready' && myResource.progress >= 100) {
+          // Only mark complete when status=ready AND has_study_kit=true
+          // has_study_kit is set AFTER the AI kit is fully written — prevents
+          // the "says ready but still building" race condition
+          if (myResource.status === 'ready' && myResource.has_study_kit === true) {
             setStage('complete')
             setProcessingStatus({ progress: 100, text: 'All features ready!' })
             qc.invalidateQueries({ queryKey: ['resources'] })
             toast.success('Your study kit is ready!')
             setTimeout(onClose, 1500)
+          } else if (myResource.status === 'error') {
+            setStage('idle')
+            setProcessingStatus({ progress: 0, text: '' })
+            toast.error(myResource.text || 'Generation failed. Please try again.')
+            eventSource?.close()
           }
         }
       })

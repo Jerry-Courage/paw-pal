@@ -165,7 +165,10 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
     queryFn: () => libraryApi.getResource(id).then(r => r.data),
     refetchInterval: (query) => {
       const data = query.state.data as any
-      return (data?.status === 'processing' || !data?.has_study_kit) ? 5000 : false
+      // Keep polling until BOTH status is ready AND has_study_kit is true
+      // This prevents the "says ready but still building" race condition
+      const isFullyReady = data?.status === 'ready' && data?.has_study_kit === true
+      return isFullyReady ? false : 4000
     }
   })
 
