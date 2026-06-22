@@ -610,12 +610,29 @@ class AIService:
         return ""
 
     def kit_chat_sync(self, messages: list, **kwargs) -> str:
-        """Synchronous wrapper for kit_chat. Used by generate_study_kit."""
-        return async_to_sync(self.kit_chat)(messages, **kwargs)
+        """
+        Synchronous wrapper for kit_chat. Used by generate_study_kit background threads.
+        Uses asyncio.run() instead of async_to_sync() to avoid event loop conflicts
+        when called from ThreadPoolExecutor threads inside an ASGI (daphne) process.
+        """
+        import asyncio
+        try:
+            # asyncio.run() always creates a fresh event loop — safe from any thread
+            return asyncio.run(self.kit_chat(messages, **kwargs))
+        except RuntimeError:
+            # Fallback: if a loop is already running (shouldn't happen in a thread, but just in case)
+            return async_to_sync(self.kit_chat)(messages, **kwargs)
 
     def chat_sync(self, messages: list, **kwargs) -> str:
-        """Synchronous wrapper for the Triple-Engine Chat. CRITICAL for background tasks."""
-        return async_to_sync(self.chat)(messages, **kwargs)
+        """
+        Synchronous wrapper for chat. CRITICAL for background tasks.
+        Uses asyncio.run() to avoid event loop conflicts in ASGI/daphne threads.
+        """
+        import asyncio
+        try:
+            return asyncio.run(self.chat(messages, **kwargs))
+        except RuntimeError:
+            return async_to_sync(self.chat)(messages, **kwargs)
 
     async def collab_chat(self, messages: list, max_tokens: int = 4096) -> str:
         """High-Fidelity Collab Signal: Groq (Primary) -> OpenRouter Free."""
@@ -623,8 +640,15 @@ class AIService:
         return await self.chat(messages, max_tokens=max_tokens) # Reuse resilient chat logic
 
     def collab_chat_sync(self, messages: list, **kwargs) -> str:
-        """Synchronous bridge for Collab Space threads."""
-        return async_to_sync(self.collab_chat)(messages, **kwargs)
+        """
+        Synchronous bridge for Collab Space threads.
+        Uses asyncio.run() to avoid event loop conflicts in ASGI/daphne threads.
+        """
+        import asyncio
+        try:
+            return asyncio.run(self.collab_chat(messages, **kwargs))
+        except RuntimeError:
+            return async_to_sync(self.collab_chat)(messages, **kwargs)
 
     async def fast_chat(self, messages: list) -> str:
         """High-speed chat bridge. Now powered by the Unified Triple-Engine."""
