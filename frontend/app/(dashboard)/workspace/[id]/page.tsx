@@ -273,16 +273,16 @@ export default function WorkspaceCollaborationStudio() {
     const types = [
       'audio/webm;codecs=opus',
       'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
       'audio/mp4',
-      'audio/mpeg',
-      'audio/wav',
     ]
     for (const type of types) {
       if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
         return type
       }
     }
-    return 'audio/mpeg' // Fallback
+    return '' // Let the browser pick its default — never force audio/mpeg
   }
 
   const handleSendMessage = async (e?: React.FormEvent, audioBlob?: Blob) => {
@@ -350,18 +350,31 @@ export default function WorkspaceCollaborationStudio() {
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = getSupportedMimeType()
-      const recorder = new MediaRecorder(stream, { mimeType })
+
+      let recorder: MediaRecorder
+      try {
+        // Only pass mimeType if we actually detected one — empty string causes errors on some browsers
+        recorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream)
+      } catch {
+        // mimeType still not supported despite isTypeSupported saying yes — use browser default
+        recorder = new MediaRecorder(stream)
+      }
+
       recorderRef.current = recorder
       chunksRef.current = []
 
-      recorder.ondataavailable = (e) => chunksRef.current.push(e.data)
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+      }
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType })
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
         handleSendMessage(undefined, blob)
         stream.getTracks().forEach(t => t.stop())
       }
 
-      recorder.start()
+      recorder.start(250) // collect data every 250ms so ondataavailable fires reliably
       setIsRecording(true)
       setRecordingDuration(0)
       timerRef.current = setInterval(() => {

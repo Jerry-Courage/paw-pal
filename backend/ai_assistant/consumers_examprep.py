@@ -339,8 +339,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         )
 
         try:
-            from asgiref.sync import sync_to_async
-            result = await sync_to_async(ai.chat_sync)([{'role': 'user', 'content': prompt}])
+            # Call the async chat method directly — we're already in an async context
+            result = await ai.chat([{'role': 'user', 'content': prompt}])
             report = ai._parse_json(result, {})
             if isinstance(report, dict) and report.get('summary'):
                 return report

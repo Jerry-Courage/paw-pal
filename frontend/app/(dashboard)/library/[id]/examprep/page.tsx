@@ -299,6 +299,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           })
         } else if (msg.type === 'session_report') {
           setReport(msg.report)
+          setIsEndingSession(false)
           setPhase('report')
           stopMic()
         } else if (msg.type === 'error') {
@@ -367,9 +368,19 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     setIsRecording(false)
   }
 
+  const [isEndingSession, setIsEndingSession] = useState(false)
+
   const endSession = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'end_session' }))
+      setIsEndingSession(true)
+    } else {
+      // WebSocket already closed — just go back to setup
+      stopMic()
+      clearInterval(timerRef.current)
+      setPhase('setup')
+      setTranscript([])
+      setSessionDuration(0)
     }
     stopMic()
     clearInterval(timerRef.current)
@@ -638,9 +649,11 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             <p className="text-xs text-slate-500 font-medium">{formatTime(sessionDuration)}</p>
           </div>
         </div>
-        <button onClick={endSession}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-black hover:bg-red-500/15 transition-all">
-          <Square className="w-3.5 h-3.5 fill-current" /> End Session
+        <button onClick={endSession} disabled={isEndingSession}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-black hover:bg-red-500/15 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+          {isEndingSession
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating report...</>
+            : <><Square className="w-3.5 h-3.5 fill-current" /> End Session</>}
         </button>
       </div>
       
