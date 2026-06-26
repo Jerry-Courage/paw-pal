@@ -181,7 +181,9 @@ export default function WorkspaceCollaborationStudio() {
         socket.onmessage = (event) => {
           const data = JSON.parse(event.data)
           if (data.type === 'broadcast_chat_message') {
-            const msg = data.message
+            // consumers.py flattens the message fields into the top-level payload
+            // so all fields (id, content, author_name, etc.) are on `data` directly
+            const msg = data
             setMessages(prev => {
               if (prev.find(m => String(m.id) === String(msg.id))) return prev
               
@@ -369,9 +371,14 @@ export default function WorkspaceCollaborationStudio() {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
       }
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
-        handleSendMessage(undefined, blob)
-        stream.getTracks().forEach(t => t.stop())
+        // Use setTimeout to yield to the event loop so the final
+        // ondataavailable chunk fires before we build the Blob
+        setTimeout(() => {
+          const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+          chunksRef.current = []
+          handleSendMessage(undefined, blob)
+          stream.getTracks().forEach(t => t.stop())
+        }, 0)
       }
 
       recorder.start(250) // collect data every 250ms so ondataavailable fires reliably
@@ -398,6 +405,7 @@ export default function WorkspaceCollaborationStudio() {
   const stopRecording = () => {
     if (recorderRef.current && isRecording) {
       recorderRef.current.stop()
+      recorderRef.current = null  // clear ref so stale chunks don't bleed into next recording
       setIsRecording(false)
       clearInterval(timerRef.current)
     }
