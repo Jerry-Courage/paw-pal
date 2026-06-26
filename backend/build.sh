@@ -2,6 +2,10 @@
 # exit on error
 set -o errexit
 
+# Install LibreOffice for PPTX→PDF conversion (gives slides same quality as PDF uploads)
+# Suppressed output to keep build logs clean — fails silently if unavailable
+apt-get install -y --no-install-recommends libreoffice 2>/dev/null || echo "LibreOffice not available, PPTX will use fallback extraction"
+
 pip install -r requirements.txt
 
 python manage.py collectstatic --noinput
