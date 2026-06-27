@@ -102,10 +102,25 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
 
         elif msg_type == 'text_message':
             # User typed a message instead of speaking
+            # Use realtimeInput text so Gemini responds with voice in the audio session
             text = msg.get('text', '').strip()
             if text and self.gemini_ws and self.session_active:
                 self.transcript_log.append(('user', text))
-                await self._send_text_to_gemini(text)
+                # Echo back to browser transcript immediately
+                await self._send({'type': 'transcript_user', 'text': text})
+                # Send via realtimeInput so Gemini treats it as spoken input
+                # and responds with audio (not just text)
+                try:
+                    realtime_msg = {
+                        'realtimeInput': {
+                            'text': text
+                        }
+                    }
+                    await self.gemini_ws.send(json.dumps(realtime_msg))
+                except Exception as e:
+                    logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
+                    # Fallback: use clientContent turn
+                    await self._send_text_to_gemini(text)
 
         elif msg_type == 'end_session':
             await self._end_session()

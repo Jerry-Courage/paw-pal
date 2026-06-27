@@ -333,28 +333,44 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   // Called AFTER mic stream is already acquired (inside the button click gesture)
   const activateMicProcessor = (stream: MediaStream) => {
     try {
-      const ctx = new AudioContext()
+      const ctx = new AudioContext({ sampleRate: 16000 })
+      audioCtxRef.current = ctx
+
+      // Resume AudioContext if it gets suspended by browser autoplay policy
+      // This is the most common reason mic stops after a few seconds
+      const resumeCtx = () => {
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {})
+        }
+      }
+      // Poll every 500ms — lightweight, stops when processor is gone
+      const resumeInterval = setInterval(() => {
+        if (!processorRef.current) { clearInterval(resumeInterval); return }
+        resumeCtx()
+      }, 500)
+
       const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(4096, 1, 1)
+      const processor = ctx.createScriptProcessor(2048, 1, 1)
       processorRef.current = processor
 
-      processor.onaudioprocess = async (e) => {
+      processor.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
-        try {
-          const pcm16 = await resampleTo16k(float32, ctx.sampleRate)
-          const b64 = int16ToBase64(pcm16)
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
-          }
-        } catch (err) {
-          // Resampling failed, skip chunk
+        // Inline int16 conversion — avoids async resampling which can stall
+        const pcm16 = new Int16Array(float32.length)
+        for (let i = 0; i < float32.length; i++) {
+          pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
         }
+        const bytes = new Uint8Array(pcm16.buffer)
+        let binary = ''
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+        const b64 = btoa(binary)
+        wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
       }
 
       source.connect(processor)
-      // Connect to a silent gain node — required for onaudioprocess to fire,
-      // but volume 0 so mic audio doesn't play back through speakers
+      // Connect to a silent gain node — required for onaudioprocess to fire
       const silentGain = ctx.createGain()
       silentGain.gain.value = 0
       processor.connect(silentGain)
@@ -456,9 +472,14 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   // ── Send text message to AI via WebSocket ─────────────────────────────────
   const sendTextMessage = () => {
     const text = textInput.trim()
-    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
+    if (!text) { toast.error('Type something first.'); return }
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      toast.error('Not connected. Please start a session first.')
+      return
+    }
+    // Show in transcript immediately
     setTranscript(prev => [...prev, { role: 'user', text, ts: Date.now() }])
+    wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
     setTextInput('')
   }
 
