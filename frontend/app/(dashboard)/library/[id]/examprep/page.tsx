@@ -280,6 +280,11 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           setPhase('session')
           // Mic stream already acquired — just wire up the processor
           activateMicProcessor(streamRef.current!)
+          // Notify user about keyboard shortcut and text fallback
+          toast('🎤 Session started! Hold Ctrl+Space to toggle mic, or type below if mic isn\'t working.', {
+            duration: 5000,
+            icon: '💡',
+          })
         } else if (msg.type === 'audio') {
           const pcm = base64ToPcmFloat(msg.data)
           playAudioChunk(pcm)

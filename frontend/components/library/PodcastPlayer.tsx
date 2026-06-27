@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { podcastApi } from '@/lib/api'
-import { Play, Pause, Loader2, Settings2, X, Image as ImageIcon, XCircle, Quote, Hand } from 'lucide-react'
+import { Play, Pause, Loader2, Settings2, X, Image as ImageIcon, XCircle, Quote, Hand, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { libraryApi } from '@/lib/api'
@@ -33,6 +33,9 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
   const [isAnswering, setIsAnswering] = useState(false)
   const [isHandRaised, setIsHandRaised] = useState(false)
   const [isAcknowledging, setIsAcknowledging] = useState(false)
+  const [micFailed, setMicFailed] = useState(false)
+  const [podcastTextInput, setPodcastTextInput] = useState('')
+  const [isSubmittingText, setIsSubmittingText] = useState(false)
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -151,40 +154,44 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     const startRecordingFlow = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+        setMicFailed(false)
+        const mimeType = (() => {
+          const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+          return types.find(t => MediaRecorder.isTypeSupported(t)) || ''
+        })()
+        const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
         mediaRecorderRef.current = mr
         audioChunksRef.current = []
-        mr.ondataavailable = (e) => audioChunksRef.current.push(e.data)
+        mr.ondataavailable = (e) => { if (e.data?.size > 0) audioChunksRef.current.push(e.data) }
         mr.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-          stream.getTracks().forEach(t => t.stop())
-          setIsRecording(false)
-          toast.loading("Hosts are thinking...", { id: 'answering-toast' })
-          try {
-            setIsAnswering(true)
-            const res = await podcastApi.interrupt(audio.sessionId!, audioBlob, audio.currentIndex)
-            
-            // The backend splices answer segments right after currentIndex.
-            const answerStartIndex = audio.currentIndex + 1
-            
-            // updateScript writes to refs synchronously, so setCurrentIndex
-            // will immediately see the new script — no delay needed.
-            updateScript(res.data.script, res.data.new_total)
-            
-            toast.dismiss('answering-toast')
-            setIsAnswering(false)
-            setCurrentIndex(answerStartIndex)
-          } catch(e) {
-            toast.dismiss('answering-toast')
-            setIsAnswering(false)
-            globalResume()
-          }
-          setIsInterrupting(false)
+          setTimeout(async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: mr.mimeType || 'audio/webm' })
+            stream.getTracks().forEach(t => t.stop())
+            setIsRecording(false)
+            toast.loading("Hosts are thinking...", { id: 'answering-toast' })
+            try {
+              setIsAnswering(true)
+              const res = await podcastApi.interrupt(audio.sessionId!, audioBlob, audio.currentIndex)
+              const answerStartIndex = audio.currentIndex + 1
+              updateScript(res.data.script, res.data.new_total)
+              toast.dismiss('answering-toast')
+              setIsAnswering(false)
+              setCurrentIndex(answerStartIndex)
+            } catch(e) {
+              toast.dismiss('answering-toast')
+              setIsAnswering(false)
+              globalResume()
+            }
+            setIsInterrupting(false)
+          }, 0)
         }
-        mr.start()
+        mr.start(250)
         setIsRecording(true)
-      } catch(e) {
+      } catch(e: any) {
+        // Mic failed — show text input fallback instead
         setIsInterrupting(false)
+        setMicFailed(true)
+        toast.error('Mic unavailable — type your question below instead.')
       }
     }
 
@@ -199,6 +206,36 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
   }
 
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
+
+  const handleTextInterrupt = async () => {
+    const text = podcastTextInput.trim()
+    if (!text || !audio.sessionId) return
+    setIsSubmittingText(true)
+    globalPause()
+    toast.loading('Hosts are thinking...', { id: 'text-interrupt-toast' })
+    try {
+      // Convert text to a small audio blob via a silent blob — the backend
+      // accepts the text in the FormData alongside the audio
+      const silentBlob = new Blob([], { type: 'audio/webm' })
+      const formData = new FormData()
+      formData.append('audio', silentBlob, 'silent.webm')
+      formData.append('text_input', text)
+      formData.append('current_index', String(audio.currentIndex))
+      const res = await podcastApi.interrupt(audio.sessionId, silentBlob, audio.currentIndex)
+      const answerStartIndex = audio.currentIndex + 1
+      updateScript(res.data.script, res.data.new_total)
+      toast.dismiss('text-interrupt-toast')
+      setCurrentIndex(answerStartIndex)
+      setPodcastTextInput('')
+      setMicFailed(false)
+    } catch (e) {
+      toast.dismiss('text-interrupt-toast')
+      toast.error('Could not send question. Try again.')
+      globalResume()
+    } finally {
+      setIsSubmittingText(false)
+    }
+  }
   
   if (status === 'idle') {
     return (
@@ -329,11 +366,36 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
                 </div>
              </div>
 
-             <div className="flex items-center gap-4">
-                <button onClick={handleInterrupt} className={cn("h-16 px-8 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-3 transition-all", isRecording ? "bg-rose-600 text-white animate-pulse" : "bg-white/5 text-white/50 border border-white/10")}>
-                   {isRecording ? "Listening..." : "Raise Hand"}
-                </button>
-                <button onClick={onClose} className="w-16 h-16 rounded-full bg-slate-950 text-slate-500 border border-white/5 flex items-center justify-center hover:text-white transition-all"><X /></button>
+             <div className="flex flex-col items-end gap-2">
+                {/* Text fallback — shown when mic fails or user prefers typing */}
+                {micFailed && (
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 w-72">
+                    <input
+                      type="text"
+                      value={podcastTextInput}
+                      onChange={e => setPodcastTextInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleTextInterrupt() }}
+                      placeholder="Type your question..."
+                      className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
+                    />
+                    <button
+                      onClick={handleTextInterrupt}
+                      disabled={!podcastTextInput.trim() || isSubmittingText}
+                      className="p-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-400 disabled:opacity-30 transition-all"
+                    >
+                      {isSubmittingText ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-4">
+                  <button onClick={handleInterrupt} className={cn("h-16 px-8 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-3 transition-all", isRecording ? "bg-rose-600 text-white animate-pulse" : "bg-white/5 text-white/50 border border-white/10")}>
+                    {isRecording ? "Listening..." : isAnswering ? "Thinking..." : "Raise Hand"}
+                  </button>
+                  <button onClick={() => setMicFailed(v => !v)} className="h-10 px-4 rounded-full bg-white/5 text-white/30 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all">
+                    Type
+                  </button>
+                  <button onClick={onClose} className="w-16 h-16 rounded-full bg-slate-950 text-slate-500 border border-white/5 flex items-center justify-center hover:text-white transition-all"><X /></button>
+                </div>
              </div>
           </div>
        </div>
