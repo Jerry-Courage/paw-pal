@@ -161,9 +161,6 @@ class DocumentChunk(models.Model):
     def __str__(self):
         return f"Chunk for {self.resource.title}"
 
-# ResourceProgress is defined in progress.py in this same app package.
-# Django discovers it automatically — no explicit import needed here.
-
 class ResourceProgress(models.Model):
     """Tracks study path progress per user per resource."""
     STEP_ORDER = ['notes', 'flashcards', 'quiz', 'practice', 'examprep']
