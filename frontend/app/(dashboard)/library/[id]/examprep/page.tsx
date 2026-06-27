@@ -298,6 +298,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             return [...prev, { role, text: msg.text, ts: Date.now() }]
           })
         } else if (msg.type === 'session_report') {
+          clearTimeout(endSessionTimeoutRef.current)
           setReport(msg.report)
           setIsEndingSession(false)
           setPhase('report')
@@ -369,21 +370,91 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   }
 
   const [isEndingSession, setIsEndingSession] = useState(false)
+  const [textInput, setTextInput] = useState('')
+  const endSessionTimeoutRef = useRef<any>(null)
 
   const endSession = () => {
+    stopMic()
+    clearInterval(timerRef.current)
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'end_session' }))
       setIsEndingSession(true)
+
+      // Safety timeout — if backend doesn't send session_report within 20s,
+      // show a fallback report so the user isn't stuck forever
+      endSessionTimeoutRef.current = setTimeout(() => {
+        setIsEndingSession(false)
+        if (!report) {
+          setReport({
+            summary: `You completed a ${formatTime(sessionDuration)} session on "${resource?.title || 'this material'}".`,
+            strengths: transcript.filter(e => e.role === 'user').length > 0
+              ? ['You engaged with the material and practiced explaining concepts out loud.']
+              : [],
+            gaps: ['Session report could not be generated — the AI connection timed out.'],
+            score: 50,
+            recommendation: 'Try again with a stable internet connection. Review your notes before the next session.',
+          })
+        }
+        setPhase('report')
+      }, 20000)
     } else {
-      // WebSocket already closed — just go back to setup
-      stopMic()
-      clearInterval(timerRef.current)
-      setPhase('setup')
-      setTranscript([])
-      setSessionDuration(0)
+      // WebSocket already closed — build a basic report from transcript
+      const userTurns = transcript.filter(e => e.role === 'user')
+      setReport({
+        summary: `Session of ${formatTime(sessionDuration)} completed. ${userTurns.length} responses recorded.`,
+        strengths: userTurns.length > 2 ? ['You actively participated in the session.'] : [],
+        gaps: userTurns.length < 2 ? ['Very few responses — try speaking more in the next session.'] : [],
+        score: Math.min(80, 30 + userTurns.length * 10),
+        recommendation: 'Review the material and try another session to deepen your understanding.',
+      })
+      setPhase('report')
     }
-    stopMic()
-    clearInterval(timerRef.current)
+  }
+
+  // Clear the safety timeout once the real report arrives
+  // (handled in ws.onmessage where setPhase('report') is called)
+
+  // ── Ctrl-to-talk: hold Ctrl key to mute/unmute mic ────────────────────────
+  useEffect(() => {
+    if (phase !== 'session') return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl (Windows/Linux) or Cmd (Mac) + Space = push-to-talk
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+        e.preventDefault()
+        // Toggle mute: pause/resume audio processing by disconnecting the processor
+        if (processorRef.current && audioCtxRef.current) {
+          if (isRecording) {
+            processorRef.current.disconnect()
+            setIsRecording(false)
+          } else {
+            if (streamRef.current) {
+              // Reconnect processor
+              const source = audioCtxRef.current.createMediaStreamSource(streamRef.current)
+              source.connect(processorRef.current)
+              const silentGain = audioCtxRef.current.createGain()
+              silentGain.gain.value = 0
+              processorRef.current.connect(silentGain)
+              silentGain.connect(audioCtxRef.current.destination)
+              setIsRecording(true)
+            }
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [phase, isRecording])
+
+  // ── Send text message to AI via WebSocket ─────────────────────────────────
+  const sendTextMessage = () => {
+    const text = textInput.trim()
+    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
+    setTranscript(prev => [...prev, { role: 'user', text, ts: Date.now() }])
+    setTextInput('')
   }
 
   const resetSession = () => {
@@ -763,6 +834,30 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             <div ref={transcriptEndRef} />
           </div>
         </div>
+      </div>
+
+      {/* Text input fallback + Ctrl hint */}
+      <div className="px-5 pt-3 pb-1 shrink-0 border-t border-white/5">
+        <div className="flex items-center gap-2 bg-white/[0.03] border border-white/8 rounded-2xl px-3 py-2 focus-within:border-orange-500/30 transition-colors">
+          <input
+            type="text"
+            value={textInput}
+            onChange={e => setTextInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage() } }}
+            placeholder="Type a message or hold Ctrl+Space to talk…"
+            className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
+          />
+          <button
+            onClick={sendTextMessage}
+            disabled={!textInput.trim()}
+            className="p-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-400 disabled:opacity-30 disabled:pointer-events-none transition-all"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <p className="text-center text-[9px] text-slate-700 mt-1.5">
+          Hold <kbd className="px-1 py-0.5 rounded bg-white/5 text-slate-500 font-mono text-[9px]">Ctrl+Space</kbd> to toggle mic
+        </p>
       </div>
 
       {/* Mic status bar */}

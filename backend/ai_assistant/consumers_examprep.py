@@ -100,6 +100,13 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 if audio_b64:
                     await self._send_audio_to_gemini(audio_b64)
 
+        elif msg_type == 'text_message':
+            # User typed a message instead of speaking
+            text = msg.get('text', '').strip()
+            if text and self.gemini_ws and self.session_active:
+                self.transcript_log.append(('user', text))
+                await self._send_text_to_gemini(text)
+
         elif msg_type == 'end_session':
             await self._end_session()
 
