@@ -3,8 +3,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import Resource
-from .progress import ResourceProgress, STEP_ORDER, STEP_XP
+from .models import Resource, ResourceProgress
+
+STEP_ORDER = ['notes', 'flashcards', 'quiz', 'practice', 'examprep']
+STEP_XP = {'notes': 50, 'flashcards': 75, 'quiz': 100, 'practice': 100, 'examprep': 150}
 
 
 class ResourceProgressView(APIView):

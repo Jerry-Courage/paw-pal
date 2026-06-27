@@ -86,9 +86,10 @@ class ResourceProgress(models.Model):
         if xp_gained > 0:
             try:
                 from django.contrib.auth import get_user_model
+                from django.db.models import F
                 User = get_user_model()
                 User.objects.filter(pk=self.user_id).update(
-                    xp=models.F('xp') + xp_gained
+                    xp=F('xp') + xp_gained
                 )
             except Exception:
                 pass  # xp field may not exist yet — handled gracefully

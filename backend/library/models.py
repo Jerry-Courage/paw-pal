@@ -161,10 +161,63 @@ class DocumentChunk(models.Model):
     def __str__(self):
         return f"Chunk for {self.resource.title}"
 
-# Import ResourceProgress so Django's app registry picks it up
-from .progress import ResourceProgress
+# ResourceProgress is defined in progress.py in this same app package.
+# Django discovers it automatically — no explicit import needed here.
 
-__all__ = [
-    'Resource', 'ResourceImage', 'Deck', 'Flashcard', 'Quiz',
-    'PodcastSession', 'DocumentChunk', 'ResourceProgress',
-]
+class ResourceProgress(models.Model):
+    """Tracks study path progress per user per resource."""
+    STEP_ORDER = ['notes', 'flashcards', 'quiz', 'practice', 'examprep']
+    STEP_XP = {'notes': 50, 'flashcards': 75, 'quiz': 100, 'practice': 100, 'examprep': 150}
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='resource_progress')
+    resource = models.ForeignKey('Resource', on_delete=models.CASCADE, related_name='progress')
+    completed_steps = models.JSONField(default=dict)
+    step_scores = models.JSONField(default=dict)
+    xp_earned = models.IntegerField(default=0)
+    mastery = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'resource')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'{self.user.email} — {self.resource.title} — {self.mastery}%'
+
+    def complete_step(self, step: str, score: int = 100) -> int:
+        if step not in self.STEP_ORDER:
+            return 0
+        xp_gained = 0
+        already_done = self.completed_steps.get(step, False)
+        current_score = self.step_scores.get(step, 0)
+        self.step_scores[step] = max(current_score, score)
+        if not already_done:
+            self.completed_steps[step] = True
+            xp_gained = self.STEP_XP.get(step, 50)
+            self.xp_earned += xp_gained
+        completed = [s for s in self.STEP_ORDER if self.completed_steps.get(s)]
+        if completed:
+            avg_score = sum(self.step_scores.get(s, 100) for s in completed) / len(completed)
+            self.mastery = int(avg_score * len(completed) / len(self.STEP_ORDER))
+        else:
+            self.mastery = 0
+        self.save()
+        if xp_gained > 0:
+            try:
+                from django.db.models import F as _F
+                type(self.user).objects.filter(pk=self.user_id).update(xp=_F('xp') + xp_gained)
+            except Exception:
+                pass
+        return xp_gained
+
+    @property
+    def next_step(self):
+        for step in self.STEP_ORDER:
+            if not self.completed_steps.get(step):
+                return step
+        return None
+
+    @property
+    def completed_count(self):
+        return sum(1 for s in self.STEP_ORDER if self.completed_steps.get(s))

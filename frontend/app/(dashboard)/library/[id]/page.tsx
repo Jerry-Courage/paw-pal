@@ -300,11 +300,6 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                 isMathMode={isMathMode}
                 onSave={(updated) => { saveNotesMutation.mutate(updated); setIsEditingNotes(false) }}
                 onOpenMath={(prob) => router.push(`/library/${id}/solver`)}
-                onScrolledToEnd={() => {
-                  // Mark notes step complete when user has read through them
-                  libraryApi.completeStep(id, 'notes', 100).catch(() => {})
-                  qc.invalidateQueries({ queryKey: ['progress', id] })
-                }}
               />
             )
           )}
