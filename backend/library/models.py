@@ -160,3 +160,11 @@ class DocumentChunk(models.Model):
 
     def __str__(self):
         return f"Chunk for {self.resource.title}"
+
+# Import ResourceProgress so Django's app registry picks it up
+from .progress import ResourceProgress
+
+__all__ = [
+    'Resource', 'ResourceImage', 'Deck', 'Flashcard', 'Quiz',
+    'PodcastSession', 'DocumentChunk', 'ResourceProgress',
+]

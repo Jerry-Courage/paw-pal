@@ -111,6 +111,9 @@ export const libraryApi = {
     api.post(`/library/resources/${id}/math/solve/`, { problem, image }),
   cloneResource: (id: number) =>
     api.post(`/library/resources/${id}/clone/`),
+  getProgress: (id: number) => api.get(`/library/resources/${id}/progress/`),
+  completeStep: (id: number, step: string, score = 100) =>
+    api.post(`/library/resources/${id}/progress/complete/`, { step, score }),
 }
 
 // AI

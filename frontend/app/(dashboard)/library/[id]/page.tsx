@@ -23,6 +23,7 @@ const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGene
 const ExpandableMobileHUD = dynamic(() => import('@/components/ui/ExpandableMobileHUD'), { ssr: false })
 const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
 const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
+const StudyPath = dynamic(() => import('@/components/library/StudyPath'), { ssr: false })
 const TOOLS = [
   { id: 'notes',      label: 'Notes',           icon: BookOpen,   href: (id: number) => `/library/${id}` },
   { id: 'quiz',       label: 'Multiple Choice', icon: HelpCircle, href: (id: number) => `/library/${id}/quiz` },
@@ -214,47 +215,56 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 [top:var(--nav-height)] flex bg-[#0d0d0d] overflow-hidden">
 
       {/* ── Left sidebar ─────────────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-48 shrink-0 bg-[#0d0d0d] border-r border-white/5 overflow-y-auto">
-        {/* Back link */}
-        <div className="px-3 pt-4 pb-2">
+      <div className="hidden lg:flex flex-col w-56 shrink-0 bg-[#0d0d0d] border-r border-white/5 overflow-y-auto">
+        {/* Back link + title */}
+        <div className="px-3 pt-4 pb-2 border-b border-white/5">
           <Link href="/library" className="flex items-center gap-1.5 text-slate-600 hover:text-white transition-colors text-xs font-bold mb-3">
             <ArrowLeft className="w-3.5 h-3.5" /> Library
           </Link>
-          <p className="text-[11px] font-black text-white leading-snug line-clamp-3 opacity-70">{resource.title}</p>
+          <p className="text-[11px] font-black text-white leading-snug line-clamp-2 opacity-70">{resource.title}</p>
         </div>
 
-        {/* Tool nav */}
-        <nav className="flex-1 px-2 py-2 space-y-0.5">
-          {visibleTools.map(tool => {
-            const isActive = activeTool === tool.id
-            const Icon = tool.icon
-            return (
-              <button
-                key={tool.id}
-                onClick={() => {
-                  if (tool.href) {
-                    const href = tool.href(id)
-                    if (href === `/library/${id}`) setActiveTool('notes')
-                    else router.push(href)
-                  } else {
-                    setActiveTool(tool.id)
-                  }
-                }}
-                className={cn(
-                  'w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all',
-                  isActive ? 'bg-orange-500/10 text-orange-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-                )}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-xs font-bold truncate">{tool.label}</span>
-              </button>
-            )
-          })}
-          <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 hover:text-slate-500 hover:bg-white/5 transition-all mt-1">
-            <Plus className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-xs font-bold">Add Method</span>
-          </button>
-        </nav>
+        {/* Study Path */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide">
+          {hasNotes ? (
+            <StudyPath
+              resourceId={id}
+              onStepClick={(step) => {
+                if (step === 'notes') setActiveTool('notes')
+                else router.push(`/library/${id}/${step}`)
+              }}
+            />
+          ) : (
+            /* Fallback plain nav while kit is still generating */
+            <nav className="px-2 py-2 space-y-0.5">
+              {TOOLS.slice(0, 3).map(tool => {
+                const isActive = activeTool === tool.id
+                const Icon = tool.icon
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => {
+                      if (tool.href) {
+                        const href = tool.href(id)
+                        if (href === `/library/${id}`) setActiveTool('notes')
+                        else router.push(href)
+                      } else {
+                        setActiveTool(tool.id)
+                      }
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all',
+                      isActive ? 'bg-orange-500/10 text-orange-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="text-xs font-bold truncate">{tool.label}</span>
+                  </button>
+                )
+              })}
+            </nav>
+          )}
+        </div>
       </div>
 
       {/* ── Center: content ───────────────────────────────────────── */}
@@ -290,6 +300,11 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                 isMathMode={isMathMode}
                 onSave={(updated) => { saveNotesMutation.mutate(updated); setIsEditingNotes(false) }}
                 onOpenMath={(prob) => router.push(`/library/${id}/solver`)}
+                onScrolledToEnd={() => {
+                  // Mark notes step complete when user has read through them
+                  libraryApi.completeStep(id, 'notes', 100).catch(() => {})
+                  qc.invalidateQueries({ queryKey: ['progress', id] })
+                }}
               />
             )
           )}
