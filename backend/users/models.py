@@ -24,6 +24,8 @@ class User(AbstractUser):
         default=0,
         help_text='Lifetime count of resources created. Never decremented on delete — used for free tier gating.'
     )
+    # ── Gamification ─────────────────────────────────────────
+    xp = models.PositiveIntegerField(default=0, help_text='Total XP earned across all study path steps.')
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

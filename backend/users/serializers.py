@@ -29,6 +29,7 @@ class UserSerializer(serializers.ModelSerializer):
     is_premium = serializers.SerializerMethodField()
     notes_used = serializers.SerializerMethodField()
     notes_limit = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -37,8 +38,9 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar_url', 'bio', 'university', 'study_streak',
             'total_study_time', 'weekly_goal_hours', 'onboarding_status',
             'created_at', 'is_premium', 'notes_used', 'notes_limit',
+            'xp', 'level',
         )
-        read_only_fields = ('id', 'email', 'study_streak', 'total_study_time', 'created_at')
+        read_only_fields = ('id', 'email', 'study_streak', 'total_study_time', 'created_at', 'xp')
 
     def get_avatar_url(self, obj):
         request = self.context.get('request')
@@ -54,6 +56,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_notes_limit(self, obj):
         return obj.FREE_NOTES_LIMIT
+
+    def get_level(self, obj):
+        """Derive level name and number from XP."""
+        xp = obj.xp or 0
+        if xp < 500:    return {'num': 1, 'name': 'Freshman',  'next_xp': 500,  'current_xp': xp}
+        if xp < 1500:   return {'num': 2, 'name': 'Sophomore', 'next_xp': 1500, 'current_xp': xp}
+        if xp < 3500:   return {'num': 3, 'name': 'Junior',    'next_xp': 3500, 'current_xp': xp}
+        if xp < 7000:   return {'num': 4, 'name': 'Senior',    'next_xp': 7000, 'current_xp': xp}
+        return             {'num': 5, 'name': 'Graduate',  'next_xp': None, 'current_xp': xp}
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):

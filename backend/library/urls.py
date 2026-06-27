@@ -11,6 +11,7 @@ from .views import (
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
+from .progress_views import ResourceProgressView, CompleteStepView
 
 urlpatterns = [
     path('decks/', DeckListCreateView.as_view(), name='deck-list-create'),
@@ -30,6 +31,9 @@ urlpatterns = [
     path('resources/<int:resource_id>/refetch-transcript/', RefetchTranscriptView.as_view()),
     path('resources/<int:resource_id>/clone/', CloneResourceView.as_view()),
     path('resources/<int:resource_id>/file/', ResourceFileView.as_view(), name='resource-file'),
+    # Study Path Progress
+    path('resources/<int:resource_id>/progress/', ResourceProgressView.as_view(), name='resource-progress'),
+    path('resources/<int:resource_id>/progress/complete/', CompleteStepView.as_view(), name='complete-step'),
     path('flashcards/', FlashcardListView.as_view(), name='flashcard-list'),
     path('flashcards/due/', DueFlashcardsView.as_view()),
     path('flashcards/<int:flashcard_id>/review/', ReviewFlashcardView.as_view()),
