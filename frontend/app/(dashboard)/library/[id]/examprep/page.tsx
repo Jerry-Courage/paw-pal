@@ -281,7 +281,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           // Mic stream already acquired — just wire up the processor
           activateMicProcessor(streamRef.current!)
           // Notify user about keyboard shortcut and text fallback
-          toast('🎤 Session started! Hold Ctrl+Space to toggle mic, or type below if mic isn\'t working.', {
+          toast('🎤 Session started! Press Ctrl+M to toggle mic, or type below if mic isn\'t working.', {
             duration: 5000,
             icon: '💡',
           })
@@ -441,17 +441,17 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     if (phase !== 'session') return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl (Windows/Linux) or Cmd (Mac) + Space = push-to-talk
-      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+      // Ctrl+M (or Cmd+M on Mac) = toggle mic — safer than Ctrl+Space which
+      // conflicts with Windows IME and browser shortcuts
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
         e.preventDefault()
-        // Toggle mute: pause/resume audio processing by disconnecting the processor
         if (processorRef.current && audioCtxRef.current) {
           if (isRecording) {
             processorRef.current.disconnect()
             setIsRecording(false)
+            toast('🔇 Mic muted', { duration: 1000 })
           } else {
             if (streamRef.current) {
-              // Reconnect processor
               const source = audioCtxRef.current.createMediaStreamSource(streamRef.current)
               source.connect(processorRef.current)
               const silentGain = audioCtxRef.current.createGain()
@@ -459,6 +459,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
               processorRef.current.connect(silentGain)
               silentGain.connect(audioCtxRef.current.destination)
               setIsRecording(true)
+              toast('🎤 Mic on', { duration: 1000 })
             }
           }
         }
@@ -832,12 +833,12 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         {/* Floating Transcript (Bottom area) */}
         <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent z-20 flex flex-col justify-end pb-4">
           <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
-            {transcript.filter(e => e.role === 'ai').length === 0 ? (
+            {transcript.length === 0 ? (
               <div className="text-center opacity-50 text-sm">
-                {isRecording ? "Listening..." : "Microphone off"}
+                {isRecording ? "Listening..." : "Mic off — type below or press Ctrl+M"}
               </div>
             ) : (
-              transcript.filter(e => e.role === 'ai').slice(-3).map((entry, i) => (
+              transcript.slice(-4).map((entry, i) => (
                 <div key={i} className={cn(
                   "flex flex-col animate-in fade-in slide-in-from-bottom-2",
                   entry.role === 'ai' ? "items-start" : "items-end"
@@ -846,7 +847,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
                     "text-[9px] font-black uppercase tracking-widest mb-0.5",
                     entry.role === 'ai' ? "text-violet-400" : "text-orange-400"
                   )}>
-                    {entry.role === 'ai' ? 'Albert Bot' : 'You'}
+                    {entry.role === 'ai' ? 'AI Tutor' : 'You'}
                   </span>
                   <div className={cn(
                     "text-sm md:text-base font-medium leading-relaxed max-w-[85%]",
@@ -870,7 +871,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             value={textInput}
             onChange={e => setTextInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage() } }}
-            placeholder="Type a message or hold Ctrl+Space to talk…"
+            placeholder="Type a message… (Enter to send)"
             className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
           />
           <button
@@ -882,7 +883,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           </button>
         </div>
         <p className="text-center text-[9px] text-slate-700 mt-1.5">
-          Hold <kbd className="px-1 py-0.5 rounded bg-white/5 text-slate-500 font-mono text-[9px]">Ctrl+Space</kbd> to toggle mic
+          Press <kbd className="px-1 py-0.5 rounded bg-white/5 text-slate-500 font-mono text-[9px]">Ctrl+M</kbd> to toggle mic on/off
         </p>
       </div>
 
