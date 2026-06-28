@@ -202,8 +202,9 @@ class ResourceProgress(models.Model):
         self.save()
         if xp_gained > 0:
             try:
-                from django.db.models import F as _F
-                type(self.user).objects.filter(pk=self.user_id).update(xp=_F('xp') + xp_gained)
+                # xp_earned on ResourceProgress is the source of truth for XP
+                # No separate user.xp column needed
+                pass
             except Exception:
                 pass
         return xp_gained

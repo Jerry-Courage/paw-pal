@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db import models
 
 User = get_user_model()
 
@@ -30,6 +31,7 @@ class UserSerializer(serializers.ModelSerializer):
     notes_used = serializers.SerializerMethodField()
     notes_limit = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
+    xp = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -40,7 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
             'created_at', 'is_premium', 'notes_used', 'notes_limit',
             'xp', 'level',
         )
-        read_only_fields = ('id', 'email', 'study_streak', 'total_study_time', 'created_at', 'xp')
+        read_only_fields = ('id', 'email', 'study_streak', 'total_study_time', 'created_at')
 
     def get_avatar_url(self, obj):
         request = self.context.get('request')
@@ -57,9 +59,17 @@ class UserSerializer(serializers.ModelSerializer):
     def get_notes_limit(self, obj):
         return obj.FREE_NOTES_LIMIT
 
+    def get_xp(self, obj):
+        try:
+            from library.models import ResourceProgress
+            return ResourceProgress.objects.filter(user=obj).aggregate(
+                total=models.Sum('xp_earned')
+            )['total'] or 0
+        except Exception:
+            return 0
+
     def get_level(self, obj):
-        """Derive level name and number from XP."""
-        xp = obj.xp or 0
+        xp = self.get_xp(obj)
         if xp < 500:    return {'num': 1, 'name': 'Freshman',  'next_xp': 500,  'current_xp': xp}
         if xp < 1500:   return {'num': 2, 'name': 'Sophomore', 'next_xp': 1500, 'current_xp': xp}
         if xp < 3500:   return {'num': 3, 'name': 'Junior',    'next_xp': 3500, 'current_xp': xp}

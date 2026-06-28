@@ -25,7 +25,8 @@ class User(AbstractUser):
         help_text='Lifetime count of resources created. Never decremented on delete — used for free tier gating.'
     )
     # ── Gamification ─────────────────────────────────────────
-    xp = models.PositiveIntegerField(default=0, help_text='Total XP earned across all study path steps.')
+    # xp field intentionally removed — tracked via ResourceProgress.xp_earned sum
+    # to avoid requiring a new DB migration on existing deployments
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
