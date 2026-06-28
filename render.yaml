@@ -5,17 +5,7 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "python manage.py migrate --noinput && python manage.py shell -c \"
-import os, django
-from django.contrib.auth import get_user_model
-User = get_user_model()
-email = os.getenv('ADMIN_EMAIL','')
-username = os.getenv('ADMIN_USERNAME','admin')
-password = os.getenv('ADMIN_PASSWORD','')
-if email and password and not User.objects.filter(email=email).exists():
-    User.objects.create_superuser(email=email, username=username, password=password)
-    print('Superuser created:', email)
-\" && daphne -b 0.0.0.0 -p $PORT core.asgi:application"
+    startCommand: "bash start.sh"
     rootDir: backend
     envVars:
       - key: DATABASE_URL
