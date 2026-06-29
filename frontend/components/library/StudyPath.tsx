@@ -115,6 +115,7 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
   const mastery = progress?.mastery || 0
   // Default to notes as next step while progress is loading
   const nextStep = progress?.next_step ?? 'notes'
+  const hasStarted = Object.keys(completedSteps).length > 0
 
   const navigate = (href: string | null, stepId?: string) => {
     if (stepId && onStepClick) {
@@ -124,19 +125,36 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
     if (href) router.push(href)
   }
 
-  const handleStart = (step: string) => {
-    if (step === 'notes' && !completedSteps.notes) {
-      completeMutation.mutate({ step: 'notes', score: 100 })
+  const completeAndNavigate = async (step: string) => {
+    if (!completedSteps[step]) {
+      await completeMutation.mutateAsync({ step, score: 100 })
     }
     navigate(STEP_HREFS[step](resourceId), step)
   }
 
+  const handleStart = (step: string) => {
+    void completeAndNavigate(step)
+  }
+
   const handleJump = (step: string) => {
-    navigate(STEP_HREFS[step](resourceId), step)
+    void completeAndNavigate(step)
   }
 
   return (
     <div className="px-4 py-5 space-y-4">
+
+      {!hasStarted && (
+        <div className="rounded-3xl border border-orange-500/20 bg-orange-500/10 p-4 text-center space-y-3">
+          <p className="text-xs uppercase tracking-[0.22em] font-black text-orange-300">Ready to master this material?</p>
+          <h2 className="text-sm font-black text-white">Master your material with one focused study path.</h2>
+          <button
+            onClick={() => handleStart(nextStep)}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+          >
+            Master your material
+          </button>
+        </div>
+      )}
 
       {/* Mastery header */}
       <div className="flex items-center justify-between">
