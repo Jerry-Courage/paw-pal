@@ -100,7 +100,8 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
 
   const completedSteps = progress?.completed_steps || {}
   const mastery = progress?.mastery || 0
-  const nextStep = progress?.next_step
+  // If progress hasn't loaded yet, treat first step as next so buttons always show
+  const nextStep = progress?.next_step ?? 'notes'
 
   const handleStart = (step: string) => {
     // Mark notes as complete when they click Start (they've seen the notes)
@@ -212,38 +213,35 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
                 </p>
               </div>
 
-              {/* Actions */}
+              {/* Actions — always show something clickable */}
               <div className="flex items-center gap-1.5 shrink-0">
-                {/* Jump in (always visible) */}
-                {!isDone && (
-                  <button
-                    onClick={() => handleJump(step.id)}
-                    className="text-[9px] text-slate-600 hover:text-slate-400 transition-colors font-bold px-2 py-1 rounded-lg hover:bg-white/5"
-                  >
-                    Jump in
-                  </button>
-                )}
-
-                {/* Start / Redo */}
-                {isNext ? (
-                  <button
-                    onClick={() => handleStart(step.id)}
-                    className={cn(
-                      'flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all',
-                      step.color, step.bg, 'border', step.border,
-                      'hover:opacity-80'
-                    )}
-                  >
-                    Start <ChevronRight className="w-3 h-3" />
-                  </button>
-                ) : isDone ? (
+                {isDone ? (
                   <button
                     onClick={() => handleJump(step.id)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 hover:opacity-80 transition-all"
                   >
                     Redo
                   </button>
-                ) : null}
+                ) : isNext ? (
+                  <button
+                    onClick={() => handleStart(step.id)}
+                    className={cn(
+                      'flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all active:scale-95',
+                      step.color, step.bg, 'border', step.border,
+                      'hover:opacity-80'
+                    )}
+                  >
+                    Start <ChevronRight className="w-3 h-3" />
+                  </button>
+                ) : (
+                  // Not done, not next — show "Jump in" so it's always clickable
+                  <button
+                    onClick={() => handleJump(step.id)}
+                    className="text-[9px] text-slate-600 hover:text-slate-400 transition-colors font-bold px-2 py-1 rounded-lg hover:bg-white/5 active:scale-95"
+                  >
+                    Jump in
+                  </button>
+                )}
               </div>
 
               {/* Connector line to next */}
