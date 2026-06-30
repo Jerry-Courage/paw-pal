@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { aiApi } from '@/lib/api'
 import { toast } from 'sonner'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 import ReactMarkdown from 'react-markdown'
 
 type Message = {
@@ -206,7 +207,7 @@ export default function StudyCompanionSidebar({
                 {msg.role === 'user' ? (
                   <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                 ) : (
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown>{normalizeReadableMath(msg.content)}</ReactMarkdown>
                 )}
               </div>
             </div>

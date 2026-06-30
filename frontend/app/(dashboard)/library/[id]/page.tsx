@@ -17,6 +17,7 @@ import { useRef } from 'react'
 import { aiApi } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
 const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGeneratorModal'), { ssr: false })
@@ -103,7 +104,7 @@ function AIChat({ resourceId, resourceTitle, hasNotes }: { resourceId: number; r
               )}>
                 {msg.role === 'user'
                   ? <p className="whitespace-pre-wrap">{msg.content}</p>
-                  : <ReactMarkdown className="prose prose-invert prose-xs max-w-none">{msg.content}</ReactMarkdown>}
+                  : <ReactMarkdown className="prose prose-invert prose-xs max-w-none">{normalizeReadableMath(msg.content)}</ReactMarkdown>}
               </div>
             </div>
           ))

@@ -6,6 +6,7 @@ import { groupsApi, aiApi } from '@/lib/api'
 import { Users, Sparkles, Send, Calendar, ArrowRight, MessageCircle, Pin } from 'lucide-react'
 import { timeAgo, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 import ReactMarkdown from 'react-markdown'
 import CollabEditor from '@/components/groups/CollabEditor'
 import Link from 'next/link'
@@ -317,7 +318,7 @@ function GroupChat({ groupId }: { groupId: number }) {
               </div>
               <div className={`text-sm rounded-2xl px-3 py-2 max-w-lg ${m.is_ai ? 'bg-sky-50 dark:bg-sky-950/50 text-gray-700 dark:text-gray-300' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}>
                 {m.is_ai
-                  ? <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">{m.content}</ReactMarkdown>
+                  ? <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">{normalizeReadableMath(m.content)}</ReactMarkdown>
                   : m.content}
               </div>
             </div>

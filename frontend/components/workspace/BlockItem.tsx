@@ -8,6 +8,7 @@ import { workspaceApi } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -245,7 +246,7 @@ export default function BlockItem({
                   code: ({ children }) => <code className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-sky-400 text-[0.9em] font-mono">{children}</code>
                 }}
               >
-                {content}
+                {normalizeReadableMath(content)}
               </ReactMarkdown>
             ) : (
               <span className="text-white/10 italic text-sm font-medium hover:text-white/20 transition-colors">Fragment empty. Click to initialize specimen...</span>
