@@ -152,6 +152,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
+  const [isMicAvailable, setIsMicAvailable] = useState(true)
+  const [isSendingText, setIsSendingText] = useState(false)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [report, setReport] = useState<SessionReport | null>(null)
   const [sessionDuration, setSessionDuration] = useState(0)
@@ -226,10 +228,10 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const startSession = async () => {
     if (!resource) return
     setIsConnecting(true)
+    setIsMicAvailable(true)
 
-    // ── Request mic access FIRST, inside the user gesture ──────────────────
-    // Browsers require a user gesture to grant getUserMedia.
-    // If we wait until the WS 'ready' message, the gesture is gone and it fails silently.
+    // Try to acquire mic, but do not block the session if it fails.
+    // The text fallback should still work even when mic permission is unavailable.
     let micStream: MediaStream | null = null
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
@@ -242,10 +244,11 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         }
       })
       streamRef.current = micStream
+      setIsMicAvailable(true)
     } catch (e) {
-      toast.error('Microphone access denied. Please allow mic permission and try again.')
-      setIsConnecting(false)
-      return
+      streamRef.current = null
+      setIsMicAvailable(false)
+      toast.error('Mic unavailable — text-only mode is now active.', { duration: 4000 })
     }
 
     try {
@@ -278,13 +281,18 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         if (msg.type === 'ready') {
           setIsConnecting(false)
           setPhase('session')
-          // Mic stream already acquired — just wire up the processor
-          activateMicProcessor(streamRef.current!)
-          // Notify user about keyboard shortcut and text fallback
-          toast('🎤 Session started! Press Ctrl+M to toggle mic, or type below if mic isn\'t working.', {
-            duration: 5000,
-            icon: '💡',
-          })
+          if (streamRef.current && isMicAvailable) {
+            activateMicProcessor(streamRef.current)
+          }
+          toast(
+            isMicAvailable
+              ? '🎤 Session started! Press Ctrl+M to toggle mic, or type below if mic isn\'t working.'
+              : '💬 Text-only mode is ready. Type your question and press Enter to chat with the AI.',
+            {
+              duration: 5000,
+              icon: '💡',
+            }
+          )
         } else if (msg.type === 'audio') {
           const pcm = base64ToPcmFloat(msg.data)
           playAudioChunk(pcm)
@@ -471,17 +479,24 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   }, [phase, isRecording])
 
   // ── Send text message to AI via WebSocket ─────────────────────────────────
-  const sendTextMessage = () => {
+  const sendTextMessage = async () => {
     const text = textInput.trim()
     if (!text) { toast.error('Type something first.'); return }
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       toast.error('Not connected. Please start a session first.')
       return
     }
-    // Show in transcript immediately
-    setTranscript(prev => [...prev, { role: 'user', text, ts: Date.now() }])
-    wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
-    setTextInput('')
+
+    setIsSendingText(true)
+    try {
+      setTranscript(prev => [...prev, { role: 'user', text, ts: Date.now() }])
+      wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
+      setTextInput('')
+    } catch (error) {
+      toast.error('Could not send your message. Please try again.')
+    } finally {
+      setIsSendingText(false)
+    }
   }
 
   const resetSession = () => {
@@ -865,26 +880,35 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
       {/* Text input fallback + Ctrl hint */}
       <div className="px-5 pt-3 pb-1 shrink-0 border-t border-white/5">
-        <div className="flex items-center gap-2 bg-white/[0.03] border border-white/8 rounded-2xl px-3 py-2 focus-within:border-orange-500/30 transition-colors">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            sendTextMessage()
+          }}
+          className="flex items-center gap-2 bg-white/[0.03] border border-white/8 rounded-2xl px-3 py-2 focus-within:border-orange-500/30 transition-colors"
+        >
           <input
             type="text"
             value={textInput}
             onChange={e => setTextInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage() } }}
-            placeholder="Type a message… (Enter to send)"
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendTextMessage() } }}
+            placeholder={isMicAvailable ? 'Type a message… (Enter to send)' : 'Text-only mode — ask the AI anything'}
             className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
+            disabled={isSendingText}
           />
           <button
-            onClick={sendTextMessage}
-            disabled={!textInput.trim()}
+            type="submit"
+            disabled={!textInput.trim() || isSendingText}
             className="p-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-400 disabled:opacity-30 disabled:pointer-events-none transition-all"
           >
-            <ChevronRight className="w-3.5 h-3.5" />
+            {isSendingText ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
+        </form>
+        <div className="mt-1.5 flex items-center justify-center gap-2 text-[9px] text-slate-700">
+          <span className={cn(isMicAvailable ? 'text-slate-700' : 'text-orange-400')}>{isMicAvailable ? 'Mic available' : 'Text-only mode'}</span>
+          <span>•</span>
+          <span>Press <kbd className="px-1 py-0.5 rounded bg-white/5 text-slate-500 font-mono text-[9px]">Ctrl+M</kbd> to toggle mic on/off</span>
         </div>
-        <p className="text-center text-[9px] text-slate-700 mt-1.5">
-          Press <kbd className="px-1 py-0.5 rounded bg-white/5 text-slate-500 font-mono text-[9px]">Ctrl+M</kbd> to toggle mic on/off
-        </p>
       </div>
 
       {/* Mic status bar */}

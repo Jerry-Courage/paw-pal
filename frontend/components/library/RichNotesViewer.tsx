@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
@@ -9,7 +9,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { cn } from '@/lib/utils'
 import { API_BASE } from '@/lib/api'
-import { X, Maximize2 } from 'lucide-react'
+import { X, Maximize2, Sparkles, Flame } from 'lucide-react'
 
 interface RichNotesViewerProps {
   notes: any
@@ -41,6 +41,20 @@ export default function RichNotesViewer({
   onOpenMath,
 }: RichNotesViewerProps) {
   const [zoomedImage, setZoomedImage] = useState<string | null>(null)
+  const [currentPart, setCurrentPart] = useState(0)
+  const [celebration, setCelebration] = useState<{ title: string; subtext: string; xp: number } | null>(null)
+  const [completedAll, setCompletedAll] = useState(false)
+  const [showStreakBadge, setShowStreakBadge] = useState(false)
+  const sections = notes?.sections || []
+  const totalParts = sections.length
+  const progressPercent = totalParts > 0 ? ((currentPart + 1) / totalParts) * 100 : 0
+  const isLastPart = currentPart >= totalParts - 1
+
+  useEffect(() => {
+    if (!celebration) return
+    const timer = window.setTimeout(() => setCelebration(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [celebration])
 
   if (!notes) return null
 
@@ -79,6 +93,27 @@ export default function RichNotesViewer({
     return `${base}${url.startsWith('/') ? '' : '/'}${url}`
   }
 
+  const handleAdvance = () => {
+    if (isLastPart) {
+      setCompletedAll(true)
+      setShowStreakBadge(true)
+      setCelebration({
+        title: 'Streak badge unlocked!',
+        subtext: 'You finished every part and your study streak is glowing.',
+        xp: 50,
+      })
+      return
+    }
+
+    const nextPart = Math.min(currentPart + 1, totalParts - 1)
+    setCurrentPart(nextPart)
+    setCelebration({
+      title: 'Part complete!',
+      subtext: `You earned 25 XP for finishing part ${currentPart + 1}.`,
+      xp: 25,
+    })
+  }
+
   return (
     <div className="w-full px-5 sm:px-8 pt-8 pb-32 text-[#e2e2e2]">
 
@@ -97,9 +132,32 @@ export default function RichNotesViewer({
         )}
       </div>
 
+      <div className="mb-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-orange-400">Part by part study</p>
+            <h2 className="text-sm font-semibold text-white">Read part {currentPart + 1} of {totalParts}</h2>
+          </div>
+          <div className="text-right text-[11px] text-slate-400">
+            <div className="font-semibold">{Math.round(progressPercent)}% complete</div>
+            <div className="text-[10px] text-slate-500">Complete each part to unlock the next one</div>
+          </div>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all" style={{ width: `${progressPercent}%` }} />
+        </div>
+        {(completedAll || showStreakBadge) && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300">
+            <Flame className="h-3.5 w-3.5" />
+            Streak badge ready
+          </div>
+        )}
+      </div>
+
       {/* ── Sections — continuous document flow ────────────── */}
       <div>
-        {notes.sections?.map((section: any, idx: number) => {
+        {sections.map((section: any, idx: number) => {
+          if (idx !== currentPart) return null
           const accentClass = ACCENT[idx % ACCENT.length]
           // Split into color parts for targeted use
           const accentText  = accentClass.split(' ')[0]   // e.g. text-blue-400
@@ -383,13 +441,50 @@ export default function RichNotesViewer({
               </div>
 
               {/* Section divider */}
-              {idx < (notes.sections?.length ?? 0) - 1 && (
+              {idx < (sections.length ?? 0) - 1 && (
                 <div className="mt-10 h-px bg-white/[0.06]" />
               )}
             </div>
           )
         })}
       </div>
+
+      <div className="mt-8 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Progress gate</p>
+          <p className="text-sm text-slate-300">
+            {completedAll
+              ? 'You finished every part. Your streak badge is live and your momentum is building.'
+              : isLastPart
+                ? 'You are on the final part. Tap finish to claim your streak badge.'
+                : `When you finish this part, tap next to continue to part ${currentPart + 2}.`}
+          </p>
+        </div>
+        <button
+          onClick={handleAdvance}
+          className="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-slate-500"
+        >
+          {completedAll ? 'Finished' : isLastPart ? 'Finish study' : 'Next part'}
+        </button>
+      </div>
+
+      {celebration && (
+        <div className="fixed inset-x-0 top-6 z-[220] flex justify-center px-4 pointer-events-none">
+          <div className="flex items-center gap-3 rounded-2xl border border-orange-400/30 bg-[#161616]/95 px-4 py-3 shadow-2xl shadow-orange-500/20 backdrop-blur">
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-orange-500/15 text-orange-400">
+              <span className="absolute inset-0 rounded-full border border-orange-400/40 animate-ping" />
+              <Sparkles className="relative h-4.5 w-4.5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">{celebration.title}</p>
+              <p className="text-xs text-slate-400">{celebration.subtext}</p>
+            </div>
+            <div className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-400">
+              +{celebration.xp} XP
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Image lightbox ─────────────────────────────────── */}
       {zoomedImage && (

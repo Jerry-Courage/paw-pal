@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { plannerApi, libraryApi, aiApi, authApi, workspaceApi, paymentsApi } from '@/lib/api'
 import {
@@ -16,6 +16,14 @@ import dynamic from 'next/dynamic'
 import { usePricing } from '@/hooks/usePricing'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
+
+function getMasteryTier(mastery: number) {
+  if (mastery >= 80) return { label: 'Mastered', level: 5, textColor: 'text-emerald-400', badgeClass: 'bg-emerald-500/10', barClass: 'from-emerald-500 to-emerald-400' }
+  if (mastery >= 60) return { label: 'Strong', level: 4, textColor: 'text-sky-400', badgeClass: 'bg-sky-500/10', barClass: 'from-sky-500 to-cyan-400' }
+  if (mastery >= 40) return { label: 'Building', level: 3, textColor: 'text-orange-400', badgeClass: 'bg-orange-500/10', barClass: 'from-orange-500 to-amber-400' }
+  if (mastery >= 20) return { label: 'Learning', level: 2, textColor: 'text-violet-400', badgeClass: 'bg-violet-500/10', barClass: 'from-violet-500 to-fuchsia-400' }
+  return { label: 'New', level: 1, textColor: 'text-slate-400', badgeClass: 'bg-white/5', barClass: 'from-slate-500 to-slate-400' }
+}
 
 export default function DashboardPage() {
   const { data: session } = useSession()
@@ -69,6 +77,8 @@ export default function DashboardPage() {
   const showUpgradeNudge = !isPremium && notesUsed >= Math.ceil(notesLimit * 0.4) && !nudgeDismissed
 
   const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
+  const totalXp = profileData?.xp ?? 0
+  const userLevel = profileData?.level || { num: 1, name: 'Freshman', next_xp: 500, current_xp: totalXp }
   const totalUnread = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
   const sessions = sessionsData?.results || []
   const resources = resourcesData?.results || []
@@ -77,6 +87,14 @@ export default function DashboardPage() {
   const studyStreak  = profileData?.study_streak ?? 0
   // total_study_time is lifetime hours — use it for the Focus stat display
   const studyTime    = profileData?.total_study_time ?? 0
+  const progressQueries = useQueries({
+    queries: resources.slice(0, 6).map((resource: any) => ({
+      queryKey: ['progress', resource.id],
+      queryFn: () => libraryApi.getProgress(resource.id).then(r => r.data),
+      staleTime: 30000,
+      enabled: !!resource.id,
+    })),
+  })
   // Weekly progress comes from analytics (week_hours vs goal_hours), NOT lifetime total
   const weekHours    = analyticsData?.week_hours ?? 0
   const weeklyGoal   = analyticsData?.goal_hours ?? profileData?.weekly_goal_hours ?? 10
@@ -191,7 +209,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Stats pills */}
-          <div className="flex gap-2.5 shrink-0">
+          <div className="flex flex-wrap gap-2.5 shrink-0">
             <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-5 py-3.5 min-w-[80px]">
               <span className="text-xl font-black text-orange-400">
                 {studyTime < 1 ? `${Math.round(studyTime * 60)}m` : `${studyTime.toFixed(1)}h`}
@@ -203,6 +221,11 @@ export default function DashboardPage() {
                 {studyStreak}<Flame className="w-3.5 h-3.5" />
               </span>
               <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">Streak</span>
+            </div>
+            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-5 py-3.5 min-w-[92px]">
+              <span className="text-xl font-black text-orange-400">{totalXp.toLocaleString()}</span>
+              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">XP</span>
+              <span className="text-[9px] text-slate-500 mt-0.5">{userLevel?.name || 'Freshman'}</span>
             </div>
           </div>
         </div>
@@ -282,7 +305,12 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {resources.slice(0, 6).map((r: any) => (
+              {resources.slice(0, 6).map((r: any, index: number) => {
+                const progress = progressQueries[index]?.data
+                const mastery = progress?.mastery ?? 0
+                const masteryTier = getMasteryTier(mastery)
+
+                return (
                 <Link
                   key={r.id}
                   href={`/library/${r.id}`}
@@ -300,6 +328,20 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    <div className="min-w-[96px]">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className={cn('text-[9px] font-black uppercase tracking-wider', masteryTier.textColor)}>
+                          {masteryTier.label} • L{masteryTier.level}
+                        </span>
+                        <span className="text-[10px] text-slate-500">{mastery}%</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                        <div
+                          className={cn('h-full rounded-full bg-gradient-to-r transition-all', masteryTier.barClass)}
+                          style={{ width: `${Math.min(100, mastery)}%` }}
+                        />
+                      </div>
+                    </div>
                     {r.has_study_kit && (
                       <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
                         Ready
@@ -308,7 +350,8 @@ export default function DashboardPage() {
                     <ArrowRight className="w-3.5 h-3.5 text-slate-700 group-hover:text-orange-400 transition-colors" />
                   </div>
                 </Link>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

@@ -7,7 +7,7 @@ import { useAudio } from '@/context/AudioContext'
 import {
   ArrowLeft, Play, Pause, Loader2,
   Image as ImageIcon, Hand, Quote, Radio, XCircle, X,
-  SkipBack, SkipForward, Volume2, Mic, MicOff
+  SkipBack, SkipForward, Volume2, Mic, MicOff, ChevronRight
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -50,6 +50,9 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   // ── Live Q&A state ────────────────────────────────────────────────
   const [liveMode, setLiveMode] = useState<'off' | 'connecting' | 'active'>('off')
   const [liveAiSpeaking, setLiveAiSpeaking] = useState(false)
+  const [liveMicAvailable, setLiveMicAvailable] = useState(true)
+  const [liveTextInput, setLiveTextInput] = useState('')
+  const [liveSendingText, setLiveSendingText] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState<{role: 'user'|'ai', text: string, ts: number}[]>([])
   const liveWsRef = useRef<WebSocket | null>(null)
   const liveMicProcessorRef = useRef<ScriptProcessorNode | null>(null)
@@ -172,6 +175,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       const source = ctx.createMediaStreamSource(stream)
       const processor = ctx.createScriptProcessor(2048, 1, 1)
       liveMicProcessorRef.current = processor
+      setLiveMicAvailable(true)
 
       processor.onaudioprocess = async (e) => {
         if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
@@ -192,14 +196,42 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       }
       source.connect(processor)
       processor.connect(ctx.destination)
+      return true
     } catch (e) {
-      toast.error('Microphone access denied')
+      setLiveMicAvailable(false)
+      toast.error('Mic unavailable — text-only mode is active.', { duration: 4000 })
+      return false
     }
   }
 
   const stopLiveMic = () => {
     liveMicProcessorRef.current?.disconnect()
+    liveMicProcessorRef.current = null
     liveMicStreamRef.current?.getTracks().forEach(t => t.stop())
+    liveMicStreamRef.current = null
+  }
+
+  const sendLiveTextMessage = async () => {
+    const text = liveTextInput.trim()
+    if (!text) {
+      toast.error('Type something first.')
+      return
+    }
+    if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) {
+      toast.error('Not connected. Please start live Q&A first.')
+      return
+    }
+
+    setLiveSendingText(true)
+    try {
+      setLiveTranscript(prev => [...prev, { role: 'user', text, ts: Date.now() }])
+      liveWsRef.current.send(JSON.stringify({ type: 'text_message', text }))
+      setLiveTextInput('')
+    } catch (error) {
+      toast.error('Could not send your message. Please try again.')
+    } finally {
+      setLiveSendingText(false)
+    }
   }
 
   const startLiveQA = async () => {
@@ -232,7 +264,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         const msg = JSON.parse(event.data)
         if (msg.type === 'ready') {
           setLiveMode('active')
-          startLiveMic()
+          setLiveMicAvailable(true)
+          void startLiveMic()
         } else if (msg.type === 'audio') {
           playLiveAudio(msg.data)
         } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
@@ -270,7 +303,9 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     liveWsRef.current?.close()
     stopLiveMic()
     setLiveMode('off')
+    setLiveMicAvailable(true)
     setLiveTranscript([])
+    setLiveTextInput('')
     liveNextPlayRef.current = 0
     clearTimeout(liveSpeakTimeoutRef.current)
     // Resume podcast after a short delay
@@ -495,24 +530,59 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
           </div>
 
           {/* Floating Transcript */}
-          <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent z-20 flex flex-col justify-end pb-4">
-            <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
-              {liveMode === 'connecting' ? (
-                <div className="text-center opacity-50 text-sm animate-pulse">Connecting to host...</div>
-              ) : liveTranscript.filter(e => e.role === 'ai').length === 0 ? (
-                <div className="text-center opacity-50 text-sm animate-pulse">Listening... Ask your question!</div>
-              ) : (
-                liveTranscript.filter(e => e.role === 'ai').slice(-3).map((entry, i) => (
-                  <div key={i} className={cn("flex flex-col animate-in fade-in slide-in-from-bottom-2", entry.role === 'ai' ? "items-start" : "items-end")}>
-                    <span className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", entry.role === 'ai' ? "text-violet-400" : "text-orange-400")}>
-                      {entry.role === 'ai' ? 'Host' : 'You'}
-                    </span>
-                    <div className={cn("text-sm md:text-base font-medium leading-relaxed max-w-[85%]", entry.role === 'ai' ? "text-white" : "text-slate-300 text-right")}>
-                      {entry.text}
-                    </div>
+          <div className="absolute bottom-0 inset-x-0 z-20">
+            <div className="mx-auto w-full max-w-2xl px-4 pb-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void sendLiveTextMessage()
+                }}
+                className="flex items-center gap-2 rounded-2xl border border-white/8 bg-[#111]/90 px-3 py-2 backdrop-blur"
+              >
+                <input
+                  type="text"
+                  value={liveTextInput}
+                  onChange={(e) => setLiveTextInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      void sendLiveTextMessage()
+                    }
+                  }}
+                  placeholder={liveMicAvailable ? 'Type a question… (Enter to send)' : 'Text-only mode — ask the host anything'}
+                  className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none"
+                  disabled={liveSendingText}
+                />
+                <button
+                  type="submit"
+                  disabled={!liveTextInput.trim() || liveSendingText}
+                  className="rounded-lg bg-orange-500 p-1.5 text-white transition-all hover:bg-orange-400 disabled:pointer-events-none disabled:opacity-30"
+                >
+                  {liveSendingText ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                </button>
+              </form>
+            </div>
+            <div className="h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent flex flex-col justify-end pb-4">
+              <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
+                {liveMode === 'connecting' ? (
+                  <div className="text-center opacity-50 text-sm animate-pulse">Connecting to host...</div>
+                ) : liveTranscript.filter(e => e.role === 'ai').length === 0 ? (
+                  <div className="text-center opacity-50 text-sm animate-pulse">
+                    {liveMicAvailable ? 'Listening... Ask your question!' : 'Text-only mode is on — type your question below.'}
                   </div>
-                ))
-              )}
+                ) : (
+                  liveTranscript.filter(e => e.role === 'ai').slice(-3).map((entry, i) => (
+                    <div key={i} className={cn("flex flex-col animate-in fade-in slide-in-from-bottom-2", entry.role === 'ai' ? "items-start" : "items-end")}>
+                      <span className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", entry.role === 'ai' ? "text-violet-400" : "text-orange-400")}>
+                        {entry.role === 'ai' ? 'Host' : 'You'}
+                      </span>
+                      <div className={cn("text-sm md:text-base font-medium leading-relaxed max-w-[85%]", entry.role === 'ai' ? "text-white" : "text-slate-300 text-right")}>
+                        {entry.text}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

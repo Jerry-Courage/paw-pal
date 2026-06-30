@@ -92,6 +92,7 @@ interface Props {
 export default function StudyPath({ resourceId, onStepClick }: Props) {
   const router = useRouter()
   const qc = useQueryClient()
+  const [showStudyPath, setShowStudyPath] = useState(false)
 
   const { data: progress } = useQuery({
     queryKey: ['progress', resourceId],
@@ -126,10 +127,24 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
   }
 
   const completeAndNavigate = async (step: string) => {
-    if (!completedSteps[step]) {
-      await completeMutation.mutateAsync({ step, score: 100 })
+    const targetHref = STEP_HREFS[step](resourceId)
+
+    setShowStudyPath(true)
+
+    if (onStepClick) {
+      onStepClick(step)
+    } else if (targetHref) {
+      router.push(targetHref)
     }
-    navigate(STEP_HREFS[step](resourceId), step)
+
+    if (!completedSteps[step]) {
+      try {
+        await completeMutation.mutateAsync({ step, score: 100 })
+      } catch (error) {
+        console.error('Failed to save study progress:', error)
+        toast.error('Your study path opened. XP will sync when the connection is back.', { duration: 2500 })
+      }
+    }
   }
 
   const handleStart = (step: string) => {
@@ -140,19 +155,41 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
     void completeAndNavigate(step)
   }
 
-  return (
-    <div className="px-4 py-5 space-y-4">
-
-      {!hasStarted && (
+  if (!showStudyPath) {
+    return (
+      <div className="px-4 py-5">
         <div className="rounded-3xl border border-orange-500/20 bg-orange-500/10 p-4 text-center space-y-3">
           <p className="text-xs uppercase tracking-[0.22em] font-black text-orange-300">Ready to master this material?</p>
-          <h2 className="text-sm font-black text-white">Master your material with one focused study path.</h2>
+          <h2 className="text-sm font-black text-white">Start with a focused study path to understand, recall, and apply what you learned.</h2>
           <button
             onClick={() => handleStart(nextStep)}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
           >
             Master your material
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 py-5 space-y-4">
+      <button
+        onClick={() => handleStart(nextStep)}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+      >
+        Master your material
+      </button>
+
+      {!hasStarted ? (
+        <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-3 text-[11px] text-slate-300">
+          Start with notes, then the next step will unlock automatically once you finish it.
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-[11px] text-emerald-300">
+          {nextStep === 'notes'
+            ? 'You are back at the start. Pick a step to continue.'
+            : `Next up: ${STEPS.find(s => s.id === nextStep)?.label || 'your next step'}`}
         </div>
       )}
 
