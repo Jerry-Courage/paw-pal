@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 // Replace Unicode chars Helvetica (jspdf built-in) cannot render
 const sanitizePdf = (t: string) => t
@@ -6,10 +7,8 @@ const sanitizePdf = (t: string) => t
   .replace(/\u2013|\u2014/g, '-').replace(/\u2026/g, '...')
   .replace(/\u00A0/g, ' ').replace(/[^\x00-\x7F]/g, '')
 
-// Strip LaTeX delimiters so math reads as plain text
-const stripLatex = (t: string) => t
-  .replace(/\\\(/g, '').replace(/\\\)/g, '')
-  .replace(/\\\[/g, '').replace(/\\\]/g, '')
+// Normalize math-like content so it reads as plain text in exports
+const stripLatex = (t: string) => normalizeReadableMath(t)
 
 // HTML-escape text content
 const esc = (t: string) => t

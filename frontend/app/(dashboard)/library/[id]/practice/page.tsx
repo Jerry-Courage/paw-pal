@@ -17,6 +17,7 @@ import { useStudyTimer } from '@/hooks/useStudyTimer'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 interface Question { question: string; type: string; hint?: string; model_answer: string }
 interface GradeResult { score: number; grade: string; correct: boolean; feedback: string; strengths: string[]; improvements: string[]; tip: string }
@@ -211,7 +212,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
             rehypePlugins={[rehypeKatex]}
             className="text-base font-bold text-white leading-relaxed prose prose-invert max-w-none"
           >
-            {q?.question}
+            {normalizeReadableMath(q?.question || '')}
           </ReactMarkdown>
           {q?.hint && (
             <div className="mt-3">
@@ -228,7 +229,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
                       rehypePlugins={[rehypeKatex]}
                       className="prose prose-invert prose-sm max-w-none text-amber-300"
                     >
-                      {q.hint}
+                      {normalizeReadableMath(q.hint || '')}
                     </ReactMarkdown>
                   </div>
                 </div>
@@ -270,7 +271,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
                   rehypePlugins={[rehypeKatex]}
                   className="text-xs text-slate-400 leading-relaxed prose prose-invert prose-sm max-w-none"
                 >
-                  {grade.feedback}
+                  {normalizeReadableMath(grade.feedback || '')}
                 </ReactMarkdown>
               </div>
             </div>
@@ -310,7 +311,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
                     rehypePlugins={[rehypeKatex]}
                     className="inline prose prose-invert prose-sm max-w-none text-sky-300 ml-1"
                   >
-                    {grade.tip}
+                    {normalizeReadableMath(grade.tip || '')}
                   </ReactMarkdown>
                 </div>
               </div>

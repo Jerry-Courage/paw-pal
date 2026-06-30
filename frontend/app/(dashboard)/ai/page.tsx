@@ -17,6 +17,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 // ─── LIGHTBOX ────────────────────────────────────────────────────────────────
 function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
@@ -356,7 +357,7 @@ function RichContent({ content }: { content: string }) {
               ),
             }}
           >
-            {part.content}
+            {normalizeReadableMath(part.content)}
           </ReactMarkdown>
         )
       )}

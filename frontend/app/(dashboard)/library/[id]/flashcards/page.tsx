@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 interface Flashcard {
   id: number
@@ -262,7 +263,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
             <div className="absolute inset-0 bg-[#1a1a1a] border border-white/8 rounded-3xl p-8 flex flex-col items-center justify-center text-center"
               style={{ backfaceVisibility: 'hidden' }}>
               <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-4 block">Question</span>
-              <p className="text-lg font-bold text-white leading-relaxed">{card?.question}</p>
+              <p className="text-lg font-bold text-white leading-relaxed">{normalizeReadableMath(card?.question || '')}</p>
               <p className="text-xs text-slate-600 mt-6 font-medium">Tap to reveal answer</p>
             </div>
 
@@ -270,7 +271,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
             <div className="absolute inset-0 bg-[#1a1a1a] border border-orange-500/20 rounded-3xl p-8 flex flex-col items-center justify-center text-center"
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
               <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-4 block">Answer</span>
-              <p className="text-lg font-bold text-orange-100 leading-relaxed">{card?.answer}</p>
+              <p className="text-lg font-bold text-orange-100 leading-relaxed">{normalizeReadableMath(card?.answer || '')}</p>
             </div>
           </div>
         </div>

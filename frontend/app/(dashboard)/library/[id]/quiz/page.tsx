@@ -16,6 +16,7 @@ import remarkMath from 'remark-math'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 interface MCQQuestion {
   question: string
@@ -341,7 +342,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
               rehypePlugins={[rehypeKatex]}
               className="text-base font-bold text-white leading-relaxed prose prose-invert max-w-none"
             >
-              {q?.question}
+              {normalizeReadableMath(q?.question || '')}
             </ReactMarkdown>
           </div>
 
@@ -378,7 +379,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                       rehypePlugins={[rehypeKatex]}
                       className="prose prose-invert prose-sm max-w-none"
                     >
-                      {opt}
+                      {normalizeReadableMath(opt || '')}
                     </ReactMarkdown>
                   </div>
                 </button>
@@ -395,7 +396,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                 rehypePlugins={[rehypeKatex]}
                 className="text-sm text-sky-200/80 leading-relaxed prose prose-invert prose-sm max-w-none"
               >
-                {q.explanation}
+                {normalizeReadableMath(q.explanation || '')}
               </ReactMarkdown>
             </div>
           )}
