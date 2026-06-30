@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import DatabaseError, ProgrammingError
 from django.shortcuts import get_object_or_404
 from .models import Resource, ResourceProgress
 
@@ -15,11 +16,14 @@ class ResourceProgressView(APIView):
 
     def get(self, request, resource_id):
         resource = get_object_or_404(Resource, id=resource_id)
-        progress, _ = ResourceProgress.objects.get_or_create(
-            user=request.user,
-            resource=resource,
-        )
-        return Response(_serialize(progress))
+        try:
+            progress, _ = ResourceProgress.objects.get_or_create(
+                user=request.user,
+                resource=resource,
+            )
+            return Response(_serialize(progress))
+        except (ProgrammingError, DatabaseError):
+            return Response(_empty_progress_payload(resource.id))
 
 
 class CompleteStepView(APIView):
@@ -43,21 +47,42 @@ class CompleteStepView(APIView):
 
         score = max(0, min(100, score))
 
-        progress, _ = ResourceProgress.objects.get_or_create(
-            user=request.user,
-            resource=resource,
-        )
+        try:
+            progress, _ = ResourceProgress.objects.get_or_create(
+                user=request.user,
+                resource=resource,
+            )
 
-        xp_gained = progress.complete_step(step, score)
+            xp_gained = progress.complete_step(step, score)
 
-        # Fetch updated user XP
-        request.user.refresh_from_db()
+            # Fetch updated user XP
+            request.user.refresh_from_db()
 
-        return Response({
-            **_serialize(progress),
-            'xp_gained': xp_gained,
-            'total_xp': request.user.xp,
-        })
+            return Response({
+                **_serialize(progress),
+                'xp_gained': xp_gained,
+                'total_xp': request.user.xp,
+            })
+        except (ProgrammingError, DatabaseError):
+            return Response({
+                **_empty_progress_payload(resource.id),
+                'xp_gained': 0,
+                'total_xp': getattr(request.user, 'xp', 0),
+            })
+
+
+def _empty_progress_payload(resource_id: int) -> dict:
+    return {
+        'resource_id': resource_id,
+        'completed_steps': {},
+        'step_scores': {},
+        'xp_earned': 0,
+        'mastery': 0,
+        'next_step': 'notes',
+        'completed_count': 0,
+        'step_order': STEP_ORDER,
+        'step_xp': STEP_XP,
+    }
 
 
 def _serialize(p: ResourceProgress) -> dict:
