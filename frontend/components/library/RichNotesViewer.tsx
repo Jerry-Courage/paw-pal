@@ -115,14 +115,14 @@ export default function RichNotesViewer({
   }
 
   return (
-    <div className="w-full px-5 sm:px-8 pt-8 pb-32 text-[#e2e2e2]">
+    <div className="w-full px-4 py-6 sm:px-8 sm:pt-8 sm:pb-32 text-[#e2e2e2]">
 
       {/* ── Document title ─────────────────────────────────── */}
-      <div className="mb-10 pb-6 border-b border-white/[0.08]">
-        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-orange-400/70 mb-3">
+      <div className="mb-6 pb-5 border-b border-white/[0.08] sm:mb-10 sm:pb-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-orange-400/70 mb-3">
           {isMathMode ? 'Logical Derivation' : 'Study Notes'}
         </p>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white leading-snug mb-4">
+        <h1 className="text-xl sm:text-3xl font-bold text-white leading-snug mb-3 sm:mb-4">
           {notes.overview?.title || 'Study Material'}
         </h1>
         {notes.overview?.summary && (
@@ -132,7 +132,7 @@ export default function RichNotesViewer({
         )}
       </div>
 
-      <div className="mb-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 sm:p-5">
+      <div className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 sm:mb-8 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.28em] text-orange-400">Part by part study</p>
@@ -449,7 +449,7 @@ export default function RichNotesViewer({
         })}
       </div>
 
-      <div className="mt-8 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-3.5 sm:mt-8 sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Progress gate</p>
           <p className="text-sm text-slate-300">

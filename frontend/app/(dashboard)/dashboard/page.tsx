@@ -179,7 +179,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Hero greeting ─────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#111] border border-white/[0.05] p-6 md:p-8">
+      <div className="relative overflow-hidden rounded-2xl bg-[#111] border border-white/[0.05] p-4 sm:p-6 md:p-8">
         <div className="absolute -top-24 -right-24 w-72 h-72 bg-orange-500/[0.04] rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-violet-500/[0.04] rounded-full blur-3xl pointer-events-none" />
 
@@ -209,20 +209,20 @@ export default function DashboardPage() {
           </div>
 
           {/* Stats pills */}
-          <div className="flex flex-wrap gap-2.5 shrink-0">
-            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-5 py-3.5 min-w-[80px]">
+          <div className="flex flex-wrap gap-2 shrink-0 sm:gap-2.5">
+            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3 min-w-[76px] sm:px-5 sm:py-3.5 sm:min-w-[80px]">
               <span className="text-xl font-black text-orange-400">
                 {studyTime < 1 ? `${Math.round(studyTime * 60)}m` : `${studyTime.toFixed(1)}h`}
               </span>
               <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">Focus</span>
             </div>
-            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-5 py-3.5 min-w-[80px]">
+            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3 min-w-[76px] sm:px-5 sm:py-3.5 sm:min-w-[80px]">
               <span className="text-xl font-black text-orange-400 flex items-center gap-1">
                 {studyStreak}<Flame className="w-3.5 h-3.5" />
               </span>
               <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">Streak</span>
             </div>
-            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-5 py-3.5 min-w-[92px]">
+            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3 min-w-[86px] sm:px-5 sm:py-3.5 sm:min-w-[92px]">
               <span className="text-xl font-black text-orange-400">{totalXp.toLocaleString()}</span>
               <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">XP</span>
               <span className="text-[9px] text-slate-500 mt-0.5">{userLevel?.name || 'Freshman'}</span>
@@ -232,7 +232,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Quick actions ──────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {quickActions.map(a => (
           <Link
             key={a.label}
@@ -314,7 +314,7 @@ export default function DashboardPage() {
                 <Link
                   key={r.id}
                   href={`/library/${r.id}`}
-                  className="group flex items-center gap-3.5 p-3.5 rounded-xl bg-[#111] border border-white/[0.05] hover:border-white/10 transition-all"
+                  className="group flex flex-col gap-3 rounded-xl bg-[#111] border border-white/[0.05] p-3.5 transition-all hover:border-white/10 sm:flex-row sm:items-center sm:gap-3.5"
                 >
                   <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
                     <ResourceIcon type={r.resource_type} />
@@ -327,8 +327,8 @@ export default function DashboardPage() {
                       {r.subject || r.resource_type}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="min-w-[96px]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 shrink-0">
+                    <div className="min-w-0 sm:min-w-[96px]">
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <span className={cn('text-[9px] font-black uppercase tracking-wider', masteryTier.textColor)}>
                           {masteryTier.label} • L{masteryTier.level}
@@ -343,11 +343,11 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     {r.has_study_kit && (
-                      <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      <span className="w-fit text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
                         Ready
                       </span>
                     )}
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-700 group-hover:text-orange-400 transition-colors" />
+                    <ArrowRight className="hidden w-3.5 h-3.5 text-slate-700 transition-colors group-hover:text-orange-400 sm:block" />
                   </div>
                 </Link>
                 )

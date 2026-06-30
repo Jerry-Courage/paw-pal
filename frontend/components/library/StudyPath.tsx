@@ -157,13 +157,13 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
 
   if (!showStudyPath) {
     return (
-      <div className="px-4 py-5">
+      <div className="px-3 py-4 sm:px-4 sm:py-5">
         <div className="rounded-3xl border border-orange-500/20 bg-orange-500/10 p-4 text-center space-y-3">
-          <p className="text-xs uppercase tracking-[0.22em] font-black text-orange-300">Ready to master this material?</p>
-          <h2 className="text-sm font-black text-white">Start with a focused study path to understand, recall, and apply what you learned.</h2>
+          <p className="text-[10px] uppercase tracking-[0.22em] font-black text-orange-300">Ready to master this material?</p>
+          <h2 className="text-sm font-black text-white leading-relaxed">Start with a focused study path to understand, recall, and apply what you learned.</h2>
           <button
             onClick={() => handleStart(nextStep)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.75 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
           >
             Master your material
           </button>
@@ -173,10 +173,10 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
   }
 
   return (
-    <div className="px-4 py-5 space-y-4">
+    <div className="px-3 py-4 space-y-3 sm:px-4 sm:py-5 sm:space-y-4">
       <button
         onClick={() => handleStart(nextStep)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.75 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
       >
         Master your material
       </button>
@@ -194,7 +194,7 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
       )}
 
       {/* Mastery header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Star className="w-3.5 h-3.5 text-orange-400" />
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Study Path</span>
@@ -254,7 +254,7 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
 
                 {/* Labels */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className={cn(
                       'text-xs font-black',
                       isDone ? 'text-emerald-400' : isNext ? 'text-white' : 'text-slate-500'
@@ -271,7 +271,7 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
                     )}
                   </div>
                   <p className={cn(
-                    'text-[10px]',
+                    'text-[10px] leading-relaxed',
                     isDone ? 'text-emerald-600' : isNext ? 'text-slate-400' : 'text-slate-700'
                   )}>
                     {step.sublabel}

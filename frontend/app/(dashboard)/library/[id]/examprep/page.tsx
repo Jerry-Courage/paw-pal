@@ -651,15 +651,15 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-8">
-        <div className="max-w-lg mx-auto space-y-8">
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-5 sm:py-8">
+        <div className="max-w-lg mx-auto space-y-6 sm:space-y-8">
 
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mx-auto">
               <Brain className="w-8 h-8 text-orange-400" />
             </div>
-            <h2 className="text-2xl font-black text-white tracking-tight">Exam Prep</h2>
+            <h2 className="text-xl font-black text-white tracking-tight sm:text-2xl">Exam Prep</h2>
             <p className="text-slate-500 text-sm">
               Phase 1: Test your understanding with a live AI session.<br />
               Phase 2: Timed exam with mixed questions.
@@ -698,7 +698,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">AI Voice</p>
               <span className="text-[10px] text-slate-600">Auto = best for technique</span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
                 onClick={() => setVoice('')}
                 className={cn(
