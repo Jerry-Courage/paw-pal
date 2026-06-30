@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+from core.channel_layers import get_channel_layers_config
 
 load_dotenv()
 
@@ -85,23 +86,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 ASGI_APPLICATION = 'core.asgi.application'
 
-# Channel Layers - Using InMemory for Dev, should swap to Redis for production
-_redis_url = os.getenv('REDIS_URL')
-if _redis_url:
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [_redis_url],
-            },
-        },
-    }
-else:
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels.layers.InMemoryChannelLayer',
-        },
-    }
+CHANNEL_LAYERS = get_channel_layers_config()
 
 import dj_database_url as _dj_db_url
 
