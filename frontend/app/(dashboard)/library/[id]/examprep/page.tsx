@@ -175,6 +175,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const isMicMutedRef = useRef(false)
   const nextPlayTimeRef = useRef(0)  // scheduled end time of last chunk
   const timerRef = useRef<any>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
@@ -233,6 +234,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     // Try to acquire mic, but do not block the session if it fails.
     // The text fallback should still work even when mic permission is unavailable.
     let micStream: MediaStream | null = null
+    let micPermissionOk = true
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -247,6 +249,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       setIsMicAvailable(true)
     } catch (e) {
       streamRef.current = null
+      micPermissionOk = false
       setIsMicAvailable(false)
       toast.error('Mic unavailable — text-only mode is now active.', { duration: 4000 })
     }
@@ -281,7 +284,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         if (msg.type === 'ready') {
           setIsConnecting(false)
           setPhase('session')
-          if (streamRef.current && isMicAvailable) {
+          if (streamRef.current && micPermissionOk) {
             activateMicProcessor(streamRef.current)
           }
           toast(
@@ -310,6 +313,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             }
             return [...prev, { role, text: msg.text, ts: Date.now() }]
           })
+        } else if (msg.type === 'status') {
+          toast.info(msg.message, { duration: 4000 })
         } else if (msg.type === 'session_report') {
           clearTimeout(endSessionTimeoutRef.current)
           setReport(msg.report)
@@ -363,6 +368,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
       processor.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        if (isMicMutedRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         // Inline int16 conversion — avoids async resampling which can stall
@@ -384,6 +390,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       processor.connect(silentGain)
       silentGain.connect(ctx.destination)
 
+      isMicMutedRef.current = false
       setIsRecording(true)
     } catch (e) {
       toast.error('Failed to start mic processing. Please try again.')
@@ -395,6 +402,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     processorRef.current = null
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null
+    isMicMutedRef.current = true
     setIsRecording(false)
   }
 
@@ -453,23 +461,18 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       // conflicts with Windows IME and browser shortcuts
       if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
         e.preventDefault()
-        if (processorRef.current && audioCtxRef.current) {
-          if (isRecording) {
-            processorRef.current.disconnect()
-            setIsRecording(false)
-            toast('🔇 Mic muted', { duration: 1000 })
-          } else {
-            if (streamRef.current) {
-              const source = audioCtxRef.current.createMediaStreamSource(streamRef.current)
-              source.connect(processorRef.current)
-              const silentGain = audioCtxRef.current.createGain()
-              silentGain.gain.value = 0
-              processorRef.current.connect(silentGain)
-              silentGain.connect(audioCtxRef.current.destination)
-              setIsRecording(true)
-              toast('🎤 Mic on', { duration: 1000 })
-            }
-          }
+        if (!streamRef.current || !processorRef.current || !audioCtxRef.current) {
+          return
+        }
+
+        if (!isMicMutedRef.current) {
+          isMicMutedRef.current = true
+          setIsRecording(false)
+          toast('🔇 Mic muted', { duration: 1000 })
+        } else {
+          isMicMutedRef.current = false
+          setIsRecording(true)
+          toast('🎤 Mic on', { duration: 1000 })
         }
       }
     }
@@ -636,6 +639,35 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     return `${m}:${String(sec).padStart(2, '0')}`
   }
 
+  const setupSteps = {
+    feynman: [
+      'Explain the idea as if the AI knows nothing',
+      'Spot the gaps in your explanation and refine them',
+      'End the session for feedback on clarity and depth',
+      'Finish with a timed exam that checks real understanding',
+    ],
+    active_recall: [
+      'Answer each prompt from memory before checking yourself',
+      'Use the AI to test what you can actually recall',
+      'End the session for feedback on recall strength and weak spots',
+      'Finish with a timed exam that checks durable understanding',
+    ],
+    socratic: [
+      'Respond to probing questions with your own reasoning',
+      'Let the AI guide you toward deeper understanding',
+      'End the session for feedback on your reasoning quality',
+      'Finish with a timed exam that checks conceptual mastery',
+    ],
+    free_chat: [
+      'Explore the topic through conversation and questions',
+      'Use the AI to pressure-test your understanding in different ways',
+      'End the session for feedback on how well you grasped the material',
+      'Finish with a timed exam that checks true comprehension',
+    ],
+  } as const
+
+  const currentSetupSteps = setupSteps[technique]
+
   // ── RENDER ─────────────────────────────────────────────────────────────────
 
   // Setup phase
@@ -661,8 +693,12 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             </div>
             <h2 className="text-xl font-black text-white tracking-tight sm:text-2xl">Exam Prep</h2>
             <p className="text-slate-500 text-sm">
-              Phase 1: Test your understanding with a live AI session.<br />
-              Phase 2: Timed exam with mixed questions.
+              {technique === 'feynman' && 'Teach the idea simply and clearly, then refine it until it makes sense.'}
+              {technique === 'active_recall' && 'Pull the answer from memory first, then test how solid your recall really is.'}
+              {technique === 'socratic' && 'Reason out loud and let the AI guide you toward deeper understanding.'}
+              {technique === 'free_chat' && 'Explore the topic through conversation and pressure-test your understanding.'}
+              <br />
+              Phase 2: A timed exam to check how well you truly understand the material.
             </p>
           </div>
 
@@ -723,12 +759,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           {/* How it works */}
           <div className="bg-[#111] border border-white/5 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">How it works</p>
-            {[
-              'Your mic is live — speak naturally',
-              'AI responds in real-time with voice',
-              'After you end the session, get a report',
-              'Then take the timed exam',
-            ].map((step, i) => (
+            {currentSetupSteps.map((step, i) => (
               <div key={i} className="flex items-center gap-2.5">
                 <span className="w-5 h-5 rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
                 <span className="text-xs text-slate-400">{step}</span>

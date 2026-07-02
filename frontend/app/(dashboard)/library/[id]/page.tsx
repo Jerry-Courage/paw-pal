@@ -154,7 +154,9 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const id = parseInt(params.id)
   const router = useRouter()
   const [activeTool, setActiveTool] = useState('notes')
+  const [notesViewKey, setNotesViewKey] = useState(0)
   const [showChat, setShowChat] = useState(true)
+  const [showStudyIntro, setShowStudyIntro] = useState(true)
   const [showMusic, setShowMusic] = useState(false)
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const qc = useQueryClient()
@@ -231,8 +233,14 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
             <StudyPath
               resourceId={id}
               onStepClick={(step) => {
-                if (step === 'notes') setActiveTool('notes')
-                else router.push(`/library/${id}/${step}`)
+                if (step === 'notes') {
+                  setActiveTool('notes')
+                  setNotesViewKey(prev => prev + 1)
+                  setShowStudyIntro(false)
+                  toast.info('You’re now in Understand — the study path is ready.', { duration: 2200 })
+                } else {
+                  router.push(`/library/${id}/${step}`)
+                }
               }}
             />
           ) : (
@@ -295,6 +303,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
               <ProcessingView resource={resource} />
             ) : (
               <RichNotesViewer
+                key={notesViewKey}
                 notes={resource.ai_notes_json}
                 isEditing={isEditingNotes}
                 setIsEditing={setIsEditingNotes}

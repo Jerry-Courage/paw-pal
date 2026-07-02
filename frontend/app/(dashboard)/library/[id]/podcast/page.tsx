@@ -7,7 +7,7 @@ import { useAudio } from '@/context/AudioContext'
 import {
   ArrowLeft, Play, Pause, Loader2,
   Image as ImageIcon, Hand, Quote, Radio, XCircle, X,
-  SkipBack, SkipForward, Volume2, Mic, MicOff, ChevronRight
+  SkipBack, SkipForward, Volume2, Mic, MicOff, ChevronRight, MessageSquare
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -60,6 +60,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const liveAudioCtxRef = useRef<AudioContext | null>(null)
   const liveNextPlayRef = useRef(0)
   const liveSpeakTimeoutRef = useRef<any>(null)
+  const liveMicMutedRef = useRef(false)
 
   const {
     state: audio,
@@ -135,6 +136,32 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     }
   }, [audio.currentIndex])
 
+  useEffect(() => {
+    if (liveMode !== 'active') return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+        e.preventDefault()
+        if (!liveMicStreamRef.current || !liveMicProcessorRef.current || !liveAudioCtxRef.current) {
+          return
+        }
+
+        if (!liveMicMutedRef.current) {
+          liveMicMutedRef.current = true
+          setIsRecording(false)
+          toast('🔇 Mic muted', { duration: 1000 })
+        } else {
+          liveMicMutedRef.current = false
+          setIsRecording(true)
+          toast('🎤 Mic on', { duration: 1000 })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [liveMode])
+
   const currentChunk = audio.script?.[audio.currentIndex] ?? null
   const activeVisual = visuals.find(v => v.id && currentChunk?.visual_ref && String(v.id) === String(currentChunk.visual_ref))
   const currentImage = activeVisual?.image || currentChunk?.visual_url || null
@@ -179,6 +206,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
       processor.onaudioprocess = async (e) => {
         if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
+        if (liveMicMutedRef.current) return
         const float32 = e.inputBuffer.getChannelData(0).slice()
         // Simple downsample to 16kHz
         const ratio = ctx.sampleRate / 16000
@@ -196,6 +224,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       }
       source.connect(processor)
       processor.connect(ctx.destination)
+      liveMicMutedRef.current = false
+      setIsRecording(true)
       return true
     } catch (e) {
       setLiveMicAvailable(false)
@@ -209,6 +239,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     liveMicProcessorRef.current = null
     liveMicStreamRef.current?.getTracks().forEach(t => t.stop())
     liveMicStreamRef.current = null
+    liveMicMutedRef.current = true
+    setIsRecording(false)
   }
 
   const sendLiveTextMessage = async () => {
@@ -266,6 +298,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
           setLiveMode('active')
           setLiveMicAvailable(true)
           void startLiveMic()
+        } else if (msg.type === 'status') {
+          toast.info(msg.message, { duration: 4000 })
         } else if (msg.type === 'audio') {
           playLiveAudio(msg.data)
         } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
@@ -307,6 +341,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     setLiveTranscript([])
     setLiveTextInput('')
     liveNextPlayRef.current = 0
+    liveMicMutedRef.current = false
     clearTimeout(liveSpeakTimeoutRef.current)
     // Resume podcast after a short delay
     setTimeout(() => globalResume(), 800)
@@ -497,15 +532,13 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
       {/* Main content — split layout on desktop, stacked on mobile */}
       {liveMode !== 'off' ? (
-        <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-[#0d0d0d]">
-          {/* Dynamic Orb Animations */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d0d]">
           <style dangerouslySetInnerHTML={{__html: `
             @keyframes orbPulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
             @keyframes orbWave { 0% { transform: scale(1); opacity: 0.5; border-width: 2px; } 100% { transform: scale(2.2); opacity: 0; border-width: 0px; } }
             @keyframes orbRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             .orb-ai { background: radial-gradient(circle at 30% 30%, #c084fc, #8b5cf6, #4338ca, #1e1b4b); box-shadow: 0 0 80px 20px rgba(139, 92, 246, 0.5), inset 0 0 50px rgba(255, 255, 255, 0.6); animation: orbPulse 1.5s ease-in-out infinite, orbRotate 8s linear infinite; }
             .orb-user { background: radial-gradient(circle at 30% 30%, #fb923c, #ea580c, #991b1b, #450a0a); box-shadow: 0 0 50px 10px rgba(234, 88, 12, 0.3), inset 0 0 30px rgba(255, 255, 255, 0.3); animation: orbPulse 3s ease-in-out infinite, orbRotate 15s linear infinite reverse; }
-            .orb-idle { background: radial-gradient(circle at 30% 30%, #475569, #1e293b, #0f172a); box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1); animation: orbRotate 20s linear infinite; }
             .orb-ring { position: absolute; inset: 0; border-radius: 50%; animation: orbWave 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite; }
             .orb-ring.ai { border: 2px solid rgba(167, 139, 250, 0.8); }
             .orb-ring.user { border: 2px solid rgba(251, 146, 60, 0.4); animation-duration: 2.5s; }
@@ -513,76 +546,124 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             .orb-ring:nth-child(3) { animation-delay: 1.2s; }
           `}} />
 
-          {/* Background glow */}
-          <div className={cn("absolute inset-0 opacity-20 transition-all duration-1000", liveAiSpeaking ? "bg-[radial-gradient(circle_at_center,#6d28d9,transparent_60%)]" : "bg-[radial-gradient(circle_at_center,#9a3412,transparent_50%)]")} />
+          <div className="flex-1 flex flex-col justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-white/[0.04] px-4 py-3 backdrop-blur">
+                <div className="flex items-center gap-3">
+                  <div className={cn('h-2.5 w-2.5 rounded-full', liveMode === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse')} />
+                  <div>
+                    <p className="text-sm font-semibold text-white">Live Q&A studio</p>
+                    <p className="text-xs text-slate-400">
+                      {liveMode === 'connecting' ? 'Connecting your host…' : liveMicAvailable ? 'Voice + text are ready' : 'Text-only mode is on'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-white/8 bg-black/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                    Ctrl/Cmd + M to mute
+                  </span>
+                  <span className="rounded-full border border-orange-500/20 bg-orange-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">
+                    {liveMicAvailable ? 'Mic ready' : 'Text only'}
+                  </span>
+                </div>
+              </div>
 
-          {/* The Orb */}
-          <div className="relative w-40 h-40 md:w-56 md:h-56 flex items-center justify-center z-10 mb-20">
-            <div className="absolute inset-0">
-              <div className={cn("orb-ring", liveAiSpeaking ? "ai" : "user")} />
-              <div className={cn("orb-ring", liveAiSpeaking ? "ai" : "user")} />
-              <div className={cn("orb-ring", liveAiSpeaking ? "ai" : "user")} />
-            </div>
-            
-            <div className={cn("w-full h-full rounded-full transition-all duration-700 ease-in-out relative z-10", liveAiSpeaking ? "orb-ai scale-110" : "orb-user scale-100")}>
-              <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_60%_20%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
-            </div>
-          </div>
+              <div className="grid flex-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="relative flex min-h-[300px] flex-col items-center justify-center overflow-hidden rounded-[1.8rem] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] p-6 sm:p-8">
+                  <div className={cn('absolute inset-0 opacity-20 transition-all duration-1000', liveAiSpeaking ? 'bg-[radial-gradient(circle_at_center,#6d28d9,transparent_60%)]' : 'bg-[radial-gradient(circle_at_center,#9a3412,transparent_50%)]')} />
+                  <div className="relative z-10 mb-6 flex w-full items-center justify-center">
+                    <div className="relative h-40 w-40 sm:h-48 sm:w-48">
+                      <div className="absolute inset-0">
+                        <div className={cn('orb-ring', liveAiSpeaking ? 'ai' : 'user')} />
+                        <div className={cn('orb-ring', liveAiSpeaking ? 'ai' : 'user')} />
+                        <div className={cn('orb-ring', liveAiSpeaking ? 'ai' : 'user')} />
+                      </div>
+                      <div className={cn('relative z-10 h-full w-full rounded-full transition-all duration-700 ease-in-out', liveAiSpeaking ? 'orb-ai scale-110' : 'orb-user scale-100')}>
+                        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_60%_20%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative z-10 text-center">
+                    <p className="text-sm font-semibold text-white">{liveAiSpeaking ? 'Host is speaking…' : 'Ask away whenever you’re ready'}</p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {liveMicAvailable ? 'Use your voice or type a question below.' : 'Your message will go straight to the host.'}
+                    </p>
+                  </div>
+                </div>
 
-          {/* Floating Transcript */}
-          <div className="absolute bottom-0 inset-x-0 z-20">
-            <div className="mx-auto w-full max-w-2xl px-4 pb-3">
+                <div className="flex min-h-[300px] flex-col rounded-[1.6rem] border border-white/8 bg-[#111]/90 p-4 sm:p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Recent replies</p>
+                      <p className="text-xs text-slate-500">Your latest exchange stays right here.</p>
+                    </div>
+                    <div className="rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                      Live
+                    </div>
+                  </div>
+                  <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+                    {liveMode === 'connecting' ? (
+                      <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/8 bg-white/[0.03] p-4 text-center text-sm text-slate-500">
+                        Connecting to host...
+                      </div>
+                    ) : liveTranscript.length === 0 ? (
+                      <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/8 bg-white/[0.03] p-4 text-center text-sm text-slate-500">
+                        Your host will respond here as soon as the session starts.
+                      </div>
+                    ) : (
+                      liveTranscript.slice(-6).map((entry, i) => (
+                        <div key={`${entry.role}-${i}`} className={cn('rounded-2xl border px-3 py-3', entry.role === 'ai' ? 'border-violet-500/20 bg-violet-500/8' : 'border-orange-500/20 bg-orange-500/8')}>
+                          <p className={cn('mb-1 text-[10px] font-black uppercase tracking-[0.2em]', entry.role === 'ai' ? 'text-violet-400' : 'text-orange-400')}>
+                            {entry.role === 'ai' ? 'Host' : 'You'}
+                          </p>
+                          <p className="text-sm leading-relaxed text-slate-200">{entry.text}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mx-auto w-full max-w-3xl">
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
                   void sendLiveTextMessage()
                 }}
-                className="flex items-center gap-2 rounded-2xl border border-white/8 bg-[#111]/90 px-3 py-2 backdrop-blur"
+                className="rounded-[1.25rem] border border-white/8 bg-[#111]/95 p-3 shadow-2xl shadow-black/30 backdrop-blur"
               >
-                <input
-                  type="text"
-                  value={liveTextInput}
-                  onChange={(e) => setLiveTextInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      void sendLiveTextMessage()
-                    }
-                  }}
-                  placeholder={liveMicAvailable ? 'Type a question… (Enter to send)' : 'Text-only mode — ask the host anything'}
-                  className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none"
-                  disabled={liveSendingText}
-                />
-                <button
-                  type="submit"
-                  disabled={!liveTextInput.trim() || liveSendingText}
-                  className="rounded-lg bg-orange-500 p-1.5 text-white transition-all hover:bg-orange-400 disabled:pointer-events-none disabled:opacity-30"
-                >
-                  {liveSendingText ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                </button>
-              </form>
-            </div>
-            <div className="h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent flex flex-col justify-end pb-4">
-              <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
-                {liveMode === 'connecting' ? (
-                  <div className="text-center opacity-50 text-sm animate-pulse">Connecting to host...</div>
-                ) : liveTranscript.filter(e => e.role === 'ai').length === 0 ? (
-                  <div className="text-center opacity-50 text-sm animate-pulse">
-                    {liveMicAvailable ? 'Listening... Ask your question!' : 'Text-only mode is on — type your question below.'}
+                <div className="flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/12 text-orange-400">
+                    <MessageSquare className="h-4.5 w-4.5" />
                   </div>
-                ) : (
-                  liveTranscript.filter(e => e.role === 'ai').slice(-3).map((entry, i) => (
-                    <div key={i} className={cn("flex flex-col animate-in fade-in slide-in-from-bottom-2", entry.role === 'ai' ? "items-start" : "items-end")}>
-                      <span className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", entry.role === 'ai' ? "text-violet-400" : "text-orange-400")}>
-                        {entry.role === 'ai' ? 'Host' : 'You'}
-                      </span>
-                      <div className={cn("text-sm md:text-base font-medium leading-relaxed max-w-[85%]", entry.role === 'ai' ? "text-white" : "text-slate-300 text-right")}>
-                        {entry.text}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                  <input
+                    type="text"
+                    value={liveTextInput}
+                    onChange={(e) => setLiveTextInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        void sendLiveTextMessage()
+                      }
+                    }}
+                    placeholder={liveMicAvailable ? 'Type a question… (Enter to send)' : 'Text-only mode — ask the host anything'}
+                    className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none"
+                    disabled={liveSendingText}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!liveTextInput.trim() || liveSendingText}
+                    className="rounded-xl bg-orange-500 px-3 py-2 text-white transition-all hover:bg-orange-400 disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    {liveSendingText ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-500">
+                  <span>Ask the host anything • Press Enter to send</span>
+                  <span>Mic stays live until you leave the session</span>
+                </div>
+              </form>
             </div>
           </div>
         </div>

@@ -149,6 +149,10 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
   }
 
   const handleStart = (step: string) => {
+    if (!showStudyPath) {
+      setShowStudyPath(true)
+      return
+    }
     void completeAndNavigate(step)
   }
 

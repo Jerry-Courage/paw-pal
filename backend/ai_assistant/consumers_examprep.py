@@ -49,6 +49,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         self.technique = 'feynman'
         self.resource_title = ''
         self.voice_override = None
+        self.text_fallback_mode = False
+        self.text_fallback_reason = ''
 
     # ── Django Channels lifecycle ─────────────────────────────────────────────
 
@@ -101,26 +103,26 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     await self._send_audio_to_gemini(audio_b64)
 
         elif msg_type == 'text_message':
-            # User typed a message instead of speaking
-            # Use realtimeInput text so Gemini responds with voice in the audio session
+            # User typed a message instead of speaking.
+            # If the live voice session is slow or unavailable, fall back to a fast text reply.
             text = msg.get('text', '').strip()
-            if text and self.gemini_ws and self.session_active:
+            if text and self.session_active:
                 self.transcript_log.append(('user', text))
-                # Echo back to browser transcript immediately
                 await self._send({'type': 'transcript_user', 'text': text})
-                # Send via realtimeInput so Gemini treats it as spoken input
-                # and responds with audio (not just text)
-                try:
-                    realtime_msg = {
-                        'realtimeInput': {
-                            'text': text
+
+                if self.text_fallback_mode or not self.gemini_ws:
+                    await self._reply_with_text_fallback(text)
+                else:
+                    try:
+                        realtime_msg = {
+                            'realtimeInput': {
+                                'text': text
+                            }
                         }
-                    }
-                    await self.gemini_ws.send(json.dumps(realtime_msg))
-                except Exception as e:
-                    logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
-                    # Fallback: use clientContent turn
-                    await self._send_text_to_gemini(text)
+                        await self.gemini_ws.send(json.dumps(realtime_msg))
+                    except Exception as e:
+                        logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
+                        await self._reply_with_text_fallback(text)
 
         elif msg_type == 'end_session':
             await self._end_session()
@@ -147,11 +149,14 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         voice_name = self.voice_override or voice_map.get(self.technique, 'Aoede')
 
         try:
-            self.gemini_ws = await websockets.connect(
-                ws_url,
-                ping_interval=20,
-                ping_timeout=10,
-                max_size=10 * 1024 * 1024,  # 10MB for large audio payloads
+            self.gemini_ws = await asyncio.wait_for(
+                websockets.connect(
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    max_size=10 * 1024 * 1024,  # 10MB for large audio payloads
+                ),
+                timeout=10,
             )
 
             # ── Setup config ──────────────────────────────────────────────────
@@ -186,13 +191,37 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             }
             await self.gemini_ws.send(json.dumps(config))
 
-            # Wait for setupComplete — drain any intermediate messages
-            for _ in range(5):
-                setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
-                setup_data = json.loads(setup_resp)
-                if 'setupComplete' in setup_data:
+            # Wait briefly for setupComplete; if it takes too long, fall back to fast text replies.
+            setup_ready = False
+            for _ in range(3):
+                try:
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=6)
+                    setup_data = json.loads(setup_resp)
+                    if 'setupComplete' in setup_data:
+                        setup_ready = True
+                        break
+                    logger.debug(f'[ExamPrep] Pre-setup message: {list(setup_data.keys())}')
+                except asyncio.TimeoutError:
                     break
-                logger.debug(f'[ExamPrep] Pre-setup message: {list(setup_data.keys())}')
+
+            greetings = {
+                'feynman':       "Hi! I don't know anything about this topic yet. Please start teaching me — what should I know first?",
+                'active_recall': "Hi! I'm ready. Please fire the first question at me.",
+                'socratic':      "Hello! I'm here to explore this topic. Please start with a thought-provoking opening question.",
+                'free_chat':     "Hello! I'm your AI study companion. What would you like to work on today?",
+                'podcast_qa':    "Hello! I'm joining the Q&A. Please welcome me warmly as the host and invite my question.",
+            }
+            initial = greetings.get(self.technique, "Hello! Let's begin.")
+
+            if not setup_ready:
+                self.session_active = True
+                self.text_fallback_mode = True
+                self.text_fallback_reason = 'live voice setup timed out'
+                logger.warning('[ExamPrep] Live setup timed out; enabling fast text fallback')
+                await self._send({'type': 'ready'})
+                await self._send({'type': 'status', 'message': 'The live voice model is warming up. You can still chat and receive fast text replies.'})
+                await self._reply_with_text_fallback(initial)
+                return
 
             self.session_active = True
             await self._send({'type': 'ready'})
@@ -203,14 +232,6 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
 
             # Send initial greeting as a text turn so the AI speaks first
             # Use realtimeInput text so it doesn't interrupt audio processing
-            greetings = {
-                'feynman':       "Hi! I don't know anything about this topic yet. Please start teaching me — what should I know first?",
-                'active_recall': "Hi! I'm ready. Please fire the first question at me.",
-                'socratic':      "Hello! I'm here to explore this topic. Please start with a thought-provoking opening question.",
-                'free_chat':     "Hello! I'm your AI study companion. What would you like to work on today?",
-                'podcast_qa':    "Hello! I'm joining the Q&A. Please welcome me warmly as the host and invite my question.",
-            }
-            initial = greetings.get(self.technique, "Hello! Let's begin.")
             await self._send_text_to_gemini(initial)
 
         except asyncio.TimeoutError:
@@ -219,6 +240,35 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f'[ExamPrep] Failed to connect to Gemini: {e}')
             await self._send({'type': 'error', 'message': f'Failed to start session: {str(e)}'})
+
+    async def _reply_with_text_fallback(self, text: str):
+        """Use the regular AI service for a fast, text-only reply when live voice is slow."""
+        try:
+            from ai_assistant.services import AIService
+            ai = AIService()
+            technique_desc = {
+                'feynman': 'Feynman: keep the response short, curious, and ask one clarifying question when useful.',
+                'active_recall': 'Active recall: ask one concise practice question or give brief feedback.',
+                'socratic': 'Socratic: ask one probing question and avoid giving away the answer.',
+                'free_chat': 'Free chat: be energetic and adapt to whatever the student asks.',
+            }.get(self.technique, 'Be helpful and concise.')
+            prompt = (
+                f"You are a friendly exam-prep tutor for the topic '{self.resource_title}'. "
+                f"{technique_desc} "
+                f"The student said: {text}. "
+                "Reply in 1-3 short sentences and keep it useful."
+            )
+            result = await asyncio.wait_for(ai.chat([{'role': 'user', 'content': prompt}]), timeout=20)
+            reply = (result or '').strip()
+            if not reply:
+                reply = 'I’m here. Tell me what you want to practice next.'
+            self.transcript_log.append(('ai', reply))
+            await self._send({'type': 'transcript_ai', 'text': reply})
+        except Exception as e:
+            logger.warning(f'[ExamPrep] Text fallback failed: {e}')
+            fallback = 'I’m here. Give me a moment and I’ll keep helping.'
+            self.transcript_log.append(('ai', fallback))
+            await self._send({'type': 'transcript_ai', 'text': fallback})
 
     async def _send_audio_to_gemini(self, audio_b64: str):
         """Forward PCM16 audio (16kHz, mono, base64) to Gemini realtimeInput."""
@@ -347,9 +397,26 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         from ai_assistant.services import AIService
         ai = AIService()
 
+        user_turns = [text for role, text in self.transcript_log if role == 'user' and text.strip()]
+        user_text = "\n".join(user_turns)
+        user_word_count = len(user_text.split())
+        user_turn_count = len(user_turns)
+        explanation_markers = [
+            'because', 'so', 'therefore', 'this means', 'for example', 'in other words',
+            'that is', 'it depends', 'the reason', 'example', 'means', 'which means',
+            'such as', 'due to', 'since', 'as a result', 'when', 'if', 'then'
+        ]
+        marker_hits = sum(1 for marker in explanation_markers if marker.lower() in user_text.lower())
+        has_specific_examples = any(word.lower() in user_text.lower() for word in ['example', 'for example', 'like', 'such as'])
+        has_concept_links = any(word.lower() in user_text.lower() for word in ['because', 'therefore', 'so', 'means', 'which means'])
+
         prompt = (
             f"Analyze this {self.technique} learning session about '{self.resource_title}'.\n\n"
             f"TRANSCRIPT:\n{transcript_text[:6000]}\n\n"
+            "Score the student's understanding from the perspective of how well they explained the material to the AI. "
+            "Prioritize depth, clarity, and conceptual understanding over memorization or shallow recall. "
+            f"Use these clues from the transcript: user turns={user_turn_count}, words={user_word_count}, explanation markers={marker_hits}, "
+            f"specific examples={str(has_specific_examples).lower()}, concept links={str(has_concept_links).lower()}.\n\n"
             "Return ONLY a JSON object:\n"
             "{\n"
             '  "summary": "2-3 sentence overall assessment of the student\'s understanding",\n'
