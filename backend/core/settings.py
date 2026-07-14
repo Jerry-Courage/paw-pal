@@ -304,24 +304,28 @@ UNFOLD = {
     'SITE_SYMBOL': 'bolt',
     'SHOW_HISTORY': True,
     'SHOW_VIEW_ON_SITE': False,
-    # Show the "Go" button next to the bulk action dropdown
-    'STYLES': [
+    # Inject a "Go" button next to the bulk action dropdown
+    # Unfold hides the native Django submit button — this restores it
+    'SCRIPTS': [
         lambda request: """
-            button[name="index"],
-            input[name="index"],
-            .action-container > button[type="submit"] {
-                display: inline-flex !important;
-                align-items: center;
-                padding: 6px 16px;
-                background-color: #f97316;
-                color: white;
-                font-weight: 700;
-                font-size: 12px;
-                border-radius: 8px;
-                border: none;
-                cursor: pointer;
-                margin-left: 8px;
-            }
+            document.addEventListener('DOMContentLoaded', function() {
+                var actionBar = document.querySelector('.action-container, [data-action-bar], #changelist-form .actions');
+                if (!actionBar) {
+                    // fallback: find any select with name="action"
+                    var sel = document.querySelector('select[name="action"]');
+                    if (sel) actionBar = sel.closest('div, span, td, li');
+                }
+                if (actionBar && !document.getElementById('go-btn-injected')) {
+                    var btn = document.createElement('button');
+                    btn.id = 'go-btn-injected';
+                    btn.type = 'submit';
+                    btn.name = 'index';
+                    btn.value = '0';
+                    btn.textContent = 'Go';
+                    btn.style.cssText = 'display:inline-flex;align-items:center;padding:6px 18px;background:#f97316;color:white;font-weight:700;font-size:12px;border-radius:8px;border:none;cursor:pointer;margin-left:10px;';
+                    actionBar.appendChild(btn);
+                }
+            });
         """
     ],
     'COLORS': {

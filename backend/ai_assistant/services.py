@@ -1435,6 +1435,12 @@ class AIService:
                 f'\n\nIMAGES AVAILABLE on pages: {pages_with_images}. '
                 'For each section include a "page_refs" array of the page numbers it covers.'
             )
+        if vision_data and not is_video:
+            image_hint += (
+                f'\n\nPAGE VISUALS: {len(vision_data)} full page renders are attached. '
+                'Use them to identify diagrams, charts, tables, and visual structure that '
+                'may not appear in the extracted text. Reference visual content explicitly in your sections.'
+            )
 
         # 1. VISION MULTI-MODAL: Trigger if vision data exists (YouTube frames or Scanned PDFs)
         is_video = resource.resource_type == 'video'
@@ -1475,13 +1481,26 @@ class AIService:
         overlap = 500
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
-        # [NEW] Multi-Modal Vision Context
+        # Multi-Modal Vision Context — send page images for BOTH videos AND PDFs/slides
+        # For PDFs: vision_data contains full page renders from PyMuPDF
+        # For videos: vision_data contains extracted frames
+        # Cap at 4 images per chunk to stay within token limits
         chat_vision_bundle = []
-        if is_video and vision_data:
+        if vision_data:
             import base64
-            for p in vision_data[:5]:
+            # Pick representative pages spread across the document for first chunk
+            sample_pages = vision_data[:4] if len(vision_data) <= 4 else [
+                vision_data[0],
+                vision_data[len(vision_data) // 3],
+                vision_data[2 * len(vision_data) // 3],
+                vision_data[-1],
+            ]
+            for p in sample_pages:
                 b64 = base64.b64encode(p['data']).decode('utf-8')
-                chat_vision_bundle.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}})
+                chat_vision_bundle.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{b64}"}
+                })
 
         all_sections = []
         all_vocabulary = []
