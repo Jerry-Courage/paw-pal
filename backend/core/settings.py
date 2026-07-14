@@ -304,6 +304,26 @@ UNFOLD = {
     'SITE_SYMBOL': 'bolt',
     'SHOW_HISTORY': True,
     'SHOW_VIEW_ON_SITE': False,
+    # Show the "Go" button next to the bulk action dropdown
+    'STYLES': [
+        lambda request: """
+            button[name="index"],
+            input[name="index"],
+            .action-container > button[type="submit"] {
+                display: inline-flex !important;
+                align-items: center;
+                padding: 6px 16px;
+                background-color: #f97316;
+                color: white;
+                font-weight: 700;
+                font-size: 12px;
+                border-radius: 8px;
+                border: none;
+                cursor: pointer;
+                margin-left: 8px;
+            }
+        """
+    ],
     'COLORS': {
         'primary': {
             '50': '240 249 255',
