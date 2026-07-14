@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o errexit
 
-# Run database migrations with verbose output to catch any issues
+# Run database migrations
 echo "Running database migrations..."
 python manage.py migrate --noinput --verbosity 2
 
@@ -11,10 +11,17 @@ from django.db import connection
 cursor = connection.cursor()
 cursor.execute(\"SELECT 1 FROM information_schema.tables WHERE table_name='library_resourceprogress' LIMIT 1\")
 if cursor.fetchone():
-    print('✓ ResourceProgress table exists')
+    print('ResourceProgress table exists')
 else:
-    print('✗ ResourceProgress table NOT found - migrations may have failed')
+    print('ResourceProgress table NOT found - migrations may have failed')
 " || true
+
+# One-time cleanup: delete stuck processing resources
+# Set CLEAR_PROCESSING=true in Render env vars to trigger, then remove it after
+if [ "$CLEAR_PROCESSING" = "true" ]; then
+    echo "Clearing stuck processing resources..."
+    python manage.py clear_processing
+fi
 
 # Create superuser from env vars (one-time, safe to repeat)
 python manage.py shell << 'PYEOF'
