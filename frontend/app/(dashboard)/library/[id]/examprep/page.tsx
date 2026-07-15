@@ -698,120 +698,150 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 [top:var(--nav-height)] bg-[#080809] flex flex-col overflow-hidden text-white font-sans select-none">
       
       {/* Ambient background glows */}
-      <div className="absolute top-[10%] left-[-20%] w-[300px] h-[300px] bg-violet-600/[0.06] blur-[120px] rounded-full pointer-events-none z-0" />
-      <div className="absolute bottom-[20%] right-[-20%] w-[300px] h-[300px] bg-orange-600/[0.06] blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-[10%] left-[-20%] w-[400px] h-[400px] bg-violet-600/[0.04] blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-[20%] right-[-20%] w-[400px] h-[400px] bg-orange-600/[0.04] blur-[150px] rounded-full pointer-events-none z-0" />
 
       {/* Header bar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.04] bg-[#0c0c0e]/80 backdrop-blur-md shrink-0 z-10">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.04] bg-[#0c0c0e]/80 backdrop-blur-md shrink-0 z-10">
         <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all active:scale-95">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
         </Link>
         <div className="min-w-0">
-          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Live Voice Session</p>
-          <h1 className="text-xs font-bold text-slate-300 truncate">{resource?.title || '...'}</h1>
+          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Active Voice Practice</p>
+          <h1 className="text-sm font-black text-white truncate">{resource?.title || '...'}</h1>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-5 z-10 scrollbar-hide">
-        <div className="max-w-md mx-auto space-y-5 pb-24">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 md:py-10 z-10 scrollbar-hide">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row gap-8 lg:gap-16 items-stretch pb-28 md:pb-0">
 
-          {/* Intro Card */}
-          <div className="text-center space-y-2 py-2">
-            <div className="w-14 h-14 bg-gradient-to-br from-orange-500/10 to-violet-500/10 border border-orange-500/20 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-              <Brain className="w-7 h-7 text-orange-400" />
+          {/* LEFT SIDE: Hero Intro & Timeline (Desktop only / Layout priority) */}
+          <div className="flex-1 flex flex-col justify-between space-y-6 md:py-2">
+            
+            {/* Header info */}
+            <div className="space-y-3 text-center md:text-left">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-500/10 to-violet-500/10 border border-orange-500/20 rounded-2xl flex items-center justify-center shadow-inner mx-auto md:mx-0">
+                <Brain className="w-7 h-7 text-orange-400" />
+              </div>
+              <h2 className="text-2xl lg:text-3xl font-black text-white tracking-tight leading-none">
+                Exam Prep Conversation
+              </h2>
+              <p className="text-slate-500 text-xs sm:text-sm max-w-md leading-relaxed">
+                {technique === 'feynman' && 'Teach the concept in your own words, and get questioned where your explanation falls short.'}
+                {technique === 'active_recall' && 'Test your retention with rapid-fire questions from memory. Answer out loud.'}
+              </p>
             </div>
-            <h2 className="text-lg font-black text-white tracking-tight">Active Voice Practice</h2>
-            <p className="text-slate-500 text-xs max-w-xs mx-auto leading-relaxed">
-              {technique === 'feynman' && 'Teach the concept in your own words, and get questioned where your explanation falls short.'}
-              {technique === 'active_recall' && 'Test your retention with rapid-fire questions from memory. Answer out loud.'}
-            </p>
+
+            {/* Dotted Timeline Info */}
+            <div className="relative border border-white/[0.04] bg-white/[0.01] backdrop-blur-md rounded-3xl p-5 md:p-6 space-y-4 overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/[0.02] blur-2xl rounded-full" />
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">How the technique works</p>
+              <div className="relative pl-6 space-y-4">
+                {/* Vertical timeline line */}
+                <div className="absolute left-[9px] top-1.5 bottom-1.5 w-[1px] bg-gradient-to-b from-orange-500/40 via-white/10 to-transparent" />
+                {currentSetupSteps.map((step, i) => (
+                  <div key={i} className="relative flex items-start gap-3">
+                    <span className="absolute -left-[23px] w-[18px] h-[18px] rounded-full bg-[#080809] border border-orange-500/30 text-orange-400 text-[10px] font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(249,115,22,0.05)]">
+                      {i + 1}
+                    </span>
+                    <span className="text-xs lg:text-sm text-slate-400 leading-relaxed font-medium">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* Technique grid (Side by side) */}
-          <div className="space-y-2">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Choose Technique</p>
-            <div className="grid grid-cols-2 gap-3">
-              {TECHNIQUES.map(t => {
-                const Icon = t.icon
-                const isSelected = technique === t.id
-                return (
+          {/* RIGHT SIDE: Interactive Configuration Settings Card */}
+          <div className="w-full md:w-[420px] shrink-0 space-y-6 bg-white/[0.01] border border-white/[0.04] backdrop-blur-xl rounded-3xl p-5 md:p-6 shadow-2xl flex flex-col justify-between">
+            
+            <div className="space-y-6">
+              {/* Choose Mode */}
+              <div className="space-y-2.5">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Choose Mode</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {TECHNIQUES.map(t => {
+                    const Icon = t.icon
+                    const isSelected = technique === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setTechnique(t.id)}
+                        className={cn(
+                          'flex flex-col items-center text-center p-3 rounded-2xl border transition-all active:scale-[0.97]',
+                          isSelected ? t.ringColor : 'border-white/[0.04] bg-white/[0.01] hover:border-white/[0.08]'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mb-2',
+                          isSelected ? 'bg-orange-500/10 text-orange-400' : 'bg-white/5 text-slate-500'
+                        )}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <span className={cn('text-xs font-black', isSelected ? 'text-white' : 'text-slate-400')}>{t.label}</span>
+                        <span className="text-[9px] text-slate-500 mt-1 leading-snug font-medium line-clamp-2">{t.desc}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Voice Picker */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">AI Voice Companion</p>
+                  <span className="text-[9px] text-slate-600 md:hidden">Swipe to view</span>
+                </div>
+                {/* Horizontal scroll on mobile, wrap grid on desktop */}
+                <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
                   <button
-                    key={t.id}
-                    onClick={() => setTechnique(t.id)}
+                    onClick={() => setVoice('')}
                     className={cn(
-                      'flex flex-col items-center text-center p-3.5 rounded-2.5xl border transition-all active:scale-[0.97]',
-                      isSelected ? t.ringColor : 'border-white/[0.04] bg-white/[0.01] hover:border-white/[0.08]'
+                      'py-2 px-3.5 rounded-full border text-[11px] font-black shrink-0 transition-all active:scale-95 text-center w-full',
+                      voice === '' ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/[0.04] bg-white/[0.01] text-slate-500 hover:border-white/[0.08]'
                     )}
                   >
-                    <div className={cn(
-                      'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mb-2',
-                      isSelected ? 'bg-orange-500/10 text-orange-400' : 'bg-white/5 text-slate-500'
-                    )}>
-                      <Icon className="w-4.5 h-4.5" />
-                    </div>
-                    <span className={cn('text-xs font-black', isSelected ? 'text-white' : 'text-slate-400')}>{t.label}</span>
-                    <span className="text-[10px] text-slate-500 mt-1 leading-snug font-medium line-clamp-2">{t.desc}</span>
+                    Auto ✨
                   </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Voice Picker (Horizontal Scroll) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">AI voice companion</p>
-              <span className="text-[9px] text-slate-600">Swipe to view</span>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-              <button
-                onClick={() => setVoice('')}
-                className={cn(
-                  'py-2 px-3.5 rounded-full border text-[11px] font-black shrink-0 transition-all active:scale-95',
-                  voice === '' ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/[0.04] bg-white/[0.01] text-slate-500 hover:border-white/[0.08]'
-                )}
-              >
-                Auto Voice ✨
-              </button>
-              {GEMINI_VOICES.map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => setVoice(v.id)}
-                  className={cn(
-                    'py-2 px-3.5 rounded-full border text-[11px] font-black shrink-0 transition-all active:scale-95 flex items-center gap-1',
-                    voice === v.id ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/[0.04] bg-white/[0.01] text-slate-500 hover:border-white/[0.08]'
-                  )}
-                >
-                  <span>{v.label}</span>
-                  <span className="text-[9px] font-medium opacity-60">({v.desc.slice(-2)})</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Dotted Timeline Info */}
-          <div className="relative border border-white/[0.04] bg-white/[0.01] backdrop-blur-md rounded-2xl p-4.5 space-y-3.5 overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/[0.02] blur-2xl rounded-full" />
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">How it works</p>
-            <div className="relative pl-5 space-y-3.5">
-              {/* Vertical timeline line */}
-              <div className="absolute left-[8px] top-1.5 bottom-1.5 w-[1px] bg-gradient-to-b from-orange-500/40 via-white/10 to-transparent" />
-              {currentSetupSteps.map((step, i) => (
-                <div key={i} className="relative flex items-start gap-2.5">
-                  <span className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-[#080809] border border-orange-500/30 text-orange-400 text-[9px] font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(249,115,22,0.05)]">
-                    {i + 1}
-                  </span>
-                  <span className="text-xs text-slate-400 leading-relaxed font-medium">{step}</span>
+                  {GEMINI_VOICES.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => setVoice(v.id)}
+                      className={cn(
+                        'py-2 px-3 rounded-full border text-[11px] font-black shrink-0 transition-all active:scale-[0.97] flex items-center justify-center gap-1.5 w-full',
+                        voice === v.id ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/[0.04] bg-white/[0.01] text-slate-500 hover:border-white/[0.08]'
+                      )}
+                    >
+                      <span>{v.label}</span>
+                      <span className="text-[8px] font-medium opacity-65">({v.desc.slice(-2)})</span>
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
+
+            {/* Embed CTA Button for Desktop */}
+            <div className="hidden md:block pt-6 border-t border-white/[0.04]">
+              <button
+                onClick={startSession}
+                disabled={isConnecting}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-600 text-white font-black text-xs uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/10 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isConnecting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Connecting to Gemini...</>
+                ) : (
+                  <><Mic className="w-4 h-4" /> Start Live Conversation</>
+                )}
+              </button>
+            </div>
+
           </div>
 
         </div>
       </div>
 
-      {/* Sticky Bottom Start Button */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#080809] via-[#080809]/95 to-transparent shrink-0 z-20">
+      {/* Sticky Bottom Start Button for Mobile Only */}
+      <div className="md:hidden absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#080809] via-[#080809]/95 to-transparent shrink-0 z-20">
         <div className="max-w-md mx-auto">
           <button
             onClick={startSession}
