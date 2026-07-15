@@ -197,7 +197,18 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       router.push('/library')
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.error || err.response?.data?.detail || 'Delete failed.'
+      let msg = 'Delete failed.'
+      if (err.response) {
+        if (typeof err.response.data === 'object' && err.response.data !== null) {
+          msg = err.response.data.error || err.response.data.detail || msg
+        } else {
+          msg = `Delete failed: Server returned status ${err.response.status}`
+        }
+      } else if (err.request) {
+        msg = 'Delete failed: No response received from server.'
+      } else {
+        msg = `Delete failed: ${err.message}`
+      }
       toast.error(msg)
     }
   })
