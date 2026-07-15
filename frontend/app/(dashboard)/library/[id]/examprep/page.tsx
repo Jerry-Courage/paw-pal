@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Technique = 'feynman' | 'active_recall' | 'socratic' | 'free_chat'
+type Technique = 'feynman' | 'active_recall'
 type Phase = 'setup' | 'session' | 'report' | 'exam'
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
@@ -66,34 +66,22 @@ interface ExamResult {
   selfGrade?: 'got_it' | 'needs_work'
 }
 
-const TECHNIQUES: { id: Technique; label: string; icon: any; desc: string; color: string }[] = [
+const TECHNIQUES: { id: Technique; label: string; icon: any; desc: string; color: string; ringColor: string }[] = [
   {
     id: 'feynman',
-    label: 'Feynman Technique',
+    label: 'Feynman Mode',
     icon: Brain,
-    desc: 'Teach the AI like it knows nothing. It will ask questions when confused.',
-    color: 'border-violet-500/40 bg-violet-500/8 text-violet-400',
+    desc: 'Teach the AI like a student. It asks when confused.',
+    color: 'border-violet-500/20 bg-violet-500/[0.03] text-violet-400 hover:border-violet-500/40',
+    ringColor: 'focus:ring-violet-500/30 active:scale-[0.99] border-violet-500/50 shadow-[0_0_20px_rgba(139,92,246,0.12)] bg-violet-500/[0.06]',
   },
   {
     id: 'active_recall',
     label: 'Active Recall',
     icon: Zap,
-    desc: 'AI fires questions at you one by one. Answer out loud.',
-    color: 'border-orange-500/40 bg-orange-500/8 text-orange-400',
-  },
-  {
-    id: 'socratic',
-    label: 'Socratic Method',
-    icon: MessageSquare,
-    desc: 'AI guides you with probing questions. No direct answers.',
-    color: 'border-sky-500/40 bg-sky-500/8 text-sky-400',
-  },
-  {
-    id: 'free_chat',
-    label: 'Open Session',
-    icon: Zap,
-    desc: 'Tell the AI what you want — quiz battle, debate, roleplay, anything educational.',
-    color: 'border-emerald-500/40 bg-emerald-500/8 text-emerald-400',
+    desc: 'AI tests you with rapid-fire questions from memory.',
+    color: 'border-orange-500/20 bg-orange-500/[0.03] text-orange-400 hover:border-orange-500/40',
+    ringColor: 'focus:ring-orange-500/30 active:scale-[0.99] border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.12)] bg-orange-500/[0.06]',
   },
 ]
 
@@ -699,18 +687,6 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       'End the session for feedback on recall strength and weak spots',
       'Finish with a timed exam that checks durable understanding',
     ],
-    socratic: [
-      'Respond to probing questions with your own reasoning',
-      'Let the AI guide you toward deeper understanding',
-      'End the session for feedback on your reasoning quality',
-      'Finish with a timed exam that checks conceptual mastery',
-    ],
-    free_chat: [
-      'Explore the topic through conversation and questions',
-      'Use the AI to pressure-test your understanding in different ways',
-      'End the session for feedback on how well you grasped the material',
-      'Finish with a timed exam that checks true comprehension',
-    ],
   } as const
 
   const currentSetupSteps = setupSteps[technique]
@@ -719,110 +695,138 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // Setup phase
   if (phase === 'setup') return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
-        <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#080809] flex flex-col overflow-hidden text-white font-sans select-none">
+      
+      {/* Ambient background glows */}
+      <div className="absolute top-[10%] left-[-20%] w-[300px] h-[300px] bg-violet-600/[0.06] blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-[20%] right-[-20%] w-[300px] h-[300px] bg-orange-600/[0.06] blur-[120px] rounded-full pointer-events-none z-0" />
+
+      {/* Header bar */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.04] bg-[#0c0c0e]/80 backdrop-blur-md shrink-0 z-10">
+        <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all active:scale-95">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
         </Link>
-        <div>
-          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Exam Prep</p>
-          <h1 className="text-sm font-black text-white truncate">{resource?.title || '...'}</h1>
+        <div className="min-w-0">
+          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Live Voice Session</p>
+          <h1 className="text-xs font-bold text-slate-300 truncate">{resource?.title || '...'}</h1>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-5 sm:py-8">
-        <div className="max-w-lg mx-auto space-y-6 sm:space-y-8">
+      <div className="flex-1 overflow-y-auto px-4 py-5 z-10 scrollbar-hide">
+        <div className="max-w-md mx-auto space-y-5 pb-24">
 
-          {/* Header */}
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mx-auto">
-              <Brain className="w-8 h-8 text-orange-400" />
+          {/* Intro Card */}
+          <div className="text-center space-y-2 py-2">
+            <div className="w-14 h-14 bg-gradient-to-br from-orange-500/10 to-violet-500/10 border border-orange-500/20 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <Brain className="w-7 h-7 text-orange-400" />
             </div>
-            <h2 className="text-xl font-black text-white tracking-tight sm:text-2xl">Exam Prep</h2>
-            <p className="text-slate-500 text-sm">
-              {technique === 'feynman' && 'Teach the idea simply and clearly, then refine it until it makes sense.'}
-              {technique === 'active_recall' && 'Pull the answer from memory first, then test how solid your recall really is.'}
-              {technique === 'socratic' && 'Reason out loud and let the AI guide you toward deeper understanding.'}
-              {technique === 'free_chat' && 'Explore the topic through conversation and pressure-test your understanding.'}
-              <br />
-              Phase 2: A timed exam to check how well you truly understand the material.
+            <h2 className="text-lg font-black text-white tracking-tight">Active Voice Practice</h2>
+            <p className="text-slate-500 text-xs max-w-xs mx-auto leading-relaxed">
+              {technique === 'feynman' && 'Teach the concept in your own words, and get questioned where your explanation falls short.'}
+              {technique === 'active_recall' && 'Test your retention with rapid-fire questions from memory. Answer out loud.'}
             </p>
           </div>
 
-          {/* Technique picker */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Choose your technique</p>
-            {TECHNIQUES.map(t => {
-              const Icon = t.icon
-              const isSelected = technique === t.id
-              return (
-                <button key={t.id} onClick={() => setTechnique(t.id)}
-                  className={cn(
-                    'w-full flex items-start gap-4 p-4 rounded-2xl border text-left transition-all',
-                    isSelected ? t.color : 'border-white/8 bg-white/3 hover:border-white/15'
-                  )}>
-                  <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
-                    isSelected ? 'bg-white/10' : 'bg-white/5')}>
-                    <Icon className={cn('w-5 h-5', isSelected ? '' : 'text-slate-500')} />
-                  </div>
-                  <div>
-                    <p className={cn('text-sm font-black', isSelected ? '' : 'text-slate-300')}>{t.label}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{t.desc}</p>
-                  </div>
-                  {isSelected && <CheckCircle2 className="w-4 h-4 ml-auto shrink-0 mt-1" />}
-                </button>
-              )
-            })}
+          {/* Technique grid (Side by side) */}
+          <div className="space-y-2">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Choose Technique</p>
+            <div className="grid grid-cols-2 gap-3">
+              {TECHNIQUES.map(t => {
+                const Icon = t.icon
+                const isSelected = technique === t.id
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTechnique(t.id)}
+                    className={cn(
+                      'flex flex-col items-center text-center p-3.5 rounded-2.5xl border transition-all active:scale-[0.97]',
+                      isSelected ? t.ringColor : 'border-white/[0.04] bg-white/[0.01] hover:border-white/[0.08]'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mb-2',
+                      isSelected ? 'bg-orange-500/10 text-orange-400' : 'bg-white/5 text-slate-500'
+                    )}>
+                      <Icon className="w-4.5 h-4.5" />
+                    </div>
+                    <span className={cn('text-xs font-black', isSelected ? 'text-white' : 'text-slate-400')}>{t.label}</span>
+                    <span className="text-[10px] text-slate-500 mt-1 leading-snug font-medium line-clamp-2">{t.desc}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Voice picker */}
-          <div className="space-y-2.5">
+          {/* Voice Picker (Horizontal Scroll) */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">AI Voice</p>
-              <span className="text-[10px] text-slate-600">Auto = best for technique</span>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">AI voice companion</p>
+              <span className="text-[9px] text-slate-600">Swipe to view</span>
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
               <button
                 onClick={() => setVoice('')}
                 className={cn(
-                  'py-2.5 px-3 rounded-xl border text-xs font-black transition-all',
-                  voice === '' ? 'border-orange-500/40 bg-orange-500/10 text-orange-400' : 'border-white/8 bg-white/3 text-slate-500 hover:border-white/15'
-                )}>
-                Auto ✨
+                  'py-2 px-3.5 rounded-full border text-[11px] font-black shrink-0 transition-all active:scale-95',
+                  voice === '' ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/[0.04] bg-white/[0.01] text-slate-500 hover:border-white/[0.08]'
+                )}
+              >
+                Auto Voice ✨
               </button>
               {GEMINI_VOICES.map(v => (
-                <button key={v.id} onClick={() => setVoice(v.id)}
+                <button
+                  key={v.id}
+                  onClick={() => setVoice(v.id)}
                   className={cn(
-                    'py-2.5 px-3 rounded-xl border text-xs font-black transition-all text-left',
-                    voice === v.id ? 'border-orange-500/40 bg-orange-500/10 text-orange-400' : 'border-white/8 bg-white/3 text-slate-500 hover:border-white/15'
-                  )}>
-                  <span className="block">{v.label}</span>
-                  <span className="text-[9px] font-medium opacity-60 block mt-0.5">{v.desc}</span>
+                    'py-2 px-3.5 rounded-full border text-[11px] font-black shrink-0 transition-all active:scale-95 flex items-center gap-1',
+                    voice === v.id ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/[0.04] bg-white/[0.01] text-slate-500 hover:border-white/[0.08]'
+                  )}
+                >
+                  <span>{v.label}</span>
+                  <span className="text-[9px] font-medium opacity-60">({v.desc.slice(-2)})</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* How it works */}
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-4 space-y-2">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">How it works</p>
-            {currentSetupSteps.map((step, i) => (
-              <div key={i} className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
-                <span className="text-xs text-slate-400">{step}</span>
-              </div>
-            ))}
+          {/* Dotted Timeline Info */}
+          <div className="relative border border-white/[0.04] bg-white/[0.01] backdrop-blur-md rounded-2xl p-4.5 space-y-3.5 overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/[0.02] blur-2xl rounded-full" />
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">How it works</p>
+            <div className="relative pl-5 space-y-3.5">
+              {/* Vertical timeline line */}
+              <div className="absolute left-[8px] top-1.5 bottom-1.5 w-[1px] bg-gradient-to-b from-orange-500/40 via-white/10 to-transparent" />
+              {currentSetupSteps.map((step, i) => (
+                <div key={i} className="relative flex items-start gap-2.5">
+                  <span className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-[#080809] border border-orange-500/30 text-orange-400 text-[9px] font-black flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(249,115,22,0.05)]">
+                    {i + 1}
+                  </span>
+                  <span className="text-xs text-slate-400 leading-relaxed font-medium">{step}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Start button */}
-          <button onClick={startSession} disabled={isConnecting}
-            className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2.5 disabled:opacity-50">
-            {isConnecting
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Connecting...</>
-              : <><Mic className="w-4 h-4" /> Start Session</>}
+        </div>
+      </div>
+
+      {/* Sticky Bottom Start Button */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#080809] via-[#080809]/95 to-transparent shrink-0 z-20">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={startSession}
+            disabled={isConnecting}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-600 text-white font-black text-xs uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/10 flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isConnecting ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Connecting to Gemini...</>
+            ) : (
+              <><Mic className="w-4 h-4" /> Start Live Conversation</>
+            )}
           </button>
         </div>
       </div>
+
     </div>
   )
 

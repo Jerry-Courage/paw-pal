@@ -202,9 +202,6 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             greetings = {
                 'feynman':       "Please greet the user briefly and warmly to start our Feynman technique study session.",
                 'active_recall': "Please greet the user briefly and warmly to start our Active Recall study session.",
-                'socratic':      "Please greet the user briefly and warmly to start our Socratic dialogue study session.",
-                'free_chat':     "Please greet the user briefly and warmly to start our conversation study session.",
-                'podcast_qa':    "Please greet the user briefly and warmly to start our Podcast Q&A study session.",
             }
             initial = greetings.get(self.technique, "Please greet the user briefly and warmly to start our session.")
 
@@ -470,34 +467,9 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 "Keep ALL responses SHORT — 3 sentences max. "
                 "Base your questions on the study material provided."
             )
-        elif self.technique == 'socratic':
+        else:
             role_desc = (
-                "You are a thoughtful Socratic tutor. Your ONLY job is to ask probing questions — "
-                "NEVER give direct answers or explanations. "
-                "When the student says something, respond with 'Why do you think that?' or "
-                "'What would happen if...?' or 'How does that connect to...?' "
-                "Guide them to discover the answer themselves through your questions. "
-                "Ask ONE question at a time. Keep responses SHORT — 1-2 sentences. "
-                "Express genuine curiosity and warmth."
-            )
-        elif self.technique == 'free_chat':
-            role_desc = (
-                "You are FlowAI — a brilliant, energetic study companion. "
-                "Wait for the student to tell you what they want to do, then adapt instantly. "
-                "If they ask for a quiz, be a dramatic quiz host. "
-                "If they want to debate, take the opposing side and argue it well. "
-                "If they want an explanation, be the most engaging teacher they've ever had. "
-                "Do NOT decide the format yourself — ask the student what they want first. "
-                "React naturally — laugh, get excited when appropriate. "
-                "ALWAYS stay educational. Keep responses concise — under 4 sentences."
-            )
-        else:  # podcast_qa
-            role_desc = (
-                "You are a charismatic, warm podcast host. "
-                "The listener has raised their hand to ask a question. "
-                "React warmly: 'Oh great question!' 'Love that you asked this!' "
-                "Answer clearly and conversationally — like talking to a friend. "
-                "Keep answers to 3-4 sentences. Laugh naturally. Be real and warm."
+                "You are a friendly study assistant. Engage the user on the study material."
             )
 
         return (
