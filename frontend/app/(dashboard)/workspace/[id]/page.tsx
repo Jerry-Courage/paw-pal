@@ -1046,6 +1046,7 @@ export default function WorkspaceCollaborationStudio() {
                             {/* Rich notes */}
                             {viewingResource.ai_notes_json && (
                               <RichNotesViewer 
+                                resourceId={viewingResource.id}
                                 notes={typeof viewingResource.ai_notes_json === 'string' ? JSON.parse(viewingResource.ai_notes_json) : viewingResource.ai_notes_json}
                                 isEditing={false}
                                 setIsEditing={() => {}}

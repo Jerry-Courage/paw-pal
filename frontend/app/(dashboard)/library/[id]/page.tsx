@@ -330,6 +330,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
             ) : (
               <RichNotesViewer
                 key={notesViewKey}
+                resourceId={id}
                 notes={resource.ai_notes_json}
                 isEditing={isEditingNotes}
                 setIsEditing={setIsEditingNotes}

@@ -9,7 +9,8 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { API_BASE } from '@/lib/api'
+import { API_BASE, libraryApi } from '@/lib/api'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   X, Maximize2, Sparkles, Flame, ChevronLeft, ChevronRight, 
   CheckCircle2, Lock, BookOpen, Layers, Award, Eye, FileText
@@ -22,6 +23,7 @@ interface RichNotesViewerProps {
   isMathMode?: boolean
   onSave: (notes: any) => void
   onOpenMath?: (prob: string) => void
+  resourceId?: number
 }
 
 const ACCENT = [
@@ -42,7 +44,17 @@ export default function RichNotesViewer({
   isMathMode,
   onSave,
   onOpenMath,
+  resourceId,
 }: RichNotesViewerProps) {
+  const queryClient = useQueryClient()
+  const completeStepMutation = useMutation({
+    mutationFn: (step: string) => libraryApi.completeStep(resourceId!, step, 100),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: ['progress', resourceId] })
+    }
+  })
+
   const [zoomedImage, setZoomedImage] = useState<string | null>(null)
   const [currentPart, setCurrentPart] = useState(0)
   const [viewMode, setViewMode] = useState<'study' | 'scroll'>('study')
@@ -116,6 +128,9 @@ export default function RichNotesViewer({
         subtext: 'You finished every part of this study kit. Streak Badge unlocked!',
         xp: 50,
       })
+      if (resourceId) {
+        completeStepMutation.mutate('notes')
+      }
       return
     }
 
