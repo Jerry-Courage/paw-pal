@@ -196,8 +196,9 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       toast.success('Resource deleted.')
       router.push('/library')
     },
-    onError: () => {
-      toast.error('Delete failed.')
+    onError: (err: any) => {
+      const msg = err.response?.data?.error || err.response?.data?.detail || 'Delete failed.'
+      toast.error(msg)
     }
   })
 

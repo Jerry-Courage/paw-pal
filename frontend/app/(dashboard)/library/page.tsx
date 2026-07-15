@@ -260,8 +260,9 @@ export default function LibraryPage() {
       toast.success('Resource deleted.')
       setConfirmModal({ isOpen: false, resourceId: null, title: '' })
     },
-    onError: () => {
-      toast.error('Delete failed.')
+    onError: (err: any) => {
+      const msg = err.response?.data?.error || err.response?.data?.detail || 'Delete failed.'
+      toast.error(msg)
       setConfirmModal({ isOpen: false, resourceId: null, title: '' })
     }
   })

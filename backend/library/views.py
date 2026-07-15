@@ -184,13 +184,21 @@ class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
         ).distinct()
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if instance.owner_id != request.user.id:
+        try:
+            instance = self.get_object()
+            if instance.owner_id != request.user.id:
+                return Response(
+                    {"error": f"Only the original owner can delete this resource. Owner ID: {instance.owner_id}, User ID: {request.user.id}"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            return super().destroy(request, *args, **kwargs)
+        except Exception as e:
+            import traceback
+            logger.error(f"[Delete Resource Error] {e}\n{traceback.format_exc()}")
             return Response(
-                {"error": "Only the original owner can delete this resource from the library."}, 
-                status=status.HTTP_403_FORBIDDEN
+                {"error": f"Deletion failed on server: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        return super().destroy(request, *args, **kwargs)
 
     def get_serializer_context(self):
         return {'request': self.request}
