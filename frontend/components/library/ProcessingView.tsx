@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Brain, BookOpen, Zap, CheckCircle2,
-  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2, Sparkles
+  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2, Sparkles, Trash2
 } from 'lucide-react'
 
 // ── Stage definitions ────────────────────────────────────────────────────────
@@ -74,9 +74,10 @@ function Particles() {
 interface Props {
   resource: any
   compact?: boolean  // for library card view
+  onDelete?: () => void
 }
 
-export default function ProcessingView({ resource, compact = false }: Props) {
+export default function ProcessingView({ resource, compact = false, onDelete }: Props) {
   const [tipIdx, setTipIdx] = useState(0)
   const [tipVisible, setTipVisible] = useState(true)
   const startedAt = useRef(Date.now()).current
@@ -296,6 +297,19 @@ export default function ProcessingView({ resource, compact = false }: Props) {
             ))}
           </div>
         </div>
+
+        {/* ── Delete Button ── */}
+        {onDelete && (
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 text-xs font-bold rounded-xl transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Resource
+            </button>
+          </div>
+        )}
 
         {/* ── Leave notice ── */}
         <p className="text-center text-[11px] text-slate-600 font-medium flex items-center justify-center gap-1.5">

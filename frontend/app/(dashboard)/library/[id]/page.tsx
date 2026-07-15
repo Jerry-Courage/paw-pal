@@ -6,7 +6,7 @@ import { libraryApi } from '@/lib/api'
 import {
   ArrowLeft, Loader2, X, RotateCcw, BookOpen,
   HelpCircle, Map, Wand2, Radio, Calculator, Layers,
-  PanelRight, PanelRightClose, Plus, Send, Sparkles, Brain
+  PanelRight, PanelRightClose, Plus, Send, Sparkles, Brain, Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -25,6 +25,7 @@ const ExpandableMobileHUD = dynamic(() => import('@/components/ui/ExpandableMobi
 const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
 const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
 const StudyPath = dynamic(() => import('@/components/library/StudyPath'), { ssr: false })
+const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
 const TOOLS = [
   { id: 'notes',      label: 'Notes',           icon: BookOpen,   href: (id: number) => `/library/${id}` },
   { id: 'quiz',       label: 'Multiple Choice', icon: HelpCircle, href: (id: number) => `/library/${id}/quiz` },
@@ -159,6 +160,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const [showStudyIntro, setShowStudyIntro] = useState(true)
   const [showMusic, setShowMusic] = useState(false)
   const [isEditingNotes, setIsEditingNotes] = useState(false)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const qc = useQueryClient()
 
   // Track time spent studying this resource — logs to /auth/log-study/ on leave
@@ -185,6 +187,18 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
   const saveNotesMutation = useMutation({
     mutationFn: (updatedNotes: any) => libraryApi.updateResource(id, { ai_notes_json: updatedNotes }),
     onSuccess: () => { toast.success('Notes saved!'); qc.invalidateQueries({ queryKey: ['resource', id] }) }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => libraryApi.deleteResource(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['resources'] })
+      toast.success('Resource deleted.')
+      router.push('/library')
+    },
+    onError: () => {
+      toast.error('Delete failed.')
+    }
   })
 
   if (isLoading) return (
@@ -300,7 +314,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         <div className="flex-1 overflow-y-auto bg-[#0d0d0d] scrollbar-hide scroll-pt-4">
           {activeTool === 'notes' && (
             !hasNotes ? (
-              <ProcessingView resource={resource} />
+              <ProcessingView resource={resource} onDelete={() => setShowConfirmDelete(true)} />
             ) : (
               <RichNotesViewer
                 key={notesViewKey}
@@ -360,6 +374,19 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         onOpenChat={() => router.push(`/ai?resource=${id}`)}
         onOpenMath={() => router.push(`/library/${id}/solver`)}
       />
+
+      {showConfirmDelete && (
+        <ConfirmationModal
+          isOpen={showConfirmDelete}
+          title="Delete Resource"
+          message={`Are you sure you want to delete "${resource.title}"? This cannot be undone.`}
+          confirmText="Delete"
+          type="danger"
+          onConfirm={() => deleteMutation.mutate()}
+          onClose={() => setShowConfirmDelete(false)}
+          isLoading={deleteMutation.isPending}
+        />
+      )}
     </div>
   )
 }

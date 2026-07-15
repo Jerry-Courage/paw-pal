@@ -116,7 +116,7 @@ function ResourceCard({ resource: r, onDelete }: { resource: any; onDelete: () =
           {/* Delete on hover */}
           <button
             onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
-            className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/50 hover:text-rose-400 hover:bg-rose-400/20 opacity-0 group-hover:opacity-100 transition-all"
+            className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/50 hover:text-rose-400 hover:bg-rose-400/20 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

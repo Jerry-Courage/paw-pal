@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import {
   X, Calculator, Sparkles, Brain, CheckCircle2, 
   ArrowRight, Info, AlertCircle, Loader2, Camera, Paperclip
 } from 'lucide-react'
