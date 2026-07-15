@@ -1417,6 +1417,7 @@ class AIService:
         Generate a comprehensive FlowAI study kit JSON.
         Supports text-based analysis and Vision-based OCR for scanned PDFs.
         """
+        is_video = resource.resource_type == 'video'
         resource.processing_progress = 10
         resource.status_text = "📖 Ingesting material..."
         resource.save(update_fields=['processing_progress', 'status_text'])
@@ -1443,7 +1444,6 @@ class AIService:
             )
 
         # 1. VISION MULTI-MODAL: Trigger if vision data exists (YouTube frames or Scanned PDFs)
-        is_video = resource.resource_type == 'video'
         
         if vision_data:
             if not text.strip() or (effective_page_count > 1 and text_density < 750 and not is_video):
