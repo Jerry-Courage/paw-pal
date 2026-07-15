@@ -457,13 +457,87 @@ export default function RichNotesViewer({
                       )}
 
                       {/* Markdown Text Body */}
-                      <ReactMarkdown
-                        remarkPlugins={[remarkMath, remarkGfm]}
-                        rehypePlugins={[rehypeKatex]}
-                        components={md}
-                      >
-                        {normalizeMath(cleanContent(section.content))}
-                      </ReactMarkdown>
+                      {section.content ? (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkMath, remarkGfm]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={md}
+                        >
+                          {normalizeMath(cleanContent(section.content))}
+                        </ReactMarkdown>
+                      ) : (
+                        <div className="space-y-6">
+                          {/* Key Question */}
+                          {section.key_question && (
+                            <div className="p-4 rounded-2xl border border-white/5 bg-[#18181c]/50 relative overflow-hidden">
+                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-indigo-600" />
+                              <div className="flex gap-3">
+                                <span className="text-xl shrink-0">❓</span>
+                                <div>
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-400">Key Question</span>
+                                  <p className="text-sm sm:text-base font-bold text-white mt-0.5">{cleanContent(section.key_question)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Plain English Explanation */}
+                          {section.plain_english && (
+                            <div className="p-5 rounded-2xl border border-white/5 bg-[#121214]/60 relative overflow-hidden">
+                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-600" />
+                              <div className="flex gap-3">
+                                <span className="text-xl shrink-0">💡</span>
+                                <div>
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-400">Simple Analogy / Plain English</span>
+                                  <p className="text-sm sm:text-base leading-relaxed text-zinc-300 mt-1">{cleanContent(section.plain_english)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Deep Dive Academic Content */}
+                          {section.deep_dive && (
+                            <div className="py-2">
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-3 px-1">Detailed Explanation</span>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkMath, remarkGfm]}
+                                rehypePlugins={[rehypeKatex]}
+                                components={md}
+                              >
+                                {normalizeMath(cleanContent(section.deep_dive))}
+                              </ReactMarkdown>
+                            </div>
+                          )}
+
+                          {/* Memory Trick Acronym / Analogy */}
+                          {section.memory_trick && (
+                            <div className="p-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 relative overflow-hidden shadow-lg shadow-orange-500/5">
+                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
+                              <div className="flex gap-3">
+                                <span className="text-xl shrink-0">⚡</span>
+                                <div>
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-orange-400">Memory Mnemonic / Trick</span>
+                                  <p className="text-sm sm:text-base text-zinc-300 mt-1 leading-relaxed">{cleanContent(section.memory_trick)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Quick Summary Feynman Recap */}
+                          {section.quick_summary && (
+                            <div className="p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 relative overflow-hidden">
+                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-400 to-fuchsia-500" />
+                              <div className="flex gap-3">
+                                <span className="text-xl shrink-0">🎯</span>
+                                <div>
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-purple-400">Feynman Recap</span>
+                                  <p className="text-sm sm:text-base text-zinc-300 mt-1 leading-relaxed">{cleanContent(section.quick_summary)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Mobile Images (renders under text flow) */}
                       {images.length > 0 && (
@@ -668,13 +742,87 @@ export default function RichNotesViewer({
                     </div>
                   )}
 
-                  <ReactMarkdown
-                    remarkPlugins={[remarkMath, remarkGfm]}
-                    rehypePlugins={[rehypeKatex]}
-                    components={md}
-                  >
-                    {normalizeMath(cleanContent(section.content))}
-                  </ReactMarkdown>
+                  {section.content ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath, remarkGfm]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={md}
+                    >
+                      {normalizeMath(cleanContent(section.content))}
+                    </ReactMarkdown>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Key Question */}
+                      {section.key_question && (
+                        <div className="p-4 rounded-2xl border border-white/5 bg-[#18181c]/50 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-indigo-600" />
+                          <div className="flex gap-3">
+                            <span className="text-xl shrink-0">❓</span>
+                            <div>
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-blue-400">Key Question</span>
+                              <p className="text-sm sm:text-base font-bold text-white mt-0.5">{cleanContent(section.key_question)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Plain English Explanation */}
+                      {section.plain_english && (
+                        <div className="p-5 rounded-2xl border border-white/5 bg-[#121214]/60 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-600" />
+                          <div className="flex gap-3">
+                            <span className="text-xl shrink-0">💡</span>
+                            <div>
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-400">Simple Analogy / Plain English</span>
+                              <p className="text-sm sm:text-base leading-relaxed text-zinc-300 mt-1">{cleanContent(section.plain_english)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Deep Dive Academic Content */}
+                      {section.deep_dive && (
+                        <div className="py-2">
+                          <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-3 px-1">Detailed Explanation</span>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath, remarkGfm]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={md}
+                          >
+                            {normalizeMath(cleanContent(section.deep_dive))}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+
+                      {/* Memory Trick Acronym / Analogy */}
+                      {section.memory_trick && (
+                        <div className="p-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 relative overflow-hidden shadow-lg shadow-orange-500/5">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
+                          <div className="flex gap-3">
+                            <span className="text-xl shrink-0">⚡</span>
+                            <div>
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-orange-400">Memory Mnemonic / Trick</span>
+                              <p className="text-sm sm:text-base text-zinc-300 mt-1 leading-relaxed">{cleanContent(section.memory_trick)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quick Summary Feynman Recap */}
+                      {section.quick_summary && (
+                        <div className="p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-400 to-fuchsia-500" />
+                          <div className="flex gap-3">
+                            <span className="text-xl shrink-0">🎯</span>
+                            <div>
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-purple-400">Feynman Recap</span>
+                              <p className="text-sm sm:text-base text-zinc-300 mt-1 leading-relaxed">{cleanContent(section.quick_summary)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Mobile Images */}
                   {images.length > 0 && (
