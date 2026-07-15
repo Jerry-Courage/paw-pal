@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
@@ -47,6 +48,7 @@ export default function RichNotesViewer({
   resourceId,
 }: RichNotesViewerProps) {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const completeStepMutation = useMutation({
     mutationFn: (step: string) => libraryApi.completeStep(resourceId!, step, 100),
     onSuccess: () => {
@@ -854,7 +856,74 @@ export default function RichNotesViewer({
         </div>
       )}
 
-      {/* ── Gamified XP & Celebration Popup ────────────────────── */}
+      {/* ── Gamified Badge / Rewards Modal ────────────────────── */}
+      <AnimatePresence>
+        {completedAll && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative max-w-sm w-full bg-[#111115] border border-orange-500/30 rounded-3xl p-6 text-center space-y-6 shadow-[0_0_50px_rgba(249,115,22,0.2)] overflow-hidden"
+            >
+              {/* Radial gradient backing glow */}
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-48 bg-orange-500/[0.08] blur-3xl rounded-full pointer-events-none" />
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Mastery Milestone</p>
+                <h3 className="text-xl font-black text-white">Understand Phase Complete!</h3>
+              </div>
+
+              {/* Badge illustration */}
+              <div className="relative w-36 h-36 mx-auto flex items-center justify-center">
+                {/* Rotating background ray aura */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/20 to-amber-500/20 rounded-full blur-xl animate-pulse" />
+                <div className="absolute w-28 h-28 border border-orange-500/30 rounded-full border-dashed animate-spin [animation-duration:12s]" />
+                <div className="absolute w-24 h-24 border border-orange-500/10 rounded-full" />
+                
+                {/* Core Badge Shield */}
+                <div className="relative w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-3xl flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/40 rotate-45 transform hover:rotate-90 transition-transform duration-700">
+                  <div className="-rotate-45">
+                    <Award className="w-10 h-10 text-[#0d0d0e]" strokeWidth={2.5} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="inline-flex px-3 py-1 bg-orange-500/15 border border-orange-500/20 text-orange-400 text-[10px] font-black tracking-widest uppercase rounded-full">
+                  UNDERSTAND BADGE UNLOCKED 🏆
+                </span>
+                <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
+                  Excellent work! You finished reading and understanding every single part of this study kit. You gained <strong className="text-white">+50 XP</strong>.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2 pt-2">
+                <button
+                  onClick={() => {
+                    setCompletedAll(false)
+                    if (resourceId) {
+                      router.push(`/library/${resourceId}/flashcards`)
+                    }
+                  }}
+                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-black font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-orange-500/15"
+                >
+                  Continue to Recall (Flashcards) →
+                </button>
+                <button
+                  onClick={() => setCompletedAll(false)}
+                  className="w-full py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-bold text-xs transition-all"
+                >
+                  Stay and Review Notes
+                </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {celebration && (
           <motion.div
