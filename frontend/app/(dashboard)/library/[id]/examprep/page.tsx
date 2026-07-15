@@ -7,7 +7,8 @@ import {
   ArrowLeft, Mic, MicOff, Square, Brain, Zap,
   MessageSquare, CheckCircle2, XCircle, AlertCircle,
   ChevronRight, RotateCcw, Loader2, Volume2,
-  Clock, FileText, ChevronLeft, Award, Target
+  Clock, FileText, ChevronLeft, Award, Target,
+  Phone, Globe, Sliders, ChevronDown, X
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -110,7 +111,7 @@ async function resampleTo16k(float32: Float32Array, inputRate: number): Promise<
   const outputLen = Math.round(float32.length * 16000 / inputRate)
   const offlineCtx = new OfflineAudioContext(1, outputLen, 16000)
   const buffer = offlineCtx.createBuffer(1, float32.length, inputRate)
-  buffer.copyToChannel(float32, 0)
+  buffer.copyToChannel(float32 as any, 0)
   const source = offlineCtx.createBufferSource()
   source.buffer = buffer
   source.connect(offlineCtx.destination)
@@ -157,6 +158,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [report, setReport] = useState<SessionReport | null>(null)
   const [sessionDuration, setSessionDuration] = useState(0)
+  const [showChat, setShowChat] = useState(false)
 
   // Exam state
   const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([])
@@ -180,11 +182,26 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const timerRef = useRef<any>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
   const isSpeakingTimeoutRef = useRef<any>(null)
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
 
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
   })
+
+  const stopAudioPlayout = useCallback(() => {
+    activeSourcesRef.current.forEach(source => {
+      try {
+        source.stop()
+      } catch (e) {}
+    })
+    activeSourcesRef.current = []
+    if (audioCtxRef.current) {
+      nextPlayTimeRef.current = audioCtxRef.current.currentTime
+    }
+    setIsAiSpeaking(false)
+    clearTimeout(isSpeakingTimeoutRef.current)
+  }, [])
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -207,7 +224,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     audioCtxRef.current = ctx
 
     const buffer = ctx.createBuffer(1, pcm.length, 24000)
-    buffer.copyToChannel(pcm, 0)
+    buffer.copyToChannel(pcm as any, 0)
     const source = ctx.createBufferSource()
     source.buffer = buffer
     source.connect(ctx.destination)
@@ -216,6 +233,12 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
     source.start(startAt)
     nextPlayTimeRef.current = startAt + buffer.duration
+
+    // Track active source nodes
+    activeSourcesRef.current.push(source)
+    source.onended = () => {
+      activeSourcesRef.current = activeSourcesRef.current.filter(src => src !== source)
+    }
 
     setIsAiSpeaking(true)
     // Clear speaking indicator 500ms after last chunk ends
@@ -299,6 +322,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         } else if (msg.type === 'audio') {
           const pcm = base64ToPcmFloat(msg.data)
           playAudioChunk(pcm)
+        } else if (msg.type === 'interrupted') {
+          stopAudioPlayout()
         } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
           setTranscript(prev => {
@@ -452,6 +477,23 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   // Clear the safety timeout once the real report arrives
   // (handled in ws.onmessage where setPhase('report') is called)
 
+  const toggleMic = useCallback(() => {
+    if (!streamRef.current || !processorRef.current || !audioCtxRef.current) {
+      toast.error('Microphone not initialized. Connect mic and try again.')
+      return
+    }
+
+    if (!isMicMutedRef.current) {
+      isMicMutedRef.current = true
+      setIsRecording(false)
+      toast('🔇 Mic muted', { duration: 1000 })
+    } else {
+      isMicMutedRef.current = false
+      setIsRecording(true)
+      toast('🎤 Mic on', { duration: 1000 })
+    }
+  }, [])
+
   // ── Ctrl-to-talk: hold Ctrl key to mute/unmute mic ────────────────────────
   useEffect(() => {
     if (phase !== 'session') return
@@ -461,25 +503,13 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       // conflicts with Windows IME and browser shortcuts
       if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
         e.preventDefault()
-        if (!streamRef.current || !processorRef.current || !audioCtxRef.current) {
-          return
-        }
-
-        if (!isMicMutedRef.current) {
-          isMicMutedRef.current = true
-          setIsRecording(false)
-          toast('🔇 Mic muted', { duration: 1000 })
-        } else {
-          isMicMutedRef.current = false
-          setIsRecording(true)
-          toast('🎤 Mic on', { duration: 1000 })
-        }
+        toggleMic()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [phase, isRecording])
+  }, [phase, toggleMic])
 
   // ── Send text message to AI via WebSocket ─────────────────────────────────
   const sendTextMessage = async () => {
@@ -781,123 +811,293 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // Session phase
   if (phase === 'session') return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className={cn('w-2 h-2 rounded-full', isRecording ? 'bg-red-500 animate-pulse' : 'bg-slate-600')} />
-          <div>
-            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
-              {TECHNIQUES.find(t => t.id === technique)?.label}
-            </p>
-            <p className="text-xs text-slate-500 font-medium">{formatTime(sessionDuration)}</p>
-          </div>
-        </div>
-        <button onClick={endSession} disabled={isEndingSession}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-black hover:bg-red-500/15 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-          {isEndingSession
-            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating report...</>
-            : <><Square className="w-3.5 h-3.5 fill-current" /> End Session</>}
-        </button>
-      </div>
+    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#07070a] flex flex-col md:flex-row overflow-hidden text-white font-sans select-none">
       
-      {/* Dynamic Orb Animations */}
+      {/* Wave keyframe animations */}
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes orbPulse {
-          0% { transform: scale(0.95); opacity: 0.8; }
-          50% { transform: scale(1.05); opacity: 1; }
-          100% { transform: scale(0.95); opacity: 0.8; }
+        @keyframes waveGrow {
+          0% { transform: scaleY(0.2); }
+          50% { transform: scaleY(1.4); }
+          100% { transform: scaleY(0.2); }
         }
-        @keyframes orbWave {
-          0% { transform: scale(1); opacity: 0.5; border-width: 2px; }
-          100% { transform: scale(2.2); opacity: 0; border-width: 0px; }
+        .wave-bar-anim {
+          animation: waveGrow 0.8s ease-in-out infinite;
+          transform-origin: bottom;
         }
-        @keyframes orbRotate {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .orb-ai {
-          background: radial-gradient(circle at 30% 30%, #c084fc, #8b5cf6, #4338ca, #1e1b4b);
-          box-shadow: 0 0 80px 20px rgba(139, 92, 246, 0.5), inset 0 0 50px rgba(255, 255, 255, 0.6);
-          animation: orbPulse 1.5s ease-in-out infinite, orbRotate 8s linear infinite;
-        }
-        .orb-user {
-          background: radial-gradient(circle at 30% 30%, #fb923c, #ea580c, #991b1b, #450a0a);
-          box-shadow: 0 0 50px 10px rgba(234, 88, 12, 0.3), inset 0 0 30px rgba(255, 255, 255, 0.3);
-          animation: orbPulse 3s ease-in-out infinite, orbRotate 15s linear infinite reverse;
-        }
-        .orb-idle {
-          background: radial-gradient(circle at 30% 30%, #475569, #1e293b, #0f172a);
-          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1);
-          animation: orbRotate 20s linear infinite;
-        }
-        .orb-ring {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          animation: orbWave 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
-        }
-        .orb-ring.ai { border: 2px solid rgba(167, 139, 250, 0.8); }
-        .orb-ring.user { border: 2px solid rgba(251, 146, 60, 0.4); animation-duration: 2.5s; }
-        .orb-ring:nth-child(2) { animation-delay: 0.6s; }
-        .orb-ring:nth-child(3) { animation-delay: 1.2s; }
       `}} />
 
-      {/* Main Orb Canvas */}
-      <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden">
-        {/* Background glow */}
-        <div className={cn(
-          "absolute inset-0 opacity-20 transition-all duration-1000",
-          isAiSpeaking ? "bg-[radial-gradient(circle_at_center,#6d28d9,transparent_60%)]" 
-          : isRecording ? "bg-[radial-gradient(circle_at_center,#9a3412,transparent_50%)]"
-          : "bg-transparent"
-        )} />
-
-        {/* The Orb */}
-        <div className="relative w-40 h-40 md:w-56 md:h-56 flex items-center justify-center z-10 mb-20">
-          {/* Concentric rings when speaking */}
-          {(isAiSpeaking || isRecording) && (
-            <div className="absolute inset-0">
-              <div className={cn("orb-ring", isAiSpeaking ? "ai" : "user")} />
-              <div className={cn("orb-ring", isAiSpeaking ? "ai" : "user")} />
-              <div className={cn("orb-ring", isAiSpeaking ? "ai" : "user")} />
-            </div>
-          )}
+      {/* LEFT AREA: Main call dashboard screen */}
+      <div className={cn(
+        "flex-1 flex flex-col overflow-hidden relative",
+        showChat ? "md:border-r md:border-white/5" : ""
+      )}>
+        {/* Top Navbar */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0 z-20">
+          <button 
+            onClick={endSession} 
+            disabled={isEndingSession}
+            className="p-2 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-all cursor-pointer"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
           
-          {/* Core Orb */}
-          <div className={cn(
-            "w-full h-full rounded-full transition-all duration-700 ease-in-out relative z-10",
-            isAiSpeaking ? "orb-ai scale-110" 
-            : isRecording ? "orb-user scale-100" 
-            : "orb-idle scale-95 opacity-50"
-          )}>
-            {/* Inner dynamic texture/sheen */}
-            <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_60%_20%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
+          <div className="flex items-center gap-2">
+            {/* Simple audio wave icon */}
+            <div className="flex gap-0.5 items-center">
+              <div className="w-[2px] h-3 bg-indigo-400 rounded-full animate-pulse" />
+              <div className="w-[2px] h-5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.1s]" />
+              <div className="w-[2px] h-4 bg-indigo-400 rounded-full animate-pulse [animation-delay:0.2s]" />
+            </div>
+            <span className="text-sm font-bold tracking-tight text-slate-300">Live Conversation</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowChat(prev => !prev)}
+              className={cn(
+                "p-2 rounded-xl transition-all relative border cursor-pointer",
+                showChat ? "bg-indigo-600/20 text-indigo-400 border-indigo-500/20" : "bg-transparent border-transparent hover:bg-white/5 text-slate-400 hover:text-white"
+              )}
+              title="Show Text Chat"
+            >
+              <MessageSquare className="w-5 h-5" />
+              {transcript.length > 0 && !showChat && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+              )}
+            </button>
+            <div className="w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-xs font-black text-indigo-400 uppercase">
+              {resource?.subject?.slice(0, 2) || 'ED'}
+            </div>
           </div>
         </div>
 
-        {/* Floating Transcript (Bottom area) */}
-        <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent z-20 flex flex-col justify-end pb-4">
-          <div className="max-w-2xl mx-auto w-full px-6 flex flex-col gap-3 max-h-[140px] overflow-y-auto scrollbar-hide">
+        {/* Dynamic ambient background glow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          <div className={cn(
+            "absolute -top-40 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full blur-[120px] opacity-20 transition-all duration-1000",
+            isAiSpeaking ? "bg-indigo-600" 
+            : isRecording ? "bg-cyan-500" 
+            : "bg-indigo-900/50"
+          )} />
+          <div className="absolute bottom-[-150px] left-[-150px] w-[350px] h-[350px] rounded-full blur-[90px] bg-purple-900/10 opacity-30" />
+          <div className="absolute top-[20%] right-[-100px] w-[300px] h-[300px] rounded-full blur-[95px] bg-cyan-900/10 opacity-20" />
+        </div>
+
+        {/* Center content: Tutor name and glowing ring */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 relative z-10">
+          
+          {/* Tutor Info Header */}
+          <div className="text-center mb-8 flex flex-col items-center">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-all cursor-pointer">
+              <Globe className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-bold text-slate-200">
+                {resource?.title || 'Biology'} Tutor
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+            </div>
+            
+            {/* AI Status / Speaking waves */}
+            <div className="flex items-center gap-2 mt-3 h-5">
+              {isAiSpeaking ? (
+                <>
+                  {/* Micro mini speaking bar wave */}
+                  <div className="flex items-end gap-[2px] h-3 w-6 pb-0.5">
+                    {[1, 2, 3, 4].map(idx => (
+                      <div 
+                        key={idx} 
+                        className="w-[2px] bg-cyan-400 rounded-full wave-bar-anim"
+                        style={{ height: '100%', animationDelay: `${idx * 0.1}s`, animationDuration: `${0.5 + idx * 0.1}s` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-slate-400 font-medium">AI Tutor is speaking...</span>
+                </>
+              ) : isRecording ? (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                  <span className="text-xs text-slate-400 font-medium">Listening...</span>
+                </>
+              ) : (
+                <span className="text-xs text-slate-500 font-medium">Click mic or type to chat</span>
+              )}
+            </div>
+          </div>
+
+          {/* Glowing Concentric Rings Container */}
+          <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full flex items-center justify-center">
+            
+            {/* Outer animated thin circle */}
+            <div className="absolute inset-0 rounded-full border border-cyan-500/10 animate-[spin_30s_linear_infinite] p-2">
+              <div className="w-full h-full rounded-full border border-dashed border-indigo-500/10" />
+            </div>
+            
+            {/* Main Gradient Ring with drop shadow glow */}
+            <div className="absolute inset-4 rounded-full bg-gradient-to-tr from-cyan-400 via-blue-600 to-purple-600 p-[3px] shadow-[0_0_60px_rgba(6,182,212,0.15)]">
+              
+              {/* Inner dark circular panel */}
+              <div className="w-full h-full rounded-full bg-[#0a0a0f] flex flex-col items-center justify-center relative overflow-hidden">
+                
+                {/* Embedded soundwave in center of circle */}
+                <div className="flex items-end gap-1.5 h-16 justify-center w-full px-6">
+                  {[...Array(15)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "w-[3px] rounded-full transition-all duration-300",
+                        isAiSpeaking 
+                          ? "bg-gradient-to-t from-cyan-400 to-indigo-500 wave-bar-anim" 
+                          : isRecording 
+                          ? "bg-cyan-500/50" 
+                          : "bg-slate-800"
+                      )}
+                      style={{
+                        height: isAiSpeaking 
+                          ? `${12 + Math.sin(i * 0.4) * 20 + 16}px` 
+                          : isRecording 
+                          ? `${6 + Math.sin(i) * 6}px` 
+                          : '4px',
+                        animationDelay: `${i * 0.05}s`,
+                        animationDuration: `${0.4 + (i % 4) * 0.12}s`
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Microphone Toggle Button inside ring */}
+                <button
+                  onClick={toggleMic}
+                  className={cn(
+                    "absolute bottom-6 w-12 h-12 rounded-full flex items-center justify-center border transition-all duration-300 shadow-lg cursor-pointer",
+                    isRecording
+                      ? "bg-slate-900/90 border-cyan-500/30 text-cyan-400 hover:bg-slate-800 hover:scale-105"
+                      : "bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20 hover:scale-105"
+                  )}
+                  title={isRecording ? "Mute Microphone" : "Unmute Microphone"}
+                >
+                  {isRecording ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 animate-pulse" />}
+                </button>
+
+              </div>
+            </div>
+          </div>
+
+          {/* Tap to Interrupt Button */}
+          {isAiSpeaking && (
+            <button
+              onClick={stopAudioPlayout}
+              className="mt-8 flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 text-xs text-slate-300 transition-all font-semibold select-none cursor-pointer"
+            >
+              <div className="w-2.5 h-2.5 bg-slate-400 rounded-sm" />
+              Tap to Interrupt
+            </button>
+          )}
+        </div>
+
+        {/* Bottom dashboard statistics + End Conversation button */}
+        <div className="px-6 pb-8 pt-4 border-t border-white/[0.03] bg-[#07070a]/90 backdrop-blur-md z-10 shrink-0">
+          <div className="max-w-md mx-auto flex flex-col gap-6">
+            
+            {/* Stat Cards Row */}
+            <div className="grid grid-cols-2 gap-4">
+              
+              {/* Conversation Time Card */}
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span className="sm:hidden">Time</span>
+                    <span className="hidden sm:inline">Conversation Time</span>
+                  </span>
+                  <span className="block text-sm sm:text-base font-black text-white mt-0.5 tracking-tight">
+                    {formatTime(sessionDuration)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Voice Mode Card */}
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <Volume2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Voice Mode</span>
+                  <span className="block text-sm sm:text-base font-black text-white mt-0.5 tracking-tight">
+                    {TECHNIQUES.find(t => t.id === technique)?.label?.split(' ')[0] || 'Natural'}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Red Phone End Conversation Button */}
+            <div className="flex flex-col items-center justify-center gap-2">
+              <button 
+                onClick={endSession} 
+                disabled={isEndingSession}
+                className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center text-white transition-all shadow-[0_0_30px_rgba(239,68,68,0.3)] hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+              >
+                {isEndingSession ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : (
+                  <Phone className="w-6 h-6 rotate-[135deg]" />
+                )}
+              </button>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                End Conversation
+              </span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* RIGHT SIDEBAR PANEL: Collapsible Transcript & Text Input */}
+      {showChat && (
+        <div className={cn(
+          "w-full md:w-80 lg:w-96 flex flex-col bg-[#0b0b0e] shrink-0 border-l border-white/5 transition-all duration-300 z-30",
+          "absolute inset-0 md:relative md:inset-auto" // full screen overlay on mobile
+        )}>
+          {/* Sidebar Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-400 font-bold">Conversation Chat</span>
+            <button 
+              onClick={() => setShowChat(false)}
+              className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Transcript Feed */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
             {transcript.length === 0 ? (
-              <div className="text-center opacity-50 text-sm">
-                {isRecording ? "Listening..." : "Mic off — type below or press Ctrl+M"}
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-600 gap-2">
+                <MessageSquare className="w-8 h-8 opacity-20" />
+                <p className="text-xs">No text messages yet. Start speaking or type your first message below.</p>
               </div>
             ) : (
-              transcript.slice(-4).map((entry, i) => (
-                <div key={i} className={cn(
-                  "flex flex-col animate-in fade-in slide-in-from-bottom-2",
-                  entry.role === 'ai' ? "items-start" : "items-end"
-                )}>
+              transcript.map((entry, idx) => (
+                <div 
+                  key={idx} 
+                  className={cn(
+                    "flex flex-col max-w-[85%] animate-in fade-in-30 slide-in-from-bottom-2",
+                    entry.role === 'ai' ? "self-start" : "self-end items-end ml-auto"
+                  )}
+                >
                   <span className={cn(
-                    "text-[9px] font-black uppercase tracking-widest mb-0.5",
-                    entry.role === 'ai' ? "text-violet-400" : "text-orange-400"
+                    "text-[8px] font-black uppercase tracking-widest mb-0.5",
+                    entry.role === 'ai' ? "text-indigo-400" : "text-cyan-400"
                   )}>
                     {entry.role === 'ai' ? 'AI Tutor' : 'You'}
                   </span>
                   <div className={cn(
-                    "text-sm md:text-base font-medium leading-relaxed max-w-[85%]",
-                    entry.role === 'ai' ? "text-white" : "text-slate-300 text-right"
+                    "text-xs leading-relaxed px-3 py-2.5 rounded-2xl",
+                    entry.role === 'ai' 
+                      ? "bg-white/[0.03] text-slate-100 rounded-tl-none border border-white/[0.05]" 
+                      : "bg-indigo-600 text-white rounded-tr-none"
                   )}>
                     {entry.text}
                   </div>
@@ -906,68 +1106,40 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
             )}
             <div ref={transcriptEndRef} />
           </div>
-        </div>
-      </div>
 
-      {/* Text input fallback + Ctrl hint */}
-      <div className="px-5 pt-3 pb-1 shrink-0 border-t border-white/5">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            sendTextMessage()
-          }}
-          className="flex items-center gap-2 bg-white/[0.03] border border-white/8 rounded-2xl px-3 py-2 focus-within:border-orange-500/30 transition-colors"
-        >
-          <input
-            type="text"
-            value={textInput}
-            onChange={e => setTextInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendTextMessage() } }}
-            placeholder={isMicAvailable ? 'Type a message… (Enter to send)' : 'Text-only mode — ask the AI anything'}
-            className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
-            disabled={isSendingText}
-          />
-          <button
-            type="submit"
-            disabled={!textInput.trim() || isSendingText}
-            className="p-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-400 disabled:opacity-30 disabled:pointer-events-none transition-all"
-          >
-            {isSendingText ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-        </form>
-        <div className="mt-1.5 flex items-center justify-center gap-2 text-[9px] text-slate-700">
-          <span className={cn(isMicAvailable ? 'text-slate-700' : 'text-orange-400')}>{isMicAvailable ? 'Mic available' : 'Text-only mode'}</span>
-          <span>•</span>
-          <span>Press <kbd className="px-1 py-0.5 rounded bg-white/5 text-slate-500 font-mono text-[9px]">Ctrl+M</kbd> to toggle mic on/off</span>
+          {/* Form input */}
+          <div className="p-4 border-t border-white/5 bg-[#09090c]/90">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                sendTextMessage()
+              }}
+              className="flex items-center gap-2 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 focus-within:border-indigo-500/40 transition-colors"
+            >
+              <input
+                type="text"
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendTextMessage() } }}
+                placeholder="Type a message..."
+                className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-600 focus:outline-none"
+                disabled={isSendingText}
+              />
+              <button
+                type="submit"
+                disabled={!textInput.trim() || isSendingText}
+                className="p-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+              >
+                {isSendingText ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            </form>
+            <div className="mt-2 text-center text-[8px] text-slate-600">
+              Ctrl+M to toggle microphone.
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Mic status bar */}
-      <div className="px-5 py-4 border-t border-white/5 shrink-0">
-        <div className={cn(
-          'flex items-center justify-center gap-3 py-3 rounded-2xl border transition-all',
-          isRecording
-            ? 'bg-red-500/8 border-red-500/20'
-            : 'bg-white/3 border-white/8'
-        )}>
-          {isRecording ? (
-            <>
-              <div className="flex gap-0.5">
-                {[0,1,2,3,4].map(i => (
-                  <div key={i} className="w-1 bg-red-400 rounded-full animate-bounce"
-                    style={{ height: `${6 + (i % 3) * 6}px`, animationDelay: `${i * 0.08}s` }} />
-                ))}
-              </div>
-              <span className="text-xs text-red-400 font-black uppercase tracking-widest">Listening</span>
-            </>
-          ) : (
-            <>
-              <MicOff className="w-4 h-4 text-slate-600" />
-              <span className="text-xs text-slate-600 font-medium">Mic off</span>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   )
 

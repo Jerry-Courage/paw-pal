@@ -328,7 +328,12 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 await self._send({'type': 'error', 'message': 'Connection to AI lost'})
 
     async def _handle_gemini_message(self, data: dict):
-        server_content = data.get('serverContent', {})
+        server_content = data.get('serverContent', {}) or {}
+        interrupted = data.get('interrupted') or server_content.get('interrupted', False)
+        if interrupted:
+            logger.info('[ExamPrep] Gemini detected interruption, notifying browser')
+            await self._send({'type': 'interrupted'})
+
         if not server_content:
             return
 
