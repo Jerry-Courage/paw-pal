@@ -160,13 +160,7 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
             onClick={() => setShowStudyPath(true)}
             className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
           >
-            Show study path
-          </button>
-          <button
-            onClick={() => router.push(`/library/${resourceId}/examprep`)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-orange-500/30 bg-transparent px-4 py-2 text-[11px] font-black uppercase tracking-widest text-orange-400 transition hover:bg-orange-500/10"
-          >
-            <Star className="w-3 h-3 fill-current" /> Attempt Mastery
+            Master your material
           </button>
         </div>
       </div>
@@ -175,12 +169,6 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
 
   return (
     <div className="px-3 py-4 space-y-3 sm:px-4 sm:py-5 sm:space-y-4">
-      <button
-        onClick={() => router.push(`/library/${resourceId}/examprep`)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:opacity-95 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-      >
-        <Star className="w-3.5 h-3.5 fill-current" /> Attempt Mastery
-      </button>
 
       {!hasStarted ? (
         <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-3 text-[11px] text-slate-300">
