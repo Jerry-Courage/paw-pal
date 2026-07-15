@@ -436,6 +436,18 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     setIsRecording(false)
   }
 
+  // ── Clean up on unmount ──────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+      stopMic()
+      stopAudioPlayout()
+    }
+  }, [stopAudioPlayout])
+
   const [isEndingSession, setIsEndingSession] = useState(false)
   const [textInput, setTextInput] = useState('')
   const endSessionTimeoutRef = useRef<any>(null)
