@@ -603,3 +603,21 @@ class DBStatusView(APIView):
             })
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+
+class DebugResourceView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        resource = get_object_or_404(Resource, id=pk)
+        return Response({
+            'id': resource.id,
+            'title': resource.title,
+            'status': resource.status,
+            'has_study_kit': resource.has_study_kit,
+            'processing_progress': resource.processing_progress,
+            'status_text': resource.status_text,
+            'ai_notes_json_keys': list(resource.ai_notes_json.keys()) if isinstance(resource.ai_notes_json, dict) else type(resource.ai_notes_json).__name__,
+            'ai_notes_json_len': len(resource.ai_notes_json) if resource.ai_notes_json else 0,
+        })
+
