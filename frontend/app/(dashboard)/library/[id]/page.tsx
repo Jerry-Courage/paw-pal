@@ -327,10 +327,10 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
       {/* ── Main body ─────────────────────────────────────────────────────── */}
       <div className="relative z-10 flex flex-1 overflow-hidden">
 
-        {/* ── LEFT: Study Path (desktop slide-in) ───────────────────────── */}
+        {/* ── LEFT: Study Path (desktop sidebar) ───────────────────────── */}
         <div className={cn(
-          'hidden lg:flex flex-col shrink-0 border-r border-white/[0.05] overflow-y-auto scrollbar-hide transition-all duration-300 bg-[#080809]',
-          showStudyPath && hasNotes ? 'w-60' : 'w-0 border-r-0 overflow-hidden'
+          'hidden lg:flex flex-col shrink-0 border-r border-white/[0.05] overflow-y-auto scrollbar-hide bg-[#080809] transition-all',
+          hasNotes ? 'w-60' : 'w-0 border-r-0 overflow-hidden'
         )}>
           {hasNotes && (
             <StudyPath
