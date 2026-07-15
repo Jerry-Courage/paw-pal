@@ -146,6 +146,9 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                 process_resource_task(resource.id)
             except Exception as e:
                 logger.error(f'[Synthesis Thread] Failed for resource {resource.id}: {e}')
+            finally:
+                from django.db import connection
+                connection.close()
 
         t = threading.Thread(target=run, daemon=True)
         t.start()

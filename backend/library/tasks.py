@@ -578,29 +578,19 @@ def _generate_selected_features(resource, features: list):
     total = len(active)
     completed = [0]  # mutable counter for threads
 
-    def wrap(fn, feat_name):
-        def wrapped():
-            fn()
-            completed[0] += 1
-            try:
-                pct = 80 + int((completed[0] / total) * 18)  # 80→98%
-                resource.refresh_from_db()
-                resource.processing_progress = pct
-                resource.status_text = f"✅ {feat_name.title()} done ({completed[0]}/{total})"
-                resource.save(update_fields=['processing_progress', 'status_text'])
-            except Exception:
-                pass
-        return wrapped
-
     for feat in active:
         fn = feature_map.get(feat)
         if fn:
-            t = threading.Thread(target=wrap(fn, feat), daemon=True)
-            threads.append(t)
-            t.start()
-
-    for t in threads:
-        t.join(timeout=600)
+            try:
+                fn()
+                completed[0] += 1
+                pct = 80 + int((completed[0] / total) * 18)  # 80→98%
+                resource.refresh_from_db()
+                resource.processing_progress = pct
+                resource.status_text = f"✅ {feat.title()} done ({completed[0]}/{total})"
+                resource.save(update_fields=['processing_progress', 'status_text'])
+            except Exception as e:
+                logger.error(f'[AutoGen] Feature {feat} failed: {e}')
 
     resource.refresh_from_db()
     resource.status_text = "✅ All features ready!"
