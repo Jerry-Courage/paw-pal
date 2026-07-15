@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
@@ -93,7 +93,6 @@ interface Props {
 export default function StudyPath({ resourceId, onStepClick }: Props) {
   const router = useRouter()
   const qc = useQueryClient()
-  const [showStudyPath, setShowStudyPath] = useState(false)
 
   const { data: progress } = useQuery({
     queryKey: ['progress', resourceId],
@@ -130,8 +129,6 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
   const completeAndNavigate = async (step: string) => {
     const targetHref = STEP_HREFS[step](resourceId)
 
-    setShowStudyPath(true)
-
     if (onStepClick) {
       onStepClick(step)
     } else if (targetHref) {
@@ -148,42 +145,17 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
     }
   }
 
-  const handleStart = (step: string) => {
-    if (!showStudyPath) {
-      setShowStudyPath(true)
-      return
-    }
-    void completeAndNavigate(step)
-  }
-
   const handleJump = (step: string) => {
     void completeAndNavigate(step)
-  }
-
-  if (!showStudyPath) {
-    return (
-      <div className="px-3 py-4 sm:px-4 sm:py-5">
-        <div className="rounded-3xl border border-orange-500/20 bg-orange-500/10 p-4 text-center space-y-3">
-          <p className="text-[10px] uppercase tracking-[0.22em] font-black text-orange-300">Ready to master this material?</p>
-          <h2 className="text-sm font-black text-white leading-relaxed">Start with a focused study path to understand, recall, and apply what you learned.</h2>
-          <button
-            onClick={() => handleStart(nextStep)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.75 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
-          >
-            Master your material
-          </button>
-        </div>
-      </div>
-    )
   }
 
   return (
     <div className="px-3 py-4 space-y-3 sm:px-4 sm:py-5 sm:space-y-4">
       <button
-        onClick={() => handleStart(nextStep)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.75 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+        onClick={() => router.push(`/library/${resourceId}/examprep`)}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:opacity-95 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
       >
-        Master your material
+        <Star className="w-3.5 h-3.5 fill-current" /> Attempt Mastery
       </button>
 
       {!hasStarted ? (
@@ -294,7 +266,7 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
                     </button>
                   ) : isNext ? (
                     <button
-                      onClick={() => handleStart(step.id)}
+                      onClick={() => handleJump(step.id)}
                       className={cn(
                         'flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all active:scale-95',
                         step.color, step.bg, 'border', step.border, 'hover:opacity-80'
