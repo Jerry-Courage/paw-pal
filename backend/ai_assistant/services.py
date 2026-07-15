@@ -588,7 +588,7 @@ class AIService:
 
         # ── STAGE 3: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
         for g_client in self._google_clients():
-            for g_model in ['gemini-2.5-flash', 'gemini-1.5-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
+            for g_model in ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     if sys_instr and contents and contents[0].get('role') == 'user':

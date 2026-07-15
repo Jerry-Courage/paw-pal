@@ -58,7 +58,7 @@ class ResourceStatusSSEView(APIView):
                     for r in resources
                 ]
                 last_states = {
-                    r['id']: (r['status'], r['processing_progress'], r['status_text'], r['has_study_kit'])
+                    r['id']: (r['status'], r['progress'], r['text'], r['has_study_kit'])
                     for r in initial_data
                 }
                 yield f"event: snapshot\ndata: {json.dumps(initial_data)}\n\n"
@@ -98,17 +98,15 @@ class ResourceStatusSSEView(APIView):
                     if changed:
                         yield f"event: status\ndata: {json.dumps(changed)}\n\n"
 
-                    # Close stream only when every resource is status=ready/error
+                    # Close stream only when every resource is status=ready/error/failed
                     # AND has_study_kit=True (kit was actually written).
-                    # This prevents the "says ready but still building" race condition
-                    # where the backend sets status=ready before the AI kit finishes.
                     if current_states and all(
-                        s[0] in ['ready', 'error']
+                        s[0] in ['ready', 'error', 'failed']
                         for s in current_states.values()
                     ):
                         all_kits_ready = all(
-                            # error resources don't need a kit; ready ones must have it
-                            s[0] == 'error' or s[3] is True
+                            # error/failed resources don't need a kit; ready ones must have it
+                            s[0] in ['error', 'failed'] or s[3] is True
                             for s in current_states.values()
                         )
                         if all_kits_ready:
