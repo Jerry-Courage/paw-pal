@@ -177,7 +177,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
     queryFn: () => libraryApi.getResource(id).then(r => r.data),
     refetchInterval: (query) => {
       const data = query.state.data as any
-      const isFullyReady = data?.status === 'ready' && data?.has_study_kit === true
+      const isFullyReady = (data?.status === 'ready' && data?.has_study_kit === true) || data?.status === 'failed'
       return isFullyReady ? false : 4000
     }
   })

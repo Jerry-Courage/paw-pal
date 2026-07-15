@@ -398,8 +398,8 @@ def process_resource_task(res_id):
                     res.ai_summary = kit.get('overview', {}).get('summary', '')[:1000]
             except Exception as e:
                 logger.exception(f'[Task Queue] AI Study kit failed for {res.id}: {e}')
-                # Don't fail the whole task if just the kit fails, but mark status
-                res.status = 'ready' # Still ready to use even without high-end kit
+                res.status = 'failed'
+                res.status_text = f"❌ Generation Failed: {str(e)[:120]}"
                 res.save()
                 return
 

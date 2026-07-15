@@ -586,9 +586,9 @@ class AIService:
                     except Exception as e:
                         logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
 
-        # ── STAGE 3: GOOGLE GEMMA 4 — rotate between both keys ──────────────
+        # ── STAGE 3: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
         for g_client in self._google_clients():
-            for g_model in ['models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
+            for g_model in ['gemini-2.5-flash', 'gemini-1.5-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     if sys_instr and contents and contents[0].get('role') == 'user':
@@ -605,6 +605,24 @@ class AIService:
                     logger.warning(f"[Google SDK Kit] {g_model} timed out")
                 except Exception as e:
                     logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+
+        # ── STAGE 4: OPENROUTER (Final Ultimate Resiliency Fallback) ─────────
+        if self.api_key:
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        self.base_url,
+                        headers=self.headers,
+                        json={'model': self.model, 'messages': messages, 'max_tokens': max_tokens},
+                        timeout=90,
+                    )
+                    if resp.status_code == 200:
+                        result = self._extract_content(resp.json())
+                        if result and result.strip():
+                            logger.info(f"[OpenRouter Kit Fallback] ✓ {self.model}")
+                            return result
+            except Exception as e:
+                logger.warning(f"[OpenRouter Kit Fallback] Failed: {e}")
 
         logger.error("[Kit Chat Final Failure]: All engines exhausted.")
         return ""

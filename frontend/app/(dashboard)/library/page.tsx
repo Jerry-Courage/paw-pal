@@ -187,10 +187,12 @@ export default function LibraryPage() {
 
   const { priceInfo } = usePricing()
 
+  const resourcesKey = (data?.results || []).map((r: any) => `${r.id}:${r.status}`).join(',')
+
   // SSE for real-time processing updates
   useEffect(() => {
     const resources = (data?.results || []) as any[]
-    const hasProcessing = resources.some((r: any) => r.status !== 'ready' && r.status !== 'error')
+    const hasProcessing = resources.some((r: any) => r.status !== 'ready' && r.status !== 'failed' && r.status !== 'error')
     if (!hasProcessing) return
 
     let aborted = false
@@ -251,7 +253,8 @@ export default function LibraryPage() {
     }
     connectSSE()
     return () => { aborted = true; ctrl.abort() }
-  }, [data, qc])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resourcesKey, qc])
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => libraryApi.deleteResource(id),

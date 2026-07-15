@@ -88,6 +88,7 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
   const progress = Math.max(resource.processing_progress || 0, 2)
   const statusText = resource.status_text || 'Initializing...'
   const [isReprocessing, setIsReprocessing] = useState(false)
+  const isFailed = resource.status === 'failed'
 
   const handleReprocess = async () => {
     setIsReprocessing(true)
@@ -196,31 +197,33 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
         {/* ── Progress bar ── */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className={cn('text-xs font-black uppercase tracking-widest', currentStage.color)}>
-              {currentStage.label}
+            <span className={cn('text-xs font-black uppercase tracking-widest', isFailed ? 'text-rose-500 animate-pulse' : currentStage.color)}>
+              {isFailed ? '❌ Generation Failed' : currentStage.label}
             </span>
             <div className="flex items-center gap-2">
               <Clock className="w-3 h-3 text-slate-600" />
               <span className="text-xs text-slate-600 font-medium tabular-nums">{elapsed}</span>
-              <span className="text-xs font-black text-white">{progress}%</span>
+              <span className={cn("text-xs font-black", isFailed ? "text-rose-400" : "text-white")}>{isFailed ? 'Error' : `${progress}%`}</span>
             </div>
           </div>
           <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700 relative"
               style={{
-                width: `${progress}%`,
-                background: progress < 40
+                width: isFailed ? '100%' : `${progress}%`,
+                background: isFailed
+                  ? 'linear-gradient(90deg, #f43f5e, #e11d48)'
+                  : progress < 40
                   ? 'linear-gradient(90deg, #38bdf8, #818cf8)'
                   : progress < 75
                   ? 'linear-gradient(90deg, #f97316, #fbbf24)'
                   : 'linear-gradient(90deg, #34d399, #10b981)',
               }}
             >
-              <div className="absolute right-0 top-0 bottom-0 w-6 bg-white/30 blur-sm" />
+              {!isFailed && <div className="absolute right-0 top-0 bottom-0 w-6 bg-white/30 blur-sm" />}
             </div>
           </div>
-          <p className="text-xs text-slate-500 italic text-center">{statusText}</p>
+          <p className={cn("text-xs italic text-center font-medium", isFailed ? "text-rose-400/90" : "text-slate-500")}>{statusText}</p>
         </div>
 
         {/* ── Stage timeline ── */}
