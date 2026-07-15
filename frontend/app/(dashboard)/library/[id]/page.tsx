@@ -339,7 +339,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                 if (step === 'notes') {
                   setActiveTool('notes')
                   setNotesViewKey(prev => prev + 1)
-                  toast.info('You're now in Understand — the study path is ready.', { duration: 2200 })
+                  toast.info("You're now in Understand — the study path is ready.", { duration: 2200 })
                 } else {
                   router.push(`/library/${id}/${step}`)
                 }
