@@ -275,8 +275,8 @@ OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3.5-sonnet')
 GOOGLE_STUDIO_API_KEY = os.getenv('GOOGLE_STUDIO_API_KEY', '')
-VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '')
-VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', 'BG8EkGI7soGE5KMcQs4lKSSGAW6qfwdjhre9WCJpPtidRi403ZfoNSfhh9aCVGH21PDLrXiuMtr8yXMjYNxSnxY')
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'Q7Q-gTlSqqIqcuOCfJFXPHBCCpAEGs-XshG1TIcjlC4')
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 LOGGING = {

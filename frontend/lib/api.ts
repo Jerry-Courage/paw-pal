@@ -64,7 +64,7 @@ export const authApi = {
   getConfig: () => api.get('/auth/config/'),
 }
 
-export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BKkB2niwQFfIfOdWDSwnu5J03lsnCgNmPoMo9Epx1hpiRMr8jjnNJ5exdYiKZ7Jsis3zectYYeCwh0NHWI0gboM'
+export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BG8EkGI7soGE5KMcQs4lKSSGAW6qfwdjhre9WCJpPtidRi403ZfoNSfhh9aCVGH21PDLrXiuMtr8yXMjYNxSnxY'
 
 // Library
 export const libraryApi = {
