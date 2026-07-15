@@ -174,7 +174,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const examTimerRef = useRef<any>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
-  const audioCtxRef = useRef<AudioContext | null>(null)
+  const micAudioCtxRef = useRef<AudioContext | null>(null)
+  const playAudioCtxRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const isMicMutedRef = useRef(false)
@@ -196,8 +197,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       } catch (e) {}
     })
     activeSourcesRef.current = []
-    if (audioCtxRef.current) {
-      nextPlayTimeRef.current = audioCtxRef.current.currentTime
+    if (playAudioCtxRef.current) {
+      nextPlayTimeRef.current = playAudioCtxRef.current.currentTime
     }
     setIsAiSpeaking(false)
     clearTimeout(isSpeakingTimeoutRef.current)
@@ -220,8 +221,8 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // ── Play AI audio — scheduled for gapless playback ───────────────────────
   const playAudioChunk = useCallback((pcm: Float32Array) => {
-    const ctx = audioCtxRef.current || new AudioContext({ sampleRate: 24000 })
-    audioCtxRef.current = ctx
+    const ctx = playAudioCtxRef.current || new AudioContext({ sampleRate: 24000 })
+    playAudioCtxRef.current = ctx
 
     const buffer = ctx.createBuffer(1, pcm.length, 24000)
     buffer.copyToChannel(pcm as any, 0)
@@ -372,7 +373,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const activateMicProcessor = (stream: MediaStream) => {
     try {
       const ctx = new AudioContext({ sampleRate: 16000 })
-      audioCtxRef.current = ctx
+      micAudioCtxRef.current = ctx
 
       // Resume AudioContext if it gets suspended by browser autoplay policy
       // This is the most common reason mic stops after a few seconds
@@ -425,6 +426,10 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const stopMic = () => {
     processorRef.current?.disconnect()
     processorRef.current = null
+    if (micAudioCtxRef.current) {
+      void micAudioCtxRef.current.close().catch(() => {})
+      micAudioCtxRef.current = null
+    }
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null
     isMicMutedRef.current = true
@@ -478,7 +483,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   // (handled in ws.onmessage where setPhase('report') is called)
 
   const toggleMic = useCallback(() => {
-    if (!streamRef.current || !processorRef.current || !audioCtxRef.current) {
+    if (!streamRef.current || !processorRef.current || !micAudioCtxRef.current) {
       toast.error('Microphone not initialized. Connect mic and try again.')
       return
     }

@@ -205,13 +205,13 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     break
 
             greetings = {
-                'feynman':       "Hi! I don't know anything about this topic yet. Please start teaching me — what should I know first?",
-                'active_recall': "Hi! I'm ready. Please fire the first question at me.",
-                'socratic':      "Hello! I'm here to explore this topic. Please start with a thought-provoking opening question.",
-                'free_chat':     "Hello! I'm your AI study companion. What would you like to work on today?",
-                'podcast_qa':    "Hello! I'm joining the Q&A. Please welcome me warmly as the host and invite my question.",
+                'feynman':       "Please greet the user briefly and warmly to start our Feynman technique study session.",
+                'active_recall': "Please greet the user briefly and warmly to start our Active Recall study session.",
+                'socratic':      "Please greet the user briefly and warmly to start our Socratic dialogue study session.",
+                'free_chat':     "Please greet the user briefly and warmly to start our conversation study session.",
+                'podcast_qa':    "Please greet the user briefly and warmly to start our Podcast Q&A study session.",
             }
-            initial = greetings.get(self.technique, "Hello! Let's begin.")
+            initial = greetings.get(self.technique, "Please greet the user briefly and warmly to start our session.")
 
             if not setup_ready:
                 self.session_active = True
