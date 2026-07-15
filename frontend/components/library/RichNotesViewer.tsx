@@ -7,9 +7,13 @@ import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { API_BASE } from '@/lib/api'
-import { X, Maximize2, Sparkles, Flame, ChevronLeft, ChevronRight } from 'lucide-react'
+import { 
+  X, Maximize2, Sparkles, Flame, ChevronLeft, ChevronRight, 
+  CheckCircle2, Lock, BookOpen, Layers, Award, Eye, FileText
+} from 'lucide-react'
 
 interface RichNotesViewerProps {
   notes: any
@@ -20,16 +24,15 @@ interface RichNotesViewerProps {
   onOpenMath?: (prob: string) => void
 }
 
-// Accent colors — one per section, used only for the section number + title underline
 const ACCENT = [
-  'text-blue-400   border-blue-400',
-  'text-violet-400 border-violet-400',
-  'text-emerald-400 border-emerald-400',
-  'text-orange-400 border-orange-400',
-  'text-pink-400   border-pink-400',
-  'text-cyan-400   border-cyan-400',
-  'text-fuchsia-400 border-fuchsia-400',
-  'text-lime-400   border-lime-400',
+  'text-blue-400 border-blue-400/30 bg-blue-500/5',
+  'text-violet-400 border-violet-400/30 bg-violet-500/5',
+  'text-emerald-400 border-emerald-400/30 bg-emerald-500/5',
+  'text-orange-400 border-orange-400/30 bg-orange-500/5',
+  'text-pink-400 border-pink-400/30 bg-pink-500/5',
+  'text-cyan-400 border-cyan-400/30 bg-cyan-500/5',
+  'text-fuchsia-400 border-fuchsia-400/30 bg-fuchsia-500/5',
+  'text-lime-400 border-lime-400/30 bg-lime-500/5',
 ]
 
 export default function RichNotesViewer({
@@ -42,27 +45,30 @@ export default function RichNotesViewer({
 }: RichNotesViewerProps) {
   const [zoomedImage, setZoomedImage] = useState<string | null>(null)
   const [currentPart, setCurrentPart] = useState(0)
+  const [viewMode, setViewMode] = useState<'study' | 'scroll'>('study')
   const [celebration, setCelebration] = useState<{ title: string; subtext: string; xp: number } | null>(null)
   const [completedAll, setCompletedAll] = useState(false)
   const [showStreakBadge, setShowStreakBadge] = useState(false)
   const [showNextStepPrompt, setShowNextStepPrompt] = useState(false)
+  const [unlockedProgress, setUnlockedProgress] = useState(0) // tracks furthest step read
+
   const contentRef = useRef<HTMLDivElement>(null)
   const sections = notes?.sections || []
   const totalParts = sections.length
-  const progressPercent = totalParts > 0 ? ((currentPart + 1) / totalParts) * 100 : 0
+  const progressPercent = totalParts > 0 ? ((unlockedProgress + 1) / totalParts) * 100 : 0
   const isLastPart = currentPart >= totalParts - 1
 
   useEffect(() => {
     if (!celebration) return
-    const timer = window.setTimeout(() => setCelebration(null), 1800)
+    const timer = window.setTimeout(() => setCelebration(null), 3000)
     return () => window.clearTimeout(timer)
   }, [celebration])
 
   useEffect(() => {
-    if (contentRef.current) {
+    if (contentRef.current && viewMode === 'study') {
       contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [currentPart])
+  }, [currentPart, viewMode])
 
   if (!notes) return null
 
@@ -79,18 +85,11 @@ export default function RichNotesViewer({
       .trim()
   }
 
-  // Normalize all math notation to KaTeX-compatible delimiters
   const normalizeMath = (text: string) => {
     if (!text) return ''
     return text
-      // Block math: \[...\] → $$...$$
       .replace(/\\\[([\s\S]*?)\\\]/g, (_: string, m: string) => `\n$$\n${m.trim()}\n$$\n`)
-      // Inline math: \(...\) → $...$
       .replace(/\\\(([\s\S]*?)\\\)/g, (_: string, m: string) => `$${m.trim()}$`)
-      // Already-correct $$ blocks — leave alone
-      // Single $ that aren't already delimiters — leave alone (handled by remarkMath)
-      // Common bare formula patterns: wrap in $ if not already wrapped
-      // e.g. "= 2x + 3" at start of line after a colon
       .replace(/(?<=:\s{0,3})((?:[A-Za-z]\s*[=<>≤≥±∓×÷∑∏∫√∞∂∇][^.\n]{2,60}))/g, (_: string, m: string) => `$${m.trim()}$`)
   }
 
@@ -103,9 +102,7 @@ export default function RichNotesViewer({
 
   const handlePrevious = () => {
     if (currentPart === 0) return
-    const prevPart = Math.max(currentPart - 1, 0)
-    setCurrentPart(prevPart)
-    setShowNextStepPrompt(false)
+    setCurrentPart(Math.max(currentPart - 1, 0))
     setCelebration(null)
   }
 
@@ -115,421 +112,611 @@ export default function RichNotesViewer({
       setShowStreakBadge(true)
       setShowNextStepPrompt(true)
       setCelebration({
-        title: 'Streak badge unlocked!',
-        subtext: 'You finished every part and your study streak is glowing.',
+        title: 'Mastery Achieved!',
+        subtext: 'You finished every part of this study kit. Streak Badge unlocked!',
         xp: 50,
       })
       return
     }
 
-    const nextPart = Math.min(currentPart + 1, totalParts - 1)
+    const nextPart = currentPart + 1
     setCurrentPart(nextPart)
-    setShowNextStepPrompt(false)
-    setCelebration({
-      title: 'Part complete!',
-      subtext: `You earned 25 XP for finishing part ${currentPart + 1}.`,
-      xp: 25,
-    })
+    if (nextPart > unlockedProgress) {
+      setUnlockedProgress(nextPart)
+      setCelebration({
+        title: 'Part complete!',
+        subtext: `You earned 25 XP for completing part ${currentPart + 1}.`,
+        xp: 25,
+      })
+    }
+  }
+
+  const handleStepClick = (idx: number) => {
+    if (idx <= unlockedProgress) {
+      setCurrentPart(idx)
+    }
   }
 
   return (
-    <div className="w-full px-4 py-6 sm:px-8 sm:pt-8 sm:pb-32 text-[#e2e2e2]">
+    <div className="w-full px-3 py-4 sm:px-6 md:px-8 sm:py-8 text-[#e2e2e2] max-w-7xl mx-auto">
+      
+      {/* ── Header / Controls ─────────────────────────────────── */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-white/[0.06] pb-5 sm:pb-6">
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-500/10 text-orange-400 mb-2 border border-orange-500/20">
+            <Sparkles className="w-3 h-3" />
+            {isMathMode ? 'Logical Derivation' : 'Study Notes'}
+          </span>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-snug tracking-tight">
+            {notes.overview?.title || 'Study Material'}
+          </h1>
+        </div>
 
-      {/* ── Document title ─────────────────────────────────── */}
-      <div className="mb-6 pb-5 border-b border-white/[0.08] sm:mb-10 sm:pb-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-orange-400/70 mb-3">
-          {isMathMode ? 'Logical Derivation' : 'Study Notes'}
-        </p>
-        <h1 className="text-xl sm:text-3xl font-bold text-white leading-snug mb-3 sm:mb-4">
-          {notes.overview?.title || 'Study Material'}
-        </h1>
-        {notes.overview?.summary && (
-          <p className="text-[15px] text-slate-400 leading-[1.85]">
-            {cleanTitle(notes.overview.summary).split('.').slice(0, 3).join('.').trim() + '.'}
-          </p>
-        )}
+        {/* View Mode Toggle */}
+        <div className="flex items-center self-start md:self-center bg-[#121214] border border-white/5 p-1 rounded-2xl">
+          <button
+            onClick={() => setViewMode('study')}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+              viewMode === 'study' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
+            )}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Study Mode
+          </button>
+          <button
+            onClick={() => setViewMode('scroll')}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+              viewMode === 'scroll' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
+            )}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            Scroll Mode
+          </button>
+        </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 sm:mb-8 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-orange-400">Part by part study</p>
-            <h2 className="text-sm font-semibold text-white">Read part {currentPart + 1} of {totalParts}</h2>
-          </div>
-          <div className="text-right text-[11px] text-slate-400">
-            <div className="font-semibold">{Math.round(progressPercent)}% complete</div>
-            <div className="text-[10px] text-slate-500">Complete each part to unlock the next one</div>
-          </div>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]">
-          <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all" style={{ width: `${progressPercent}%` }} />
-        </div>
-        {(completedAll || showStreakBadge) && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300">
-            <Flame className="h-3.5 w-3.5" />
-            Streak badge ready
-          </div>
-        )}
-      </div>
-
-      {/* ── Sections — continuous document flow ────────────── */}
-      <div ref={contentRef}>
-        {sections.map((section: any, idx: number) => {
-          if (idx !== currentPart) return null
-          const accentClass = ACCENT[idx % ACCENT.length]
-          // Split into color parts for targeted use
-          const accentText  = accentClass.split(' ')[0]   // e.g. text-blue-400
-          const accentBorder = accentClass.split(' ')[1]  // e.g. border-blue-400
-
-          // Inline images for this section
-          const images: any[] = section.images || []
-
-          // Build markdown component map — scoped to this section's accent
-          const md: any = {
-            // ── Tables ──
-            table: ({ children }: any) => (
-              <div className="my-6 overflow-x-auto rounded-xl border border-white/[0.08]">
-                <table className="min-w-full border-collapse text-sm">{children}</table>
-              </div>
-            ),
-            thead: ({ children }: any) => <thead className="bg-white/[0.04] text-slate-400">{children}</thead>,
-            th: ({ children }: any) => (
-              <th className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider border-b border-white/[0.08]">{children}</th>
-            ),
-            td: ({ children }: any) => (
-              <td className="px-4 py-3 text-[14px] text-slate-300 border-b border-white/[0.05] leading-relaxed">{children}</td>
-            ),
-            tr: ({ children }: any) => <tr className="hover:bg-white/[0.02]">{children}</tr>,
-
-            // ── Headings ──
-            h1: ({ children }: any) => (
-              <h1 className="text-xl font-bold text-white mt-8 mb-3 first:mt-0 leading-snug">{children}</h1>
-            ),
-            h2: ({ children }: any) => (
-              <h2 className="text-lg font-bold text-white mt-7 mb-2.5 first:mt-0 leading-snug">{children}</h2>
-            ),
-            h3: ({ children }: any) => (
-              <h3 className="text-base font-semibold text-slate-200 mt-5 mb-2 first:mt-0">{children}</h3>
-            ),
-            h4: ({ children }: any) => (
-              <h4 className={cn('text-[11px] font-black uppercase tracking-[0.2em] mt-5 mb-2 first:mt-0', accentText)}>
-                {children}
-              </h4>
-            ),
-
-            // ── Paragraph ──
-            p: ({ children }: any) => (
-              <p className="mb-4 text-[16px] leading-[1.9] text-slate-300 last:mb-0">{children}</p>
-            ),
-
-            // ── Bold — key terms highlighted like a textbook ──
-            strong: ({ children }: any) => {
-              const text = String(children || '')
-              const isLabel = ['Key Question:', 'Deep Dive:', 'Memory Trick:', 'Quick Summary:'].some(l =>
-                text.trim().startsWith(l)
-              )
-              if (isLabel) {
+      {/* ── Study Mode Layout (Interactive Pages) ────────────── */}
+      {viewMode === 'study' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* Mobile Horizontal Progress Scroller */}
+          <div className="lg:hidden w-full overflow-x-auto scrollbar-hide py-1 mb-2">
+            <div className="flex items-center gap-2.5 min-w-max px-1">
+              {sections.map((sec: any, idx: number) => {
+                const isCompleted = idx < currentPart
+                const isActive = idx === currentPart
+                const isLocked = idx > unlockedProgress
+                
                 return (
-                  <strong className={cn('block text-[11px] font-black uppercase tracking-[0.2em] mb-1.5 mt-5 first:mt-0', accentText)}>
-                    {text}
-                  </strong>
+                  <button
+                    key={idx}
+                    onClick={() => handleStepClick(idx)}
+                    disabled={isLocked}
+                    className={cn(
+                      "flex items-center gap-2 px-3.5 py-2.5 rounded-2xl border transition-all text-xs font-black uppercase tracking-wider",
+                      isActive 
+                        ? "bg-orange-500 text-black border-orange-400 font-extrabold shadow-lg shadow-orange-500/20" 
+                        : isCompleted
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : isLocked
+                            ? "bg-[#121214] border-white/5 text-zinc-600 cursor-not-allowed opacity-50"
+                            : "bg-[#18181c] border-white/10 text-zinc-300 hover:bg-zinc-800"
+                    )}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    ) : isLocked ? (
+                      <Lock className="w-3.5 h-3.5" />
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                    )}
+                    Part {idx + 1}
+                  </button>
                 )
-              }
-              // Textbook-style: bold + subtle color highlight
-              return (
-                <strong className={cn('font-bold', accentText)}>{children}</strong>
-              )
-            },
+              })}
+            </div>
+          </div>
 
-            // ── Italic ──
-            em: ({ children }: any) => (
-              <em className="not-italic text-slate-200 font-medium">{children}</em>
-            ),
+          {/* Desktop Table of Contents Sidebar */}
+          <div className="hidden lg:block lg:col-span-3 sticky top-24 bg-[#121214]/60 border border-white/5 p-5 rounded-[2rem] backdrop-blur-2xl">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500 mb-4 px-2">Table of Contents</h3>
+            <div className="space-y-2">
+              {sections.map((sec: any, idx: number) => {
+                const isCompleted = idx < currentPart
+                const isActive = idx === currentPart
+                const isLocked = idx > unlockedProgress
+                const accentClass = ACCENT[idx % ACCENT.length]
+                const accentText = accentClass.split(' ')[0]
 
-            // ── Blockquote ──
-            blockquote: ({ children }: any) => (
-              <blockquote className={cn('my-5 pl-4 border-l-[3px] py-0.5', accentBorder)}>
-                <div className="text-[15px] text-slate-400 italic leading-[1.85]">{children}</div>
-              </blockquote>
-            ),
-
-            // ── Lists — textbook bullet hierarchy ──
-            ul: ({ children }: any) => (
-              <ul className="mb-4 space-y-1.5 pl-0">{children}</ul>
-            ),
-            ol: ({ children }: any) => (
-              <ol className="mb-4 space-y-1.5 pl-0 list-none counter-reset-[item]">{children}</ol>
-            ),
-            li: ({ children }: any) => (
-              <li className="flex gap-2.5 text-[16px] text-slate-300 leading-[1.8]">
-                {/* Solid bullet dot matching accent */}
-                <span className={cn('mt-[0.55em] w-[5px] h-[5px] rounded-full shrink-0 opacity-80',
-                  accentText.replace('text-', 'bg-')
-                )} />
-                <span className="flex-1">{children}</span>
-              </li>
-            ),
-
-            // ── Links ──
-            a: ({ children, href }: any) => (
-              <a
-                href={href}
-                className={cn('underline underline-offset-3 font-medium transition-opacity hover:opacity-70', accentText)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {children}
-              </a>
-            ),
-
-            // ── Divider ──
-            hr: () => <div className="my-7 h-px bg-white/[0.07]" />,
-
-            // ── Inline images in markdown body ──
-            img: ({ src, alt }: any) => {
-              if (!src || src.startsWith('Illustration') || !src.includes('/')) {
-                return alt ? (
-                  <span className="inline-flex items-center gap-1.5 text-sm text-slate-500 italic">
-                    🖼️ {cleanContent(alt || src)}
-                  </span>
-                ) : null
-              }
-              const url = src.startsWith('http') ? src : `${API_BASE?.replace(/\/api\/?$/, '')}${src}`
-              return (
-                <span
-                  className="block float-right ml-5 mb-3 w-[45%] max-w-[220px] cursor-zoom-in group"
-                  onClick={() => setZoomedImage(url)}
-                >
-                  <img src={url} alt={alt} className="w-full h-auto rounded-lg border border-white/[0.08] group-hover:border-white/20 transition-all" />
-                  {alt && <span className="block text-[11px] text-slate-500 italic mt-1 text-center leading-snug">{cleanContent(alt)}</span>}
-                </span>
-              )
-            },
-
-            // ── Code ──
-            code: ({ node, inline, className, children, ...props }: any) => {
-              const match = /language-(\w+)/.exec(className || '')
-              const content = Array.isArray(children) ? children.join('') : String(children || '')
-              const cleanedCode = content.replace(/\n$/, '')
-              const isMathBlock =
-                match?.[1] === 'math' ||
-                (!inline && (cleanedCode.includes('\\') || cleanedCode.includes('_') || cleanedCode.includes('^')))
-
-              if (isMathBlock) {
                 return (
-                  <div className="my-6 py-5 px-5 bg-black/40 rounded-xl border border-white/[0.06] overflow-x-auto">
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: katex.renderToString(cleanedCode.replace(/\\\\/g, '\\'), {
-                          displayMode: true,
-                          throwOnError: false,
-                          trust: true,
-                        }),
-                      }}
-                    />
+                  <button
+                    key={idx}
+                    disabled={isLocked}
+                    onClick={() => handleStepClick(idx)}
+                    className={cn(
+                      "w-full text-left flex items-start gap-3 p-3 rounded-2xl border transition-all group",
+                      isActive 
+                        ? "bg-[#1d1d22] border-white/10 text-white" 
+                        : isLocked
+                          ? "bg-transparent border-transparent text-zinc-600 cursor-not-allowed opacity-40"
+                          : "bg-transparent border-transparent text-zinc-400 hover:bg-[#18181c] hover:text-white"
+                    )}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      {isCompleted ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : isLocked ? (
+                        <Lock className="w-4 h-4" />
+                      ) : (
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center border-orange-500/50", isActive && "border-orange-500 animate-pulse")}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-[9px] font-black tracking-widest uppercase text-zinc-500">Part {idx + 1}</span>
+                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                      </div>
+                      <p className="text-xs font-bold truncate leading-relaxed mt-0.5">
+                        {cleanTitle(sec.title)}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Active Canvas Column */}
+          <div className="lg:col-span-9" ref={contentRef}>
+            <AnimatePresence mode="wait">
+              {sections.map((section: any, idx: number) => {
+                if (idx !== currentPart) return null
+                const accentClass = ACCENT[idx % ACCENT.length]
+                const accentText  = accentClass.split(' ')[0]
+                const accentBorder = accentClass.split(' ')[1]
+                const accentBg = accentClass.split(' ')[2]
+                const images: any[] = section.images || []
+
+                // Custom markdown component overrides scoped to the current active accent
+                const md: any = {
+                  table: ({ children }: any) => (
+                    <div className="my-5 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#121214]/40">
+                      <table className="min-w-full border-collapse text-sm">{children}</table>
+                    </div>
+                  ),
+                  thead: ({ children }: any) => <thead className="bg-white/[0.03] text-slate-400 border-b border-white/[0.08]">{children}</thead>,
+                  th: ({ children }: any) => (
+                    <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-zinc-400">{children}</th>
+                  ),
+                  td: ({ children }: any) => (
+                    <td className="px-4 py-3.5 text-sm text-zinc-300 border-b border-white/[0.04] leading-relaxed">{children}</td>
+                  ),
+                  tr: ({ children }: any) => <tr className="hover:bg-white/[0.01] transition-all">{children}</tr>,
+
+                  h1: ({ children }: any) => (
+                    <h2 className="text-lg sm:text-xl font-black text-white mt-8 mb-4 tracking-tight">{children}</h2>
+                  ),
+                  h2: ({ children }: any) => (
+                    <h3 className="text-md sm:text-lg font-black text-white mt-7 mb-3 tracking-tight">{children}</h3>
+                  ),
+                  p: ({ children }: any) => (
+                    <p className="mb-4 text-sm sm:text-base leading-relaxed sm:leading-[1.85] text-zinc-300 last:mb-0">{children}</p>
+                  ),
+                  strong: ({ children }: any) => {
+                    const text = String(children || '')
+                    const isLabel = ['Key Question:', 'Deep Dive:', 'Memory Trick:', 'Quick Summary:'].some(l =>
+                      text.trim().startsWith(l)
+                    )
+                    if (isLabel) {
+                      return (
+                        <span className={cn('block text-[11px] font-black uppercase tracking-wider mb-2 mt-5 first:mt-0', accentText)}>
+                          {text}
+                        </span>
+                      )
+                    }
+                    return <strong className={cn('font-bold', accentText)}>{children}</strong>
+                  },
+                  blockquote: ({ children }: any) => (
+                    <blockquote className={cn('my-6 p-4 rounded-2xl border bg-white/[0.02] backdrop-blur-xl shadow-lg relative overflow-hidden', accentBorder)}>
+                      <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
+                      <div className="text-sm sm:text-base text-zinc-300 italic leading-relaxed flex gap-3.5">
+                        <Sparkles className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                        <div>{children}</div>
+                      </div>
+                    </blockquote>
+                  ),
+                  ul: ({ children }: any) => <ul className="mb-5 space-y-2.5 pl-1">{children}</ul>,
+                  ol: ({ children }: any) => <ol className="mb-5 space-y-2.5 pl-1 list-none">{children}</ol>,
+                  li: ({ children }: any) => (
+                    <li className="flex gap-3 text-sm sm:text-base text-zinc-300 leading-relaxed">
+                      <span className={cn('mt-[0.65em] w-1.5 h-1.5 rounded-full shrink-0 opacity-80', accentText.replace('text-', 'bg-'))} />
+                      <span className="flex-1">{children}</span>
+                    </li>
+                  ),
+                  a: ({ children, href }: any) => (
+                    <a
+                      href={href}
+                      className={cn('underline underline-offset-4 font-bold transition-opacity hover:opacity-70', accentText)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {children}
+                    </a>
+                  ),
+                  hr: () => <div className="my-6 h-px bg-white/[0.06]" />,
+                  code: ({ node, inline, className, children, ...props }: any) => {
+                    const match = /language-(\w+)/.exec(className || '')
+                    const content = Array.isArray(children) ? children.join('') : String(children || '')
+                    const cleanedCode = content.replace(/\n$/, '')
+                    const isMathBlock =
+                      match?.[1] === 'math' ||
+                      (!inline && (cleanedCode.includes('\\') || cleanedCode.includes('_') || cleanedCode.includes('^')))
+
+                    if (isMathBlock) {
+                      return (
+                        <div className="my-6 py-5 px-4 bg-black/40 rounded-2xl border border-white/[0.06] overflow-x-auto scrollbar-hide">
+                          <div
+                            className="text-sm sm:text-base min-w-max mx-auto text-center"
+                            dangerouslySetInnerHTML={{
+                              __html: katex.renderToString(cleanedCode.replace(/\\\\/g, '\\'), {
+                                displayMode: true,
+                                throwOnError: false,
+                                trust: true,
+                              }),
+                            }}
+                          />
+                        </div>
+                      )
+                    }
+                    if (inline) {
+                      return (
+                        <code className="px-2 py-0.5 rounded-lg bg-white/[0.07] font-mono text-xs text-orange-300" {...props}>
+                          {children}
+                        </code>
+                      )
+                    }
+                    return (
+                      <div className="my-5 rounded-2xl bg-black/50 border border-white/[0.06] overflow-x-auto scrollbar-hide">
+                        <pre className="p-4">
+                          <code className="font-mono text-xs sm:text-sm text-slate-300 leading-relaxed" {...props}>
+                            {children}
+                          </code>
+                        </pre>
+                      </div>
+                    )
+                  },
+                }
+
+                return (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    transition={{ duration: 0.3 }}
+                    className="bg-[#121214]/30 border border-white/5 p-4 sm:p-6 md:p-8 rounded-[2rem] backdrop-blur-2xl shadow-xl"
+                  >
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 pb-4 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-3">
+                        <span className={cn('text-3xl font-black tracking-tight tabular-nums', accentText)}>
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                          {cleanTitle(section.title)}
+                        </h2>
+                      </div>
+                      <span className="self-start sm:self-center px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                        {images.length} Media Attached
+                      </span>
+                    </div>
+
+                    {/* Content Section */}
+                    <div className="clearfix">
+                      {/* Floating Images (Desktop only, inline floating) */}
+                      {images.length > 0 && (
+                        <div className="float-right ml-6 mb-4 space-y-4 w-[38%] max-w-[280px] hidden sm:block">
+                          {images.slice(0, 2).map((img: any, i: number) => {
+                            const url = resolveUrl(img.url)
+                            if (!url) return null
+                            return (
+                              <div
+                                key={i}
+                                className="group cursor-zoom-in rounded-2xl overflow-hidden border border-white/[0.08] hover:border-white/20 transition-all bg-black/20"
+                                onClick={() => setZoomedImage(url)}
+                              >
+                                <img src={url} alt={img.caption} className="w-full h-auto object-cover" />
+                                {img.caption && (
+                                  <p className="text-[10px] text-zinc-400 px-3 py-2 italic border-t border-white/[0.05] text-center leading-normal">
+                                    {cleanContent(img.caption)}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Markdown Text Body */}
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath, remarkGfm]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={md}
+                      >
+                        {normalizeMath(cleanContent(section.content))}
+                      </ReactMarkdown>
+
+                      {/* Mobile Images (renders under text flow) */}
+                      {images.length > 0 && (
+                        <div className="sm:hidden mt-6 space-y-4">
+                          {images.slice(0, 2).map((img: any, i: number) => {
+                            const url = resolveUrl(img.url)
+                            if (!url) return null
+                            return (
+                              <div
+                                key={i}
+                                className="rounded-2xl overflow-hidden border border-white/[0.08] bg-black/20 cursor-zoom-in"
+                                onClick={() => setZoomedImage(url)}
+                              >
+                                <img src={url} alt={img.caption} className="w-full h-auto" />
+                                {img.caption && (
+                                  <p className="text-[10px] text-zinc-400 px-3 py-2.5 italic text-center border-t border-white/[0.05] leading-normal">
+                                    {cleanContent(img.caption)}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Extra Overflow Images (3+) */}
+                      {images.length > 2 && (
+                        <div className="mt-6 grid grid-cols-2 gap-4 clear-both">
+                          {images.slice(2).map((img: any, i: number) => {
+                            const url = resolveUrl(img.url)
+                            if (!url) return null
+                            return (
+                              <div
+                                key={i}
+                                className="rounded-2xl overflow-hidden border border-white/[0.08] bg-black/20 cursor-zoom-in"
+                                onClick={() => setZoomedImage(url)}
+                              >
+                                <img src={url} alt={img.caption} className="w-full h-auto" />
+                                {img.caption && (
+                                  <p className="text-[10px] text-zinc-400 px-3 py-2 italic text-center border-t border-white/[0.05] leading-normal">
+                                    {cleanContent(img.caption)}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Progress navigation at bottom of card */}
+                    <div className="mt-8 pt-5 border-t border-white/[0.06] flex items-center justify-between">
+                      <button
+                        onClick={handlePrevious}
+                        disabled={currentPart === 0}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white/5 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Prev
+                      </button>
+
+                      <button
+                        onClick={handleAdvance}
+                        className={cn(
+                          "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                          isLastPart 
+                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-lg shadow-orange-500/10 hover:brightness-110"
+                            : "bg-white text-black hover:bg-zinc-200"
+                        )}
+                      >
+                        {isLastPart ? 'Complete Kit' : 'Next Part'}
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          </div>
+        </div>
+      ) : (
+        /* ── Scroll Mode Layout (Continuous Document) ─────────── */
+        <div className="space-y-12">
+          {sections.map((section: any, idx: number) => {
+            const accentClass = ACCENT[idx % ACCENT.length]
+            const accentText  = accentClass.split(' ')[0]
+            const accentBorder = accentClass.split(' ')[1]
+            const images: any[] = section.images || []
+
+            const md: any = {
+              table: ({ children }: any) => (
+                <div className="my-5 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#121214]/40">
+                  <table className="min-w-full border-collapse text-sm">{children}</table>
+                </div>
+              ),
+              thead: ({ children }: any) => <thead className="bg-white/[0.03] text-slate-400 border-b border-white/[0.08]">{children}</thead>,
+              th: ({ children }: any) => (
+                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-zinc-400">{children}</th>
+              ),
+              td: ({ children }: any) => (
+                <td className="px-4 py-3.5 text-sm text-zinc-300 border-b border-white/[0.04] leading-relaxed">{children}</td>
+              ),
+              tr: ({ children }: any) => <tr className="hover:bg-white/[0.01] transition-all">{children}</tr>,
+              h1: ({ children }: any) => (
+                <h3 className="text-base sm:text-lg font-black text-white mt-8 mb-4 tracking-tight">{children}</h3>
+              ),
+              h2: ({ children }: any) => (
+                <h4 className="text-sm sm:text-base font-black text-white mt-6 mb-3 tracking-tight">{children}</h4>
+              ),
+              p: ({ children }: any) => (
+                <p className="mb-4 text-sm sm:text-base leading-relaxed sm:leading-[1.8] text-zinc-300 last:mb-0">{children}</p>
+              ),
+              strong: ({ children }: any) => {
+                const text = String(children || '')
+                if (['Key Question:', 'Deep Dive:', 'Memory Trick:', 'Quick Summary:'].some(l => text.trim().startsWith(l))) {
+                  return <span className={cn('block text-[11px] font-black uppercase tracking-wider mb-2 mt-5 first:mt-0', accentText)}>{text}</span>
+                }
+                return <strong className={cn('font-bold', accentText)}>{children}</strong>
+              },
+              blockquote: ({ children }: any) => (
+                <blockquote className={cn('my-6 p-4 rounded-2xl border bg-white/[0.02] backdrop-blur-xl shadow-lg relative overflow-hidden', accentBorder)}>
+                  <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
+                  <div className="text-sm sm:text-base text-zinc-300 italic leading-relaxed flex gap-3">
+                    <Sparkles className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                    <div>{children}</div>
+                  </div>
+                </blockquote>
+              ),
+              ul: ({ children }: any) => <ul className="mb-5 space-y-2 pl-1">{children}</ul>,
+              ol: ({ children }: any) => <ol className="mb-5 space-y-2 pl-1 list-none">{children}</ol>,
+              li: ({ children }: any) => (
+                <li className="flex gap-3 text-sm sm:text-base text-zinc-300 leading-relaxed">
+                  <span className={cn('mt-[0.65em] w-1.5 h-1.5 rounded-full shrink-0 opacity-80', accentText.replace('text-', 'bg-'))} />
+                  <span className="flex-1">{children}</span>
+                </li>
+              ),
+              a: ({ children, href }: any) => (
+                <a href={href} className={cn('underline underline-offset-4 font-bold transition-opacity hover:opacity-70', accentText)} target="_blank" rel="noopener noreferrer">{children}</a>
+              ),
+              hr: () => <div className="my-6 h-px bg-white/[0.06]" />,
+              code: ({ node, inline, className, children, ...props }: any) => {
+                const match = /language-(\w+)/.exec(className || '')
+                const content = Array.isArray(children) ? children.join('') : String(children || '')
+                const cleanedCode = content.replace(/\n$/, '')
+                const isMathBlock = match?.[1] === 'math' || (!inline && (cleanedCode.includes('\\') || cleanedCode.includes('_') || cleanedCode.includes('^')))
+
+                if (isMathBlock) {
+                  return (
+                    <div className="my-6 py-5 px-4 bg-black/40 rounded-2xl border border-white/[0.06] overflow-x-auto scrollbar-hide">
+                      <div className="text-sm sm:text-base min-w-max mx-auto text-center" dangerouslySetInnerHTML={{ __html: katex.renderToString(cleanedCode.replace(/\\\\/g, '\\'), { displayMode: true, throwOnError: false, trust: true }) }} />
+                    </div>
+                  )
+                }
+                if (inline) {
+                  return <code className="px-2 py-0.5 rounded-lg bg-white/[0.07] font-mono text-xs text-orange-300" {...props}>{children}</code>
+                }
+                return (
+                  <div className="my-5 rounded-2xl bg-black/50 border border-white/[0.06] overflow-x-auto scrollbar-hide">
+                    <pre className="p-4"><code className="font-mono text-xs sm:text-sm text-slate-300 leading-relaxed" {...props}>{children}</code></pre>
                   </div>
                 )
-              }
-              if (inline) {
-                return (
-                  <code className="px-1.5 py-0.5 rounded bg-white/[0.07] font-mono text-[13px] text-orange-300" {...props}>
-                    {children}
-                  </code>
-                )
-              }
-              return (
-                <div className="my-5 rounded-xl bg-black/40 border border-white/[0.06] overflow-x-auto">
-                  <pre className="p-4">
-                    <code className="font-mono text-[13px] text-slate-300 leading-relaxed" {...props}>
-                      {children}
-                    </code>
-                  </pre>
-                </div>
-              )
-            },
-          }
+              },
+            }
 
-          return (
-            <div key={idx} id={`section-${idx}`} className="mb-12 scroll-mt-4">
-
-              {/* ── Section heading — textbook style ── */}
-              <div className="flex items-baseline gap-3 mb-5">
-                {/* Large section number */}
-                <span className={cn('text-4xl font-black leading-none shrink-0 tabular-nums', accentText)}>
-                  {idx + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <h2 className={cn(
-                    'text-xl sm:text-2xl font-bold text-white leading-snug pb-1.5 border-b-2',
-                    accentBorder
-                  )}>
+            return (
+              <div
+                key={idx}
+                className="bg-[#121214]/20 border border-white/5 p-4 sm:p-6 md:p-8 rounded-[2rem] backdrop-blur-2xl"
+              >
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/[0.06]">
+                  <span className={cn('text-2xl font-black tracking-tight tabular-nums', accentText)}>
+                    {String(idx + 1).padStart(2, '0')}
+                  </span>
+                  <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                     {cleanTitle(section.title)}
                   </h2>
                 </div>
-              </div>
 
-              {/* ── Section body ── */}
-              {/* If images exist, float them right inside the text flow */}
-              <div className="clearfix">
-                {/* Floating image(s) — first image floats right, rest stack below it */}
-                {images.length > 0 && (
-                  <div className="float-right ml-6 mb-4 space-y-3 w-[38%] max-w-[280px] hidden sm:block">
-                    {images.slice(0, 2).map((img: any, i: number) => {
-                      const url = resolveUrl(img.url)
-                      if (!url) return null
-                      return (
-                        <div
-                          key={i}
-                          className="group cursor-zoom-in rounded-xl overflow-hidden border border-white/[0.08] hover:border-white/20 transition-all bg-black/20"
-                          onClick={() => setZoomedImage(url)}
-                        >
-                          <img src={url} alt={img.caption} className="w-full h-auto object-cover" />
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="p-1 bg-black/60 rounded backdrop-blur-sm">
-                              <Maximize2 className="w-3 h-3 text-white" />
-                            </div>
+                <div className="clearfix">
+                  {/* Floating Images (Desktop only) */}
+                  {images.length > 0 && (
+                    <div className="float-right ml-6 mb-4 space-y-4 w-[38%] max-w-[280px] hidden sm:block">
+                      {images.slice(0, 2).map((img: any, i: number) => {
+                        const url = resolveUrl(img.url)
+                        if (!url) return null
+                        return (
+                          <div
+                            key={i}
+                            className="group cursor-zoom-in rounded-2xl overflow-hidden border border-white/[0.08] hover:border-white/20 transition-all bg-black/20"
+                            onClick={() => setZoomedImage(url)}
+                          >
+                            <img src={url} alt={img.caption} className="w-full h-auto object-cover" />
+                            {img.caption && (
+                              <p className="text-[10px] text-zinc-400 px-3 py-2 italic border-t border-white/[0.05] text-center leading-normal">
+                                {cleanContent(img.caption)}
+                              </p>
+                            )}
                           </div>
-                          {img.caption && (
-                            <p className="text-[11px] text-slate-500 px-2.5 py-1.5 italic leading-snug border-t border-white/[0.05] text-center">
-                              {cleanContent(img.caption)}
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        )
+                      })}
+                    </div>
+                  )}
 
-                {/* Main text */}
-                <ReactMarkdown
-                  remarkPlugins={[remarkMath, remarkGfm]}
-                  rehypePlugins={[rehypeKatex]}
-                  components={md}
-                >
-                  {normalizeMath(cleanContent(section.content))}
-                </ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath, remarkGfm]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={md}
+                  >
+                    {normalizeMath(cleanContent(section.content))}
+                  </ReactMarkdown>
 
-                {/* Mobile images — shown below text on small screens */}
-                {images.length > 0 && (
-                  <div className="sm:hidden mt-5 space-y-3">
-                    {images.slice(0, 2).map((img: any, i: number) => {
-                      const url = resolveUrl(img.url)
-                      if (!url) return null
-                      return (
-                        <div
-                          key={i}
-                          className="rounded-xl overflow-hidden border border-white/[0.08] cursor-zoom-in"
-                          onClick={() => setZoomedImage(url)}
-                        >
-                          <img src={url} alt={img.caption} className="w-full h-auto" />
-                          {img.caption && (
-                            <p className="text-[11px] text-slate-500 px-3 py-2 italic text-center border-t border-white/[0.05]">
-                              {cleanContent(img.caption)}
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Extra images (3+) shown below on all screens */}
-                {images.length > 2 && (
-                  <div className="mt-5 grid grid-cols-2 gap-3 clear-both">
-                    {images.slice(2).map((img: any, i: number) => {
-                      const url = resolveUrl(img.url)
-                      if (!url) return null
-                      return (
-                        <div
-                          key={i}
-                          className="rounded-xl overflow-hidden border border-white/[0.08] cursor-zoom-in"
-                          onClick={() => setZoomedImage(url)}
-                        >
-                          <img src={url} alt={img.caption} className="w-full h-auto" />
-                          {img.caption && (
-                            <p className="text-[11px] text-slate-500 px-2 py-1.5 italic text-center border-t border-white/[0.05]">
-                              {cleanContent(img.caption)}
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Section divider */}
-              {idx < (sections.length ?? 0) - 1 && (
-                <div className="mt-10 h-px bg-white/[0.06]" />
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-3.5 sm:mt-8 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Progress gate</p>
-          <p className="text-sm text-slate-300">
-            {completedAll
-              ? 'You finished every part. Your streak badge is live and your momentum is building.'
-              : isLastPart
-                ? 'You are on the final part. Tap finish to claim your streak badge.'
-                : `When you finish this part, tap proceed to continue to part ${currentPart + 2}.`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrevious}
-            disabled={currentPart === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Previous
-          </button>
-          <button
-            onClick={handleAdvance}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-slate-500"
-          >
-            {completedAll ? 'Finished' : isLastPart ? 'Finish study' : 'Proceed'}
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {(celebration || showNextStepPrompt) && (
-        <div className="mt-4 rounded-2xl border border-orange-400/20 bg-orange-500/10 p-3.5 shadow-lg shadow-orange-500/10">
-          {celebration && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-start gap-2.5">
-                <div className="mt-0.5 rounded-full bg-orange-500/15 p-1.5 text-orange-400">
-                  <Sparkles className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-white">{celebration.title}</p>
-                  <p className="text-xs text-slate-400">{celebration.subtext}</p>
+                  {/* Mobile Images */}
+                  {images.length > 0 && (
+                    <div className="sm:hidden mt-6 space-y-4">
+                      {images.slice(0, 2).map((img: any, i: number) => {
+                        const url = resolveUrl(img.url)
+                        if (!url) return null
+                        return (
+                          <div
+                            key={i}
+                            className="rounded-2xl overflow-hidden border border-white/[0.08] bg-black/20 cursor-zoom-in"
+                            onClick={() => setZoomedImage(url)}
+                          >
+                            <img src={url} alt={img.caption} className="w-full h-auto" />
+                            {img.caption && (
+                              <p className="text-[10px] text-zinc-400 px-3 py-2.5 italic text-center border-t border-white/[0.05] leading-normal">
+                                {cleanContent(img.caption)}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-400">
-                +{celebration.xp} XP
-              </div>
-            </div>
-          )}
-
-          {showNextStepPrompt && !completedAll && (
-            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-slate-300">
-              <div className="flex items-center justify-between gap-3">
-                <span>Next stage is ready — move to the next study step when you’re ready.</span>
-                <button className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white transition hover:bg-white/20">
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
+            )
+          })}
         </div>
       )}
 
-      {/* ── Image lightbox ─────────────────────────────────── */}
+      {/* ── Gamified XP & Celebration Popup ────────────────────── */}
+      <AnimatePresence>
+        {celebration && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-[150] max-w-sm w-[90%] bg-[#121214]/95 border border-orange-500/20 shadow-[0_10px_50px_rgba(249,115,22,0.15)] rounded-2xl p-4 backdrop-blur-2xl flex items-center justify-between gap-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-orange-500/10 p-2 text-orange-400 animate-bounce">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-white uppercase tracking-wider">{celebration.title}</p>
+                <p className="text-xs text-zinc-400 mt-0.5 leading-normal">{celebration.subtext}</p>
+              </div>
+            </div>
+            <div className="shrink-0 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase">
+              +{celebration.xp} XP
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Image Lightbox / Zoom ─────────────────────────────── */}
       {zoomedImage && (
         <div
           className="fixed inset-0 z-[200] bg-black/92 backdrop-blur-md flex items-center justify-center p-4 sm:p-10"
