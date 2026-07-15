@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 set -o errexit
 
+# Auto-Heal: check if migrations table is desynced with actual tables
+echo "Running database integrity checks..."
+python -c "
+import os
+import django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+django.setup()
+from django.db import connection
+try:
+    cursor = connection.cursor()
+    cursor.execute(\"SELECT 1 FROM information_schema.tables WHERE table_name='library_resourceprogress' LIMIT 1\")
+    table_exists = bool(cursor.fetchone())
+    if not table_exists:
+        cursor.execute(\"SELECT 1 FROM django_migrations WHERE app='library' AND name='0013_resourceprogress' LIMIT 1\")
+        applied = bool(cursor.fetchone())
+        if applied:
+            print('Auto-Healing Database: library_resourceprogress table is missing but migration 0013 is marked as applied. Clearing migration record...')
+            cursor.execute(\"DELETE FROM django_migrations WHERE app='library' AND name='0013_resourceprogress'\")
+            print('Migration record cleared successfully.')
+except Exception as e:
+    print(f'Database auto-heal check skipped: {e}')
+" || true
+
 # Run database migrations
 echo "Running database migrations..."
 python manage.py migrate --noinput --verbosity 2
