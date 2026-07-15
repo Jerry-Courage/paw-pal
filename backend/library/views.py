@@ -185,7 +185,7 @@ class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if instance.owner != request.user:
+        if instance.owner_id != request.user.id:
             return Response(
                 {"error": "Only the original owner can delete this resource from the library."}, 
                 status=status.HTTP_403_FORBIDDEN
@@ -466,7 +466,7 @@ class CloneResourceView(APIView):
         source = get_object_or_404(Resource, id=resource_id)
         
         # Access check
-        if source.owner != request.user:
+        if source.owner_id != request.user.id:
             from workspace.models import Workspace
             has_access = Workspace.objects.filter(resources=source, members=request.user).exists()
             if not has_access:

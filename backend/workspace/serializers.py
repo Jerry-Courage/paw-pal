@@ -89,7 +89,7 @@ class WorkspaceDetailSerializer(serializers.ModelSerializer):
     def get_is_owner(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.owner == request.user
+            return obj.owner_id == request.user.id
         return False
 
     def get_my_role(self, obj):
@@ -129,5 +129,5 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     def get_is_owner(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.owner == request.user
+            return obj.owner_id == request.user.id
         return False

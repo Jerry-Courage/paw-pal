@@ -297,7 +297,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         assignment = get_object_or_404(Assignment, pk=pk)
         
         # Security Check: Is Owner OR is a member of a workspace where shared
-        can_access = (assignment.user == request.user)
+        can_access = (assignment.user_id == request.user.id)
         if not can_access:
              from workspace.models import WorkspaceMember
              can_access = WorkspaceMember.objects.filter(
@@ -651,7 +651,7 @@ def export_assignment(request, pk):
     assignment = get_object_or_404(Assignment, pk=pk)
 
     # Auth: must be owner OR workspace member with access
-    if assignment.user != request.user:
+    if assignment.user_id != request.user.id:
         try:
             from workspace.models import WorkspaceMember
             has_access = WorkspaceMember.objects.filter(

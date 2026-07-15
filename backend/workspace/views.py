@@ -56,7 +56,7 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Owner-only Deletion Protocol."""
         instance = self.get_object()
-        if instance.owner != request.user:
+        if instance.owner_id != request.user.id:
             return Response(
                 {"error": "Only the creator can decommission this Collab Space."}, 
                 status=status.HTTP_403_FORBIDDEN
@@ -67,7 +67,7 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     def leave(self, request, pk=None):
         """Member departure protocol."""
         ws = self.get_object()
-        if ws.owner == request.user:
+        if ws.owner_id == request.user.id:
             return Response(
                 {"error": "Creators cannot leave. Use 'Delete' to decommission the space."}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -169,7 +169,7 @@ class WorkspaceMessageView(APIView):
         mentioned_usernames = re.findall(r'@(\w+)', content)
         for username in mentioned_usernames:
             mentioned_user = User.objects.filter(username=username).first()
-            if mentioned_user and mentioned_user != request.user:
+            if mentioned_user and mentioned_user.id != request.user.id:
                 create_notification(
                     mentioned_user, 'group',
                     f"Mentioned in {ws.name}",
@@ -181,7 +181,7 @@ class WorkspaceMessageView(APIView):
         if parent_id:
             try:
                 parent_msg = WorkspaceMessage.objects.get(id=parent_id)
-                if parent_msg.author and parent_msg.author != request.user:
+                if parent_msg.author_id and parent_msg.author_id != request.user.id:
                     create_notification(
                         parent_msg.author, 'group',
                         f"Reply in {ws.name}",
@@ -380,7 +380,7 @@ class WorkspaceMessageDetailView(APIView):
         ws = get_object_or_404(Workspace, id=workspace_id, members=request.user)
         msg = get_object_or_404(WorkspaceMessage, id=pk, workspace=ws)
         
-        if msg.author != request.user and ws.owner != request.user:
+        if msg.author_id != request.user.id and ws.owner_id != request.user.id:
              return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
              
         msg_id = msg.id

@@ -131,7 +131,7 @@ class StudyRoomJoinLeaveView(APIView):
         if room.participants.filter(id=request.user.id).exists():
             room.participants.remove(request.user)
             # Close room if host leaves and no one else
-            if room.host == request.user and room.participants.count() == 0:
+            if room.host_id == request.user.id and room.participants.count() == 0:
                 room.is_active = False
                 room.save()
             return Response({'joined': False, 'participant_count': room.participants.count()})

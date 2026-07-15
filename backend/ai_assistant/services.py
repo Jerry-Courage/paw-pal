@@ -2431,8 +2431,10 @@ class AIService:
         
         if "---DRAFT---" in raw_response and "---COMMENT---" in raw_response:
             parts = raw_response.split("---COMMENT---")
-            draft_part = parts[0].replace("---DRAFT---", "").strip()
+            draft_section = parts[0]
             comment_part = parts[1].strip()
+            draft_subparts = draft_section.split("---DRAFT---", 1)
+            draft_part = draft_subparts[1].strip() if len(draft_subparts) > 1 else draft_section.strip()
             if draft_part: draft = draft_part
             if comment_part: comment = comment_part
         
@@ -2521,8 +2523,10 @@ class AIService:
         # 1. Standard Dual-Marker Split
         if "---DRAFT---" in raw_response and "---COMMENT---" in raw_response:
             parts = raw_response.split("---COMMENT---")
-            draft_part = parts[0].replace("---DRAFT---", "").strip()
+            draft_section = parts[0]
             comment_part = parts[1].strip()
+            draft_subparts = draft_section.split("---DRAFT---", 1)
+            draft_part = draft_subparts[1].strip() if len(draft_subparts) > 1 else draft_section.strip()
             if draft_part: draft = draft_part
             if comment_part: comment = comment_part
         # 2. Single Marker Logic (Resilience)

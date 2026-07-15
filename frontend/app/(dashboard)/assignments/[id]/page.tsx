@@ -20,9 +20,14 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import Link from 'next/link'
 import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
-import { normalizeReadableMath } from '@/lib/mathFormatting'
-
-const sanitizeMath = (content: string) => normalizeReadableMath(content)
+const sanitizeMath = (content: string) => {
+  if (!content) return ''
+  return content
+    // Block math: \[...\] → $$...$$
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_: string, m: string) => `\n$$\n${m.trim()}\n$$\n`)
+    // Inline math: \(...\) → $...$
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_: string, m: string) => `$${m.trim()}$`)
+}
 
 const STATUS_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
   pending:    { color: 'text-slate-500 bg-slate-500/10 border-slate-500/20',   label: 'Pending', icon: Clock },
