@@ -351,9 +351,9 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
         {/* ── CENTER: Content area ──────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-          {/* Quick tool pills — horizontal scroll on mobile */}
+          {/* Quick tool pills — visible on desktop, hidden on mobile */}
           {hasNotes && (
-            <div className="shrink-0 px-4 py-2.5 border-b border-white/[0.04] bg-[#080809]/60">
+            <div className="hidden lg:block shrink-0 px-4 py-2.5 border-b border-white/[0.04] bg-[#080809]/60">
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
                 {QUICK_TOOLS.map(tool => (
                   <button
