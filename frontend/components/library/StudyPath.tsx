@@ -1,6 +1,6 @@
 'use client'
 
-
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
@@ -93,6 +93,7 @@ interface Props {
 export default function StudyPath({ resourceId, onStepClick }: Props) {
   const router = useRouter()
   const qc = useQueryClient()
+  const [showStudyPath, setShowStudyPath] = useState(false)
 
   const { data: progress } = useQuery({
     queryKey: ['progress', resourceId],
@@ -147,6 +148,29 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
 
   const handleJump = (step: string) => {
     void completeAndNavigate(step)
+  }
+
+  if (!showStudyPath) {
+    return (
+      <div className="px-3 py-4 sm:px-4 sm:py-5">
+        <div className="rounded-3xl border border-orange-500/20 bg-orange-500/10 p-4 text-center space-y-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] font-black text-orange-300">Ready to master this material?</p>
+          <h2 className="text-sm font-black text-white leading-relaxed">Start with a focused study path to understand, recall, and apply what you learned.</h2>
+          <button
+            onClick={() => setShowStudyPath(true)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-black shadow-lg shadow-orange-500/15 transition hover:bg-orange-400"
+          >
+            Show study path
+          </button>
+          <button
+            onClick={() => router.push(`/library/${resourceId}/examprep`)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-orange-500/30 bg-transparent px-4 py-2 text-[11px] font-black uppercase tracking-widest text-orange-400 transition hover:bg-orange-500/10"
+          >
+            <Star className="w-3 h-3 fill-current" /> Attempt Mastery
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
