@@ -176,15 +176,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
                     },
-                    # Voice activity detection — longer silence threshold so
-                    # the AI doesn't cut off mid-sentence or stop listening
+                    # Voice activity detection — default settings for maximum responsiveness
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'startOfSpeechSensitivity': 'START_SENSITIVITY_LOW',
-                            'endOfSpeechSensitivity': 'END_SENSITIVITY_LOW',
-                            'prefixPaddingMs': 200,
-                            'silenceDurationMs': 800,
                         }
                     },
                 }
