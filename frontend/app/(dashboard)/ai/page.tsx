@@ -436,13 +436,18 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
         isUser ? 'items-end' : 'items-start'
       )}>
         <div className={cn(
-          'relative transition-all duration-300',
+          'relative transition-all duration-300 overflow-hidden',
           isUser
-            ? 'rounded-3xl px-5 py-3.5 bg-[#1a1a1a] border border-white/8 text-slate-100 rounded-tr-sm shadow-xl max-w-[85%] sm:max-w-[75%]'
-            : 'w-full py-2 text-slate-200 pl-4 border-l border-white/5'
+            ? 'rounded-3xl px-5 py-3.5 bg-white/[0.03] border border-white/[0.08] backdrop-blur-md text-slate-100 rounded-tr-sm shadow-xl max-w-[85%] sm:max-w-[75%]'
+            : 'w-full max-w-[90%] sm:max-w-[85%] rounded-3xl rounded-tl-sm px-5 py-4 bg-[#111116]/50 border border-white/5 shadow-xl text-slate-200'
         )}>
-          {/* Subtle background glow for AI */}
-          {!isUser && <div className="absolute -top-10 -right-10 w-24 h-24 bg-orange-500/5 blur-[40px] pointer-events-none" />}
+          {/* Subtle left gradient indicator and background glow for AI */}
+          {!isUser && (
+            <>
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
+              <div className="absolute -top-10 -right-10 w-24 h-24 bg-orange-500/5 blur-[40px] pointer-events-none" />
+            </>
+          )}
 
           {/* User image attachment */}
           {msg.image && isUser && (
@@ -851,7 +856,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="fixed inset-0 [top:var(--nav-height)] flex bg-[#0d0d0d] overflow-hidden text-white">
+    <div className="fixed inset-0 [top:var(--nav-height)] flex bg-[#07070a] overflow-hidden text-white">
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -863,7 +868,7 @@ function AIChat() {
 
       {/* Sidebar */}
       <div className={cn(
-        'flex-shrink-0 bg-[#111] border-r border-white/5 flex flex-col transition-all duration-300 ease-out z-50 overflow-hidden',
+        'flex-shrink-0 bg-[#0a0a0f]/90 border-r border-white/[0.05] backdrop-blur-xl flex flex-col transition-all duration-300 ease-out z-50 overflow-hidden',
         'absolute lg:relative h-full top-0 left-0',
         sidebarOpen 
           ? 'w-[280px] md:w-[320px] translate-x-0 opacity-100' 
@@ -871,7 +876,7 @@ function AIChat() {
       )}>
         <div className="p-4 flex items-center gap-3 border-b border-white/5 flex-shrink-0">
           <button onClick={startNew}
-            className="w-full btn-primary py-3 flex-shrink-0 whitespace-nowrap">
+            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:opacity-90 transition-all font-black text-xs uppercase tracking-wider rounded-xl py-3 flex items-center justify-center gap-2 flex-shrink-0 whitespace-nowrap cursor-pointer">
             <Plus className="w-4 h-4" /> New Chat
           </button>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2.5 rounded-xl border border-white/8 text-slate-500 hover:text-white hover:bg-white/5 active:scale-95 transition-all">
@@ -883,11 +888,11 @@ function AIChat() {
           {/* Context */}
           <div className="px-4 pb-4">
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-3 px-1 tracking-widest uppercase">Context</p>
-            <div className="flex gap-2 p-1 bg-white/5 rounded-xl">
+            <div className="flex gap-2 p-1 bg-white/[0.02] border border-white/[0.06] rounded-xl">
               {(['global', 'resource'] as const).map(t => (
                 <button key={t} onClick={() => { setContextType(t); startNew() }}
-                  className={cn('flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all',
-                    contextType === t ? 'bg-orange-500/10 text-orange-400' : 'text-slate-500 hover:text-slate-300')}
+                  className={cn('flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer',
+                    contextType === t ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20' : 'text-slate-500 hover:text-slate-300')}
                 >
                   {t === 'global' ? 'Global' : 'Document'}
                 </button>
@@ -900,7 +905,7 @@ function AIChat() {
             <div className="px-4 pb-4 animate-fade-in-down">
               <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-3 px-1 tracking-widest uppercase">Target Document</p>
               {resources.length === 0 ? (
-                <div className="p-4 text-center border border-dashed border-white/8 rounded-2xl bg-white/3">
+                <div className="p-4 text-center border border-dashed border-white/[0.08] rounded-2xl bg-white/[0.02]">
                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">No documents found</p>
                    <p className="text-[9px] text-slate-400 mt-1">Upload a PDF to your library first</p>
                 </div>
@@ -913,10 +918,10 @@ function AIChat() {
                         setSelectedResource(res.id);
                         toast.success(`Context set to: ${res.title}`);
                       }}
-                      className={cn('w-full text-left p-2.5 rounded-xl transition-all flex items-center gap-3 group',
+                      className={cn('w-full text-left p-2.5 rounded-xl transition-all flex items-center gap-3 group cursor-pointer border',
                         selectedResource === res.id 
-                          ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' 
-                          : 'hover:bg-white/5 text-slate-500 border border-transparent hover:text-slate-300'
+                          ? 'bg-orange-500/15 text-orange-400 border-orange-500/20' 
+                          : 'bg-transparent hover:bg-white/5 text-slate-500 border-transparent hover:text-slate-300'
                       )}
                     >
                       <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center text-xs shadow-sm shadow-black/5',
@@ -941,9 +946,9 @@ function AIChat() {
                   setSidebarOpen(false)
                   setTimeout(() => textareaRef.current?.focus(), 100)
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-violet-500/10 hover:text-violet-400 transition-all border border-transparent hover:border-violet-500/20 cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-500/20 text-violet-500 flex items-center justify-center"><Network className="w-4 h-4" /></div> Generate Diagram
+                <div className="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0 border border-violet-500/10"><Network className="w-4 h-4" /></div> Generate Diagram
               </button>
               <button 
                 onClick={() => {
@@ -951,9 +956,9 @@ function AIChat() {
                   setSidebarOpen(false)
                   setTimeout(() => textareaRef.current?.focus(), 100)
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-pink-500/10 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-pink-500/10 hover:text-pink-400 transition-all border border-transparent hover:border-pink-500/20 cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-500/20 text-pink-500 flex items-center justify-center"><Wand2 className="w-4 h-4" /></div> Generate Image
+                <div className="w-8 h-8 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center shrink-0 border border-pink-500/10"><Wand2 className="w-4 h-4" /></div> Generate Image
               </button>
             </div>
           </div>
@@ -962,15 +967,15 @@ function AIChat() {
           <div className="px-4 pb-6">
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-3 px-1 tracking-widest uppercase">Recent History</p>
             {sessions.length === 0 ? (
-              <p className="text-xs text-slate-600 text-center py-6 bg-white/3 border border-white/8 border-dashed rounded-2xl">No historic chats</p>
+              <p className="text-xs text-slate-600 text-center py-6 bg-white/3 border border-white/[0.05] border-dashed rounded-2xl">No historic chats</p>
             ) : (
               <div className="space-y-1">
                 {sessions.slice(0, 20).map((s: any) => (
                   <button key={s.id} onClick={() => loadSession(s)}
-                    className={cn('w-full text-left px-3 py-3 rounded-xl transition-all group flex items-start gap-3 relative',
+                    className={cn('w-full text-left px-3 py-3 rounded-xl transition-all group flex items-start gap-3 relative border cursor-pointer',
                       activeSession?.id === s.id
-                        ? 'bg-orange-500/10 text-orange-400'
-                        : 'text-slate-500 hover:bg-white/5 hover:text-slate-300')}>
+                        ? 'bg-orange-500/15 text-orange-400 border-orange-500/20 shadow-sm shadow-orange-500/5'
+                        : 'text-slate-500 bg-transparent border-transparent hover:bg-white/5 hover:text-slate-300')}>
                     <MessageSquare className="w-4 h-4 flex-shrink-0 mt-0.5 opacity-50" />
                     <div className="flex-1 min-w-0 pr-6">
                       <div className="font-bold text-sm truncate">{s.title || 'Untitled Session'}</div>
@@ -978,7 +983,7 @@ function AIChat() {
                     </div>
                     <button 
                       onClick={(e) => handleDeleteSession(e, s.id)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                       title="Delete chat"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -992,22 +997,28 @@ function AIChat() {
       </div>
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-[#0d0d0d]">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-[#07070a] relative">
         
+        {/* Dynamic ambient background glow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          <div className="absolute top-[10%] left-1/4 w-[350px] h-[350px] rounded-full blur-[100px] bg-orange-500/5 opacity-30" />
+          <div className="absolute bottom-[20%] right-1/4 w-[400px] h-[400px] rounded-full blur-[120px] bg-indigo-500/5 opacity-20" />
+        </div>
+
         {/* Slim toolbar - just sidebar toggle + new chat, no branding */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 shrink-0">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.04] bg-[#07070a]/90 backdrop-blur-md shrink-0 z-20">
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-xl text-slate-500 hover:bg-white/5 hover:text-white transition-all active:scale-95">
+            className="p-2 rounded-xl text-slate-500 hover:bg-white/5 hover:text-white transition-all active:scale-95 cursor-pointer">
             <Menu className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2">
             {activeSession && (
-              <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider truncate max-w-[150px]">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider truncate max-w-[150px]">
                 {activeSession.title || 'Current Thread'}
               </span>
             )}
             <button onClick={startNew}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-orange-400 bg-orange-500/10 hover:bg-orange-500/15 transition-all font-black text-xs active:scale-95">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-orange-400 bg-orange-500/10 hover:bg-orange-500/15 border border-orange-500/20 hover:border-orange-500/30 transition-all font-black text-xs active:scale-95 cursor-pointer">
               <Plus className="w-3.5 h-3.5" />
               <span>New Chat</span>
             </button>
@@ -1015,20 +1026,20 @@ function AIChat() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto w-full scrollbar-hide">
+        <div className="flex-1 overflow-y-auto w-full scrollbar-hide relative z-10">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center min-h-full px-4 py-8 text-center">
-              <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
+            <div className="flex flex-col items-center justify-center min-h-full px-4 py-8 text-center max-w-2xl mx-auto">
+              <div className="w-14 h-14 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4 shadow-lg shadow-orange-500/10 animate-pulse">
                 <Sparkles className="w-7 h-7 text-orange-400" />
               </div>
               <h1 className="text-2xl font-black text-white mb-2 tracking-tight">Hi, I'm Flow AI</h1>
-              <p className="text-slate-500 text-sm max-w-xs mb-8 leading-relaxed">
+              <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 w-full max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-xl">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
-                    className={cn('flex items-start gap-2.5 p-3.5 bg-[#1a1a1a] border border-white/6 rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f1f] group',
+                    className={cn('flex items-start gap-2.5 p-3.5 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-left transition-all hover:border-orange-500/20 hover:bg-[#1f1f26]/40 hover:shadow-lg hover:shadow-orange-500/5 group cursor-pointer',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
                     )}>
                     <div className="text-base shrink-0 bg-white/5 p-1.5 rounded-lg group-hover:scale-110 transition-transform">{s.icon}</div>
@@ -1055,14 +1066,14 @@ function AIChat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 sm:p-5 bg-[#0d0d0d] border-t border-white/5 flex-shrink-0 relative z-20"
+        <div className="p-4 sm:p-5 bg-[#07070a] border-t border-white/[0.04] flex-shrink-0 relative z-20"
           style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))' }}
         >
           <div className="max-w-4xl mx-auto">
             
             {/* Attached file preview */}
             {attachedFile && (
-              <div className="flex items-center gap-3 mb-4 p-3 bg-[#1a1a1a] border border-white/8 rounded-2xl animate-fade-in-up w-fit pr-10 relative">
+              <div className="flex items-center gap-3 mb-4 p-3 bg-white/[0.02] border border-white/[0.06] backdrop-blur-md rounded-2xl animate-fade-in-up w-fit pr-10 relative">
                 {filePreview ? (
                   <img src={filePreview} alt="preview" className="w-12 h-12 rounded-xl object-cover shadow-sm" />
                 ) : (
@@ -1074,20 +1085,20 @@ function AIChat() {
                   <div className="text-sm font-extrabold text-white max-w-[150px] sm:max-w-xs truncate">{attachedFile.name}</div>
                   <div className="text-xs font-bold text-slate-400 mt-0.5">{(attachedFile.size / 1024).toFixed(0)} KB</div>
                 </div>
-                <button onClick={removeFile} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white">
+                <button onClick={removeFile} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             )}
 
             {/* Input Wrapper */}
-            <div className="relative bg-[#1a1a1a] border border-white/8 rounded-3xl p-2 focus-within:border-orange-500/30 transition-all duration-300">
+            <div className="relative bg-white/[0.02] border border-white/[0.08] backdrop-blur-md rounded-[2rem] p-2 focus-within:border-orange-500/40 focus-within:shadow-[0_0_30px_rgba(249,115,22,0.06)] transition-all duration-300">
               <div className="flex items-end gap-2">
                 
                 {/* Plus context menu (mobile friendly) */}
                 <div className="flex bg-white/5 rounded-2xl p-1 shrink-0 mb-1 ml-1">
                   <button onClick={() => fileRef.current?.click()}
-                    className="p-2 sm:p-2.5 text-slate-500 hover:text-orange-400 transition-colors hover:bg-white/5 rounded-xl" title="Upload">
+                    className="p-2 sm:p-2.5 text-slate-500 hover:text-orange-400 transition-colors hover:bg-white/5 rounded-xl cursor-pointer" title="Upload">
                     <Plus className="w-5 h-5" />
                   </button>
                   <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
@@ -1108,7 +1119,7 @@ function AIChat() {
                 {/* Send Button */}
                 <button onClick={handleSend}
                   disabled={sending || (!input.trim() && !attachedFile)}
-                  className={cn('p-3 sm:p-4 rounded-2xl flex-shrink-0 transition-all duration-300 mb-1 mr-1',
+                  className={cn('p-3 sm:p-4 rounded-2xl flex-shrink-0 transition-all duration-300 mb-1 mr-1 cursor-pointer',
                     (input.trim() || attachedFile) && !sending
                       ? 'bg-orange-500 hover:bg-orange-400 text-white shadow-lg shadow-orange-500/20 hover:-translate-y-0.5'
                       : 'bg-white/5 text-slate-600 cursor-not-allowed')}>
