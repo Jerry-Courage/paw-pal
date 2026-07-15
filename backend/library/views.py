@@ -574,3 +574,32 @@ class ReprocessResourceView(APIView):
         
         logger.info(f'[Manual Failover] User {request.user.id} forced local synthesis for Resource {resource.id}')
         return Response({'success': True, 'message': 'Imperial Forge ignited locally. Check status in a few minutes.'})
+
+
+class DBStatusView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from django.db import connection
+        try:
+            cursor = connection.cursor()
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)
+            tables = [r[0] for r in cursor.fetchall()]
+            
+            cursor.execute("SELECT app, name, applied FROM django_migrations")
+            migrations = [
+                {"app": r[0], "name": r[1], "applied": str(r[2])}
+                for r in cursor.fetchall()
+            ]
+            
+            return Response({
+                "tables": tables,
+                "migrations": migrations,
+                "database_engine": connection.vendor
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

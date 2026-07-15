@@ -7,13 +7,14 @@ from .views import (
     RefetchTranscriptView, MathSolverView,
     DeckListCreateView, DeckDetailView, SaveFlashcardsView,
     CloneResourceView, ResourceFileView, CuratedLibraryView,
-    ReprocessResourceView
+    ReprocessResourceView, DBStatusView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
 from .progress_views import ResourceProgressView, CompleteStepView
 
 urlpatterns = [
+    path('db-status/', DBStatusView.as_view(), name='db-status'),
     path('decks/', DeckListCreateView.as_view(), name='deck-list-create'),
     path('decks/<int:pk>/', DeckDetailView.as_view(), name='deck-detail'),
     path('decks/<int:deck_id>/save-flashcards/', SaveFlashcardsView.as_view(), name='save-flashcards'),
