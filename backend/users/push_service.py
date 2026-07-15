@@ -14,6 +14,10 @@ class PushService:
         if not subscriptions.exists():
             return False
 
+        if not getattr(settings, 'VAPID_PRIVATE_KEY', None) or not settings.VAPID_PRIVATE_KEY:
+            logger.warning("VAPID_PRIVATE_KEY is not configured. Skipping push notification.")
+            return False
+
         payload = {
             'title': title,
             'body': body,
