@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Brain, BookOpen, Zap, CheckCircle2,
-  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2, Sparkles, Trash2
+  Clock, FileText, Layers, HelpCircle, Radio, Map, Wand2, Sparkles, Trash2, RotateCcw, Loader2
 } from 'lucide-react'
+import { libraryApi } from '@/lib/api'
+import { toast } from 'sonner'
 
 // ── Stage definitions ────────────────────────────────────────────────────────
 const STAGES = [
@@ -85,6 +87,19 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
 
   const progress = Math.max(resource.processing_progress || 0, 2)
   const statusText = resource.status_text || 'Initializing...'
+  const [isReprocessing, setIsReprocessing] = useState(false)
+
+  const handleReprocess = async () => {
+    setIsReprocessing(true)
+    try {
+      await libraryApi.reprocessResource(resource.id)
+      toast.success('Regeneration triggered successfully! Check back in a moment.', { duration: 4000 })
+    } catch (err) {
+      toast.error('Failed to trigger regeneration. Please try again.')
+    } finally {
+      setIsReprocessing(false)
+    }
+  }
 
   // Rotate tips every 6s with fade
   useEffect(() => {
@@ -298,9 +313,30 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
           </div>
         </div>
 
+        {/* ── Retry / Regenerate Button ── */}
+        {!compact && (
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <button
+              onClick={handleReprocess}
+              disabled={isReprocessing}
+              className="flex items-center gap-2 px-5 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 hover:border-orange-500/30 text-orange-400 text-xs font-black uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+            >
+              {isReprocessing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              Regenerate Study Kit
+            </button>
+            <p className="text-[10px] text-slate-700 text-center max-w-[280px]">
+              Notes taking too long? If notes are stuck or if the generation failed, click above to retry.
+            </p>
+          </div>
+        )}
+
         {/* ── Delete Button ── */}
         {onDelete && (
-          <div className="flex justify-center pt-2">
+          <div className="flex justify-center pt-1">
             <button
               onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
               className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 text-rose-400 text-xs font-bold rounded-xl transition-all"

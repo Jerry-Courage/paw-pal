@@ -114,6 +114,7 @@ export const libraryApi = {
   getProgress: (id: number) => api.get(`/library/resources/${id}/progress/`),
   completeStep: (id: number, step: string, score = 100) =>
     api.post(`/library/resources/${id}/progress/complete/`, { step, score }),
+  reprocessResource: (id: number) => api.post(`/library/resources/${id}/reprocess/`),
 }
 
 // AI
