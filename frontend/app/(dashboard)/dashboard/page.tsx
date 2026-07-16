@@ -119,7 +119,7 @@ export default function DashboardPage() {
     },
     {
       icon: Headphones,
-      label: 'Voice Coach',
+      label: 'Personal Tutor',
       sub: 'Personalized tutor',
       href: '/dashboard/personalised',
       color: 'text-rose-400',

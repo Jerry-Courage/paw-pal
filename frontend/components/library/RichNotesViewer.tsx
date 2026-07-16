@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
@@ -169,28 +170,39 @@ export default function RichNotesViewer({
           </h1>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex items-center self-start md:self-center bg-[#121214] border border-white/5 p-1 rounded-2xl">
-          <button
-            onClick={() => setViewMode('study')}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
-              viewMode === 'study' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
-            )}
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-[#121214] border border-white/5 p-1 rounded-2xl">
+            <button
+              onClick={() => setViewMode('study')}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                viewMode === 'study' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
+              )}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Study Mode
+            </button>
+            <button
+              onClick={() => setViewMode('scroll')}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                viewMode === 'scroll' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
+              )}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Scroll Mode
+            </button>
+          </div>
+
+          {/* Explore in VR Button */}
+          <Link
+            href={`/library/${resourceId}/vr`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 hover:border-rose-500/35 text-rose-400 text-xs font-bold uppercase tracking-widest transition-all duration-200 active:scale-95 shadow-lg shadow-rose-500/5 hover:-translate-y-0.5"
           >
-            <Layers className="w-3.5 h-3.5" />
-            Study Mode
-          </button>
-          <button
-            onClick={() => setViewMode('scroll')}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
-              viewMode === 'scroll' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
-            )}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            Scroll Mode
-          </button>
+            <Sparkles className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+            Explore in VR 🥽
+          </Link>
         </div>
       </div>
 
