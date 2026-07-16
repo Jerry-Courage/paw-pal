@@ -259,15 +259,34 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 allow="autoplay; fullscreen; xr-spatial-tracking"
               />
             ) : (
+              // Animated 3D-style placeholder — shows when no Sketchfab model found
               <div style={{
                 width: '100%', height: '100%',
-                background: 'radial-gradient(ellipse at center, #1a1a3e 0%, #050816 70%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'radial-gradient(ellipse at 40% 40%, #1e1b4b 0%, #050816 70%)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 16,
               }}>
-                <div style={{ textAlign: 'center', color: '#6366f1' }}>
-                  <div style={{ fontSize: 64, marginBottom: 16 }}>⬡</div>
-                  <p style={{ fontSize: 20, fontWeight: 700, color: '#e2e8f0' }}>{activeNode?.label}</p>
-                  <p style={{ fontSize: 14, color: '#94a3b8', marginTop: 8, maxWidth: 300 }}>{activeNode?.description}</p>
+                {/* Animated orbital rings */}
+                <div style={{ position: 'relative', width: 120, height: 120 }}>
+                  <div style={{
+                    position: 'absolute', inset: 0, borderRadius: '50%',
+                    border: `2px solid ${activeNode?.color || '#6366f1'}40`,
+                    animation: 'spin 4s linear infinite',
+                  }} />
+                  <div style={{
+                    position: 'absolute', inset: 16, borderRadius: '50%',
+                    border: `2px solid ${activeNode?.color || '#6366f1'}60`,
+                    animation: 'spin 3s linear infinite reverse',
+                  }} />
+                  <div style={{
+                    position: 'absolute', inset: 32, borderRadius: '50%',
+                    background: `radial-gradient(circle, ${activeNode?.color || '#6366f1'}80, ${activeNode?.color || '#6366f1'}20)`,
+                    animation: 'pulse 2s ease-in-out infinite',
+                  }} />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 700, margin: 0 }}>{activeNode?.label}</p>
+                  <p style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>Add SKETCHFAB_API_TOKEN for 3D models</p>
                 </div>
               </div>
             )}
@@ -341,6 +360,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
         @keyframes wave { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
         @keyframes glow { 0%,100% { box-shadow:0 0 10px rgba(99,102,241,0.3); } 50% { box-shadow:0 0 30px rgba(99,102,241,0.7); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       {/* Header */}
@@ -448,7 +468,9 @@ export default function VRPage({ params }: { params: { id: string } }) {
             {!loadingModel && modelUrl && (
               <div className="w-full h-full min-h-64 rounded-2xl overflow-hidden border border-indigo-500/20 shadow-2xl">
                 <iframe key={modelUrl} src={modelUrl} className="w-full h-full" style={{ border: 'none' }}
-                  allow="autoplay; fullscreen; xr-spatial-tracking" allowFullScreen />
+                  allow="autoplay; fullscreen; xr-spatial-tracking" allowFullScreen
+                  onError={() => setModelUrl(null)}
+                />
               </div>
             )}
             {!loadingModel && !modelUrl && activeNode && (
