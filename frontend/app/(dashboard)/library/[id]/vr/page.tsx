@@ -31,6 +31,188 @@ const NODE_COLORS = [
   '#f59e0b', '#ec4899', '#3b82f6', '#a3e635',
 ]
 
+// ── Realistic Composite 3D Organ Models ──
+function renderOrganModel(label: string, color: string) {
+  const clean = label.toLowerCase();
+  
+  // 1. Teeth: Jaw arch and individual teeth
+  if (clean.includes('teeth') || clean.includes('tooth')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.1 0" rotation="20 0 0">
+        {/* Jaw arch base */}
+        {/* @ts-ignore */}
+        <a-torus radius="0.18" radius-tubular="0.02" arc="180" rotation="90 0 0" position="0 -0.04 0" color="#e2e8f0"></a-torus>
+        {/* Teeth cylinders */}
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.02" height="0.06" position="-0.13 -0.02 0.04" color="#ffffff"></a-cylinder>
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.02" height="0.06" position="-0.08 -0.02 0.10" color="#ffffff"></a-cylinder>
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.022" height="0.07" position="0 -0.02 0.12" color="#ffffff"></a-cylinder>
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.02" height="0.06" position="0.08 -0.02 0.10" color="#ffffff"></a-cylinder>
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.02" height="0.06" position="0.13 -0.02 0.04" color="#ffffff"></a-cylinder>
+      </a-entity>
+    );
+  }
+  
+  // 2. Tongue: Realistic pink tongue with groove
+  if (clean.includes('tongue')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.05 0" rotation="25 0 0">
+        {/* Main flat tongue body */}
+        {/* @ts-ignore */}
+        <a-box width="0.28" height="0.06" depth="0.40" color="#fda4af" roughness="0.8" position="0 0 0"></a-box>
+        {/* Median sulcus line */}
+        {/* @ts-ignore */}
+        <a-box width="0.015" height="0.068" depth="0.38" color="#f43f5e" position="0 0.002 0"></a-box>
+        {/* Tongue base */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.13" scale="1 0.4 1" position="0 -0.02 -0.08" color="#f43f5e"></a-sphere>
+      </a-entity>
+    );
+  }
+  
+  // 3. Stomach: Curved J-shape organ
+  if (clean.includes('stomach')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.08 0" rotation="0 0 20">
+        {/* Main stomach body */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.22" scale="1.3 0.9 0.75" color="#f43f5e" position="0 0 0" roughness="0.6"></a-sphere>
+        {/* Esophageal entrance */}
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.06" height="0.16" position="-0.10 0.16 0" rotation="0 0 -25" color="#fda4af"></a-cylinder>
+        {/* Duodenal exit */}
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.05" height="0.20" position="0.15 -0.11 0" rotation="0 0 65" color="#e11d48"></a-cylinder>
+      </a-entity>
+    );
+  }
+  
+  // 4. Liver: Dark-red wedge bi-lobed organ with green gallbladder peaking underneath
+  if (clean.includes('liver')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.08 0" rotation="0 15 -10">
+        {/* Large Right Lobe */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.28" scale="1.2 0.65 0.75" position="0.06 0 0" color="#7f1d1d" roughness="0.7"></a-sphere>
+        {/* Smaller Left Lobe */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.18" scale="1.1 0.55 0.65" position="-0.13 0.04 0.04" color="#991b1b" roughness="0.7"></a-sphere>
+        {/* Gallbladder */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.05" scale="0.7 1.1 0.7" position="0.06 -0.15 0.08" color="#166534" roughness="0.5"></a-sphere>
+      </a-entity>
+    );
+  }
+  
+  // 5. Pancreas: Elongated orange gland
+  if (clean.includes('pancreas')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.05 0" rotation="0 0 -15">
+        {/* Head of pancreas */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.10" position="-0.11 0 0" color="#ea580c" roughness="0.9"></a-sphere>
+        {/* Body and tail of pancreas */}
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.06" height="0.32" position="0.03 0 0" rotation="0 0 90" color="#f97316" roughness="0.9"></a-cylinder>
+        {/* Lobular textured surface details */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.03" position="-0.06 0.04 0.04" color="#ea580c"></a-sphere>
+        {/* @ts-ignore */}
+        <a-sphere radius="0.03" position="0.03 -0.03 0.04" color="#f97316"></a-sphere>
+        {/* @ts-ignore */}
+        <a-sphere radius="0.03" position="0.09 0.02 0.03" color="#f97316"></a-sphere>
+      </a-entity>
+    );
+  }
+  
+  // 6. Salivary Glands: Grape-like cluster representation
+  if (clean.includes('salivary') || clean.includes('gland')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.05 0">
+        {/* Central duct */}
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.015" height="0.22" color="#f43f5e" rotation="45 0 0"></a-cylinder>
+        {/* Clusters of glandular cells */}
+        {/* @ts-ignore */}
+        <a-sphere radius="0.06" position="-0.06 0.06 0" color="#fb7185" roughness="0.8"></a-sphere>
+        {/* @ts-ignore */}
+        <a-sphere radius="0.07" position="0.04 0.04 0.04" color="#fda4af" roughness="0.8"></a-sphere>
+        {/* @ts-ignore */}
+        <a-sphere radius="0.06" position="-0.02 -0.06 0.04" color="#fb7185" roughness="0.8"></a-sphere>
+        {/* @ts-ignore */}
+        <a-sphere radius="0.06" position="0.06 -0.03 -0.03" color="#f43f5e" roughness="0.8"></a-sphere>
+      </a-entity>
+    );
+  }
+  
+  // 7. Esophagus / Throat: Muscular pink cylinder tube
+  if (clean.includes('esophagus') || clean.includes('throat') || clean.includes('vessel') || clean.includes('duct') || clean.includes('pharynx')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.08 0">
+        {/* Tube body */}
+        {/* @ts-ignore */}
+        <a-cylinder radius="0.065" height="0.50" color="#fda4af" roughness="0.9"></a-cylinder>
+        {/* External muscular rings */}
+        {/* @ts-ignore */}
+        <a-torus radius="0.07" radius-tubular="0.007" position="0 0.14 0" rotation="90 0 0" color="#f43f5e" opacity="0.8"></a-torus>
+        {/* @ts-ignore */}
+        <a-torus radius="0.07" radius-tubular="0.007" position="0 0 0" rotation="90 0 0" color="#f43f5e" opacity="0.8"></a-torus>
+        {/* @ts-ignore */}
+        <a-torus radius="0.07" radius-tubular="0.007" position="0 -0.14 0" rotation="90 0 0" color="#f43f5e" opacity="0.8"></a-torus>
+      </a-entity>
+    );
+  }
+  
+  // 8. Intestines: Convoluted winding loops
+  if (clean.includes('intestine') || clean.includes('colon') || clean.includes('rectum')) {
+    return (
+      // @ts-ignore
+      <a-entity position="0 0.05 0">
+        {/* Winding loops */}
+        {/* @ts-ignore */}
+        <a-torus radius="0.15" radius-tubular="0.038" position="-0.05 0.06 0" rotation="20 40 10" color="#f43f5e" roughness="0.7"></a-torus>
+        {/* @ts-ignore */}
+        <a-torus radius="0.15" radius-tubular="0.038" position="0.05 -0.06 0" rotation="-20 -40 -10" color="#f43f5e" roughness="0.7"></a-torus>
+        {/* @ts-ignore */}
+        <a-torus radius="0.13" radius-tubular="0.032" position="0 0 0.06" rotation="90 0 0" color="#fda4af" roughness="0.7"></a-torus>
+      </a-entity>
+    );
+  }
+
+  // 9. Default / process node: molecular break-down nutrient diagram
+  return (
+    // @ts-ignore
+    <a-entity animation="property: rotation; to: 360 360 0; loop: true; dur: 12000; easing: linear">
+      {/* Central node */}
+      {/* @ts-ignore */}
+      <a-sphere radius="0.14" color={color} material="roughness: 0.2; metalness: 0.8"></a-sphere>
+      {/* Surrounding particles */}
+      {/* @ts-ignore */}
+      <a-sphere radius="0.055" position="-0.18 0.11 0.08" color="#ffffff" material="shader: flat"></a-sphere>
+      {/* @ts-ignore */}
+      <a-sphere radius="0.055" position="0.18 -0.11 0.08" color="#ffffff" material="shader: flat"></a-sphere>
+      {/* @ts-ignore */}
+      <a-sphere radius="0.055" position="0.07 -0.16 -0.10" color="#ffffff" material="shader: flat"></a-sphere>
+      {/* Connecting sticks */}
+      {/* @ts-ignore */}
+      <a-cylinder radius="0.007" height="0.24" position="-0.09 0.05 0.04" rotation="45 45 0" color="#a1a1aa"></a-cylinder>
+      {/* @ts-ignore */}
+      <a-cylinder radius="0.007" height="0.24" position="0.09 -0.05 0.04" rotation="45 45 0" color="#a1a1aa"></a-cylinder>
+    </a-entity>
+  );
+}
+
 export default function VRPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   const [aframeLoaded, setAframeLoaded] = useState(false)
@@ -250,48 +432,8 @@ export default function VRPage({ params }: { params: { id: string } }) {
           const label = (node.label || 'Node').slice(0, 24)
           const desc = (node.description || '').slice(0, 160)
 
-          // Fallback type keyword mapping for robust geometry detection
-          const nodeType = (node.type || '').toLowerCase()
-          const cleanLabel = label.toLowerCase()
-
           // Staggered Y position for labels to completely prevent text overlaps
           const labelY = idx % 2 === 0 ? 0.75 : 0.48
-
-          // 1. Organ (box representation)
-          const isOrgan = nodeType.includes('organ') || 
-                          cleanLabel.includes('stomach') || 
-                          cleanLabel.includes('pancreas') || 
-                          cleanLabel.includes('gland') || 
-                          cleanLabel.includes('mouth') || 
-                          cleanLabel.includes('tongue') || 
-                          cleanLabel.includes('liver') || 
-                          cleanLabel.includes('heart')
-
-          // 2. Vessel (cylinder representation)
-          const isVessel = nodeType.includes('vessel') || 
-                           cleanLabel.includes('esophagus') || 
-                           cleanLabel.includes('intestine') || 
-                           cleanLabel.includes('throat') || 
-                           cleanLabel.includes('vein') || 
-                           cleanLabel.includes('artery') || 
-                           cleanLabel.includes('duct') || 
-                           cleanLabel.includes('tract')
-
-          // 3. Enzyme / Molecule (double torus representation)
-          const isChemical = nodeType.includes('enzyme') || 
-                             nodeType.includes('molecule') || 
-                             cleanLabel.includes('digestion') || 
-                             cleanLabel.includes('chemical') || 
-                             cleanLabel.includes('acid') || 
-                             cleanLabel.includes('pepsin') || 
-                             cleanLabel.includes('amylase') || 
-                             cleanLabel.includes('bile')
-
-          // 4. Organelle / Cell structures
-          const isOrganelle = nodeType.includes('organelle') || 
-                              nodeType.includes('nucleus') || 
-                              cleanLabel.includes('cell') || 
-                              cleanLabel.includes('nucleus')
 
           return (
             // @ts-ignore
@@ -320,80 +462,8 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 material={`shader: flat; color: ${color}; opacity: 0.35`}
               ></a-cylinder>
 
-              {/* ── Shapes by Category ── */}
-              {isOrganelle ? (
-                // biology cell: sphere with orbital ring
-                // @ts-ignore
-                <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-sphere
-                    radius="0.26"
-                    material={`color: ${color}; roughness: 0.3; metalness: 0.1; emissive: ${color}; emissiveIntensity: 0.45`}
-                  ></a-sphere>
-                  {/* @ts-ignore */}
-                  <a-torus radius="0.36" radius-tubular="0.012"
-                    rotation="80 0 0"
-                    material={`shader: flat; color: ${color}; opacity: 0.7`}
-                  ></a-torus>
-                </a-entity>
-              ) : isChemical ? (
-                // chemical: two interlocked rings
-                // @ts-ignore
-                <a-entity animation="property: rotation; to: 360 180 0; loop: true; dur: 7000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-torus radius="0.22" radius-tubular="0.038"
-                    rotation="0 0 0"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.55; roughness: 0.2; metalness: 0.6`}
-                  ></a-torus>
-                  {/* @ts-ignore */}
-                  <a-torus radius="0.22" radius-tubular="0.038"
-                    rotation="90 0 0"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.55; roughness: 0.2; metalness: 0.6`}
-                  ></a-torus>
-                </a-entity>
-              ) : isVessel ? (
-                // pathway/tube: cylinder
-                // @ts-ignore
-                <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-cylinder
-                    radius="0.18"
-                    height="0.5"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.4; roughness: 0.4; metalness: 0.2`}
-                  ></a-cylinder>
-                  {/* @ts-ignore */}
-                  <a-ring radius-inner="0.20" radius-outer="0.22" rotation="90 0 0" position="0 0.18 0"
-                    material={`shader: flat; color: #ffffff; opacity: 0.6`}></a-ring>
-                  {/* @ts-ignore */}
-                  <a-ring radius-inner="0.20" radius-outer="0.22" rotation="90 0 0" position="0 -0.18 0"
-                    material={`shader: flat; color: #ffffff; opacity: 0.6`}></a-ring>
-                </a-entity>
-              ) : isOrgan ? (
-                // organ: pulsating box
-                // @ts-ignore
-                <a-entity animation="property: scale; to: 1.15 1.15 1.15; dir: alternate; loop: true; dur: 1000; easing: easeInOutSine">
-                  {/* @ts-ignore */}
-                  <a-box width="0.44" height="0.38" depth="0.32"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.45; roughness: 0.5; metalness: 0.1`}
-                  ></a-box>
-                </a-entity>
-              ) : (
-                // Default: glowing sphere
-                // @ts-ignore
-                <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 11000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-sphere
-                    radius="0.25"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.5; roughness: 0.2; metalness: 0.5`}
-                  ></a-sphere>
-                  {/* Equatorial glow ring */}
-                  {/* @ts-ignore */}
-                  <a-torus radius="0.30" radius-tubular="0.010"
-                    material={`shader: flat; color: ${color}; opacity: 0.75`}
-                    rotation="90 0 0"
-                  ></a-torus>
-                </a-entity>
-              )}
+              {/* ── Render Realistic Composite Model ── */}
+              {renderOrganModel(label, color)}
 
               {/* Staggered Billboard Label Tag */}
               {/* @ts-ignore */}
