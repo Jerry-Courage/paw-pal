@@ -23,6 +23,8 @@ declare global {
       'a-text': any;
       'a-cursor': any;
       'a-camera': any;
+      'a-circle': any;
+      'a-cone': any;
     }
   }
 }
@@ -217,6 +219,32 @@ export default function VRPage({ params }: { params: { id: string } }) {
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [activeModel, setActiveModel] = useState<string>('Digestion')
   const [tutorText, setTutorText] = useState<string>('Hello! Welcome to the Holographic VR Classroom. Gaze at any menu concept on the left to begin.')
+
+  // Interactivity HUD states
+  const [isHandRaised, setIsHandRaised] = useState(false)
+  const [showNotesOverlay, setShowNotesOverlay] = useState(false)
+
+  // Bridge React callbacks to window so A-Frame components can trigger them
+  useEffect(() => {
+    (window as any).toggleMic = () => setIsMicMuted(m => !m);
+    (window as any).toggleHand = () => setIsHandRaised(h => !h);
+    (window as any).toggleNotes = () => setShowNotesOverlay(n => !n);
+    (window as any).triggerAsk = () => {
+      setTutorText("AI Tutor, can you give me a summary of this concept?");
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'text_message',
+          text: 'I have a question about this topic. Can you explain how it works and give me a quick quiz question?'
+        }));
+      }
+    };
+    return () => {
+      delete (window as any).toggleMic;
+      delete (window as any).toggleHand;
+      delete (window as any).toggleNotes;
+      delete (window as any).triggerAsk;
+    }
+  }, [isMicMuted, isHandRaised, showNotesOverlay])
 
   // Refs for audio context
   const wsRef = useRef<WebSocket | null>(null)
@@ -507,6 +535,40 @@ export default function VRPage({ params }: { params: { id: string } }) {
         }
       })
     }
+
+    if (!AFRAME.components['console-btn']) {
+      AFRAME.registerComponent('console-btn', {
+        schema: {
+          action: { type: 'string', default: '' }
+        },
+        init: function () {
+          const el = this.el
+          const action = this.data.action
+
+          el.addEventListener('mouseenter', () => {
+            el.setAttribute('material', 'color: #06b6d4; opacity: 0.95')
+            el.setAttribute('scale', '1.08 1.08 1')
+          })
+
+          el.addEventListener('mouseleave', () => {
+            el.setAttribute('material', 'color: #07050e; opacity: 0.85')
+            el.setAttribute('scale', '1 1 1')
+          })
+
+          el.addEventListener('click', () => {
+            if (action === 'mic' && (window as any).toggleMic) {
+              (window as any).toggleMic()
+            } else if (action === 'hand' && (window as any).toggleHand) {
+              (window as any).toggleHand()
+            } else if (action === 'notes' && (window as any).toggleNotes) {
+              (window as any).toggleNotes()
+            } else if (action === 'ask' && (window as any).triggerAsk) {
+              (window as any).triggerAsk()
+            }
+          })
+        }
+      })
+    }
   }, [aframeLoaded])
 
   if (isResourceLoading || (!aframeLoaded && !scriptError)) {
@@ -569,191 +631,442 @@ export default function VRPage({ params }: { params: { id: string } }) {
       {/* @ts-ignore */}
       <a-scene embedded vr-mode-ui="enabled: true" renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true">
         
-        {/* Solid wall and floor textures simulating an enclosed high-tech classroom */}
+        {/* ── SCENIC WINDOW BACKDROP (Nature environment outside) ── */}
+        {/* @ts-ignore */}
+        <a-sky src="https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=2000&q=80" crossorigin="anonymous" material="opacity: 0.45; color: #1e293b"></a-sky>
+
+        {/* ── COCKPIT ENCLOSURE ARCHITECTURE ── */}
         {/* Floor */}
         {/* @ts-ignore */}
-        <a-plane width="12" height="12" color="#0b0a12" rotation="-90 0 0" position="0 -0.5 0"></a-plane>
-        {/* Front wall */}
+        <a-plane width="16" height="16" color="#050409" rotation="-90 0 0" position="0 -0.5 0" material="roughness: 0.6; metalness: 0.9"></a-plane>
+        
+        {/* Floor concentric glowing ring pathways */}
         {/* @ts-ignore */}
-        <a-plane width="12" height="6" color="#030206" position="0 2.5 -5"></a-plane>
-        {/* Left wall */}
+        <a-ring radius-inner="1.3" radius-outer="1.32" color="#06b6d4" rotation="-90 0 0" position="0 -0.49 -3" opacity="0.6" material="shader: flat"></a-ring>
         {/* @ts-ignore */}
-        <a-plane width="12" height="6" color="#05040a" position="-6 2.5 0" rotation="0 90 0"></a-plane>
-        {/* Right wall */}
-        {/* @ts-ignore */}
-        <a-plane width="12" height="6" color="#05040a" position="6 2.5 0" rotation="0 -90 0"></a-plane>
+        <a-ring radius-inner="2.6" radius-outer="2.63" color="#a855f7" rotation="-90 0 0" position="0 -0.49 -3" opacity="0.4" material="shader: flat"></a-ring>
 
-        {/* High-tech trim neon outline vectors */}
+        {/* Curved front metallic walls & pillars */}
         {/* @ts-ignore */}
-        <a-entity line="start: -6 -0.48 -4.95; end: 6 -0.48 -4.95; color: #a855f7; opacity: 0.5"></a-entity>
+        <a-box width="0.3" height="6" depth="0.3" position="-5.5 2.5 -4" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
         {/* @ts-ignore */}
-        <a-entity line="start: -5.95 -0.48 -5; end: -5.95 -0.48 5; color: #06b6d4; opacity: 0.3"></a-entity>
+        <a-box width="0.3" height="6" depth="0.3" position="5.5 2.5 -4" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
         {/* @ts-ignore */}
-        <a-entity line="start: 5.95 -0.48 -5; end: 5.95 -0.48 5; color: #06b6d4; opacity: 0.3"></a-entity>
+        <a-box width="0.3" height="6" depth="0.3" position="-3.5 2.5 -5" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
+        {/* @ts-ignore */}
+        <a-box width="0.3" height="6" depth="0.3" position="3.5 2.5 -5" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
 
-        {/* Ceiling light panel */}
+        {/* Ceiling arch */}
         {/* @ts-ignore */}
-        <a-plane width="4" height="4" color="#0f0d1a" rotation="90 0 0" position="0 4.5 -1"></a-plane>
+        <a-cylinder radius="0.08" height="11" position="0 4.5 -4.5" rotation="0 0 90" color="#1e293b" material="roughness: 0.4; metalness: 0.8"></a-cylinder>
 
-        {/* Ambient Lights */}
+        {/* Lighting system */}
         {/* @ts-ignore */}
         <a-light type="ambient" color="#ffffff" intensity="1.2"></a-light>
         {/* @ts-ignore */}
-        <a-light type="directional" color="#ffffff" intensity="1.4" position="2 4 1"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="1.3" position="2 4 1"></a-light>
         {/* @ts-ignore */}
-        <a-light type="point" color="#a855f7" intensity="1.2" position="0 3.2 -2.5"></a-light>
+        <a-light type="point" color="#06b6d4" intensity="1.0" position="0 3.2 -2.5"></a-light>
 
-        {/* ── SMARTBOARD (Large screen at the back of the classroom) ── */}
+        {/* ── CENTERSTAGE TUTOR PODIUM ── */}
         {/* @ts-ignore */}
-        <a-plane
-          position="0 2.2 -4.8"
-          width="5.0"
-          height="2.2"
-          material="shader: flat; color: #020205; transparent: true; opacity: 0.95"
-        >
-          {/* Outer glowing border */}
-          {/* @ts-ignore */}
-          <a-ring radius-inner="2.7" radius-outer="2.72" scale="1 0.44 1" color="#a855f7" opacity="0.6" material="shader: flat"></a-ring>
-          
-          {/* Header */}
-          {/* @ts-ignore */}
-          <a-text
-            value="HOLOGRAPHIC LECTURE DECK"
-            align="center"
-            width="2.5"
-            color="#06b6d4"
-            position="0 0.85 0.01"
-            font="klykov"
-          ></a-text>
-
-          {/* Topic Title */}
-          {/* @ts-ignore */}
-          <a-text
-            value={resource.title}
-            align="center"
-            width="4.0"
-            color="#f43f5e"
-            position="0 0.5 0.01"
-            font="klykov"
-          ></a-text>
-
-          {/* Lecture text transcripts / subtitle output */}
-          {/* @ts-ignore */}
-          <a-text
-            value={tutorText}
-            align="center"
-            width="4.4"
-            color="#ffffff"
-            position="0 -0.2 0.01"
-            wrap-count="48"
-          ></a-text>
-
-          {/* Status Bar */}
-          {/* @ts-ignore */}
-          <a-text
-            value={isAiSpeaking ? "• TUTOR SPEAKING" : "• LISTENING FOR STUDENT QUESTIONS"}
-            align="center"
-            width="2.0"
-            color={isAiSpeaking ? "#a855f7" : "#10b981"}
-            position="0 -0.85 0.01"
-            font="klykov"
-          ></a-text>
-        </a-plane>
-
-        {/* ── TEACHER LECTERN / DESK ── */}
+        <a-cylinder radius="0.55" height="0.08" position="0 -0.46 -3.2" color="#0e1726" material="roughness: 0.4; metalness: 0.9"></a-cylinder>
         {/* @ts-ignore */}
-        <a-box
-          position="0 -0.15 -3.0"
-          width="1.2"
-          height="0.7"
-          depth="0.6"
-          color="#0f0e15"
-          material="roughness: 0.4; metalness: 0.8"
-        >
-          {/* Glowing trim */}
-          {/* @ts-ignore */}
-          <a-box width="1.22" height="0.02" depth="0.62" position="0 0.35 0" color="#a855f7" material="shader: flat"></a-box>
-        </a-box>
+        <a-ring radius-inner="0.53" radius-outer="0.55" position="0 -0.41 -3.2" rotation="-90 0 0" color="#06b6d4" material="shader: flat"></a-ring>
 
-        {/* ── AI TUTOR AVATAR ── */}
+        {/* ── AI TUTOR AVATAR (Futuristic Sleek Humanoid Robot) ── */}
         {/* @ts-ignore */}
         <a-entity
-          position="0 0.75 -3.2"
-          animation="property: position; to: 0 0.85 -3.2; dir: alternate; loop: true; dur: 2200; easing: easeInOutSine"
+          position="0 0.8 -3.2"
+          animation="property: position; to: 0 0.9 -3.2; dir: alternate; loop: true; dur: 2400; easing: easeInOutSine"
         >
-          {/* Head (glowing glass sphere) */}
+          {/* Head - Sleek white sphere with dark glass visor */}
           {/* @ts-ignore */}
-          <a-sphere radius="0.13" color="#a855f7" material="roughness: 0.1; metalness: 0.9; opacity: 0.8"></a-sphere>
-          
+          <a-sphere radius="0.12" color="#f8fafc" material="roughness: 0.2; metalness: 0.3"></a-sphere>
+          {/* Visor */}
+          {/* @ts-ignore */}
+          <a-box width="0.15" height="0.05" depth="0.14" position="0 0 0.05" color="#090514" material="roughness: 0.1"></a-box>
           {/* Glowing Eyes */}
           {/* @ts-ignore */}
-          <a-sphere radius="0.025" position="-0.04 0.02 0.11" color="#06b6d4" material="shader: flat"></a-sphere>
+          <a-sphere radius="0.012" position="-0.03 0 0.12" color="#06b6d4" material="shader: flat"></a-sphere>
           {/* @ts-ignore */}
-          <a-sphere radius="0.025" position="0.04 0.02 0.11" color="#06b6d4" material="shader: flat"></a-sphere>
+          <a-sphere radius="0.012" position="0.03 0 0.12" color="#06b6d4" material="shader: flat"></a-sphere>
 
-          {/* Neck ring */}
+          {/* Torso - Capsule jumpsuit aesthetic */}
           {/* @ts-ignore */}
-          <a-torus radius="0.09" radius-tubular="0.015" rotation="90 0 0" position="0 -0.16 0" color="#06b6d4" material="shader: flat; opacity: 0.8"></a-torus>
-
-          {/* Torso */}
+          <a-cylinder radius="0.13" height="0.38" position="0 -0.38 0" color="#f8fafc" material="roughness: 0.2; metalness: 0.4"></a-cylinder>
+          {/* Glowing blue accent rings */}
           {/* @ts-ignore */}
-          <a-cylinder radius="0.15" height="0.32" position="0 -0.34 0" color="#1e1b4b" material="roughness: 0.2; metalness: 0.8"></a-cylinder>
+          <a-cylinder radius="0.135" height="0.02" position="0 -0.28 0" color="#06b6d4" material="shader: flat"></a-cylinder>
+          {/* @ts-ignore */}
+          <a-cylinder radius="0.135" height="0.02" position="0 -0.46 0" color="#06b6d4" material="shader: flat"></a-cylinder>
+          
+          {/* "AI" logo badge on chest */}
+          {/* @ts-ignore */}
+          <a-text value="AI" width="1.2" color="#06b6d4" position="0 -0.34 0.14" align="center" font="klykov"></a-text>
 
-          {/* Glowing vocal core in chest - pulses rapidly when talking */}
+          {/* Glowing vocal core in chest - pulses in sync with speech */}
           {/* @ts-ignore */}
           <a-sphere
-            radius="0.05"
-            position="0 -0.3 0.12"
-            color="#a855f7"
+            radius="0.035"
+            position="0 -0.36 0.135"
+            color="#06b6d4"
             material="shader: flat"
-            animation={isAiSpeaking ? "property: scale; to: 1.4 1.4 1.4; dir: alternate; loop: true; dur: 150" : "property: scale; to: 1.05 1.05 1.05; dir: alternate; loop: true; dur: 1500; easing: easeInOutSine"}
+            animation={isAiSpeaking ? "property: scale; to: 1.4 1.4 1.4; dir: alternate; loop: true; dur: 120" : "property: scale; to: 1.0 1.0 1.0; dir: alternate; loop: true; dur: 1500; easing: easeInOutSine"}
           ></a-sphere>
 
-          {/* Floating Base Platform */}
+          {/* Left arm */}
           {/* @ts-ignore */}
-          <a-cone radius-bottom="0.18" radius-top="0.02" height="0.25" position="0 -0.62 0" color="#1e1b4b" rotation="180 0 0"></a-cone>
+          <a-cylinder radius="0.02" height="0.18" position="-0.17 -0.3 0" rotation="30 0 -20" color="#f8fafc"></a-cylinder>
+          {/* @ts-ignore */}
+          <a-cylinder radius="0.018" height="0.18" position="-0.22 -0.42 0.05" rotation="60 0 -10" color="#f8fafc"></a-cylinder>
+
+          {/* Right arm gesturing to screen */}
+          {/* @ts-ignore */}
+          <a-cylinder radius="0.02" height="0.18" position="0.17 -0.3 0.05" rotation="-20 40 40" color="#f8fafc"></a-cylinder>
+          {/* @ts-ignore */}
+          <a-cylinder radius="0.018" height="0.20" position="0.28 -0.22 0.18" rotation="-40 60 20" color="#f8fafc"></a-cylinder>
+
+          {/* Base connector */}
+          {/* @ts-ignore */}
+          <a-cone radius-bottom="0.15" radius-top="0.02" height="0.20" position="0 -0.66 0" color="#0f172a" rotation="180 0 0"></a-cone>
         </a-entity>
 
-        {/* ── LEFT PANEL: Gaze Interactive Concept Menu ── */}
+
+        {/* ── MAIN CURVED HOLOGRAPHIC SMARTBOARD (Floating behind the tutor) ── */}
         {/* @ts-ignore */}
-        <a-entity position="-1.4 0.5 -2.5" rotation="0 25 0">
+        <a-entity position="0 1.8 -3.8">
+          {/* Glass backing board */}
+          {/* @ts-ignore */}
+          <a-plane
+            width="4.4"
+            height="2.0"
+            material="shader: flat; color: #080f1e; transparent: true; opacity: 0.85; side: double"
+          >
+            {/* Board glowing border */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="2.38" radius-outer="2.4" scale="1 0.45 1" color="#06b6d4" opacity="0.6" material="shader: flat"></a-ring>
+
+            {/* Smartboard Header */}
+            {/* @ts-ignore */}
+            <a-text
+              value="TODAY'S TOPIC"
+              align="left"
+              width="2.2"
+              color="#06b6d4"
+              position="-2.0 0.8 0.01"
+              font="klykov"
+            ></a-text>
+
+            {/* Topic title */}
+            {/* @ts-ignore */}
+            <a-text
+              value={resource.title}
+              align="left"
+              width="3.8"
+              color="#f43f5e"
+              position="-2.0 0.5 0.01"
+              font="klykov"
+            ></a-text>
+
+            {/* Lecture subtitle text */}
+            {/* @ts-ignore */}
+            <a-text
+              value={tutorText.length > 180 ? tutorText.slice(0, 180) + '...' : tutorText}
+              align="left"
+              width="2.6"
+              color="#ffffff"
+              position="-2.0 -0.1 0.01"
+              wrap-count="36"
+            ></a-text>
+
+            {/* Status bar */}
+            {/* @ts-ignore */}
+            <a-text
+              value={isAiSpeaking ? "• AI TUTOR ONLINE & LECTURING" : "• LISTENING FOR QUESTIONS..."}
+              align="left"
+              width="1.8"
+              color={isAiSpeaking ? "#a855f7" : "#10b981"}
+              position="-2.0 -0.75 0.01"
+              font="klykov"
+            ></a-text>
+
+            {/* Concept select helper */}
+            {/* @ts-ignore */}
+            <a-text
+              value="Gaze select on left panel to change topic"
+              align="left"
+              width="1.4"
+              color="#64748b"
+              position="-2.0 -0.88 0.01"
+            ></a-text>
+          </a-plane>
+
+          {/* Integrated 3D Hologram Projection Field (Right side of the Smartboard) */}
+          {/* @ts-ignore */}
+          <a-entity position="1.1 0 0.1">
+            {/* Projection base ring */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.32" radius-outer="0.34" rotation="90 0 0" position="0 -0.75 0" color="#06b6d4" opacity="0.8" material="shader: flat"></a-ring>
+            
+            {/* Light beam cylinder */}
+            {/* @ts-ignore */}
+            <a-cylinder radius="0.32" height="1.3" position="0 -0.1 0" material="shader: flat; transparent: true; opacity: 0.06; color: #06b6d4; side: double"></a-cylinder>
+
+            {/* Dynamic projected 3D organ model */}
+            {renderOrganModel(activeModel, '#06b6d4', '0 -0.1 0')}
+
+            {/* Floating label above the projected model */}
+            {/* @ts-ignore */}
+            <a-entity look-at-camera position="0 0.65 0">
+              {/* @ts-ignore */}
+              <a-plane width="0.65" height="0.14" material="shader: flat; color: #05030a; transparent: true; opacity: 0.85">
+                {/* @ts-ignore */}
+                <a-text value={activeModel} align="center" width="1.8" color="#06b6d4" font="klykov"></a-text>
+              </a-plane>
+            </a-entity>
+          </a-entity>
+        </a-entity>
+
+
+        {/* ── LEFT HUD PANEL: AI Tutor profile deck ── */}
+        {/* @ts-ignore */}
+        <a-entity position="-2.2 1.4 -2.8" rotation="0 25 0">
+          {/* HUD Backing */}
+          {/* @ts-ignore */}
+          <a-plane width="1.0" height="1.4" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
+            {/* Trim */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.7" radius-outer="0.71" scale="1 1.4 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
+
+            {/* Profile Avatar icon representation */}
+            {/* @ts-ignore */}
+            <a-circle radius="0.08" position="-0.3 0.5 0.01" color="#1e293b">
+              {/* @ts-ignore */}
+              <a-text value="T" width="1.2" color="#06b6d4" align="center"></a-text>
+            </a-circle>
+            
+            {/* Profile Header */}
+            {/* @ts-ignore */}
+            <a-text value="AI TUTOR" width="2.4" color="#06b6d4" position="-0.12 0.5 0.01" font="klykov"></a-text>
+            {/* @ts-ignore */}
+            <a-text value="Online" width="1.8" color="#10b981" position="-0.12 0.38 0.01"></a-text>
+            {/* @ts-ignore */}
+            <a-sphere radius="0.01" position="-0.18 0.38 0.015" color="#10b981"></a-sphere>
+
+            {/* Quick profile bio/status */}
+            {/* @ts-ignore */}
+            <a-text 
+              value="Hello! I am your visual anatomical assistant. Speak to me or select concepts to project 3D details on the holographic Smartboard." 
+              width="1.7" 
+              color="#94a3b8" 
+              position="-0.4 0.05 0.01" 
+              wrap-count="24"
+            ></a-text>
+
+            {/* Glowing Soundwave Visualizer (6 bars pulsing dynamically when AI talks) */}
+            {/* @ts-ignore */}
+            <a-box width="0.02" height="0.1" depth="0.02" position="-0.2 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 3 1; dir: alternate; loop: true; dur: 200" : ""} pointer-events="none"></a-box>
+            {/* @ts-ignore */}
+            <a-box width="0.02" height="0.1" depth="0.02" position="-0.12 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 4.5 1; dir: alternate; loop: true; dur: 250" : ""} pointer-events="none"></a-box>
+            {/* @ts-ignore */}
+            <a-box width="0.02" height="0.1" depth="0.02" position="-0.04 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 2 1; dir: alternate; loop: true; dur: 180" : ""} pointer-events="none"></a-box>
+            {/* @ts-ignore */}
+            <a-box width="0.02" height="0.1" depth="0.02" position="0.04 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 3.5 1; dir: alternate; loop: true; dur: 220" : ""} pointer-events="none"></a-box>
+            {/* @ts-ignore */}
+            <a-box width="0.02" height="0.1" depth="0.02" position="0.12 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 4 1; dir: alternate; loop: true; dur: 260" : ""} pointer-events="none"></a-box>
+            {/* @ts-ignore */}
+            <a-box width="0.02" height="0.1" depth="0.02" position="0.2 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 2.5 1; dir: alternate; loop: true; dur: 200" : ""} pointer-events="none"></a-box>
+          </a-plane>
+        </a-entity>
+
+
+        {/* ── RIGHT HUD PANEL: Classroom / Peers Online List ── */}
+        {/* @ts-ignore */}
+        <a-entity position="2.2 1.4 -2.8" rotation="0 -25 0">
+          {/* HUD Backing */}
+          {/* @ts-ignore */}
+          <a-plane width="1.0" height="1.4" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
+            {/* Trim */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.7" radius-outer="0.71" scale="1 1.4 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
+
+            {/* Header */}
+            {/* @ts-ignore */}
+            <a-text value="CLASSROOM" width="2.4" color="#06b6d4" position="0 0.55 0.01" align="center" font="klykov"></a-text>
+            {/* @ts-ignore */}
+            <a-text value="12 Students Online" width="1.6" color="#10b981" position="0 0.42 0.01" align="center"></a-text>
+
+            {/* Peer rows */}
+            {/* Alex */}
+            {/* @ts-ignore */}
+            <a-circle radius="0.02" position="-0.3 0.24 0.01" color="#1e293b"></a-circle>
+            {/* @ts-ignore */}
+            <a-text value="Alex" width="1.8" color="#ffffff" position="-0.2 0.24 0.01"></a-text>
+            {/* @ts-ignore */}
+            <a-sphere radius="0.01" position="0.3 0.24 0.015" color="#10b981"></a-sphere>
+
+            {/* Sam */}
+            {/* @ts-ignore */}
+            <a-circle radius="0.02" position="-0.3 0.12 0.01" color="#1e293b"></a-circle>
+            {/* @ts-ignore */}
+            <a-text value="Sam" width="1.8" color="#ffffff" position="-0.2 0.12 0.01"></a-text>
+            {/* @ts-ignore */}
+            <a-sphere radius="0.01" position="0.3 0.12 0.015" color="#10b981"></a-sphere>
+
+            {/* Taylor */}
+            {/* @ts-ignore */}
+            <a-circle radius="0.02" position="-0.3 0.0 0.01" color="#1e293b"></a-circle>
+            {/* @ts-ignore */}
+            <a-text value="Taylor" width="1.8" color="#ffffff" position="-0.2 0.0 0.01"></a-text>
+            {/* @ts-ignore */}
+            <a-sphere radius="0.01" position="0.3 0.0 0.015" color="#10b981"></a-sphere>
+
+            {/* Jordan */}
+            {/* @ts-ignore */}
+            <a-circle radius="0.02" position="-0.3 -0.12 0.01" color="#1e293b"></a-circle>
+            {/* @ts-ignore */}
+            <a-text value="Jordan" width="1.8" color="#ffffff" position="-0.2 -0.12 0.01"></a-text>
+            {/* @ts-ignore */}
+            <a-sphere radius="0.01" position="0.3 -0.12 0.015" color="#10b981"></a-sphere>
+
+            {/* Riley */}
+            {/* @ts-ignore */}
+            <a-circle radius="0.02" position="-0.3 -0.24 0.01" color="#1e293b"></a-circle>
+            {/* @ts-ignore */}
+            <a-text value="Riley" width="1.8" color="#ffffff" position="-0.2 -0.24 0.01"></a-text>
+            {/* @ts-ignore */}
+            <a-sphere radius="0.01" position="0.3 -0.24 0.015" color="#10b981"></a-sphere>
+
+            {/* +6 more label */}
+            {/* @ts-ignore */}
+            <a-text value="+ 7 more online" width="1.6" color="#06b6d4" position="0 -0.42 0.01" align="center"></a-text>
+          </a-plane>
+        </a-entity>
+
+
+        {/* ── LOWER LEFT HUD: Lesson Progress Card ── */}
+        {/* @ts-ignore */}
+        <a-entity position="-1.8 0.55 -2.2" rotation="-15 20 0">
+          {/* Backing */}
+          {/* @ts-ignore */}
+          <a-plane width="0.75" height="0.5" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
+            {/* Trim */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.3" radius-outer="0.31" scale="1 0.66 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
+
+            {/* Header */}
+            {/* @ts-ignore */}
+            <a-text value="LESSON PROGRESS" width="1.6" color="#06b6d4" position="0 0.18 0.01" align="center" font="klykov"></a-text>
+
+            {/* Progress Circular Dial Ring */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.1" radius-outer="0.12" position="-0.16 -0.06 0.01" color="#1e293b" material="shader: flat"></a-ring>
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.1" radius-outer="0.125" theta-length="162" position="-0.16 -0.06 0.015" color="#06b6d4" material="shader: flat"></a-ring>
+            {/* Progress text */}
+            {/* @ts-ignore */}
+            <a-text value="45%" width="2.2" color="#ffffff" position="-0.16 -0.06 0.02" align="center" font="klykov"></a-text>
+
+            {/* Side Progress Status */}
+            {/* @ts-ignore */}
+            <a-text value="Completed" width="1.6" color="#94a3b8" position="0.18 -0.04 0.01" align="center"></a-text>
+            {/* @ts-ignore */}
+            <a-text value="Keep it up!" width="1.4" color="#10b981" position="0.18 -0.15 0.01" align="center"></a-text>
+          </a-plane>
+        </a-entity>
+
+
+        {/* ── LOWER RIGHT HUD: Next Up Topic Deck ── */}
+        {/* @ts-ignore */}
+        <a-entity position="1.8 0.55 -2.2" rotation="-15 -20 0">
+          {/* Backing */}
+          {/* @ts-ignore */}
+          <a-plane width="0.75" height="0.5" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
+            {/* Trim */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.3" radius-outer="0.31" scale="1 0.66 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
+
+            {/* Header */}
+            {/* @ts-ignore */}
+            <a-text value="NEXT UP" width="1.6" color="#06b6d4" position="0 0.18 0.01" align="center" font="klykov"></a-text>
+
+            {/* Topic item */}
+            {/* @ts-ignore */}
+            <a-text value="DNA & Genes" width="1.8" color="#ffffff" position="0 -0.04 0.01" align="center" font="klykov"></a-text>
+            {/* @ts-ignore */}
+            <a-text value="15 min duration" width="1.4" color="#64748b" position="0 -0.16 0.01" align="center"></a-text>
+
+            {/* Decorative rotating DNA model inside a small project space */}
+            {/* @ts-ignore */}
+            <a-entity position="0 0.08 0.015" animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear">
+              {/* @ts-ignore */}
+              <a-sphere radius="0.015" position="-0.15 0 0" color="#a855f7"></a-sphere>
+              {/* @ts-ignore */}
+              <a-sphere radius="0.015" position="-0.08 0.03 0.03" color="#06b6d4"></a-sphere>
+              {/* @ts-ignore */}
+              <a-sphere radius="0.015" position="0 0.05 0.05" color="#a855f7"></a-sphere>
+              {/* @ts-ignore */}
+              <a-sphere radius="0.015" position="0.08 0.03 0.03" color="#06b6d4"></a-sphere>
+              {/* @ts-ignore */}
+              <a-sphere radius="0.015" position="0.15 0 0" color="#a855f7"></a-sphere>
+              {/* @ts-ignore */}
+              <a-cylinder radius="0.002" height="0.35" rotation="0 0 90" color="#ffffff" opacity="0.3"></a-cylinder>
+            </a-entity>
+          </a-plane>
+        </a-entity>
+
+
+        {/* ── CONCEPTS SELECT MENU: Curving on the left side ── */}
+        {/* @ts-ignore */}
+        <a-entity position="-1.7 0.6 -2.4" rotation="0 20 0">
           {/* Menu Backing plate */}
           {/* @ts-ignore */}
           <a-plane
             width="0.8"
-            height="1.1"
-            material="shader: flat; color: #07050e; transparent: true; opacity: 0.85; side: double"
+            height="1.0"
+            material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double"
           >
+            {/* Border */}
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.5" radius-outer="0.51" scale="1 1.25 1" color="#06b6d4" opacity="0.4" material="shader: flat"></a-ring>
+
             {/* Title */}
             {/* @ts-ignore */}
             <a-text
-              value="CONCEPTS"
+              value="LESSON CONCEPTS"
               align="center"
-              width="2.0"
+              width="1.8"
               color="#06b6d4"
-              position="0 0.45 0.01"
+              position="0 0.4 0.01"
               font="klykov"
             ></a-text>
 
             {/* Menu List of concepts */}
             {concepts.map((concept: any, idx: number) => {
-              const buttonY = 0.25 - idx * 0.13
+              const buttonY = 0.22 - idx * 0.12
+              const isSelected = activeModel === concept.label
               return (
                 // @ts-ignore
                 <a-plane
                   key={concept.id}
                   class="raycastable"
-                  width="0.72"
-                  height="0.10"
+                  width="0.7"
+                  height="0.09"
                   position={`0 ${buttonY} 0.02`}
-                  material="shader: flat; color: #0c0a12; transparent: true; opacity: 0.85"
+                  material={`shader: flat; color: ${isSelected ? '#f43f5e' : '#0c0a12'}; transparent: true; opacity: 0.90`}
                   menu-trigger={`label: ${concept.label}; desc: ${concept.description}`}
                 >
+                  {/* Glowing active indicator */}
+                  {isSelected && (
+                    // @ts-ignore
+                    <a-sphere radius="0.012" position="-0.30 0 0.01" color="#ffffff" material="shader: flat"></a-sphere>
+                  )}
                   {/* @ts-ignore */}
                   <a-text
                     value={concept.label}
                     align="center"
-                    width="1.6"
+                    width="1.5"
                     color="#ffffff"
                     position="0 0 0.01"
                   ></a-text>
@@ -763,28 +1076,157 @@ export default function VRPage({ params }: { params: { id: string } }) {
           </a-plane>
         </a-entity>
 
-        {/* ── RIGHT PANEL: Holographic Projector Display Stage ── */}
-        {/* Base Ring on the floor */}
-        {/* @ts-ignore */}
-        <a-ring radius-inner="0" radius-outer="0.45" color="#06b6d4" rotation="-90 0 0" position="1.4 -0.49 -2.5" material="shader: flat; opacity: 0.85"></a-ring>
-        {/* Light beam cylinder */}
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.45" height="1.8" position="1.4 0.4 -2.5" material="shader: flat; transparent: true; opacity: 0.08; color: #06b6d4; side: double"></a-cylinder>
 
-        {/* Dynamic projected anatomical 3D structure */}
-        {renderOrganModel(activeModel, '#06b6d4', '1.4 0.4 -2.5')}
-
-        {/* Concept label card floating right above the projection stage */}
+        {/* ── COCKPIT BOTTOM CONSOLE / DASHBOARD (Curving in front of user) ── */}
         {/* @ts-ignore */}
-        <a-entity look-at-camera position="1.4 1.2 -2.5">
+        <a-entity position="0 -0.42 -1.2" rotation="-38 0 0">
+          {/* Curved Desk backing panel */}
           {/* @ts-ignore */}
-          <a-plane width="0.75" height="0.18" material="shader: flat; color: #07050e; transparent: true; opacity: 0.85">
+          <a-plane
+            width="1.45"
+            height="0.36"
+            material="shader: flat; color: #020205; transparent: true; opacity: 0.92; side: double"
+          >
+            {/* Glowing neon ring runner */}
             {/* @ts-ignore */}
-            <a-text value={activeModel} align="center" width="2.0" color="#06b6d4" font="klykov"></a-text>
+            <a-ring radius-inner="0.72" radius-outer="0.73" scale="1 0.25 1" color="#06b6d4" opacity="0.6" material="shader: flat"></a-ring>
+
+            {/* Center Glowing dial core */}
+            {/* @ts-ignore */}
+            <a-sphere
+              radius="0.07"
+              position="0 0 0.03"
+              color="#06b6d4"
+              material="shader: flat; opacity: 0.9"
+              animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine"
+            ></a-sphere>
+            {/* @ts-ignore */}
+            <a-ring radius-inner="0.085" radius-outer="0.10" position="0 0 0.035" color="#a855f7" opacity="0.8" material="shader: flat"></a-ring>
+
+            {/* ── Left Console Controls ── */}
+            {/* Mic Toggle button */}
+            {/* @ts-ignore */}
+            <a-plane
+              class="raycastable"
+              width="0.22"
+              height="0.18"
+              position="-0.38 0 0.02"
+              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
+              console-btn="action: mic"
+            >
+              {/* @ts-ignore */}
+              <a-sphere radius="0.012" position="-0.07 0.04 0.02" color={isMicMuted ? "#f43f5e" : "#10b981"} material="shader: flat"></a-sphere>
+              {/* @ts-ignore */}
+              <a-text value="Mic" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
+              {/* @ts-ignore */}
+              <a-text value={isMicMuted ? "MUTED" : "ACTIVE"} width="1.4" color={isMicMuted ? "#f43f5e" : "#10b981"} position="0 -0.05 0.02" align="center"></a-text>
+            </a-plane>
+
+            {/* Raise Hand button */}
+            {/* @ts-ignore */}
+            <a-plane
+              class="raycastable"
+              width="0.22"
+              height="0.18"
+              position="-0.15 0 0.02"
+              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
+              console-btn="action: hand"
+            >
+              {/* @ts-ignore */}
+              <a-sphere radius="0.012" position="-0.08 0.04 0.02" color={isHandRaised ? "#a855f7" : "#64748b"} material="shader: flat"></a-sphere>
+              {/* @ts-ignore */}
+              <a-text value="Hand" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
+              {/* @ts-ignore */}
+              <a-text value={isHandRaised ? "RAISED" : "OFF"} width="1.4" color={isHandRaised ? "#a855f7" : "#64748b"} position="0 -0.05 0.02" align="center"></a-text>
+            </a-plane>
+
+            {/* ── Right Console Controls ── */}
+            {/* Ask AI button */}
+            {/* @ts-ignore */}
+            <a-plane
+              class="raycastable"
+              width="0.22"
+              height="0.18"
+              position="0.15 0 0.02"
+              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
+              console-btn="action: ask"
+            >
+              {/* @ts-ignore */}
+              <a-sphere radius="0.012" position="-0.08 0.04 0.02" color="#06b6d4" material="shader: flat"></a-sphere>
+              {/* @ts-ignore */}
+              <a-text value="Ask AI" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
+              {/* @ts-ignore */}
+              <a-text value="TRIGGER" width="1.4" color="#06b6d4" position="0 -0.05 0.02" align="center"></a-text>
+            </a-plane>
+
+            {/* Study Notes Toggle button */}
+            {/* @ts-ignore */}
+            <a-plane
+              class="raycastable"
+              width="0.22"
+              height="0.18"
+              position="0.38 0 0.02"
+              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
+              console-btn="action: notes"
+            >
+              {/* @ts-ignore */}
+              <a-sphere radius="0.012" position="-0.08 0.04 0.02" color={showNotesOverlay ? "#a855f7" : "#64748b"} material="shader: flat"></a-sphere>
+              {/* @ts-ignore */}
+              <a-text value="Notes" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
+              {/* @ts-ignore */}
+              <a-text value={showNotesOverlay ? "OPEN" : "CLOSED"} width="1.4" color={showNotesOverlay ? "#a855f7" : "#64748b"} position="0 -0.05 0.02" align="center"></a-text>
+            </a-plane>
           </a-plane>
         </a-entity>
 
-        {/* ── Camera + raycasting gaze cursor ── */}
+
+        {/* ── FLOATING NOTES OVERLAY BOARD (Materializes in front when Notes is clicked) ── */}
+        {showNotesOverlay && (
+          // @ts-ignore
+          <a-entity look-at-camera position="0 1.6 -1.8">
+            {/* Overlay card */}
+            {/* @ts-ignore */}
+            <a-plane width="1.5" height="1.1" material="shader: flat; color: #020106; transparent: false; side: double">
+              {/* Glowing outline */}
+              {/* @ts-ignore */}
+              <a-ring radius-inner="0.65" radius-outer="0.66" scale="1 1.45 1" color="#a855f7" opacity="0.8" material="shader: flat"></a-ring>
+              
+              {/* Header */}
+              {/* @ts-ignore */}
+              <a-text value="STUDY NOTES TEXTBOOK" align="center" width="2.0" color="#a855f7" position="0 0.45 0.01" font="klykov"></a-text>
+              {/* @ts-ignore */}
+              <a-text value={resource.title} align="center" width="1.8" color="#06b6d4" position="0 0.35 0.01" font="klykov"></a-text>
+
+              {/* Notes content (Truncated to fit layout beautifully) */}
+              {/* @ts-ignore */}
+              <a-text
+                value={resource.content ? resource.content.slice(0, 360) + '...' : 'No notes written for this kit. Speak to the AI tutor to write notes!'}
+                align="left"
+                width="1.35"
+                color="#ffffff"
+                position="-0.65 0.02 0.01"
+                wrap-count="28"
+              ></a-text>
+
+              {/* Close Button */}
+              {/* @ts-ignore */}
+              <a-plane
+                class="raycastable"
+                width="0.30"
+                height="0.11"
+                position="0 -0.42 0.02"
+                material="shader: flat; color: #f43f5e"
+                console-btn="action: notes"
+              >
+                {/* @ts-ignore */}
+                <a-text value="CLOSE NOTES" align="center" width="1.6" color="#ffffff" position="0 0 0.01"></a-text>
+              </a-plane>
+            </a-plane>
+          </a-entity>
+        )}
+
+
+        {/* ── VR First-Person Camera with center locked Cursor ── */}
         {/* @ts-ignore */}
         <a-camera look-controls wasd-controls position="0 1.6 0.5">
           {/* @ts-ignore */}
@@ -793,9 +1235,9 @@ export default function VRPage({ params }: { params: { id: string } }) {
             fuse="true"
             fuse-timeout="1200"
             color="#f43f5e"
-            scale="0.7 0.7 0.7"
-            animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dur: 1200; from: 0.7 0.7 0.7; to: 0.15 0.15 0.15"
-            animation__leave="property: scale; startEvents: mouseleave; easing: easeOutQuad; dur: 400; to: 0.7 0.7 0.7"
+            scale="0.6 0.6 0.6"
+            animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dur: 1200; from: 0.6 0.6 0.6; to: 0.15 0.15 0.15"
+            animation__leave="property: scale; startEvents: mouseleave; easing: easeOutQuad; dur: 400; to: 0.6 0.6 0.6"
           ></a-cursor>
         </a-camera>
 
