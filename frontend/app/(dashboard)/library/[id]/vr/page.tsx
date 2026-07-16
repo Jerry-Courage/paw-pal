@@ -86,7 +86,7 @@ export default function VRClassroomPage({ params }: { params: { id: string } }) 
   // Resource data
   const { data: resource, isLoading: resourceLoading } = useQuery({
     queryKey: ['resource', params.id],
-    queryFn: () => libraryApi.getResource(Number(params.id)),
+    queryFn: () => libraryApi.getResource(Number(params.id)).then(res => res.data),
   })
 
   const { data: vrLayout, isLoading: layoutLoading } = useQuery<VRLayout>({
@@ -168,7 +168,7 @@ export default function VRClassroomPage({ params }: { params: { id: string } }) 
         if (msg.type === 'audio' && msg.data && audioCtxRef.current) {
           const pcm = base64ToPcmFloat(msg.data)
           const buf = audioCtxRef.current.createBuffer(1, pcm.length, 24000)
-          buf.copyToChannel(pcm, 0)
+          buf.copyToChannel(pcm as any, 0)
           const src = audioCtxRef.current.createBufferSource()
           src.buffer = buf
           src.connect(audioCtxRef.current.destination)
@@ -195,7 +195,12 @@ export default function VRClassroomPage({ params }: { params: { id: string } }) 
           const f32 = ev.inputBuffer.getChannelData(0)
           const i16 = new Int16Array(f32.length)
           for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768))
-          const b64 = btoa(String.fromCharCode(...new Uint8Array(i16.buffer)))
+          const bytes = new Uint8Array(i16.buffer)
+          let binary = ''
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i])
+          }
+          const b64 = btoa(binary)
           ws.send(JSON.stringify({ type: 'audio', data: b64 }))
         }
       }
