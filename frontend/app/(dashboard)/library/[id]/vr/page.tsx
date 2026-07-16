@@ -3,1246 +3,549 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi, getAuthToken, API_BASE } from '@/lib/api'
-import { Loader2, ChevronLeft, Sparkles, AlertCircle, Mic, MicOff } from 'lucide-react'
+import {
+  Loader2, ChevronLeft, Sparkles, AlertCircle, Mic, MicOff,
+  Hand, BookOpen, MessageCircle, X, Maximize2, RotateCcw, Volume2, VolumeX,
+} from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'a-scene': any;
-      'a-sky': any;
-      'a-light': any;
-      'a-entity': any;
-      'a-sphere': any;
-      'a-box': any;
-      'a-cylinder': any;
-      'a-torus': any;
-      'a-ring': any;
-      'a-plane': any;
-      'a-text': any;
-      'a-cursor': any;
-      'a-camera': any;
-      'a-circle': any;
-      'a-cone': any;
-    }
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+interface VRNode {
+  id: string
+  label: string
+  description: string
+  color: string
+  type: string
+  sketchfab_keyword?: string
 }
 
-// Rich biology color palette
-const NODE_COLORS = [
-  '#f43f5e', '#8b5cf6', '#06b6d4', '#10b981',
-  '#f59e0b', '#ec4899', '#3b82f6', '#a3e635',
-]
-
-function base64ToPcmFloat(base64: string): Float32Array {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  const int16 = new Int16Array(bytes.buffer);
-  const float32 = new Float32Array(int16.length);
-  for (let i = 0; i < int16.length; i++) {
-    float32[i] = int16[i] / 32768.0;
-  }
-  return float32;
+interface VREdge {
+  from: string
+  to: string
+  label: string
+  color: string
 }
 
-// ── Realistic Composite 3D Organ Models ──
-function renderOrganModel(label: string, color: string, posStr: string) {
-  const clean = label.toLowerCase();
-  
-  // 1. Teeth: Jaw arch and individual teeth
-  if (clean.includes('teeth') || clean.includes('tooth') || clean.includes('mouth')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} rotation="20 0 0" scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-torus radius="0.18" radius-tubular="0.02" arc="180" rotation="90 0 0" position="0 -0.04 0" color="#e2e8f0"></a-torus>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.02" height="0.06" position="-0.13 -0.02 0.04" color="#ffffff"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.02" height="0.06" position="-0.08 -0.02 0.10" color="#ffffff"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.022" height="0.07" position="0 -0.02 0.12" color="#ffffff"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.02" height="0.06" position="0.08 -0.02 0.10" color="#ffffff"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.02" height="0.06" position="0.13 -0.02 0.04" color="#ffffff"></a-cylinder>
-      </a-entity>
-    );
-  }
-  
-  // 2. Tongue: Realistic pink tongue with groove
-  if (clean.includes('tongue')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} rotation="25 0 0" scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-box width="0.28" height="0.06" depth="0.40" color="#fda4af" roughness="0.8" position="0 0 0"></a-box>
-        {/* @ts-ignore */}
-        <a-box width="0.015" height="0.068" depth="0.38" color="#f43f5e" position="0 0.002 0"></a-box>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.13" scale="1 0.4 1" position="0 -0.02 -0.08" color="#f43f5e"></a-sphere>
-      </a-entity>
-    );
-  }
-  
-  // 3. Stomach: Curved J-shape organ
-  if (clean.includes('stomach')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} rotation="0 0 20" scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-sphere radius="0.22" scale="1.3 0.9 0.75" color="#f43f5e" position="0 0 0" roughness="0.6"></a-sphere>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.06" height="0.16" position="-0.10 0.16 0" rotation="0 0 -25" color="#fda4af"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.05" height="0.20" position="0.15 -0.11 0" rotation="0 0 65" color="#e11d48"></a-cylinder>
-      </a-entity>
-    );
-  }
-  
-  // 4. Liver: Dark-red wedge bi-lobed organ with green gallbladder peaking underneath
-  if (clean.includes('liver')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} rotation="0 15 -10" scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-sphere radius="0.28" scale="1.2 0.65 0.75" position="0.06 0 0" color="#7f1d1d" roughness="0.7"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.18" scale="1.1 0.55 0.65" position="-0.13 0.04 0.04" color="#991b1b" roughness="0.7"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.05" scale="0.7 1.1 0.7" position="0.06 -0.15 0.08" color="#166534" roughness="0.5"></a-sphere>
-      </a-entity>
-    );
-  }
-  
-  // 5. Pancreas: Elongated orange gland
-  if (clean.includes('pancreas')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} rotation="0 0 -15" scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-sphere radius="0.10" position="-0.11 0 0" color="#ea580c" roughness="0.9"></a-sphere>
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.06" height="0.32" position="0.03 0 0" rotation="0 0 90" color="#f97316" roughness="0.9"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.03" position="-0.06 0.04 0.04" color="#ea580c"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.03" position="0.03 -0.03 0.04" color="#f97316"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.03" position="0.09 0.02 0.03" color="#f97316"></a-sphere>
-      </a-entity>
-    );
-  }
-  
-  // 6. Salivary Glands: Grape-like cluster representation
-  if (clean.includes('salivary') || clean.includes('gland')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.015" height="0.22" color="#f43f5e" rotation="45 0 0"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.06" position="-0.06 0.06 0" color="#fb7185" roughness="0.8"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.07" position="0.04 0.04 0.04" color="#fda4af" roughness="0.8"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.06" position="-0.02 -0.06 0.04" color="#fb7185" roughness="0.8"></a-sphere>
-        {/* @ts-ignore */}
-        <a-sphere radius="0.06" position="0.06 -0.03 -0.03" color="#f43f5e" roughness="0.8"></a-sphere>
-      </a-entity>
-    );
-  }
-  
-  // 7. Esophagus / Throat: Muscular pink cylinder tube
-  if (clean.includes('esophagus') || clean.includes('throat') || clean.includes('vessel') || clean.includes('pharynx')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.065" height="0.50" color="#fda4af" roughness="0.9"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-torus radius="0.07" radius-tubular="0.007" position="0 0.14 0" rotation="90 0 0" color="#f43f5e" opacity="0.8"></a-torus>
-        {/* @ts-ignore */}
-        <a-torus radius="0.07" radius-tubular="0.007" position="0 0 0" rotation="90 0 0" color="#f43f5e" opacity="0.8"></a-torus>
-        {/* @ts-ignore */}
-        <a-torus radius="0.07" radius-tubular="0.007" position="0 -0.14 0" rotation="90 0 0" color="#f43f5e" opacity="0.8"></a-torus>
-      </a-entity>
-    );
-  }
-  
-  // 8. Intestines: Convoluted winding loops
-  if (clean.includes('intestine') || clean.includes('colon') || clean.includes('rectum')) {
-    return (
-      // @ts-ignore
-      <a-entity position={posStr} scale="1.2 1.2 1.2">
-        {/* @ts-ignore */}
-        <a-torus radius="0.15" radius-tubular="0.038" position="-0.05 0.06 0" rotation="20 40 10" color="#f43f5e" roughness="0.7"></a-torus>
-        {/* @ts-ignore */}
-        <a-torus radius="0.15" radius-tubular="0.038" position="0.05 -0.06 0" rotation="-20 -40 -10" color="#f43f5e" roughness="0.7"></a-torus>
-        {/* @ts-ignore */}
-        <a-torus radius="0.13" radius-tubular="0.032" position="0 0 0.06" rotation="90 0 0" color="#fda4af" roughness="0.7"></a-torus>
-      </a-entity>
-    );
-  }
-
-  // 9. Default / process node: molecular break-down nutrient diagram
-  return (
-    // @ts-ignore
-    <a-entity position={posStr} animation="property: rotation; to: 360 360 0; loop: true; dur: 12000; easing: linear">
-      {/* @ts-ignore */}
-      <a-sphere radius="0.14" color={color} material="roughness: 0.2; metalness: 0.8"></a-sphere>
-      {/* @ts-ignore */}
-      <a-sphere radius="0.055" position="-0.18 0.11 0.08" color="#ffffff" material="shader: flat"></a-sphere>
-      {/* @ts-ignore */}
-      <a-sphere radius="0.055" position="0.18 -0.11 0.08" color="#ffffff" material="shader: flat"></a-sphere>
-      {/* @ts-ignore */}
-      <a-cylinder radius="0.007" height="0.24" position="-0.09 0.05 0.04" rotation="45 45 0" color="#a1a1aa"></a-cylinder>
-      {/* @ts-ignore */}
-      <a-cylinder radius="0.007" height="0.24" position="0.09 -0.05 0.04" rotation="45 45 0" color="#a1a1aa"></a-cylinder>
-    </a-entity>
-  );
+interface VRLayout {
+  nodes: VRNode[]
+  edges: VREdge[]
 }
 
-export default function VRPage({ params }: { params: { id: string } }) {
-  const resourceId = parseInt(params.id)
-  const [aframeLoaded, setAframeLoaded] = useState(false)
-  const [scriptError, setScriptError] = useState(false)
+interface SketchfabResult {
+  found: boolean
+  uid?: string
+  embed_url?: string
+  keyword?: string
+}
 
-  // AI voice states
-  const [isAiSpeaking, setIsAiSpeaking] = useState(false)
-  const [isMicAvailable, setIsMicAvailable] = useState(true)
+// ─────────────────────────────────────────────────────────────────────────────
+// Small helper: fetch Sketchfab model for a keyword
+// ─────────────────────────────────────────────────────────────────────────────
+async function fetchSketchfabModel(keyword: string): Promise<SketchfabResult> {
+  const token = getAuthToken()
+  const res = await fetch(
+    `${API_BASE}/library/sketchfab-model/?q=${encodeURIComponent(keyword)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) return { found: false }
+  return res.json()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mock peers for the classroom panel
+// ─────────────────────────────────────────────────────────────────────────────
+const PEERS = ['Alex', 'Sam', 'Taylor', 'Jordan', 'Riley']
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
+export default function VRClassroomPage({ params }: { params: { id: string } }) {
+  const [activeNode, setActiveNode] = useState<VRNode | null>(null)
+  const [sketchfabUrl, setSketchfabUrl] = useState<string | null>(null)
+  const [loadingModel, setLoadingModel] = useState(false)
+  const [modelExpanded, setModelExpanded] = useState(false)
+
+  // AI tutor state
+  const [sessionActive, setSessionActive] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
-  const [activeModel, setActiveModel] = useState<string>('Digestion')
-  const [tutorText, setTutorText] = useState<string>('Hello! Welcome to the Holographic VR Classroom. Gaze at any menu concept on the left to begin.')
-
-  // Interactivity HUD states
+  const [aiTranscript, setAiTranscript] = useState<string>('Click a concept below to start learning...')
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const [isHandRaised, setIsHandRaised] = useState(false)
-  const [showNotesOverlay, setShowNotesOverlay] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
 
-  // Bridge React callbacks to window so A-Frame components can trigger them
-  useEffect(() => {
-    (window as any).toggleMic = () => setIsMicMuted(m => !m);
-    (window as any).toggleHand = () => setIsHandRaised(h => !h);
-    (window as any).toggleNotes = () => setShowNotesOverlay(n => !n);
-    (window as any).triggerAsk = () => {
-      setTutorText("AI Tutor, can you give me a summary of this concept?");
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: 'text_message',
-          text: 'I have a question about this topic. Can you explain how it works and give me a quick quiz question?'
-        }));
-      }
-    };
-    return () => {
-      delete (window as any).toggleMic;
-      delete (window as any).toggleHand;
-      delete (window as any).toggleNotes;
-      delete (window as any).triggerAsk;
-    }
-  }, [isMicMuted, isHandRaised, showNotesOverlay])
-
-  // Refs for audio context
+  // WebSocket / audio refs
   const wsRef = useRef<WebSocket | null>(null)
-  const micAudioCtxRef = useRef<AudioContext | null>(null)
-  const playAudioCtxRef = useRef<AudioContext | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const isMicMutedRef = useRef(false)
-  const nextPlayTimeRef = useRef(0)
-  const isSpeakingTimeoutRef = useRef<any>(null)
-  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
+  const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    isMicMutedRef.current = isMicMuted
-  }, [isMicMuted])
-
-  // fetch notes data
-  const { data: resource, isLoading: isResourceLoading } = useQuery({
-    queryKey: ['resource', resourceId],
-    queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
-    enabled: !!resourceId,
+  // Resource data
+  const { data: resource, isLoading: resourceLoading } = useQuery({
+    queryKey: ['resource', params.id],
+    queryFn: () => libraryApi.getResource(Number(params.id)),
   })
 
-  const { data: vrLayout } = useQuery({
-    queryKey: ['vr-layout', resourceId],
-    queryFn: () => libraryApi.getVRLayout(resourceId).then(r => r.data),
-    enabled: !!resourceId,
+  const { data: vrLayout, isLoading: layoutLoading } = useQuery<VRLayout>({
+    queryKey: ['vr-layout', params.id],
+    queryFn: async () => {
+      const token = getAuthToken()
+      const res = await fetch(`${API_BASE}/library/resources/${params.id}/vr-layout/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Failed to load VR layout')
+      return res.json()
+    },
+    enabled: !!params.id,
   })
 
-  // Dynamic menu concepts parsed from VR layout
-  const concepts = (vrLayout?.nodes || []).map((node: any) => ({
-    id: node.id,
-    label: node.label,
-    description: node.description || ''
-  })).slice(0, 6)
+  // ── Select concept ──────────────────────────────────────────────────────────
+  const selectNode = useCallback(async (node: VRNode) => {
+    setActiveNode(node)
+    setSketchfabUrl(null)
+    setLoadingModel(true)
+    setModelExpanded(false)
 
-  // ── Audio Playout helpers ──
-  const stopAudioPlayout = useCallback(() => {
-    activeSourcesRef.current.forEach(source => {
-      try { source.stop() } catch (e) {}
-    })
-    activeSourcesRef.current = []
-    if (playAudioCtxRef.current) {
-      nextPlayTimeRef.current = playAudioCtxRef.current.currentTime
-    }
-    setIsAiSpeaking(false)
-    clearTimeout(isSpeakingTimeoutRef.current)
-  }, [])
-
-  const playAudioChunk = useCallback((pcm: Float32Array) => {
-    const ctx = playAudioCtxRef.current || new AudioContext({ sampleRate: 24000 })
-    playAudioCtxRef.current = ctx
-
-    const buffer = ctx.createBuffer(1, pcm.length, 24000)
-    buffer.copyToChannel(pcm as any, 0)
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.connect(ctx.destination)
-
-    const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
-    source.start(startAt)
-    nextPlayTimeRef.current = startAt + buffer.duration
-
-    activeSourcesRef.current.push(source)
-    source.onended = () => {
-      activeSourcesRef.current = activeSourcesRef.current.filter(src => src !== source)
-    }
-
-    setIsAiSpeaking(true)
-    clearTimeout(isSpeakingTimeoutRef.current)
-    isSpeakingTimeoutRef.current = setTimeout(() => {
-      setIsAiSpeaking(false)
-    }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
-  }, [])
-
-  // ── Mic capture ──
-  const activateMicProcessor = (stream: MediaStream) => {
+    const keyword = node.sketchfab_keyword || node.label
     try {
-      const ctx = new AudioContext({ sampleRate: 16000 })
-      micAudioCtxRef.current = ctx
-
-      const resumeCtx = () => {
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      const result = await fetchSketchfabModel(keyword)
+      if (result.found && result.embed_url) {
+        setSketchfabUrl(result.embed_url)
+      } else {
+        setSketchfabUrl(null)
       }
-      const resumeInterval = setInterval(() => {
-        if (!processorRef.current) { clearInterval(resumeInterval); return }
-        resumeCtx()
-      }, 500)
-
-      const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(2048, 1, 1)
-      processorRef.current = processor
-
-      processor.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        if (isMicMutedRef.current) return
-        if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
-        
-        const float32 = e.inputBuffer.getChannelData(0).slice()
-        const pcm16 = new Int16Array(float32.length)
-        for (let i = 0; i < float32.length; i++) {
-          pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
-        }
-        const bytes = new Uint8Array(pcm16.buffer)
-        let binary = ''
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-        const b64 = btoa(binary)
-        wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
-      }
-
-      source.connect(processor)
-      const silentGain = ctx.createGain()
-      silentGain.gain.value = 0
-      processor.connect(silentGain)
-      silentGain.connect(ctx.destination)
-    } catch (e) {
-      console.error('Failed to configure mic', e)
+    } catch {
+      setSketchfabUrl(null)
+    } finally {
+      setLoadingModel(false)
     }
-  }
-
-  const stopMic = () => {
-    processorRef.current?.disconnect()
-    processorRef.current = null
-    if (micAudioCtxRef.current) {
-      void micAudioCtxRef.current.close().catch(() => {})
-      micAudioCtxRef.current = null
-    }
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-  }
-
-  // ── Establish Gemini WebSocket Session ──
-  useEffect(() => {
-    const initVoiceSession = async () => {
-      if (!resource) return
-      
-      try {
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            sampleRate: { ideal: 16000 },
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-          }
-        })
-        streamRef.current = micStream
-        setIsMicAvailable(true)
-      } catch (e) {
-        setIsMicAvailable(false)
-        toast.warning('Mic unavailable — gaze menu interaction will still trigger voice teachings.')
-      }
-
-      try {
-        const token = await getAuthToken()
-        const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${backendHost}/ws/examprep/${resourceId}/?token=${token}`
-
-        const ws = new WebSocket(wsUrl)
-        wsRef.current = ws
-
-        ws.onopen = () => {
-          // Preload content
-          const kit = resource.ai_notes_json || {}
-          const sections = (kit.sections || []).slice(0, 10)
-          const context = sections.map((s: any) => `${s.title}: ${s.content?.slice(0, 300)}`).join('\n\n')
-
-          ws.send(JSON.stringify({
-            type: 'start',
-            technique: 'vr_tutor',
-            resource_title: resource.title,
-            resource_context: context,
-            voice: 'Aoede'
-          }))
-        }
-
-        ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data)
-
-          if (msg.type === 'ready') {
-            if (streamRef.current) {
-              activateMicProcessor(streamRef.current)
-            }
-          } else if (msg.type === 'audio') {
-            const pcm = base64ToPcmFloat(msg.data)
-            playAudioChunk(pcm)
-          } else if (msg.type === 'interrupted') {
-            stopAudioPlayout()
-          } else if (msg.type === 'transcript_ai') {
-            setTutorText(prev => {
-              // Extract organ keywords from accumulated AI transcript to automatically update projected 3D visual
-              const text = msg.text.toLowerCase()
-              if (text.includes('stomach')) setActiveModel('Stomach')
-              else if (text.includes('liver')) setActiveModel('Liver')
-              else if (text.includes('pancreas')) setActiveModel('Pancreas')
-              else if (text.includes('salivary')) setActiveModel('Salivary Glands')
-              else if (text.includes('teeth')) setActiveModel('Teeth')
-              else if (text.includes('tongue')) setActiveModel('Tongue')
-              else if (text.includes('intestine')) setActiveModel('Intestines')
-              
-              if (prev.startsWith('Hello! Welcome') || prev.length > 200) {
-                return msg.text
-              }
-              return prev + msg.text
-            })
-          }
-        }
-      } catch (e) {
-        toast.error('Failed to establish classroom audio proxy.')
-      }
-    }
-
-    if (resource) {
-      initVoiceSession()
-    }
-
-    return () => {
-      if (wsRef.current) wsRef.current.close()
-      stopMic()
-      stopAudioPlayout()
-    }
-  }, [resource])
-
-  // ── Load A-Frame ──
-  useEffect(() => {
-    const scriptId = 'aframe-cdn-script'
-    if (document.getElementById(scriptId)) { setAframeLoaded(true); return }
-    const script = document.createElement('script')
-    script.id = scriptId
-    script.src = 'https://aframe.io/releases/1.4.2/aframe.min.js'
-    script.async = true
-    script.onload = () => setAframeLoaded(true)
-    script.onerror = () => setScriptError(true)
-    document.head.appendChild(script)
   }, [])
 
-  // ── Register custom components ──
+  // Auto-select first node once layout loads
   useEffect(() => {
-    if (!aframeLoaded || !(window as any).AFRAME) return
-    const AFRAME = (window as any).AFRAME
-
-    // Custom menu gaze triggers
-    if (!AFRAME.components['menu-trigger']) {
-      AFRAME.registerComponent('menu-trigger', {
-        schema: { 
-          label: { type: 'string', default: '' },
-          desc: { type: 'string', default: '' } 
-        },
-        init: function () {
-          const el = this.el
-          const { label } = this.data
-
-          el.addEventListener('mouseenter', () => {
-            el.setAttribute('material', 'color: #f43f5e; opacity: 0.95')
-            el.setAttribute('scale', '1.08 1.08 1')
-          })
-
-          el.addEventListener('mouseleave', () => {
-            el.setAttribute('material', 'color: #0c0a12; opacity: 0.85')
-            el.setAttribute('scale', '1 1 1')
-          })
-
-          el.addEventListener('click', () => {
-            setActiveModel(label)
-            setTutorText(`Teaching about the ${label}...`)
-            
-            // Send request turns to Gemini Live Voice
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({
-                type: 'text_message',
-                text: `Briefly explain the functions and importance of the ${label} in 2 sentences.`
-              }))
-            }
-          })
-        }
-      })
+    if (vrLayout?.nodes?.length && !activeNode) {
+      selectNode(vrLayout.nodes[0])
     }
+  }, [vrLayout, activeNode, selectNode])
 
-    if (!AFRAME.components['look-at-camera']) {
-      AFRAME.registerComponent('look-at-camera', {
-        tick: function () {
-          const cameraEl = document.querySelector('[camera]') as any
-          if (!cameraEl) return
-          const THREE = (window as any).THREE || AFRAME.THREE
-          const cameraPosition = new THREE.Vector3()
-          cameraEl.object3D.getWorldPosition(cameraPosition)
-          ;(this.el as any).object3D.lookAt(cameraPosition)
+  // ── WebSocket AI Tutor ──────────────────────────────────────────────────────
+  function base64ToPcmFloat(b64: string): Float32Array {
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    const i16 = new Int16Array(bytes.buffer)
+    const f32 = new Float32Array(i16.length)
+    for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768.0
+    return f32
+  }
+
+  const startSession = useCallback(async () => {
+    if (sessionActive) return
+    try {
+      const token = getAuthToken()
+      const wsUrl = `${API_BASE.replace(/^http/, 'ws')}/library/resources/${params.id}/vr-session/?token=${token}`
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+      audioCtxRef.current = new AudioContext({ sampleRate: 24000 })
+
+      ws.onopen = () => {
+        setSessionActive(true)
+        setAiTranscript('AI tutor connected! Ask me anything about this topic.')
+        toast.success('AI tutor connected')
+      }
+
+      ws.onmessage = async (e) => {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'transcript') {
+          setAiTranscript(msg.text)
+          setIsSpeaking(true)
+          if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current)
+          speakingTimerRef.current = setTimeout(() => setIsSpeaking(false), 2000)
         }
-      })
-    }
-
-    if (!AFRAME.components['console-btn']) {
-      AFRAME.registerComponent('console-btn', {
-        schema: {
-          action: { type: 'string', default: '' }
-        },
-        init: function () {
-          const el = this.el
-          const action = this.data.action
-
-          el.addEventListener('mouseenter', () => {
-            el.setAttribute('material', 'color: #06b6d4; opacity: 0.95')
-            el.setAttribute('scale', '1.08 1.08 1')
-          })
-
-          el.addEventListener('mouseleave', () => {
-            el.setAttribute('material', 'color: #07050e; opacity: 0.85')
-            el.setAttribute('scale', '1 1 1')
-          })
-
-          el.addEventListener('click', () => {
-            if (action === 'mic' && (window as any).toggleMic) {
-              (window as any).toggleMic()
-            } else if (action === 'hand' && (window as any).toggleHand) {
-              (window as any).toggleHand()
-            } else if (action === 'notes' && (window as any).toggleNotes) {
-              (window as any).toggleNotes()
-            } else if (action === 'ask' && (window as any).triggerAsk) {
-              (window as any).triggerAsk()
-            }
-          })
+        if (msg.type === 'audio' && msg.data && audioCtxRef.current) {
+          const pcm = base64ToPcmFloat(msg.data)
+          const buf = audioCtxRef.current.createBuffer(1, pcm.length, 24000)
+          buf.copyToChannel(pcm, 0)
+          const src = audioCtxRef.current.createBufferSource()
+          src.buffer = buf
+          src.connect(audioCtxRef.current.destination)
+          src.start()
         }
-      })
-    }
-  }, [aframeLoaded])
+      }
 
-  if (isResourceLoading || (!aframeLoaded && !scriptError)) {
+      ws.onclose = () => {
+        setSessionActive(false)
+        setIsSpeaking(false)
+      }
+
+      // Mic capture
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      const micCtx = new AudioContext({ sampleRate: 16000 })
+      const src = micCtx.createMediaStreamSource(stream)
+      const proc = micCtx.createScriptProcessor(4096, 1, 1)
+      processorRef.current = proc
+      src.connect(proc)
+      proc.connect(micCtx.destination)
+      proc.onaudioprocess = (ev) => {
+        if (!isMicMuted && ws.readyState === WebSocket.OPEN) {
+          const f32 = ev.inputBuffer.getChannelData(0)
+          const i16 = new Int16Array(f32.length)
+          for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768))
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(i16.buffer)))
+          ws.send(JSON.stringify({ type: 'audio', data: b64 }))
+        }
+      }
+    } catch (err) {
+      toast.error('Could not start AI session')
+      console.error(err)
+    }
+  }, [sessionActive, params.id, isMicMuted])
+
+  const endSession = useCallback(() => {
+    wsRef.current?.close()
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    processorRef.current?.disconnect()
+    setSessionActive(false)
+    setAiTranscript('Session ended.')
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => () => { endSession() }, [endSession])
+
+  // ── Loading state ───────────────────────────────────────────────────────────
+  if (resourceLoading || layoutLoading) {
     return (
-      <div className="w-full h-screen bg-[#050507] flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-10 h-10 text-rose-500 animate-spin" />
-        <div className="text-center">
-          <p className="text-sm font-black text-white uppercase tracking-widest">Entering Holographic Room...</p>
-          <p className="text-[10px] text-slate-500 mt-1">Initializing AI Classroom and Avatar Deck</p>
+      <div style={{ width: '100vw', height: '100vh', background: '#050816', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <Loader2 size={48} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+        <p style={{ color: '#94a3b8', fontFamily: 'Inter, sans-serif', fontSize: 18 }}>Loading VR Classroom…</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
+
+  if (!resource || !vrLayout) {
+    return (
+      <div style={{ width: '100vw', height: '100vh', background: '#050816', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#f43f5e', fontFamily: 'Inter, sans-serif' }}>
+          <AlertCircle size={48} style={{ margin: '0 auto 12px' }} />
+          <p>Failed to load classroom. <Link href={`/library/${params.id}`} style={{ color: '#6366f1' }}>Go back</Link></p>
         </div>
       </div>
     )
   }
 
-  if (scriptError || !resource) {
-    return (
-      <div className="w-full h-screen bg-black flex flex-col items-center justify-center p-6 space-y-4">
-        <AlertCircle className="w-12 h-12 text-rose-500" />
-        <div className="text-center">
-          <h2 className="text-lg font-black text-white uppercase">VR Classroom Failed</h2>
-          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Tutor engine could not launch. Please try again.</p>
-        </div>
-        <Link href={`/library/${resourceId}`}
-          className="px-5 py-2.5 rounded-xl bg-white text-black font-black text-xs uppercase tracking-widest">
-          Return to Notes
-        </Link>
-      </div>
-    )
-  }
-
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="w-full h-screen relative bg-black select-none">
-      
-      {/* ── HUD controls ── */}
-      <div className="absolute top-5 left-5 z-50 pointer-events-auto flex items-center gap-3">
-        <Link href={`/library/${resourceId}`}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 text-white hover:text-rose-400 text-xs font-bold uppercase tracking-widest transition-all">
-          <ChevronLeft className="w-4 h-4" /> Back to Notes
+    <div style={{ width: '100vw', height: '100vh', background: 'linear-gradient(135deg, #050816 0%, #0a0f2e 50%, #050816 100%)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@400;600;700&display=swap" rel="stylesheet" />
+      <style>{`
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.5); border-radius: 4px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100% { opacity:1; transform: scale(1); } 50% { opacity:0.7; transform: scale(1.05); } }
+        @keyframes wave { 0%,100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+        @keyframes slideIn { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+        @keyframes glow { 0%,100% { box-shadow: 0 0 10px rgba(99,102,241,0.3); } 50% { box-shadow: 0 0 25px rgba(99,102,241,0.7); } }
+        .concept-btn:hover { background: rgba(99,102,241,0.25) !important; transform: translateX(4px); }
+        .control-btn:hover { background: rgba(255,255,255,0.12) !important; transform: scale(1.05); }
+        .control-btn:active { transform: scale(0.97); }
+      `}</style>
+
+      {/* ── TOP NAV BAR ────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: 'rgba(5,8,22,0.9)', borderBottom: '1px solid rgba(99,102,241,0.2)', backdropFilter: 'blur(20px)', zIndex: 50, flexShrink: 0 }}>
+        <Link href={`/library/${params.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', textDecoration: 'none', fontSize: 14, transition: 'color 0.2s' }}>
+          <ChevronLeft size={18} /><span>Back to Library</span>
         </Link>
-        <button
-          onClick={() => setIsMicMuted(m => !m)}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 text-white hover:text-rose-400 disabled:opacity-50 text-xs font-bold uppercase tracking-widest transition-all"
-        >
-          {isMicMuted ? (
-            <><MicOff className="w-3.5 h-3.5 text-rose-500" /> Mic Muted</>
-          ) : (
-            <><Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> Mic Active</>
-          )}
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', animation: 'pulse 2s ease-in-out infinite' }} />
+          <span style={{ color: '#e2e8f0', fontFamily: 'Orbitron, sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VR CLASSROOM</span>
+          <span style={{ color: '#64748b', fontSize: 13 }}>—</span>
+          <span style={{ color: '#94a3b8', fontSize: 13, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resource.title}</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Peers count */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 20, fontSize: 13, color: '#10b981' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+            {PEERS.length + 7} online
+          </div>
+        </div>
       </div>
 
-      <div className="absolute top-5 right-5 z-50 flex items-center gap-2 pointer-events-none">
-        <span className="text-[10px] font-black uppercase tracking-widest text-white/50 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/[0.06] flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-          Live Voice Classroom
-        </span>
-      </div>
+      {/* ── MAIN BODY ───────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px 1fr 280px', gap: 0, overflow: 'hidden' }}>
 
-      {/* ── A-Frame Scene ── */}
-      {/* @ts-ignore */}
-      <a-scene embedded vr-mode-ui="enabled: true" renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true">
-        
-        {/* ── SCENIC WINDOW BACKDROP (Nature environment outside) ── */}
-        {/* @ts-ignore */}
-        <a-sky src="https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=2000&q=80" crossorigin="anonymous" material="opacity: 0.45; color: #1e293b"></a-sky>
+        {/* ── LEFT SIDEBAR: Concepts ──────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(5,8,22,0.8)', borderRight: '1px solid rgba(99,102,241,0.15)', overflow: 'hidden' }}>
+          {/* AI Tutor card */}
+          <div style={{ padding: '20px 16px', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, animation: isSpeaking ? 'glow 1s ease-in-out infinite' : 'none' }}>🤖</div>
+              <div>
+                <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 14 }}>AI Tutor</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: sessionActive ? '#10b981' : '#64748b' }} />
+                  <span style={{ color: sessionActive ? '#10b981' : '#64748b' }}>{sessionActive ? 'Live' : 'Offline'}</span>
+                </div>
+              </div>
+            </div>
 
-        {/* ── COCKPIT ENCLOSURE ARCHITECTURE ── */}
-        {/* Floor */}
-        {/* @ts-ignore */}
-        <a-plane width="16" height="16" color="#050409" rotation="-90 0 0" position="0 -0.5 0" material="roughness: 0.6; metalness: 0.9"></a-plane>
-        
-        {/* Floor concentric glowing ring pathways */}
-        {/* @ts-ignore */}
-        <a-ring radius-inner="1.3" radius-outer="1.32" color="#06b6d4" rotation="-90 0 0" position="0 -0.49 -3" opacity="0.6" material="shader: flat"></a-ring>
-        {/* @ts-ignore */}
-        <a-ring radius-inner="2.6" radius-outer="2.63" color="#a855f7" rotation="-90 0 0" position="0 -0.49 -3" opacity="0.4" material="shader: flat"></a-ring>
+            {/* Soundwave visualizer */}
+            {isSpeaking && (
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28, marginBottom: 10, padding: '0 4px' }}>
+                {[0.3,0.7,1,0.6,0.9,0.4,0.8,0.5,1,0.7,0.4,0.9].map((h, i) => (
+                  <div key={i} style={{ flex: 1, background: 'linear-gradient(to top, #6366f1, #a855f7)', borderRadius: 2, animation: `wave ${0.3 + i * 0.07}s ease-in-out ${i * 0.05}s infinite alternate`, transformOrigin: 'bottom', height: `${h * 100}%` }} />
+                ))}
+              </div>
+            )}
 
-        {/* Curved front metallic walls & pillars */}
-        {/* @ts-ignore */}
-        <a-box width="0.3" height="6" depth="0.3" position="-5.5 2.5 -4" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
-        {/* @ts-ignore */}
-        <a-box width="0.3" height="6" depth="0.3" position="5.5 2.5 -4" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
-        {/* @ts-ignore */}
-        <a-box width="0.3" height="6" depth="0.3" position="-3.5 2.5 -5" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
-        {/* @ts-ignore */}
-        <a-box width="0.3" height="6" depth="0.3" position="3.5 2.5 -5" color="#0f172a" material="roughness: 0.3; metalness: 0.8"></a-box>
+            {/* Transcript */}
+            <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.5, minHeight: 60, maxHeight: 90, overflow: 'hidden' }}>
+              {aiTranscript}
+            </div>
 
-        {/* Ceiling arch */}
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.08" height="11" position="0 4.5 -4.5" rotation="0 0 90" color="#1e293b" material="roughness: 0.4; metalness: 0.8"></a-cylinder>
+            {/* Session controls */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              {!sessionActive ? (
+                <button onClick={startSession} className="control-btn" style={{ flex: 1, padding: '8px 12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'all 0.2s' }}>
+                  <Sparkles size={14} /> Start Session
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => setIsMicMuted(m => !m)} className="control-btn" style={{ flex: 1, padding: '8px 10px', background: isMicMuted ? 'rgba(244,63,94,0.2)' : 'rgba(16,185,129,0.2)', border: `1px solid ${isMicMuted ? 'rgba(244,63,94,0.4)' : 'rgba(16,185,129,0.4)'}`, borderRadius: 8, color: isMicMuted ? '#f43f5e' : '#10b981', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 0.2s' }}>
+                    {isMicMuted ? <MicOff size={13} /> : <Mic size={13} />}
+                    {isMicMuted ? 'Unmute' : 'Mute'}
+                  </button>
+                  <button onClick={endSession} className="control-btn" style={{ flex: 1, padding: '8px 10px', background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)', borderRadius: 8, color: '#f43f5e', fontSize: 12, cursor: 'pointer', transition: 'all 0.2s' }}>
+                    End
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
 
-        {/* Lighting system */}
-        {/* @ts-ignore */}
-        <a-light type="ambient" color="#ffffff" intensity="1.2"></a-light>
-        {/* @ts-ignore */}
-        <a-light type="directional" color="#ffffff" intensity="1.3" position="2 4 1"></a-light>
-        {/* @ts-ignore */}
-        <a-light type="point" color="#06b6d4" intensity="1.0" position="0 3.2 -2.5"></a-light>
-
-        {/* ── CENTERSTAGE TUTOR PODIUM ── */}
-        {/* @ts-ignore */}
-        <a-cylinder radius="0.55" height="0.08" position="0 -0.46 -3.2" color="#0e1726" material="roughness: 0.4; metalness: 0.9"></a-cylinder>
-        {/* @ts-ignore */}
-        <a-ring radius-inner="0.53" radius-outer="0.55" position="0 -0.41 -3.2" rotation="-90 0 0" color="#06b6d4" material="shader: flat"></a-ring>
-
-        {/* ── AI TUTOR AVATAR (Futuristic Sleek Humanoid Robot) ── */}
-        {/* @ts-ignore */}
-        <a-entity
-          position="0 0.8 -3.2"
-          animation="property: position; to: 0 0.9 -3.2; dir: alternate; loop: true; dur: 2400; easing: easeInOutSine"
-        >
-          {/* Head - Sleek white sphere with dark glass visor */}
-          {/* @ts-ignore */}
-          <a-sphere radius="0.12" color="#f8fafc" material="roughness: 0.2; metalness: 0.3"></a-sphere>
-          {/* Visor */}
-          {/* @ts-ignore */}
-          <a-box width="0.15" height="0.05" depth="0.14" position="0 0 0.05" color="#090514" material="roughness: 0.1"></a-box>
-          {/* Glowing Eyes */}
-          {/* @ts-ignore */}
-          <a-sphere radius="0.012" position="-0.03 0 0.12" color="#06b6d4" material="shader: flat"></a-sphere>
-          {/* @ts-ignore */}
-          <a-sphere radius="0.012" position="0.03 0 0.12" color="#06b6d4" material="shader: flat"></a-sphere>
-
-          {/* Torso - Capsule jumpsuit aesthetic */}
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.13" height="0.38" position="0 -0.38 0" color="#f8fafc" material="roughness: 0.2; metalness: 0.4"></a-cylinder>
-          {/* Glowing blue accent rings */}
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.135" height="0.02" position="0 -0.28 0" color="#06b6d4" material="shader: flat"></a-cylinder>
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.135" height="0.02" position="0 -0.46 0" color="#06b6d4" material="shader: flat"></a-cylinder>
-          
-          {/* "AI" logo badge on chest */}
-          {/* @ts-ignore */}
-          <a-text value="AI" width="1.2" color="#06b6d4" position="0 -0.34 0.14" align="center" font="klykov"></a-text>
-
-          {/* Glowing vocal core in chest - pulses in sync with speech */}
-          {/* @ts-ignore */}
-          <a-sphere
-            radius="0.035"
-            position="0 -0.36 0.135"
-            color="#06b6d4"
-            material="shader: flat"
-            animation={isAiSpeaking ? "property: scale; to: 1.4 1.4 1.4; dir: alternate; loop: true; dur: 120" : "property: scale; to: 1.0 1.0 1.0; dir: alternate; loop: true; dur: 1500; easing: easeInOutSine"}
-          ></a-sphere>
-
-          {/* Left arm */}
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.02" height="0.18" position="-0.17 -0.3 0" rotation="30 0 -20" color="#f8fafc"></a-cylinder>
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.018" height="0.18" position="-0.22 -0.42 0.05" rotation="60 0 -10" color="#f8fafc"></a-cylinder>
-
-          {/* Right arm gesturing to screen */}
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.02" height="0.18" position="0.17 -0.3 0.05" rotation="-20 40 40" color="#f8fafc"></a-cylinder>
-          {/* @ts-ignore */}
-          <a-cylinder radius="0.018" height="0.20" position="0.28 -0.22 0.18" rotation="-40 60 20" color="#f8fafc"></a-cylinder>
-
-          {/* Base connector */}
-          {/* @ts-ignore */}
-          <a-cone radius-bottom="0.15" radius-top="0.02" height="0.20" position="0 -0.66 0" color="#0f172a" rotation="180 0 0"></a-cone>
-        </a-entity>
-
-
-        {/* ── MAIN CURVED HOLOGRAPHIC SMARTBOARD (Floating behind the tutor) ── */}
-        {/* @ts-ignore */}
-        <a-entity position="0 1.8 -3.8">
-          {/* Glass backing board */}
-          {/* @ts-ignore */}
-          <a-plane
-            width="4.4"
-            height="2.0"
-            material="shader: flat; color: #080f1e; transparent: true; opacity: 0.85; side: double"
-          >
-            {/* Board glowing border */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="2.38" radius-outer="2.4" scale="1 0.45 1" color="#06b6d4" opacity="0.6" material="shader: flat"></a-ring>
-
-            {/* Smartboard Header */}
-            {/* @ts-ignore */}
-            <a-text
-              value="TODAY'S TOPIC"
-              align="left"
-              width="2.2"
-              color="#06b6d4"
-              position="-2.0 0.8 0.01"
-              font="klykov"
-            ></a-text>
-
-            {/* Topic title */}
-            {/* @ts-ignore */}
-            <a-text
-              value={resource.title}
-              align="left"
-              width="3.8"
-              color="#f43f5e"
-              position="-2.0 0.5 0.01"
-              font="klykov"
-            ></a-text>
-
-            {/* Lecture subtitle text */}
-            {/* @ts-ignore */}
-            <a-text
-              value={tutorText.length > 180 ? tutorText.slice(0, 180) + '...' : tutorText}
-              align="left"
-              width="2.6"
-              color="#ffffff"
-              position="-2.0 -0.1 0.01"
-              wrap-count="36"
-            ></a-text>
-
-            {/* Status bar */}
-            {/* @ts-ignore */}
-            <a-text
-              value={isAiSpeaking ? "• AI TUTOR ONLINE & LECTURING" : "• LISTENING FOR QUESTIONS..."}
-              align="left"
-              width="1.8"
-              color={isAiSpeaking ? "#a855f7" : "#10b981"}
-              position="-2.0 -0.75 0.01"
-              font="klykov"
-            ></a-text>
-
-            {/* Concept select helper */}
-            {/* @ts-ignore */}
-            <a-text
-              value="Gaze select on left panel to change topic"
-              align="left"
-              width="1.4"
-              color="#64748b"
-              position="-2.0 -0.88 0.01"
-            ></a-text>
-          </a-plane>
-
-          {/* Integrated 3D Hologram Projection Field (Right side of the Smartboard) */}
-          {/* @ts-ignore */}
-          <a-entity position="1.1 0 0.1">
-            {/* Projection base ring */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.32" radius-outer="0.34" rotation="90 0 0" position="0 -0.75 0" color="#06b6d4" opacity="0.8" material="shader: flat"></a-ring>
-            
-            {/* Light beam cylinder */}
-            {/* @ts-ignore */}
-            <a-cylinder radius="0.32" height="1.3" position="0 -0.1 0" material="shader: flat; transparent: true; opacity: 0.06; color: #06b6d4; side: double"></a-cylinder>
-
-            {/* Dynamic projected 3D organ model */}
-            {renderOrganModel(activeModel, '#06b6d4', '0 -0.1 0')}
-
-            {/* Floating label above the projected model */}
-            {/* @ts-ignore */}
-            <a-entity look-at-camera position="0 0.65 0">
-              {/* @ts-ignore */}
-              <a-plane width="0.65" height="0.14" material="shader: flat; color: #05030a; transparent: true; opacity: 0.85">
-                {/* @ts-ignore */}
-                <a-text value={activeModel} align="center" width="1.8" color="#06b6d4" font="klykov"></a-text>
-              </a-plane>
-            </a-entity>
-          </a-entity>
-        </a-entity>
-
-
-        {/* ── LEFT HUD PANEL: AI Tutor profile deck ── */}
-        {/* @ts-ignore */}
-        <a-entity position="-2.2 1.4 -2.8" rotation="0 25 0">
-          {/* HUD Backing */}
-          {/* @ts-ignore */}
-          <a-plane width="1.0" height="1.4" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
-            {/* Trim */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.7" radius-outer="0.71" scale="1 1.4 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
-
-            {/* Profile Avatar icon representation */}
-            {/* @ts-ignore */}
-            <a-circle radius="0.08" position="-0.3 0.5 0.01" color="#1e293b">
-              {/* @ts-ignore */}
-              <a-text value="T" width="1.2" color="#06b6d4" align="center"></a-text>
-            </a-circle>
-            
-            {/* Profile Header */}
-            {/* @ts-ignore */}
-            <a-text value="AI TUTOR" width="2.4" color="#06b6d4" position="-0.12 0.5 0.01" font="klykov"></a-text>
-            {/* @ts-ignore */}
-            <a-text value="Online" width="1.8" color="#10b981" position="-0.12 0.38 0.01"></a-text>
-            {/* @ts-ignore */}
-            <a-sphere radius="0.01" position="-0.18 0.38 0.015" color="#10b981"></a-sphere>
-
-            {/* Quick profile bio/status */}
-            {/* @ts-ignore */}
-            <a-text 
-              value="Hello! I am your visual anatomical assistant. Speak to me or select concepts to project 3D details on the holographic Smartboard." 
-              width="1.7" 
-              color="#94a3b8" 
-              position="-0.4 0.05 0.01" 
-              wrap-count="24"
-            ></a-text>
-
-            {/* Glowing Soundwave Visualizer (6 bars pulsing dynamically when AI talks) */}
-            {/* @ts-ignore */}
-            <a-box width="0.02" height="0.1" depth="0.02" position="-0.2 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 3 1; dir: alternate; loop: true; dur: 200" : ""} pointer-events="none"></a-box>
-            {/* @ts-ignore */}
-            <a-box width="0.02" height="0.1" depth="0.02" position="-0.12 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 4.5 1; dir: alternate; loop: true; dur: 250" : ""} pointer-events="none"></a-box>
-            {/* @ts-ignore */}
-            <a-box width="0.02" height="0.1" depth="0.02" position="-0.04 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 2 1; dir: alternate; loop: true; dur: 180" : ""} pointer-events="none"></a-box>
-            {/* @ts-ignore */}
-            <a-box width="0.02" height="0.1" depth="0.02" position="0.04 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 3.5 1; dir: alternate; loop: true; dur: 220" : ""} pointer-events="none"></a-box>
-            {/* @ts-ignore */}
-            <a-box width="0.02" height="0.1" depth="0.02" position="0.12 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 4 1; dir: alternate; loop: true; dur: 260" : ""} pointer-events="none"></a-box>
-            {/* @ts-ignore */}
-            <a-box width="0.02" height="0.1" depth="0.02" position="0.2 -0.45 0.01" color="#06b6d4" animation={isAiSpeaking ? "property: scale; to: 1 2.5 1; dir: alternate; loop: true; dur: 200" : ""} pointer-events="none"></a-box>
-          </a-plane>
-        </a-entity>
-
-
-        {/* ── RIGHT HUD PANEL: Classroom / Peers Online List ── */}
-        {/* @ts-ignore */}
-        <a-entity position="2.2 1.4 -2.8" rotation="0 -25 0">
-          {/* HUD Backing */}
-          {/* @ts-ignore */}
-          <a-plane width="1.0" height="1.4" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
-            {/* Trim */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.7" radius-outer="0.71" scale="1 1.4 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
-
-            {/* Header */}
-            {/* @ts-ignore */}
-            <a-text value="CLASSROOM" width="2.4" color="#06b6d4" position="0 0.55 0.01" align="center" font="klykov"></a-text>
-            {/* @ts-ignore */}
-            <a-text value="12 Students Online" width="1.6" color="#10b981" position="0 0.42 0.01" align="center"></a-text>
-
-            {/* Peer rows */}
-            {/* Alex */}
-            {/* @ts-ignore */}
-            <a-circle radius="0.02" position="-0.3 0.24 0.01" color="#1e293b"></a-circle>
-            {/* @ts-ignore */}
-            <a-text value="Alex" width="1.8" color="#ffffff" position="-0.2 0.24 0.01"></a-text>
-            {/* @ts-ignore */}
-            <a-sphere radius="0.01" position="0.3 0.24 0.015" color="#10b981"></a-sphere>
-
-            {/* Sam */}
-            {/* @ts-ignore */}
-            <a-circle radius="0.02" position="-0.3 0.12 0.01" color="#1e293b"></a-circle>
-            {/* @ts-ignore */}
-            <a-text value="Sam" width="1.8" color="#ffffff" position="-0.2 0.12 0.01"></a-text>
-            {/* @ts-ignore */}
-            <a-sphere radius="0.01" position="0.3 0.12 0.015" color="#10b981"></a-sphere>
-
-            {/* Taylor */}
-            {/* @ts-ignore */}
-            <a-circle radius="0.02" position="-0.3 0.0 0.01" color="#1e293b"></a-circle>
-            {/* @ts-ignore */}
-            <a-text value="Taylor" width="1.8" color="#ffffff" position="-0.2 0.0 0.01"></a-text>
-            {/* @ts-ignore */}
-            <a-sphere radius="0.01" position="0.3 0.0 0.015" color="#10b981"></a-sphere>
-
-            {/* Jordan */}
-            {/* @ts-ignore */}
-            <a-circle radius="0.02" position="-0.3 -0.12 0.01" color="#1e293b"></a-circle>
-            {/* @ts-ignore */}
-            <a-text value="Jordan" width="1.8" color="#ffffff" position="-0.2 -0.12 0.01"></a-text>
-            {/* @ts-ignore */}
-            <a-sphere radius="0.01" position="0.3 -0.12 0.015" color="#10b981"></a-sphere>
-
-            {/* Riley */}
-            {/* @ts-ignore */}
-            <a-circle radius="0.02" position="-0.3 -0.24 0.01" color="#1e293b"></a-circle>
-            {/* @ts-ignore */}
-            <a-text value="Riley" width="1.8" color="#ffffff" position="-0.2 -0.24 0.01"></a-text>
-            {/* @ts-ignore */}
-            <a-sphere radius="0.01" position="0.3 -0.24 0.015" color="#10b981"></a-sphere>
-
-            {/* +6 more label */}
-            {/* @ts-ignore */}
-            <a-text value="+ 7 more online" width="1.6" color="#06b6d4" position="0 -0.42 0.01" align="center"></a-text>
-          </a-plane>
-        </a-entity>
-
-
-        {/* ── LOWER LEFT HUD: Lesson Progress Card ── */}
-        {/* @ts-ignore */}
-        <a-entity position="-1.8 0.55 -2.2" rotation="-15 20 0">
-          {/* Backing */}
-          {/* @ts-ignore */}
-          <a-plane width="0.75" height="0.5" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
-            {/* Trim */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.3" radius-outer="0.31" scale="1 0.66 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
-
-            {/* Header */}
-            {/* @ts-ignore */}
-            <a-text value="LESSON PROGRESS" width="1.6" color="#06b6d4" position="0 0.18 0.01" align="center" font="klykov"></a-text>
-
-            {/* Progress Circular Dial Ring */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.1" radius-outer="0.12" position="-0.16 -0.06 0.01" color="#1e293b" material="shader: flat"></a-ring>
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.1" radius-outer="0.125" theta-length="162" position="-0.16 -0.06 0.015" color="#06b6d4" material="shader: flat"></a-ring>
-            {/* Progress text */}
-            {/* @ts-ignore */}
-            <a-text value="45%" width="2.2" color="#ffffff" position="-0.16 -0.06 0.02" align="center" font="klykov"></a-text>
-
-            {/* Side Progress Status */}
-            {/* @ts-ignore */}
-            <a-text value="Completed" width="1.6" color="#94a3b8" position="0.18 -0.04 0.01" align="center"></a-text>
-            {/* @ts-ignore */}
-            <a-text value="Keep it up!" width="1.4" color="#10b981" position="0.18 -0.15 0.01" align="center"></a-text>
-          </a-plane>
-        </a-entity>
-
-
-        {/* ── LOWER RIGHT HUD: Next Up Topic Deck ── */}
-        {/* @ts-ignore */}
-        <a-entity position="1.8 0.55 -2.2" rotation="-15 -20 0">
-          {/* Backing */}
-          {/* @ts-ignore */}
-          <a-plane width="0.75" height="0.5" material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double">
-            {/* Trim */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.3" radius-outer="0.31" scale="1 0.66 1" color="#06b6d4" opacity="0.3" material="shader: flat"></a-ring>
-
-            {/* Header */}
-            {/* @ts-ignore */}
-            <a-text value="NEXT UP" width="1.6" color="#06b6d4" position="0 0.18 0.01" align="center" font="klykov"></a-text>
-
-            {/* Topic item */}
-            {/* @ts-ignore */}
-            <a-text value="DNA & Genes" width="1.8" color="#ffffff" position="0 -0.04 0.01" align="center" font="klykov"></a-text>
-            {/* @ts-ignore */}
-            <a-text value="15 min duration" width="1.4" color="#64748b" position="0 -0.16 0.01" align="center"></a-text>
-
-            {/* Decorative rotating DNA model inside a small project space */}
-            {/* @ts-ignore */}
-            <a-entity position="0 0.08 0.015" animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear">
-              {/* @ts-ignore */}
-              <a-sphere radius="0.015" position="-0.15 0 0" color="#a855f7"></a-sphere>
-              {/* @ts-ignore */}
-              <a-sphere radius="0.015" position="-0.08 0.03 0.03" color="#06b6d4"></a-sphere>
-              {/* @ts-ignore */}
-              <a-sphere radius="0.015" position="0 0.05 0.05" color="#a855f7"></a-sphere>
-              {/* @ts-ignore */}
-              <a-sphere radius="0.015" position="0.08 0.03 0.03" color="#06b6d4"></a-sphere>
-              {/* @ts-ignore */}
-              <a-sphere radius="0.015" position="0.15 0 0" color="#a855f7"></a-sphere>
-              {/* @ts-ignore */}
-              <a-cylinder radius="0.002" height="0.35" rotation="0 0 90" color="#ffffff" opacity="0.3"></a-cylinder>
-            </a-entity>
-          </a-plane>
-        </a-entity>
-
-
-        {/* ── CONCEPTS SELECT MENU: Curving on the left side ── */}
-        {/* @ts-ignore */}
-        <a-entity position="-1.7 0.6 -2.4" rotation="0 20 0">
-          {/* Menu Backing plate */}
-          {/* @ts-ignore */}
-          <a-plane
-            width="0.8"
-            height="1.0"
-            material="shader: flat; color: #020205; transparent: true; opacity: 0.85; side: double"
-          >
-            {/* Border */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.5" radius-outer="0.51" scale="1 1.25 1" color="#06b6d4" opacity="0.4" material="shader: flat"></a-ring>
-
-            {/* Title */}
-            {/* @ts-ignore */}
-            <a-text
-              value="LESSON CONCEPTS"
-              align="center"
-              width="1.8"
-              color="#06b6d4"
-              position="0 0.4 0.01"
-              font="klykov"
-            ></a-text>
-
-            {/* Menu List of concepts */}
-            {concepts.map((concept: any, idx: number) => {
-              const buttonY = 0.22 - idx * 0.12
-              const isSelected = activeModel === concept.label
-              return (
-                // @ts-ignore
-                <a-plane
-                  key={concept.id}
-                  class="raycastable"
-                  width="0.7"
-                  height="0.09"
-                  position={`0 ${buttonY} 0.02`}
-                  material={`shader: flat; color: ${isSelected ? '#f43f5e' : '#0c0a12'}; transparent: true; opacity: 0.90`}
-                  menu-trigger={`label: ${concept.label}; desc: ${concept.description}`}
+          {/* Concept list */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px' }}>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, paddingLeft: 4 }}>Concepts</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(vrLayout?.nodes || []).map(node => (
+                <button
+                  key={node.id}
+                  className="concept-btn"
+                  onClick={() => selectNode(node)}
+                  style={{ width: '100%', padding: '12px 14px', background: activeNode?.id === node.id ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)', border: `1px solid ${activeNode?.id === node.id ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.06)'}`, borderLeft: `3px solid ${node.color}`, borderRadius: 10, textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s' }}
                 >
-                  {/* Glowing active indicator */}
-                  {isSelected && (
-                    // @ts-ignore
-                    <a-sphere radius="0.012" position="-0.30 0 0.01" color="#ffffff" material="shader: flat"></a-sphere>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: node.color, flexShrink: 0 }} />
+                    <span style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 500 }}>{node.label}</span>
+                  </div>
+                  {activeNode?.id === node.id && (
+                    <p style={{ color: '#94a3b8', fontSize: 11.5, marginTop: 6, lineHeight: 1.4, paddingLeft: 16 }}>{node.description}</p>
                   )}
-                  {/* @ts-ignore */}
-                  <a-text
-                    value={concept.label}
-                    align="center"
-                    width="1.5"
-                    color="#ffffff"
-                    position="0 0 0.01"
-                  ></a-text>
-                </a-plane>
-              )
-            })}
-          </a-plane>
-        </a-entity>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
+        {/* ── CENTER: Sketchfab 3D Model Viewer ──────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+          {/* Model header */}
+          {activeNode && (
+            <div style={{ padding: '14px 20px', background: 'rgba(5,8,22,0.6)', borderBottom: '1px solid rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: activeNode.color }} />
+                <div>
+                  <h2 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: 0 }}>{activeNode.label}</h2>
+                  <p style={{ color: '#64748b', fontSize: 12, margin: '2px 0 0' }}>{activeNode.description}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {sketchfabUrl && (
+                  <button onClick={() => setModelExpanded(e => !e)} className="control-btn" style={{ padding: '6px 10px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#818cf8', cursor: 'pointer', transition: 'all 0.2s' }}>
+                    <Maximize2 size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
-        {/* ── COCKPIT BOTTOM CONSOLE / DASHBOARD (Curving in front of user) ── */}
-        {/* @ts-ignore */}
-        <a-entity position="0 -0.42 -1.2" rotation="-38 0 0">
-          {/* Curved Desk backing panel */}
-          {/* @ts-ignore */}
-          <a-plane
-            width="1.45"
-            height="0.36"
-            material="shader: flat; color: #020205; transparent: true; opacity: 0.92; side: double"
-          >
-            {/* Glowing neon ring runner */}
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.72" radius-outer="0.73" scale="1 0.25 1" color="#06b6d4" opacity="0.6" material="shader: flat"></a-ring>
+          {/* Model viewer area */}
+          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+            {/* Background grid */}
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px)', backgroundSize: '40px 40px', pointerEvents: 'none' }} />
 
-            {/* Center Glowing dial core */}
-            {/* @ts-ignore */}
-            <a-sphere
-              radius="0.07"
-              position="0 0 0.03"
-              color="#06b6d4"
-              material="shader: flat; opacity: 0.9"
-              animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine"
-            ></a-sphere>
-            {/* @ts-ignore */}
-            <a-ring radius-inner="0.085" radius-outer="0.10" position="0 0 0.035" color="#a855f7" opacity="0.8" material="shader: flat"></a-ring>
+            {loadingModel && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, animation: 'slideIn 0.3s ease' }}>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', border: '3px solid rgba(99,102,241,0.2)', borderTopColor: '#6366f1', animation: 'spin 1s linear infinite' }} />
+                <p style={{ color: '#64748b', fontSize: 14 }}>Loading 3D model…</p>
+              </div>
+            )}
 
-            {/* ── Left Console Controls ── */}
-            {/* Mic Toggle button */}
-            {/* @ts-ignore */}
-            <a-plane
-              class="raycastable"
-              width="0.22"
-              height="0.18"
-              position="-0.38 0 0.02"
-              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
-              console-btn="action: mic"
+            {!loadingModel && sketchfabUrl && (
+              <div style={{ position: 'absolute', inset: 0, animation: 'slideIn 0.4s ease' }}>
+                <iframe
+                  key={sketchfabUrl}
+                  src={sketchfabUrl}
+                  title={activeNode?.label || '3D Model'}
+                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                  allow="autoplay; fullscreen; xr-spatial-tracking"
+                  allowFullScreen
+                />
+              </div>
+            )}
+
+            {!loadingModel && !sketchfabUrl && activeNode && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: 40, animation: 'slideIn 0.3s ease' }}>
+                {/* Animated placeholder */}
+                <div style={{ width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${activeNode.color}33, transparent)`, border: `2px solid ${activeNode.color}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 3s ease-in-out infinite' }}>
+                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: `${activeNode.color}44`, border: `2px solid ${activeNode.color}` }} />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <h3 style={{ color: '#e2e8f0', fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{activeNode.label}</h3>
+                  <p style={{ color: '#64748b', fontSize: 14, maxWidth: 340, lineHeight: 1.6 }}>{activeNode.description}</p>
+                  <p style={{ color: '#475569', fontSize: 12, marginTop: 16 }}>No 3D model found for this concept. Add your Sketchfab API token in backend .env to enable dynamic search.</p>
+                </div>
+              </div>
+            )}
+
+            {!loadingModel && !activeNode && (
+              <div style={{ textAlign: 'center', color: '#475569' }}>
+                <Sparkles size={48} style={{ margin: '0 auto 16px', color: '#6366f1', opacity: 0.5 }} />
+                <p style={{ fontSize: 16 }}>Select a concept to view its 3D model</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── BOTTOM CONTROLS ────────────────────────────────────────────── */}
+          <div style={{ padding: '12px 20px', background: 'rgba(5,8,22,0.8)', borderTop: '1px solid rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0 }}>
+            <button
+              className="control-btn"
+              onClick={() => setIsMicMuted(m => !m)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: isMicMuted ? 'rgba(244,63,94,0.15)' : 'rgba(16,185,129,0.15)', border: `1px solid ${isMicMuted ? 'rgba(244,63,94,0.4)' : 'rgba(16,185,129,0.4)'}`, borderRadius: 10, color: isMicMuted ? '#f43f5e' : '#10b981', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              {/* @ts-ignore */}
-              <a-sphere radius="0.012" position="-0.07 0.04 0.02" color={isMicMuted ? "#f43f5e" : "#10b981"} material="shader: flat"></a-sphere>
-              {/* @ts-ignore */}
-              <a-text value="Mic" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
-              {/* @ts-ignore */}
-              <a-text value={isMicMuted ? "MUTED" : "ACTIVE"} width="1.4" color={isMicMuted ? "#f43f5e" : "#10b981"} position="0 -0.05 0.02" align="center"></a-text>
-            </a-plane>
+              {isMicMuted ? <MicOff size={16} /> : <Mic size={16} />}
+              {isMicMuted ? 'Unmuted' : 'Mic On'}
+            </button>
 
-            {/* Raise Hand button */}
-            {/* @ts-ignore */}
-            <a-plane
-              class="raycastable"
-              width="0.22"
-              height="0.18"
-              position="-0.15 0 0.02"
-              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
-              console-btn="action: hand"
+            <button
+              className="control-btn"
+              onClick={() => setIsHandRaised(h => !h)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: isHandRaised ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isHandRaised ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, color: isHandRaised ? '#a855f7' : '#94a3b8', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              {/* @ts-ignore */}
-              <a-sphere radius="0.012" position="-0.08 0.04 0.02" color={isHandRaised ? "#a855f7" : "#64748b"} material="shader: flat"></a-sphere>
-              {/* @ts-ignore */}
-              <a-text value="Hand" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
-              {/* @ts-ignore */}
-              <a-text value={isHandRaised ? "RAISED" : "OFF"} width="1.4" color={isHandRaised ? "#a855f7" : "#64748b"} position="0 -0.05 0.02" align="center"></a-text>
-            </a-plane>
+              <Hand size={16} />
+              {isHandRaised ? 'Hand Raised' : 'Raise Hand'}
+            </button>
 
-            {/* ── Right Console Controls ── */}
-            {/* Ask AI button */}
-            {/* @ts-ignore */}
-            <a-plane
-              class="raycastable"
-              width="0.22"
-              height="0.18"
-              position="0.15 0 0.02"
-              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
-              console-btn="action: ask"
+            <button
+              className="control-btn"
+              onClick={() => !sessionActive && startSession()}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.4)', borderRadius: 10, color: '#06b6d4', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              {/* @ts-ignore */}
-              <a-sphere radius="0.012" position="-0.08 0.04 0.02" color="#06b6d4" material="shader: flat"></a-sphere>
-              {/* @ts-ignore */}
-              <a-text value="Ask AI" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
-              {/* @ts-ignore */}
-              <a-text value="TRIGGER" width="1.4" color="#06b6d4" position="0 -0.05 0.02" align="center"></a-text>
-            </a-plane>
+              <MessageCircle size={16} />
+              Ask AI
+            </button>
 
-            {/* Study Notes Toggle button */}
-            {/* @ts-ignore */}
-            <a-plane
-              class="raycastable"
-              width="0.22"
-              height="0.18"
-              position="0.38 0 0.02"
-              material="shader: flat; color: #07050e; transparent: true; opacity: 0.85"
-              console-btn="action: notes"
+            <button
+              className="control-btn"
+              onClick={() => setShowNotes(n => !n)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: showNotes ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${showNotes ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, color: showNotes ? '#a855f7' : '#94a3b8', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              {/* @ts-ignore */}
-              <a-sphere radius="0.012" position="-0.08 0.04 0.02" color={showNotesOverlay ? "#a855f7" : "#64748b"} material="shader: flat"></a-sphere>
-              {/* @ts-ignore */}
-              <a-text value="Notes" width="1.8" color="#ffffff" position="0.01 0.04 0.02" align="center" font="klykov"></a-text>
-              {/* @ts-ignore */}
-              <a-text value={showNotesOverlay ? "OPEN" : "CLOSED"} width="1.4" color={showNotesOverlay ? "#a855f7" : "#64748b"} position="0 -0.05 0.02" align="center"></a-text>
-            </a-plane>
-          </a-plane>
-        </a-entity>
+              <BookOpen size={16} />
+              Notes
+            </button>
+          </div>
+        </div>
 
+        {/* ── RIGHT SIDEBAR ───────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(5,8,22,0.8)', borderLeft: '1px solid rgba(99,102,241,0.15)', overflow: 'hidden' }}>
+          {/* Classmates */}
+          <div style={{ padding: '20px 16px', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Classmates Online</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {PEERS.map(name => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: `linear-gradient(135deg, hsl(${name.charCodeAt(0) * 5 % 360},70%,50%), hsl(${name.charCodeAt(0) * 5 + 60 % 360},70%,40%))`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                    {name[0]}
+                  </div>
+                  <span style={{ color: '#e2e8f0', fontSize: 13, flex: 1 }}>{name}</span>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                </div>
+              ))}
+              <div style={{ padding: '8px 10px', color: '#64748b', fontSize: 12 }}>+ 7 more online</div>
+            </div>
+          </div>
 
-        {/* ── FLOATING NOTES OVERLAY BOARD (Materializes in front when Notes is clicked) ── */}
-        {showNotesOverlay && (
-          // @ts-ignore
-          <a-entity look-at-camera position="0 1.6 -1.8">
-            {/* Overlay card */}
-            {/* @ts-ignore */}
-            <a-plane width="1.5" height="1.1" material="shader: flat; color: #020106; transparent: false; side: double">
-              {/* Glowing outline */}
-              {/* @ts-ignore */}
-              <a-ring radius-inner="0.65" radius-outer="0.66" scale="1 1.45 1" color="#a855f7" opacity="0.8" material="shader: flat"></a-ring>
-              
-              {/* Header */}
-              {/* @ts-ignore */}
-              <a-text value="STUDY NOTES TEXTBOOK" align="center" width="2.0" color="#a855f7" position="0 0.45 0.01" font="klykov"></a-text>
-              {/* @ts-ignore */}
-              <a-text value={resource.title} align="center" width="1.8" color="#06b6d4" position="0 0.35 0.01" font="klykov"></a-text>
+          {/* Lesson Progress */}
+          <div style={{ padding: '16px', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Lesson Progress</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              {/* Circle progress */}
+              <svg width="56" height="56" viewBox="0 0 56 56" style={{ flexShrink: 0 }}>
+                <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(99,102,241,0.15)" strokeWidth="4" />
+                <circle cx="28" cy="28" r="22" fill="none" stroke="#6366f1" strokeWidth="4" strokeDasharray={`${2 * Math.PI * 22 * 0.45} ${2 * Math.PI * 22 * 0.55}`} strokeDashoffset={2 * Math.PI * 22 * 0.25} strokeLinecap="round" style={{ transform: 'rotate(-90deg)', transformOrigin: '28px 28px' }} />
+                <text x="28" y="33" textAnchor="middle" fill="#e2e8f0" fontSize="12" fontWeight="700">45%</text>
+              </svg>
+              <div>
+                <div style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 600 }}>In Progress</div>
+                <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
+                  {activeNode ? `Studying: ${activeNode.label}` : 'Select a concept'}
+                </div>
+              </div>
+            </div>
+          </div>
 
-              {/* Notes content (Truncated to fit layout beautifully) */}
-              {/* @ts-ignore */}
-              <a-text
-                value={resource.content ? resource.content.slice(0, 360) + '...' : 'No notes written for this kit. Speak to the AI tutor to write notes!'}
-                align="left"
-                width="1.35"
-                color="#ffffff"
-                position="-0.65 0.02 0.01"
-                wrap-count="28"
-              ></a-text>
+          {/* Concept map mini */}
+          <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>All Topics</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {(vrLayout?.nodes || []).map((node, i) => (
+                <div key={node.id} onClick={() => selectNode(node)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: activeNode?.id === node.id ? 'rgba(99,102,241,0.15)' : 'transparent', cursor: 'pointer', transition: 'all 0.15s' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: node.color, flexShrink: 0 }} />
+                  <span style={{ color: activeNode?.id === node.id ? '#e2e8f0' : '#94a3b8', fontSize: 12.5 }}>{node.label}</span>
+                  {activeNode?.id === node.id && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#6366f1', marginLeft: 'auto' }} />}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
-              {/* Close Button */}
-              {/* @ts-ignore */}
-              <a-plane
-                class="raycastable"
-                width="0.30"
-                height="0.11"
-                position="0 -0.42 0.02"
-                material="shader: flat; color: #f43f5e"
-                console-btn="action: notes"
-              >
-                {/* @ts-ignore */}
-                <a-text value="CLOSE NOTES" align="center" width="1.6" color="#ffffff" position="0 0 0.01"></a-text>
-              </a-plane>
-            </a-plane>
-          </a-entity>
-        )}
-
-
-        {/* ── VR First-Person Camera with center locked Cursor ── */}
-        {/* @ts-ignore */}
-        <a-camera look-controls wasd-controls position="0 1.6 0.5">
-          {/* @ts-ignore */}
-          <a-cursor
-            raycaster="objects: .raycastable"
-            fuse="true"
-            fuse-timeout="1200"
-            color="#f43f5e"
-            scale="0.6 0.6 0.6"
-            animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dur: 1200; from: 0.6 0.6 0.6; to: 0.15 0.15 0.15"
-            animation__leave="property: scale; startEvents: mouseleave; easing: easeOutQuad; dur: 400; to: 0.6 0.6 0.6"
-          ></a-cursor>
-        </a-camera>
-
-      {/* @ts-ignore */}
-      </a-scene>
+      {/* ── NOTES OVERLAY ──────────────────────────────────────────────────── */}
+      {showNotes && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'slideIn 0.3s ease' }}>
+          <div style={{ width: '90%', maxWidth: 680, maxHeight: '80vh', background: 'linear-gradient(135deg, #0a0f2e, #050816)', border: '1px solid rgba(168,85,247,0.4)', borderRadius: 20, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(168,85,247,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <BookOpen size={18} color="#a855f7" />
+                <h3 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: 0 }}>Study Notes</h3>
+              </div>
+              <button onClick={() => setShowNotes(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              <h4 style={{ color: '#a855f7', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>{resource.title}</h4>
+              {activeNode && (
+                <div style={{ marginBottom: 20, padding: '14px 16px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12 }}>
+                  <div style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: 6, fontSize: 14 }}>{activeNode.label}</div>
+                  <div style={{ color: '#94a3b8', fontSize: 13, lineHeight: 1.6 }}>{activeNode.description}</div>
+                </div>
+              )}
+              <div style={{ color: '#94a3b8', fontSize: 14, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                {resource.content ? resource.content.slice(0, 2000) : 'No notes available yet. Start an AI tutor session to generate notes!'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

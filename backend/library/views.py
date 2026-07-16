@@ -18,6 +18,7 @@ from .youtube import process_youtube_url
 from .pdf_extractor import extract_pdf_text
 from ai_assistant.services import AIService
 from core.throttling import UploadRateThrottle, AIRateThrottle
+from .sketchfab_service import get_model_uid, get_embed_url
 
 logger = logging.getLogger('nitemind')
 
@@ -646,32 +647,36 @@ class ResourceVRLayoutView(APIView):
         
         prompt = (
             f"You are a 3D visual design assistant for a WebVR educational app.\n"
-            f"Analyze this study material and create a concept map of the most important concepts.\n\n"
+            f"Analyze this study material and create a concept map of the most important concepts.\n"
+            f"This could be ANY subject: biology, chemistry, physics, history, geography, math, " 
+            f"engineering, computer science, economics, literature, art, music, or anything else.\n\n"
             f"Topic: {subject}\n"
             f"Overview: {overview.get('summary', '')[:300]}\n"
             f"Key Sections:\n{sections_summary}\n\n"
             "IMPORTANT: Return ONLY valid JSON. No markdown, no code fences, no explanation.\n\n"
-            "Each node must have ONE of these exact type values (controls the 3D shape rendered):\n"
-            "  'organelle'  -> biology cell sphere with orbital ring (cells, organelles, biological structures)\n"
-            "  'nucleus'    -> biology cell sphere with orbital ring (nucleus, control centers, core concepts)\n"
-            "  'enzyme'     -> two interlocked torus rings (enzymes, catalysts, chemical agents, hormones)\n"
-            "  'vessel'     -> cylinder with glow bands (tubes, intestines, ducts, vessels, tracts, pathways)\n"
-            "  'organ'      -> pulsating box (organs, chambers, stomach, liver, heart, reservoirs)\n"
-            "  'molecule'   -> two interlocked torus rings (molecules, compounds, nutrients, vitamins)\n"
-            "  'atom'       -> sphere with equatorial ring (atoms, ions, particles, elements)\n"
-            "  'default'    -> glowing sphere with ring (general concepts, facts, processes, steps)\n\n"
-            "Use vivid hex colors appropriate to biology:\n"
-            "  Red #ef4444 for organs, Purple #8b5cf6 for enzymes, Cyan #06b6d4 for vessels,\n"
-            "  Green #10b981 for organelles, Orange #f59e0b for molecules, Rose #f43f5e for nucleus.\n\n"
+            "Each node MUST have a 'sketchfab_keyword' field — a short 1-3 word search term\n"
+            "that best describes what 3D model should represent this concept on Sketchfab.\n"
+            "Examples: 'human heart', 'water molecule', 'roman colosseum', 'pendulum', 'dna helix'\n\n"
+            "Each node must have ONE of these exact type values:\n"
+            "  'object'     -> physical object, structure, organ, artefact, device\n"
+            "  'concept'    -> abstract idea, process, theory, principle, law\n"
+            "  'event'      -> historical event, reaction, phenomenon, occurrence\n"
+            "  'entity'     -> person, organism, element, compound, material\n"
+            "  'default'    -> anything else\n\n"
+            "Use vivid, subject-appropriate hex colors:\n"
+            "  Red #ef4444, Purple #8b5cf6, Cyan #06b6d4, Green #10b981,\n"
+            "  Orange #f59e0b, Rose #f43f5e, Blue #3b82f6, Yellow #eab308.\n\n"
             "Labels: max 4 words. Descriptions: exactly 1 factual sentence.\n"
             "Generate 4 to 7 nodes and edges connecting related concepts.\n\n"
             "Return JSON in this exact format:\n"
             "{\n"
             '  "nodes": [\n'
-            '    {"id": "n1", "type": "organ", "color": "#ef4444", "label": "Stomach", "description": "Churns food with gastric acid and pepsin to form chyme."}\n'
+            '    {"id": "n1", "type": "object", "color": "#ef4444", "label": "Human Heart", '
+            '"description": "A muscular organ that pumps blood throughout the body.", '
+            '"sketchfab_keyword": "human heart"}\n'
             '  ],\n'
             '  "edges": [\n'
-            '    {"from": "n1", "to": "n2", "color": "#ffffff", "label": "sends chyme to"}\n'
+            '    {"from": "n1", "to": "n2", "color": "#ffffff", "label": "pumps blood to"}\n'
             '  ]\n'
             "}"
         )
@@ -691,3 +696,24 @@ class ResourceVRLayoutView(APIView):
             logger.error(f"Failed to generate VR layout: {e}")
             return Response({"error": f"Failed to generate layout: {str(e)}"}, status=500)
 
+
+class SketchfabModelView(APIView):
+    """Searches Sketchfab for the best free 3D model matching an educational keyword."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        keyword = request.query_params.get('q', '').strip()
+        if not keyword:
+            return Response({'error': 'Query parameter ?q= is required'}, status=400)
+
+        uid = get_model_uid(keyword)
+        if not uid:
+            return Response({'found': False, 'keyword': keyword})
+
+        return Response({
+            'found': True,
+            'keyword': keyword,
+            'uid': uid,
+            'embed_url': get_embed_url(uid),
+            'viewer_url': f'https://sketchfab.com/models/{uid}',
+        })
