@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import { Loader2, ChevronLeft, Sparkles, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
 
 declare global {
   namespace JSX {
@@ -17,32 +16,13 @@ declare global {
       'a-octahedron': any;
       'a-sphere': any;
       'a-box': any;
+      'a-cylinder': any;
       'a-ring': any;
       'a-plane': any;
       'a-text': any;
       'a-cursor': any;
     }
   }
-}
-
-// Curated 3D Models dictionary mapped to standard layout node types
-const GLB_ASSETS: Record<string, string> = {
-  server: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/glTF-Binary/SciFiHelmet.glb',
-  database: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/glTF-Binary/Lantern.glb',
-  client_device: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-  organelle: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-  nucleus: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-  heart: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Heart/glTF-Binary/Heart.glb'
-}
-
-// Normalization scales for GLB assets (prevents giant model overlaps)
-const MODEL_SCALES: Record<string, string> = {
-  server: '0.18 0.18 0.18',
-  database: '0.02 0.02 0.02',
-  client_device: '0.35 0.35 0.35',
-  organelle: '0.015 0.015 0.015',
-  nucleus: '0.015 0.015 0.015',
-  heart: '0.035 0.035 0.035'
 }
 
 // Pre-calculated semicircle layout coordinates centered around the user camera
@@ -55,6 +35,15 @@ const SEMICIRCLE_POSITIONS = [
   '0.6 1.5 -3.1',  // Inner Right
   '1.3 1.5 -2.7',  // Mid Right
   '2.0 1.5 -2.2',  // Far Right
+]
+
+// Twinkling stars database coordinates
+const STARS = [
+  { x: -5, y: 4, z: -5 }, { x: 5, y: 3, z: -6 }, { x: -3, y: 6, z: -8 },
+  { x: 2, y: 5, z: -7 }, { x: -6, y: 3, z: 2 }, { x: 6, y: 4, z: 3 },
+  { x: -2, y: 5, z: 6 }, { x: 3, y: 6, z: 5 }, { x: 0, y: 7, z: -4 },
+  { x: -4, y: 4, z: 4 }, { x: 4, y: 5, z: -2 }, { x: -1, y: 6, z: -3 },
+  { x: 5, y: 6, z: 4 }, { x: -5, y: 5, z: -3 }, { x: 1, y: 4, z: -5 }
 ]
 
 export default function VRPage({ params }: { params: { id: string } }) {
@@ -201,11 +190,6 @@ export default function VRPage({ params }: { params: { id: string } }) {
     )
   }
 
-  const notes = resource.ai_notes_json || {}
-  const subject = resource.subject || resource.title
-  const skyboxPrompt = `equirectangular 360 panorama of ${subject}, detailed scientific visualization, 8k resolution, virtual reality workspace`
-  const skyboxUrl = notes.vr_skybox_url || `https://image.pollinations.ai/prompt/${encodeURIComponent(skyboxPrompt)}?width=1024&height=512&enhance=false`
-
   // Map AI layout nodes to semicircle layout to prevent overlapping
   const nodes = (vrLayout.nodes || []).map((node: any, idx: number) => ({
     ...node,
@@ -241,31 +225,41 @@ export default function VRPage({ params }: { params: { id: string } }) {
       {/* @ts-ignore */}
       <a-scene embedded vr-mode-ui="enabled: true">
         
-        {/* Skybox with CORS crossorigin parameter */}
+        {/* Solid deep space background — completely CORS safe */}
         {/* @ts-ignore */}
-        <a-sky src={skyboxUrl} rotation="0 -90 0" crossorigin="anonymous"></a-sky>
+        <a-sky color="#030006"></a-sky>
+
+        {/* Twinkling Space Stars details */}
+        {STARS.map((s, i) => (
+          // @ts-ignore
+          <a-sphere
+            key={i}
+            position={`${s.x} ${s.y} ${s.z}`}
+            radius="0.03"
+            color="#ffffff"
+            material="shader: flat"
+            animation="property: scale; to: 0.1 0.1 0.1; dir: alternate; loop: true; dur: 1200; easing: easeInOutQuad"
+          ></a-sphere>
+        ))}
 
         {/* Floor grid / concentric glowing rings deck */}
         {/* @ts-ignore */}
-        <a-ring radius-inner="0" radius-outer="5" color="#030006" rotation="-90 0 0" position="0 -0.5 0"></a-ring>
+        <a-ring radius-inner="0" radius-outer="5" color="#010003" rotation="-90 0 0" position="0 -0.5 0"></a-ring>
         {/* @ts-ignore */}
-        <a-ring radius-inner="1" radius-outer="1.01" color="#f43f5e" opacity="0.15" rotation="-90 0 0" position="0 -0.49 0"></a-ring>
+        <a-ring radius-inner="1" radius-outer="1.01" color="#f43f5e" opacity="0.15" rotation="-90 0 0" position="0 -0.49 0" material="shader: flat"></a-ring>
         {/* @ts-ignore */}
-        <a-ring radius-inner="2" radius-outer="2.01" color="#f43f5e" opacity="0.1" rotation="-90 0 0" position="0 -0.49 0"></a-ring>
+        <a-ring radius-inner="2" radius-outer="2.01" color="#f43f5e" opacity="0.1" rotation="-90 0 0" position="0 -0.49 0" material="shader: flat"></a-ring>
         {/* @ts-ignore */}
-        <a-ring radius-inner="3" radius-outer="3.01" color="#f43f5e" opacity="0.05" rotation="-90 0 0" position="0 -0.49 0"></a-ring>
+        <a-ring radius-inner="3" radius-outer="3.01" color="#f43f5e" opacity="0.05" rotation="-90 0 0" position="0 -0.49 0" material="shader: flat"></a-ring>
 
         {/* Ambient Lights */}
         {/* @ts-ignore */}
-        <a-light type="ambient" intensity="0.6" color="#ffffff"></a-light>
+        <a-light type="ambient" intensity="0.5" color="#ffffff"></a-light>
         {/* @ts-ignore */}
         <a-light type="directional" intensity="0.8" position="2 4 3" color="#ffffff"></a-light>
 
         {/* ── Render AI layout nodes ── */}
         {nodes.map((node: any) => {
-          const modelPath = GLB_ASSETS[node.type]
-          const scale = MODEL_SCALES[node.type] || '0.2 0.2 0.2'
-
           return (
             // @ts-ignore
             <a-entity 
@@ -273,57 +267,82 @@ export default function VRPage({ params }: { params: { id: string } }) {
               position={node.assignedPosition}
               interactive-panel={`title: ${node.label}; content: ${node.description || ''}`}
             >
-              {/* Glowing Hologram pedastal/ring */}
+              {/* Glowing Hologram pedestal/ring */}
               {/* @ts-ignore */}
               <a-ring
-                radius-inner="0.32"
-                radius-outer="0.34"
+                radius-inner="0.28"
+                radius-outer="0.3"
                 rotation="90 0 0"
                 position="0 -0.45 0"
                 color={node.color || '#f43f5e'}
-                opacity="0.75"
-                animation="property: scale; to: 1.08 1.08 1.08; dir: alternate; loop: true; dur: 1200; easing: easeInOutQuad"
+                opacity="0.8"
+                material="shader: flat"
+                animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 1500; easing: easeInOutQuad"
               ></a-ring>
 
-              {/* If a pre-defined GLTF asset model exists, render it */}
-              {modelPath ? (
+              {/* Procedural Holographic Geometry — CORS safe & instantly loads */}
+              {node.type === 'server' ? (
+                // Server stack primitive representation
                 // @ts-ignore
-                <a-entity
-                  gltf-model={modelPath}
-                  scale={scale}
-                  animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
-                ></a-entity>
-              ) : node.type === 'atom' ? (
-                // Procedural Atom
-                // @ts-ignore
-                <a-entity>
+                <a-entity position="0 0.1 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear">
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.12" color={node.color || '#e2e8f0'}></a-sphere>
+                  <a-box width="0.3" height="0.08" depth="0.3" color={node.color || '#f43f5e'} material="roughness: 0.2; metalness: 0.8" position="0 0.12 0"></a-box>
                   {/* @ts-ignore */}
-                  <a-ring radius-inner="0.25" radius-outer="0.27" rotation="45 45 0" color={node.color || '#f43f5e'} opacity="0.8"></a-ring>
+                  <a-box width="0.3" height="0.08" depth="0.3" color={node.color || '#f43f5e'} material="roughness: 0.2; metalness: 0.8" position="0 0 0"></a-box>
                   {/* @ts-ignore */}
-                  <a-ring radius-inner="0.25" radius-outer="0.27" rotation="-45 45 0" color={node.color || '#f43f5e'} opacity="0.8"></a-ring>
+                  <a-box width="0.3" height="0.08" depth="0.3" color={node.color || '#f43f5e'} material="roughness: 0.2; metalness: 0.8" position="0 -0.12 0"></a-box>
                 </a-entity>
-              ) : node.type === 'molecule' ? (
-                // Procedural Molecule
+              ) : node.type === 'database' ? (
+                // Cylinder database primitive representation
                 // @ts-ignore
-                <a-entity>
+                <a-entity position="0 0.1 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear">
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.08" color="#ef4444" position="-0.12 0 0"></a-sphere>
+                  <a-cylinder radius="0.16" height="0.3" color={node.color || '#3b82f6'} material="roughness: 0.2; metalness: 0.8"></a-cylinder>
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.12" color="#3b82f6" position="0 0 0"></a-sphere>
+                  <a-ring radius-inner="0.18" radius-outer="0.2" rotation="90 0 0" position="0 0.08 0" color="#ffffff" opacity="0.8" material="shader: flat"></a-ring>
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.08" color="#ef4444" position="0.12 0 0"></a-sphere>
+                  <a-ring radius-inner="0.18" radius-outer="0.2" rotation="90 0 0" position="0 -0.08 0" color="#ffffff" opacity="0.8" material="shader: flat"></a-ring>
+                </a-entity>
+              ) : node.type === 'client_device' ? (
+                // Screen device primitive representation
+                // @ts-ignore
+                <a-entity position="0 0.1 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 12000; easing: linear">
+                  {/* @ts-ignore */}
+                  <a-box width="0.35" height="0.22" depth="0.03" color={node.color || '#10b981'} material="roughness: 0.1; metalness: 0.9"></a-box>
+                  {/* @ts-ignore */}
+                  <a-cylinder radius="0.02" height="0.1" position="0 -0.12 0" color="#a1a1aa"></a-cylinder>
+                  {/* @ts-ignore */}
+                  <a-box width="0.18" height="0.02" depth="0.12" position="0 -0.17 0" color="#a1a1aa"></a-box>
+                </a-entity>
+              ) : node.type === 'organelle' || node.type === 'nucleus' ? (
+                // Biology Organelle / Nucleus orbitals representation
+                // @ts-ignore
+                <a-entity position="0 0.1 0" animation="property: rotation; to: 360 360 0; loop: true; dur: 10000; easing: linear">
+                  {/* @ts-ignore */}
+                  <a-sphere radius="0.12" color={node.color || '#a855f7'} material="roughness: 0.3; metalness: 0.7"></a-sphere>
+                  {/* @ts-ignore */}
+                  <a-ring radius-inner="0.2" radius-outer="0.22" rotation="45 45 0" color={node.color || '#a855f7'} opacity="0.8" material="shader: flat"></a-ring>
+                  {/* @ts-ignore */}
+                  <a-ring radius-inner="0.2" radius-outer="0.22" rotation="-45 45 0" color={node.color || '#a855f7'} opacity="0.8" material="shader: flat"></a-ring>
+                </a-entity>
+              ) : node.type === 'heart' ? (
+                // Heart beat pulsating primitive representation
+                // @ts-ignore
+                <a-entity position="0 0.1 0" animation="property: scale; to: 1.25 1.25 1.25; dir: alternate; loop: true; dur: 850; easing: easeInOutQuad">
+                  {/* @ts-ignore */}
+                  <a-octahedron radius="0.18" color={node.color || '#ef4444'} material="roughness: 0.2; metalness: 0.8"></a-octahedron>
                 </a-entity>
               ) : (
-                // Glowing State Machine Node or Generic Sphere
+                // Standard default generic floating sphere
                 // @ts-ignore
-                <a-sphere
-                  radius="0.2"
-                  color={node.color || '#f43f5e'}
-                  material="roughness: 0.1; metalness: 0.9; opacity: 0.85"
-                  animation="property: scale; to: 1.06 1.06 1.06; dir: alternate; loop: true; dur: 1200; easing: easeInOutQuad"
-                ></a-sphere>
+                <a-entity position="0 0.1 0" animation="property: rotation; to: 360 0 360; loop: true; dur: 10000; easing: linear">
+                  {/* @ts-ignore */}
+                  <a-sphere
+                    radius="0.15"
+                    color={node.color || '#e2e8f0'}
+                    material="roughness: 0.2; metalness: 0.8"
+                  ></a-sphere>
+                </a-entity>
               )}
 
               {/* Floating label above the model */}
@@ -387,9 +406,8 @@ export default function VRPage({ params }: { params: { id: string } }) {
           rotation="-20 0 0"
           width="2.5"
           height="0.9"
-          color="#060608"
-          opacity="0.95"
-          material="roughness: 0.9; metalness: 0.3; strokeColor: #f43f5e; strokeWidth: 2"
+          color="#0a0a0d"
+          material="shader: flat; transparent: true; opacity: 0.9"
         >
           {/* @ts-ignore */}
           <a-text
