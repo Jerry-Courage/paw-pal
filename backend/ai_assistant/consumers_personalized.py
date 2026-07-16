@@ -1,6 +1,6 @@
 """
 Personalised Learning Live Session Consumer
-Proxies audio between the browser and Gemini 2.0 Flash Live API,
+Proxies audio between the browser and Gemini 2.5 Flash Native Audio Live API,
 pre-loading user chat history and study material contexts.
 """
 import json

@@ -35,6 +35,28 @@ const GLB_ASSETS: Record<string, string> = {
   heart: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Heart/glTF-Binary/Heart.glb'
 }
 
+// Normalization scales for GLB assets (prevents giant model overlaps)
+const MODEL_SCALES: Record<string, string> = {
+  server: '0.18 0.18 0.18',
+  database: '0.02 0.02 0.02',
+  client_device: '0.35 0.35 0.35',
+  organelle: '0.015 0.015 0.015',
+  nucleus: '0.015 0.015 0.015',
+  heart: '0.035 0.035 0.035'
+}
+
+// Pre-calculated semicircle layout coordinates centered around the user camera
+// Spreads out 7 positions evenly to prevent any overlapping or crowding.
+const SEMICIRCLE_POSITIONS = [
+  '-2.0 1.5 -2.2', // Far Left
+  '-1.3 1.5 -2.7', // Mid Left
+  '-0.6 1.5 -3.1', // Inner Left
+  '0.0 1.5 -3.3',  // Center
+  '0.6 1.5 -3.1',  // Inner Right
+  '1.3 1.5 -2.7',  // Mid Right
+  '2.0 1.5 -2.2',  // Far Right
+]
+
 export default function VRPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   const [aframeLoaded, setAframeLoaded] = useState(false)
@@ -104,7 +126,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
           el.addEventListener('mouseenter', () => {
             el.setAttribute('animation', {
               property: 'scale',
-              to: '1.2 1.2 1.2',
+              to: '1.15 1.15 1.15',
               dur: 150,
               easing: 'easeOutQuad'
             })
@@ -152,8 +174,8 @@ export default function VRPage({ params }: { params: { id: string } }) {
       <div className="w-full h-screen bg-black flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-10 h-10 text-rose-500 animate-spin" />
         <div className="text-center">
-          <p className="text-sm font-black text-white uppercase tracking-widest">Designing 3D Space...</p>
-          <p className="text-[10px] text-slate-500 mt-1">AI is reading notes and mapping 3D topology layout</p>
+          <p className="text-sm font-black text-white uppercase tracking-widest">Constructing VR Space...</p>
+          <p className="text-[10px] text-slate-500 mt-1">AI is analyzing notes and designing the 3D topology</p>
         </div>
       </div>
     )
@@ -164,9 +186,9 @@ export default function VRPage({ params }: { params: { id: string } }) {
       <div className="w-full h-screen bg-black flex flex-col items-center justify-center p-6 space-y-4">
         <AlertCircle className="w-12 h-12 text-rose-500" />
         <div className="text-center">
-          <h2 className="text-lg font-black text-white uppercase">VR Model Generation Failed</h2>
+          <h2 className="text-lg font-black text-white uppercase">VR Generation Failed</h2>
           <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-normal">
-            We couldn't construct the 3D model layout for this topic. Please try again.
+            We couldn't compile the 3D visual scene layout for this topic. Please try again.
           </p>
         </div>
         <Link 
@@ -184,8 +206,13 @@ export default function VRPage({ params }: { params: { id: string } }) {
   const skyboxPrompt = `equirectangular 360 panorama of ${subject}, detailed scientific visualization, 8k resolution, virtual reality workspace`
   const skyboxUrl = notes.vr_skybox_url || `https://image.pollinations.ai/prompt/${encodeURIComponent(skyboxPrompt)}?width=1024&height=512&enhance=false`
 
-  // Extract Nodes & Edges
-  const nodes = vrLayout.nodes || []
+  // Map AI layout nodes to semicircle layout to prevent overlapping
+  const nodes = (vrLayout.nodes || []).map((node: any, idx: number) => ({
+    ...node,
+    assignedPosition: SEMICIRCLE_POSITIONS[idx % SEMICIRCLE_POSITIONS.length],
+    index: idx
+  }))
+
   const edges = vrLayout.edges || []
 
   // Helpers to get connection vector coordinates
@@ -214,65 +241,88 @@ export default function VRPage({ params }: { params: { id: string } }) {
       {/* @ts-ignore */}
       <a-scene embedded vr-mode-ui="enabled: true">
         
-        {/* Skybox */}
+        {/* Skybox with CORS crossorigin parameter */}
         {/* @ts-ignore */}
-        <a-sky src={skyboxUrl} rotation="0 -90 0"></a-sky>
+        <a-sky src={skyboxUrl} rotation="0 -90 0" crossorigin="anonymous"></a-sky>
+
+        {/* Floor grid / concentric glowing rings deck */}
+        {/* @ts-ignore */}
+        <a-ring radius-inner="0" radius-outer="5" color="#030006" rotation="-90 0 0" position="0 -0.5 0"></a-ring>
+        {/* @ts-ignore */}
+        <a-ring radius-inner="1" radius-outer="1.01" color="#f43f5e" opacity="0.15" rotation="-90 0 0" position="0 -0.49 0"></a-ring>
+        {/* @ts-ignore */}
+        <a-ring radius-inner="2" radius-outer="2.01" color="#f43f5e" opacity="0.1" rotation="-90 0 0" position="0 -0.49 0"></a-ring>
+        {/* @ts-ignore */}
+        <a-ring radius-inner="3" radius-outer="3.01" color="#f43f5e" opacity="0.05" rotation="-90 0 0" position="0 -0.49 0"></a-ring>
 
         {/* Ambient Lights */}
         {/* @ts-ignore */}
-        <a-light type="ambient" intensity="0.5" color="#ffffff"></a-light>
+        <a-light type="ambient" intensity="0.6" color="#ffffff"></a-light>
         {/* @ts-ignore */}
         <a-light type="directional" intensity="0.8" position="2 4 3" color="#ffffff"></a-light>
 
         {/* ── Render AI layout nodes ── */}
-        {nodes.map((node: any, idx: number) => {
+        {nodes.map((node: any) => {
           const modelPath = GLB_ASSETS[node.type]
+          const scale = MODEL_SCALES[node.type] || '0.2 0.2 0.2'
 
           return (
             // @ts-ignore
             <a-entity 
               key={node.id} 
-              position={node.position}
+              position={node.assignedPosition}
               interactive-panel={`title: ${node.label}; content: ${node.description || ''}`}
             >
+              {/* Glowing Hologram pedastal/ring */}
+              {/* @ts-ignore */}
+              <a-ring
+                radius-inner="0.32"
+                radius-outer="0.34"
+                rotation="90 0 0"
+                position="0 -0.45 0"
+                color={node.color || '#f43f5e'}
+                opacity="0.75"
+                animation="property: scale; to: 1.08 1.08 1.08; dir: alternate; loop: true; dur: 1200; easing: easeInOutQuad"
+              ></a-ring>
+
               {/* If a pre-defined GLTF asset model exists, render it */}
               {modelPath ? (
                 // @ts-ignore
                 <a-entity
                   gltf-model={modelPath}
-                  scale="0.8 0.8 0.8"
-                  animation="property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear"
+                  scale={scale}
+                  animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
                 ></a-entity>
               ) : node.type === 'atom' ? (
                 // Procedural Atom
                 // @ts-ignore
                 <a-entity>
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.15" color={node.color || '#3b82f6'}></a-sphere>
+                  <a-sphere radius="0.12" color={node.color || '#e2e8f0'}></a-sphere>
                   {/* @ts-ignore */}
-                  <a-ring radius-inner="0.3" radius-outer="0.32" rotation="45 45 0" color={node.color || '#3b82f6'}></a-ring>
+                  <a-ring radius-inner="0.25" radius-outer="0.27" rotation="45 45 0" color={node.color || '#f43f5e'} opacity="0.8"></a-ring>
                   {/* @ts-ignore */}
-                  <a-ring radius-inner="0.3" radius-outer="0.32" rotation="-45 45 0" color={node.color || '#3b82f6'}></a-ring>
+                  <a-ring radius-inner="0.25" radius-outer="0.27" rotation="-45 45 0" color={node.color || '#f43f5e'} opacity="0.8"></a-ring>
                 </a-entity>
               ) : node.type === 'molecule' ? (
                 // Procedural Molecule
                 // @ts-ignore
                 <a-entity>
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.1" color="#ef4444" position="-0.15 0 0"></a-sphere>
+                  <a-sphere radius="0.08" color="#ef4444" position="-0.12 0 0"></a-sphere>
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.15" color="#3b82f6" position="0 0 0"></a-sphere>
+                  <a-sphere radius="0.12" color="#3b82f6" position="0 0 0"></a-sphere>
                   {/* @ts-ignore */}
-                  <a-sphere radius="0.1" color="#ef4444" position="0.15 0 0"></a-sphere>
+                  <a-sphere radius="0.08" color="#ef4444" position="0.12 0 0"></a-sphere>
                 </a-entity>
               ) : (
                 // Glowing State Machine Node or Generic Sphere
                 // @ts-ignore
                 <a-sphere
-                  radius="0.25"
+                  radius="0.2"
                   color={node.color || '#f43f5e'}
-                  material="roughness: 0.1; metalness: 0.9; opacity: 0.9"
-                  animation="property: scale; to: 1.05 1.05 1.05; dir: alternate; loop: true; dur: 1000"
+                  material="roughness: 0.1; metalness: 0.9; opacity: 0.85"
+                  animation="property: scale; to: 1.06 1.06 1.06; dir: alternate; loop: true; dur: 1200; easing: easeInOutQuad"
                 ></a-sphere>
               )}
 
@@ -280,7 +330,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
               {/* @ts-ignore */}
               <a-text
                 value={node.label}
-                position="0 0.45 0"
+                position="0 0.5 0"
                 align="center"
                 width="1.8"
                 color="#ffffff"
@@ -297,13 +347,13 @@ export default function VRPage({ params }: { params: { id: string } }) {
 
           if (!fromNode || !toNode) return null
 
-          // Parse position coordinates "x y z"
-          const [x1, y1, z1] = fromNode.position.split(' ').map(Number)
-          const [x2, y2, z2] = toNode.position.split(' ').map(Number)
+          // Parse position coordinates "x y z" from semicircle assignment
+          const [x1, y1, z1] = fromNode.assignedPosition.split(' ').map(Number)
+          const [x2, y2, z2] = toNode.assignedPosition.split(' ').map(Number)
 
-          // Calculate connection label position (midpoint of the vector)
+          // Calculate connection label position (midpoint of the vector, slightly raised)
           const midX = (x1 + x2) / 2
-          const midY = (y1 + y2) / 2 + 0.1
+          const midY = (y1 + y2) / 2 + 0.12
           const midZ = (z1 + z2) / 2
 
           return (
@@ -312,7 +362,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
               {/* glowing connection line */}
               {/* @ts-ignore */}
               <a-entity
-                line={`start: ${x1} ${y1} ${z1}; end: ${x2} ${y2} ${z2}; color: ${edge.color || '#a1a1aa'}; opacity: 0.4`}
+                line={`start: ${x1} ${y1} ${z1}; end: ${x2} ${y2} ${z2}; color: ${edge.color || '#a1a1aa'}; opacity: 0.35`}
               ></a-entity>
               
               {/* edge label card */}
@@ -321,7 +371,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 value={edge.label || ''}
                 position={`${midX} ${midY} ${midZ}`}
                 align="center"
-                width="1.2"
+                width="1.3"
                 color="#94a3b8"
                 font="klykov"
               ></a-text>
@@ -337,7 +387,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
           rotation="-20 0 0"
           width="2.5"
           height="0.9"
-          color="#09090b"
+          color="#060608"
           opacity="0.95"
           material="roughness: 0.9; metalness: 0.3; strokeColor: #f43f5e; strokeWidth: 2"
         >
@@ -348,17 +398,17 @@ export default function VRPage({ params }: { params: { id: string } }) {
             align="center"
             width="2.2"
             color="#f43f5e"
-            position="0 0.25 0.02"
+            position="0 0.22 0.02"
             font="klykov"
           ></a-text>
           {/* @ts-ignore */}
           <a-text
             id="detail-text"
-            value="Gaze at any floating model/node to load notes"
+            value="Gaze at any floating hologram node to explore concepts"
             align="center"
             width="2.0"
             color="#94a3b8"
-            position="0 -0.1 0.02"
+            position="0 -0.12 0.02"
             font="klykov"
           ></a-text>
         </a-plane>
