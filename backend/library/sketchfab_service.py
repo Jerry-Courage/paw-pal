@@ -70,20 +70,30 @@ SKETCHFAB_SEARCH_URL = "https://api.sketchfab.com/v3/models"
 def get_model_uid(keyword: str) -> str | None:
     """
     Returns the best Sketchfab model UID for an educational keyword.
-    Only uses the live API if SKETCHFAB_API_TOKEN is set.
-    Falls back to None if not found — caller handles the no-model case.
+    Uses targeted search with anatomy/science filters to avoid irrelevant results.
     """
     keyword_lower = keyword.lower().strip()
 
-    # Try Sketchfab API search first (most reliable)
     token = os.getenv('SKETCHFAB_API_TOKEN', '').strip()
-    if token:
+    if not token:
+        logger.warning("[Sketchfab] No SKETCHFAB_API_TOKEN set.")
+        return None
+
+    # Build education-specific search queries (most specific first)
+    search_queries = [
+        f"{keyword} anatomy",
+        f"{keyword} biology",
+        f"{keyword} science education",
+        f"{keyword} medical",
+        keyword,
+    ]
+
+    for query in search_queries:
         try:
             params = {
-                'q': keyword,
-                'downloadable': 'false',
+                'q': query,
                 'sort_by': '-likeCount',
-                'count': 3,
+                'count': 10,
                 'type': 'models',
             }
             headers = {'Authorization': f'Token {token}'}
@@ -91,15 +101,26 @@ def get_model_uid(keyword: str) -> str | None:
             resp.raise_for_status()
             data = resp.json()
             results = data.get('results', [])
-            if results:
-                uid = results[0].get('uid')
-                if uid:
-                    logger.info(f"[Sketchfab] API found model for '{keyword}': {uid}")
-                    return uid
-        except Exception as e:
-            logger.warning(f"[Sketchfab] API search failed for '{keyword}': {e}")
 
-    logger.warning(f"[Sketchfab] No SKETCHFAB_API_TOKEN set and no curated model for '{keyword}'")
+            # Filter: model name must contain the keyword or a close variant
+            keyword_words = set(keyword_lower.split())
+            for model in results:
+                name = model.get('name', '').lower()
+                tags = [t.get('name', '').lower() for t in model.get('tags', [])]
+                categories = [c.get('name', '').lower() for c in model.get('categories', [])]
+                all_text = name + ' ' + ' '.join(tags) + ' ' + ' '.join(categories)
+
+                # Check if any keyword word appears in the model metadata
+                if any(word in all_text for word in keyword_words if len(word) > 3):
+                    uid = model.get('uid')
+                    if uid:
+                        logger.info(f"[Sketchfab] Matched '{keyword}' → '{model.get('name')}' ({uid})")
+                        return uid
+
+        except Exception as e:
+            logger.warning(f"[Sketchfab] Search failed for '{query}': {e}")
+
+    logger.warning(f"[Sketchfab] No relevant model found for '{keyword}'")
     return None
 
 
