@@ -367,7 +367,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
 
           ws.send(JSON.stringify({
             type: 'start',
-            technique: 'free_chat',
+            technique: 'vr_tutor',
             resource_title: resource.title,
             resource_context: context,
             voice: 'Aoede'

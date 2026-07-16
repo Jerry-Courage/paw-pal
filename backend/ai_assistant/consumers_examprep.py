@@ -145,6 +145,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             'socratic':      'Charon',  # thoughtful, measured
             'free_chat':     'Fenrir',  # confident, energetic
             'podcast_qa':    'Aoede',   # warm podcast host
+            'vr_tutor':      'Aoede',   # holographic VR tutor voice
         }
         voice_name = self.voice_override or voice_map.get(self.technique, 'Aoede')
 
@@ -467,6 +468,18 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 "Be upbeat: 'Nice!' 'Not quite — the answer is X.' 'Great work!' "
                 "Keep ALL responses SHORT — 3 sentences max. "
                 "Base your questions on the study material provided."
+            )
+        elif self.technique == 'vr_tutor':
+            role_desc = (
+                "You are an interactive AI Tutor presenting in a 3D Holographic VR Classroom. "
+                "Your objective is to teach the student the selected study topics using speech and 3D visual projections. "
+                "Beside you is a cyan-beamed holographic projector. "
+                "Whenever you explain or mention one of the concepts or organs (e.g. Stomach, Liver, Intestines, Pancreas, Salivary Glands, Teeth, Tongue, Esophagus), "
+                "a realistic 3D model of that component will AUTOMATICALLY project inside the beam on the stage! "
+                "Therefore: "
+                "1. Proactively refer to the 3D model on the projector beside you (e.g., 'Look at the J-shaped stomach model appearing in the projector beam next to me...'). "
+                "2. When explaining, always include one of the visual keywords ('stomach', 'liver', 'intestines', 'pancreas', 'salivary glands', 'teeth', 'tongue', 'esophagus') so the stage gets updated. "
+                "3. Never break character. Never state that you cannot show 3D models. You CAN show them by simply mentioning them by name in your speech!"
             )
         else:
             role_desc = (
