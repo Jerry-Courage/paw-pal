@@ -620,7 +620,61 @@ class DebugResourceView(APIView):
             'has_study_kit': resource.has_study_kit,
             'processing_progress': resource.processing_progress,
             'status_text': resource.status_text,
+            'error_message': resource.status_text if resource.status == 'error' else '',
             'ai_notes_json_keys': list(resource.ai_notes_json.keys()) if isinstance(resource.ai_notes_json, dict) else type(resource.ai_notes_json).__name__,
             'ai_notes_json_len': len(resource.ai_notes_json) if resource.ai_notes_json else 0,
         })
 
+
+class ResourceVRLayoutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        resource = get_object_or_404(Resource, Q(id=pk) & (Q(owner=request.user) | Q(is_public=True)))
+        
+        # Check if already cached
+        notes = resource.ai_notes_json or {}
+        vr_layout = notes.get('vr_layout')
+        if vr_layout:
+            return Response(vr_layout)
+            
+        overview = notes.get('overview', {})
+        sections = notes.get('sections', [])
+        
+        sections_summary = "\n".join([f"- {s.get('title')}: {s.get('content', '')[:150]}" for s in sections[:5]])
+        subject = resource.subject or resource.title
+        
+        prompt = (
+            f"You are a 3D spatial design assistant for a WebVR learning app.\n"
+            f"Analyze this study material and design a 3D schematic/concept topology map representing the main ideas, architecture, or biological structure described.\n\n"
+            f"Topic: {subject}\n"
+            f"Overview: {overview.get('summary', '')[:300]}\n"
+            f"Key Sections:\n{sections_summary}\n\n"
+            "Return a structured JSON object containing a list of 'nodes' (each with an id, type, position, color, and label) and 'edges' (connections between node ids).\n"
+            "Keep the scene clean and spacing comfortable for VR (coordinates x, y, z in meters, centering around y=1.2 to y=1.8, and z=-1.5 to z=-3.5).\n\n"
+            "For each node, map its visual meaning to one of these allowed 3D model types: 'server' (infrastructure rack), 'database' (cylinder stack), 'client_device' (laptop/phone), 'organelle' (mitochondria), 'nucleus' (cell center), 'cell_membrane', 'atom', 'molecule', or 'state_node' (generic sphere).\n\n"
+            "Format the response exactly as this JSON:\n"
+            "{\n"
+            '  "nodes": [\n'
+            '    {"id": "node1", "type": "server"|"database"|"client_device"|"organelle"|"nucleus"|"cell_membrane"|"atom"|"molecule"|"state_node", "position": "x y z", "color": "#hex", "label": "Short label", "description": "1-sentence fact about this component"}\n'
+            '  ],\n'
+            '  "edges": [\n'
+            '    {"from": "node1", "to": "node2", "color": "#hex", "label": "Relation text"}\n'
+            '  ]\n'
+            "}"
+        )
+        
+        try:
+            ai = AIService()
+            raw_result = ai.chat_sync([{'role': 'user', 'content': prompt}])
+            result = ai._parse_json(raw_result, {})
+            
+            # Cache layout in notes
+            notes['vr_layout'] = result
+            resource.ai_notes_json = notes
+            resource.save(update_fields=['ai_notes_json'])
+            
+            return Response(result)
+        except Exception as e:
+            logger.error(f"Failed to generate VR layout: {e}")
+            return Response({"error": f"Failed to generate layout: {str(e)}"}, status=500)

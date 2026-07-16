@@ -73,6 +73,7 @@ export const libraryApi = {
   getCuratedResources: (type?: string) =>
     api.get('/library/resources/curated/', { params: type ? { type } : {} }),
   getResource: (id: number) => api.get(`/library/resources/${id}/`),
+  getVRLayout: (id: number) => api.get(`/library/resources/${id}/vr-layout/`),
   updateResource: (id: number, data: any) => api.patch(`/library/resources/${id}/`, data),
   updateResourceCover: (id: number, file: File) => {
     const fd = new FormData()
