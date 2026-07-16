@@ -25,22 +25,10 @@ declare global {
   }
 }
 
-// Rich biology color palette — maps to vibrant node colours
+// Rich biology color palette
 const NODE_COLORS = [
   '#f43f5e', '#8b5cf6', '#06b6d4', '#10b981',
   '#f59e0b', '#ec4899', '#3b82f6', '#a3e635',
-]
-
-// Semicircle positions — close to camera, spread at eye level
-// These are hand-tuned for a dramatic, immersive feel
-const SEMICIRCLE_POSITIONS = [
-  { x: -2.4, y: 1.6, z: -2.0 },
-  { x: -1.5, y: 1.6, z: -2.6 },
-  { x: -0.6, y: 1.6, z: -2.9 },
-  { x:  0.0, y: 1.6, z: -3.0 },
-  { x:  0.6, y: 1.6, z: -2.9 },
-  { x:  1.5, y: 1.6, z: -2.6 },
-  { x:  2.4, y: 1.6, z: -2.0 },
 ]
 
 export default function VRPage({ params }: { params: { id: string } }) {
@@ -73,7 +61,6 @@ export default function VRPage({ params }: { params: { id: string } }) {
     }, 100)
   }
 
-
   useEffect(() => {
     const scriptId = 'aframe-cdn-script'
     if (document.getElementById(scriptId)) { setAframeLoaded(true); return }
@@ -86,7 +73,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
     document.head.appendChild(script)
   }, [])
 
-  // Register hover component once A-Frame is ready
+  // Register hover and billboard components once A-Frame is ready
   useEffect(() => {
     if (!aframeLoaded || !(window as any).AFRAME) return
     const AFRAME = (window as any).AFRAME
@@ -108,6 +95,19 @@ export default function VRPage({ params }: { params: { id: string } }) {
             el.setAttribute('animation__scale', 'property: scale; to: 1 1 1; dur: 200; easing: easeOutQuad')
           })
         },
+      })
+    }
+
+    if (!AFRAME.components['look-at-camera']) {
+      AFRAME.registerComponent('look-at-camera', {
+        tick: function () {
+          const cameraEl = document.querySelector('[camera]') as any
+          if (!cameraEl) return
+          const THREE = (window as any).THREE || AFRAME.THREE
+          const cameraPosition = new THREE.Vector3()
+          cameraEl.object3D.getWorldPosition(cameraPosition)
+          ;(this.el as any).object3D.lookAt(cameraPosition)
+        }
       })
     }
   }, [aframeLoaded])
@@ -140,11 +140,31 @@ export default function VRPage({ params }: { params: { id: string } }) {
     )
   }
 
-  const nodes = (vrLayout.nodes as any[]).map((node, idx) => ({
-    ...node,
-    pos: SEMICIRCLE_POSITIONS[idx % SEMICIRCLE_POSITIONS.length],
-    color: node.color || NODE_COLORS[idx % NODE_COLORS.length],
-  }))
+  // Calculate layout dynamically to prevent ANY overlaps
+  const nodesRaw = vrLayout.nodes as any[]
+  const count = nodesRaw.length
+  const radius = 3.6
+  const centerZ = -1.5 // Center pivot point
+  
+  // Calculate dynamic angle spread based on node count
+  const startAngle = -Math.PI / 1.5 // approx -120 deg
+  const endAngle = Math.PI / 1.5     // approx 120 deg
+  const angleStep = count > 1 ? (endAngle - startAngle) / (count - 1) : 0
+
+  const positionedNodes = nodesRaw.map((node, idx) => {
+    const angle = startAngle + idx * angleStep
+    // Circular coordinates around the viewer
+    const x = Math.sin(angle) * radius
+    const z = centerZ - Math.cos(angle) * (radius * 0.8)
+    const y = 1.5
+
+    return {
+      ...node,
+      pos: { x, y, z },
+      color: node.color || NODE_COLORS[idx % NODE_COLORS.length],
+      index: idx
+    }
+  })
 
   const edges = (vrLayout.edges as any[]) || []
 
@@ -202,7 +222,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
             <a-sphere
               key={`star-${i}`}
               position={`${px} ${py} ${pz}`}
-              radius="0.025"
+              radius="0.02"
               material={`shader: flat; color: #ffffff; opacity: ${0.3 + Math.random() * 0.5}`}
               animation={`property: scale; to: ${0.3 + Math.random() * 0.5} ${0.3 + Math.random() * 0.5} ${0.3 + Math.random() * 0.5}; dir: alternate; loop: true; dur: ${800 + Math.floor(Math.random() * 1400)}; easing: easeInOutSine`}
             ></a-sphere>
@@ -211,27 +231,67 @@ export default function VRPage({ params }: { params: { id: string } }) {
 
         {/* ── Ground deck ── */}
         {/* @ts-ignore */}
-        <a-ring radius-inner="0.01" radius-outer="4" color="#0a0010" material="shader: flat; opacity: 0.9" rotation="-90 0 0" position="0 0.01 -1.5"></a-ring>
-        {[0.8, 1.6, 2.4, 3.2].map((r, i) => (
+        <a-ring radius-inner="0.01" radius-outer="4.5" color="#0a0010" material="shader: flat; opacity: 0.9" rotation="-90 0 0" position="0 0.01 -1.5"></a-ring>
+        {[0.8, 1.6, 2.4, 3.2, 4.0].map((r, i) => (
           // @ts-ignore
           <a-ring
             key={`ring-${i}`}
             radius-inner={r - 0.015}
             radius-outer={r}
-            material={`shader: flat; color: #f43f5e; opacity: ${0.15 - i * 0.03}`}
+            material={`shader: flat; color: #f43f5e; opacity: ${0.15 - i * 0.025}`}
             rotation="-90 0 0"
             position="0 0.02 -1.5"
           ></a-ring>
         ))}
 
         {/* ── Node entities ── */}
-        {nodes.map((node: any, idx: number) => {
+        {positionedNodes.map((node: any, idx: number) => {
           const { pos, color } = node
-          const label = (node.label || 'Node').slice(0, 28)
+          const label = (node.label || 'Node').slice(0, 24)
           const desc = (node.description || '').slice(0, 160)
 
-          // Pick geometry based on type
-          const type = (node.type || 'default').toLowerCase()
+          // Fallback type keyword mapping for robust geometry detection
+          const nodeType = (node.type || '').toLowerCase()
+          const cleanLabel = label.toLowerCase()
+
+          // Staggered Y position for labels to completely prevent text overlaps
+          const labelY = idx % 2 === 0 ? 0.75 : 0.48
+
+          // 1. Organ (box representation)
+          const isOrgan = nodeType.includes('organ') || 
+                          cleanLabel.includes('stomach') || 
+                          cleanLabel.includes('pancreas') || 
+                          cleanLabel.includes('gland') || 
+                          cleanLabel.includes('mouth') || 
+                          cleanLabel.includes('tongue') || 
+                          cleanLabel.includes('liver') || 
+                          cleanLabel.includes('heart')
+
+          // 2. Vessel (cylinder representation)
+          const isVessel = nodeType.includes('vessel') || 
+                           cleanLabel.includes('esophagus') || 
+                           cleanLabel.includes('intestine') || 
+                           cleanLabel.includes('throat') || 
+                           cleanLabel.includes('vein') || 
+                           cleanLabel.includes('artery') || 
+                           cleanLabel.includes('duct') || 
+                           cleanLabel.includes('tract')
+
+          // 3. Enzyme / Molecule (double torus representation)
+          const isChemical = nodeType.includes('enzyme') || 
+                             nodeType.includes('molecule') || 
+                             cleanLabel.includes('digestion') || 
+                             cleanLabel.includes('chemical') || 
+                             cleanLabel.includes('acid') || 
+                             cleanLabel.includes('pepsin') || 
+                             cleanLabel.includes('amylase') || 
+                             cleanLabel.includes('bile')
+
+          // 4. Organelle / Cell structures
+          const isOrganelle = nodeType.includes('organelle') || 
+                              nodeType.includes('nucleus') || 
+                              cleanLabel.includes('cell') || 
+                              cleanLabel.includes('nucleus')
 
           return (
             // @ts-ignore
@@ -240,7 +300,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
               position={`${pos.x} ${pos.y} ${pos.z}`}
               node-hover={`label: ${label}; desc: ${desc}`}
             >
-              {/* Glowing pedestal ring flat-shaded so always visible */}
+              {/* Glowing pedestal ring */}
               {/* @ts-ignore */}
               <a-ring
                 radius-inner="0.30"
@@ -250,7 +310,8 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 material={`shader: flat; color: ${color}; opacity: 0.85`}
                 animation="property: scale; to: 1.12 1.12 1.12; dir: alternate; loop: true; dur: 1400; easing: easeInOutSine"
               ></a-ring>
-              {/* Thin stem from pedestal to object */}
+              
+              {/* Thin pedestal connector stem */}
               {/* @ts-ignore */}
               <a-cylinder
                 radius="0.018"
@@ -259,61 +320,61 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 material={`shader: flat; color: ${color}; opacity: 0.35`}
               ></a-cylinder>
 
-              {/* ── Shape by type ── */}
-              {(type.includes('organ') || type.includes('cell') || type.includes('nucl')) ? (
-                // Biology cell: sphere with orbital ring
+              {/* ── Shapes by Category ── */}
+              {isOrganelle ? (
+                // biology cell: sphere with orbital ring
                 // @ts-ignore
                 <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear">
                   {/* @ts-ignore */}
                   <a-sphere
-                    radius="0.28"
-                    material={`color: ${color}; roughness: 0.3; metalness: 0.1; emissive: ${color}; emissiveIntensity: 0.4`}
+                    radius="0.26"
+                    material={`color: ${color}; roughness: 0.3; metalness: 0.1; emissive: ${color}; emissiveIntensity: 0.45`}
                   ></a-sphere>
                   {/* @ts-ignore */}
-                  <a-torus radius="0.38" radius-tubular="0.012"
+                  <a-torus radius="0.36" radius-tubular="0.012"
                     rotation="80 0 0"
                     material={`shader: flat; color: ${color}; opacity: 0.7`}
                   ></a-torus>
                 </a-entity>
-              ) : (type.includes('enzyme') || type.includes('acid') || type.includes('chem')) ? (
-                // Chemical/Enzyme: two interlocked rings
+              ) : isChemical ? (
+                // chemical: two interlocked rings
                 // @ts-ignore
                 <a-entity animation="property: rotation; to: 360 180 0; loop: true; dur: 7000; easing: linear">
                   {/* @ts-ignore */}
-                  <a-torus radius="0.22" radius-tubular="0.04"
+                  <a-torus radius="0.22" radius-tubular="0.038"
                     rotation="0 0 0"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.5; roughness: 0.2; metalness: 0.6`}
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.55; roughness: 0.2; metalness: 0.6`}
                   ></a-torus>
                   {/* @ts-ignore */}
-                  <a-torus radius="0.22" radius-tubular="0.04"
+                  <a-torus radius="0.22" radius-tubular="0.038"
                     rotation="90 0 0"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.5; roughness: 0.2; metalness: 0.6`}
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.55; roughness: 0.2; metalness: 0.6`}
                   ></a-torus>
                 </a-entity>
-              ) : (type.includes('vessel') || type.includes('tube') || type.includes('duct') || type.includes('intestin')) ? (
-                // Tube/Vessel: cylinder
+              ) : isVessel ? (
+                // pathway/tube: cylinder
                 // @ts-ignore
                 <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
                   {/* @ts-ignore */}
                   <a-cylinder
                     radius="0.18"
                     height="0.5"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.3; roughness: 0.4; metalness: 0.2`}
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.4; roughness: 0.4; metalness: 0.2`}
                   ></a-cylinder>
                   {/* @ts-ignore */}
                   <a-ring radius-inner="0.20" radius-outer="0.22" rotation="90 0 0" position="0 0.18 0"
-                    material={`shader: flat; color: #ffffff; opacity: 0.5`}></a-ring>
+                    material={`shader: flat; color: #ffffff; opacity: 0.6`}></a-ring>
                   {/* @ts-ignore */}
                   <a-ring radius-inner="0.20" radius-outer="0.22" rotation="90 0 0" position="0 -0.18 0"
-                    material={`shader: flat; color: #ffffff; opacity: 0.5`}></a-ring>
+                    material={`shader: flat; color: #ffffff; opacity: 0.6`}></a-ring>
                 </a-entity>
-              ) : (type.includes('muscle') || type.includes('stomach') || type.includes('organ')) ? (
-                // Organ: rounded box
+              ) : isOrgan ? (
+                // organ: pulsating box
                 // @ts-ignore
-                <a-entity animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 1200; easing: easeInOutSine">
+                <a-entity animation="property: scale; to: 1.15 1.15 1.15; dir: alternate; loop: true; dur: 1000; easing: easeInOutSine">
                   {/* @ts-ignore */}
-                  <a-box width="0.45" height="0.38" depth="0.32"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.35; roughness: 0.5; metalness: 0.1`}
+                  <a-box width="0.44" height="0.38" depth="0.32"
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.45; roughness: 0.5; metalness: 0.1`}
                   ></a-box>
                 </a-entity>
               ) : (
@@ -323,47 +384,59 @@ export default function VRPage({ params }: { params: { id: string } }) {
                   {/* @ts-ignore */}
                   <a-sphere
                     radius="0.25"
-                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.45; roughness: 0.2; metalness: 0.5`}
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.5; roughness: 0.2; metalness: 0.5`}
                   ></a-sphere>
                   {/* Equatorial glow ring */}
                   {/* @ts-ignore */}
                   <a-torus radius="0.30" radius-tubular="0.010"
-                    material={`shader: flat; color: ${color}; opacity: 0.6`}
+                    material={`shader: flat; color: ${color}; opacity: 0.75`}
                     rotation="90 0 0"
                   ></a-torus>
                 </a-entity>
               )}
 
-              {/* Node label — big, bright, always readable */}
+              {/* Staggered Billboard Label Tag */}
               {/* @ts-ignore */}
-              <a-text
-                value={label}
-                position="0 0.70 0"
-                align="center"
-                width="2.2"
-                color="#ffffff"
-                wrap-count="18"
-              ></a-text>
+              <a-plane
+                width="0.9"
+                height="0.26"
+                position={`0 ${labelY} 0.02`}
+                material="shader: flat; color: #07060a; transparent: true; opacity: 0.85"
+                look-at-camera
+              >
+                {/* @ts-ignore */}
+                <a-text
+                  value={label}
+                  align="center"
+                  width="1.6"
+                  color="#ffffff"
+                  wrap-count="12"
+                  position="0 0 0.01"
+                ></a-text>
+              </a-plane>
             </a-entity>
           )
         })}
 
         {/* ── Connection lines ── */}
         {edges.map((edge: any, idx: number) => {
-          const from = nodes.find((n: any) => n.id === edge.from)
-          const to   = nodes.find((n: any) => n.id === edge.to)
+          const from = positionedNodes.find((n: any) => n.id === edge.from)
+          const to   = positionedNodes.find((n: any) => n.id === edge.to)
           if (!from || !to) return null
           const { x: x1, y: y1, z: z1 } = from.pos
           const { x: x2, y: y2, z: z2 } = to.pos
           return (
             // @ts-ignore
-            <a-entity key={`edge-${idx}`}
-              line={`start: ${x1} ${y1} ${z1}; end: ${x2} ${y2} ${z2}; color: #ffffff; opacity: 0.18`}
-            ></a-entity>
+            <a-entity key={`edge-${idx}`}>
+              {/* @ts-ignore */}
+              <a-entity
+                line={`start: ${x1} ${y1} ${z1}; end: ${x2} ${y2} ${z2}; color: ${edge.color || '#f43f5e'}; opacity: 0.35`}
+              ></a-entity>
+            </a-entity>
           )
         })}
 
-        {/* ── Info panel — appears at bottom of view ── */}
+        {/* ── Info panel — billboarded at bottom of view ── */}
         {/* @ts-ignore */}
         <a-plane
           position="0 0.6 -2.2"
