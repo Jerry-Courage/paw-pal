@@ -39,20 +39,22 @@ def get_model_uid(keyword: str) -> str | None:
 
     # Build search queries — most specific first
     queries = [
-        keyword,                          # exact keyword first
-        f"{keyword} anatomy",
-        f"{keyword} 3d model",
-        f"{keyword} biology",
-        f"{keyword} science",
+        f"human {keyword}",               # "human liver", "human stomach" etc
+        f"{keyword} anatomy",             # "liver anatomy"
+        f"{keyword} model anatomy",       # "liver model anatomy"
+        keyword,                          # just the keyword
     ]
 
-    for query in queries:
+    for i, query in enumerate(queries):
         try:
+            # First query: sort by likes (most popular human liver = best quality)
+            # Subsequent queries: sort by relevance
+            sort_by = '-likeCount' if i == 0 else '-relevance'
             resp = requests.get(
                 SKETCHFAB_SEARCH_URL,
                 params={
                     'q': query,
-                    'sort_by': '-relevance',
+                    'sort_by': sort_by,
                     'count': 24,
                     'type': 'models',
                 },
@@ -114,8 +116,9 @@ def get_embed_url(uid: str) -> str:
         "&ui_ar=0"
         "&ui_help=0"
         "&ui_settings=0"
-        "&ui_vr=0"
+        "&ui_vr=1"
         "&ui_fullscreen=1"
-        "&ui_annotations=0"
+        "&ui_annotations=1"
+        "&annotations_visible=1"
         "&camera=0"
     )
