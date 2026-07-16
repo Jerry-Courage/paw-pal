@@ -394,7 +394,13 @@ export default function VRPage({ params }: { params: { id: string } }) {
         {/* Left: Concept list */}
         <div className="w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-indigo-500/15 flex flex-col bg-black/40 overflow-hidden">
           <div className="px-4 py-3 border-b border-indigo-500/10">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Concepts</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Concepts</p>
+              <button onClick={refreshLayout}
+                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-black transition-colors flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-500/10">
+                ↺ Refresh
+              </button>
+            </div>
             {/* AI tutor card */}
             <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-3 mb-3">
               <div className="flex items-center gap-3 mb-2">
