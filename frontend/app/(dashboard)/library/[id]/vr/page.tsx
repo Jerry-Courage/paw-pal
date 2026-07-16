@@ -286,7 +286,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 700, margin: 0 }}>{activeNode?.label}</p>
-                  <p style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>Add SKETCHFAB_API_TOKEN for 3D models</p>
+                  <p style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>Searching for 3D model...</p>
                 </div>
               </div>
             )}
@@ -482,7 +482,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 <div>
                   <h3 className="text-xl font-black text-white mb-2">{activeNode.label}</h3>
                   <p className="text-slate-400 text-sm leading-relaxed max-w-sm">{activeNode.description}</p>
-                  <p className="text-slate-600 text-xs mt-4">No 3D model found. Add SKETCHFAB_API_TOKEN to enable search.</p>
+                  <p className="text-slate-600 text-xs mt-4">No 3D model found for this concept yet.</p>
                 </div>
               </div>
             )}

@@ -102,20 +102,34 @@ def get_model_uid(keyword: str) -> str | None:
             data = resp.json()
             results = data.get('results', [])
 
-            # Filter: model name must contain the keyword or a close variant
-            keyword_words = set(keyword_lower.split())
+            # Filter: prefer models where keyword appears in name/tags/categories
+            # but fall back to first result if nothing matches exactly
+            keyword_words = [w for w in keyword_lower.split() if len(w) > 3]
+            best_match = None
+            first_result = None
+
             for model in results:
+                uid = model.get('uid')
+                if not uid:
+                    continue
+                if not first_result:
+                    first_result = uid
+
                 name = model.get('name', '').lower()
                 tags = [t.get('name', '').lower() for t in model.get('tags', [])]
                 categories = [c.get('name', '').lower() for c in model.get('categories', [])]
                 all_text = name + ' ' + ' '.join(tags) + ' ' + ' '.join(categories)
 
-                # Check if any keyword word appears in the model metadata
-                if any(word in all_text for word in keyword_words if len(word) > 3):
-                    uid = model.get('uid')
-                    if uid:
-                        logger.info(f"[Sketchfab] Matched '{keyword}' → '{model.get('name')}' ({uid})")
-                        return uid
+                if any(word in all_text for word in keyword_words):
+                    best_match = uid
+                    logger.info(f"[Sketchfab] Keyword match '{keyword}' → '{model.get('name')}' ({uid})")
+                    break
+
+            # Use best keyword match; fall back to first result on final query attempt
+            result_uid = best_match or (first_result if query == search_queries[-1] else None)
+            if result_uid:
+                logger.info(f"[Sketchfab] Using {'matched' if best_match else 'fallback'} model for '{keyword}': {result_uid}")
+                return result_uid
 
         except Exception as e:
             logger.warning(f"[Sketchfab] Search failed for '{query}': {e}")
