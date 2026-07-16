@@ -27,19 +27,19 @@ GEMINI_LIVE_WS_URL = (
 @sync_to_async
 def _get_personalized_context(user):
     try:
-        # Get last 20 messages from global sessions
+        # Get last 5 messages from global sessions for fast setup
         global_sessions = ChatSession.objects.filter(user=user, context_type='global')
-        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:20]
+        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:5]
         recent_messages = list(recent_messages)[::-1]  # chronological order
         
         history = []
         for msg in recent_messages:
             role_label = "Student" if msg.role == 'user' else "AI Coach"
-            history.append(f"{role_label}: {msg.content[:200]}")
+            history.append(f"{role_label}: {msg.content[:100]}")
         history_str = "\n".join(history) if history else "No previous chat history."
         
-        # Get resources they are studying
-        resources = Resource.objects.filter(owner=user).values('title', 'subject')[:8]
+        # Get resources they are studying (limit to top 3)
+        resources = Resource.objects.filter(owner=user).values('title', 'subject')[:3]
         materials = [f"- {r['title']} ({r['subject'] or 'General'})" for r in resources]
         materials_str = "\n".join(materials) if materials else "No materials uploaded yet."
         
