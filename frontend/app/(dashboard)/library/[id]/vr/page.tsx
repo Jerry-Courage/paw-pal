@@ -12,6 +12,7 @@ declare global {
     interface IntrinsicElements {
       'a-scene': any;
       'a-sky': any;
+      'a-camera': any;
       'a-light': any;
       'a-entity': any;
       'a-sphere': any;
@@ -729,7 +730,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
 
         {/* ── Camera + raycasting gaze cursor ── */}
         {/* @ts-ignore */}
-        <a-entity camera look-controls wasd-controls position="0 1.6 0.5">
+        <a-camera look-controls wasd-controls position="0 1.6 0.5">
           {/* @ts-ignore */}
           <a-cursor
             raycaster="objects: .raycastable"
@@ -740,7 +741,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
             animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dur: 1200; from: 0.7 0.7 0.7; to: 0.15 0.15 0.15"
             animation__leave="property: scale; startEvents: mouseleave; easing: easeOutQuad; dur: 400; to: 0.7 0.7 0.7"
           ></a-cursor>
-        </a-entity>
+        </a-camera>
 
       {/* @ts-ignore */}
       </a-scene>
