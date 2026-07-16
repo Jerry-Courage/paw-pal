@@ -45,7 +45,7 @@ interface SketchfabResult {
 // Small helper: fetch Sketchfab model for a keyword
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchSketchfabModel(keyword: string): Promise<SketchfabResult> {
-  const token = getAuthToken()
+  const token = await getAuthToken()
   const res = await fetch(
     `${API_BASE}/library/sketchfab-model/?q=${encodeURIComponent(keyword)}`,
     { headers: { Authorization: `Bearer ${token}` } }
@@ -92,7 +92,7 @@ export default function VRClassroomPage({ params }: { params: { id: string } }) 
   const { data: vrLayout, isLoading: layoutLoading } = useQuery<VRLayout>({
     queryKey: ['vr-layout', params.id],
     queryFn: async () => {
-      const token = getAuthToken()
+      const token = await getAuthToken()
       const res = await fetch(`${API_BASE}/library/resources/${params.id}/vr-layout/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -145,7 +145,7 @@ export default function VRClassroomPage({ params }: { params: { id: string } }) 
   const startSession = useCallback(async () => {
     if (sessionActive) return
     try {
-      const token = getAuthToken()
+      const token = await getAuthToken()
       const wsUrl = `${API_BASE.replace(/^http/, 'ws')}/library/resources/${params.id}/vr-session/?token=${token}`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
