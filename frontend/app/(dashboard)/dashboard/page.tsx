@@ -118,6 +118,14 @@ export default function DashboardPage() {
       bg: 'bg-violet-500/10',
     },
     {
+      icon: Headphones,
+      label: 'Voice Coach',
+      sub: 'Personalized tutor',
+      href: '/dashboard/personalised',
+      color: 'text-rose-400',
+      bg: 'bg-rose-500/10',
+    },
+    {
       icon: LayoutGrid,
       label: 'Collab',
       sub: 'Study together',
@@ -232,7 +240,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Quick actions ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {quickActions.map(a => (
           <Link
             key={a.label}
