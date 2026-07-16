@@ -62,7 +62,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
     queryFn: () => libraryApi.getResource(Number(resourceId)).then(r => r.data),
   })
 
-  const { data: vrLayout, isLoading } = useQuery<VRLayout>({
+  const { data: vrLayout, isLoading, refetch: refetchLayout } = useQuery<VRLayout>({
     queryKey: ['vr-layout', resourceId],
     queryFn: async () => {
       const token = await getAuthToken()
@@ -76,7 +76,16 @@ export default function VRPage({ params }: { params: { id: string } }) {
     retry: false,
   })
 
-  // Load 3D model for a node
+  const refreshLayout = async () => {
+    const token = await getAuthToken()
+    await fetch(`${API_BASE}/library/resources/${resourceId}/vr-layout/?refresh=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    setActiveNode(null)
+    setModelUrl(null)
+    refetchLayout()
+    toast.success('Regenerating VR concepts...')
+  }
   const loadModel = useCallback(async (node: VRNode) => {
     setActiveNode(node)
     setModelUrl(null)
@@ -372,7 +381,12 @@ export default function VRPage({ params }: { params: { id: string } }) {
           <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
           <span className="text-indigo-300 text-xs font-black uppercase tracking-widest">VR Classroom</span>
         </div>
-        <div className="text-slate-500 text-xs max-w-48 truncate">{resource?.title}</div>
+        <div className="flex items-center gap-2">
+          <button onClick={refreshLayout} className="text-slate-600 hover:text-slate-400 text-xs transition-colors" title="Regenerate concepts">
+            ↺ Refresh
+          </button>
+          <div className="text-slate-500 text-xs max-w-48 truncate">{resource?.title}</div>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
