@@ -228,43 +228,26 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             }
             await self.gemini_ws.send(json.dumps(config))
 
-            setup_ready = False
-            for _ in range(5):
-                try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
-                    setup_data = json.loads(setup_resp)
-                    if 'setupComplete' in setup_data:
-                        setup_ready = True
-                        break
-                    logger.debug(f'[PersonalisedVoice] Pre-setup message: {list(setup_data.keys())}')
-                except asyncio.TimeoutError:
-                    break
-
             initial_instruction = f"Say hello to the student, {ctx['username']}, and invite them to kick off this study session."
 
-            if not setup_ready:
-                self.session_active = True
-                self.text_fallback_mode = True
-                self.text_fallback_reason = 'live voice setup timed out'
-                logger.warning('[PersonalisedVoice] Live setup timed out; enabling fast text fallback')
-                await self._send({'type': 'ready'})
-                await self._send({'type': 'status', 'message': 'Voice module is warming up. Fast text replies are active.'})
-                await self._reply_with_text_fallback(initial_instruction)
-                return
-
+            # Start session and background receive task immediately
             self.session_active = True
             await self._send({'type': 'ready'})
-            logger.info(f'[PersonalisedVoice] Gemini ready: voice={voice_name}')
+            logger.info(f'[PersonalisedVoice] Gemini Live connected: voice={voice_name}')
 
             self.gemini_task = asyncio.create_task(self._receive_from_gemini())
             await self._send_text_to_gemini(initial_instruction)
 
-        except asyncio.TimeoutError:
-            logger.error('[PersonalisedVoice] Timeout waiting for Gemini setup')
-            await self._send({'type': 'error', 'message': 'Connection timed out. Try again.'})
         except Exception as e:
             logger.error(f'[PersonalisedVoice] Failed to connect: {e}')
-            await self._send({'type': 'error', 'message': f'Failed to start session: {str(e)}'})
+            # Graceful text fallback on initial connection failure
+            self.session_active = True
+            self.text_fallback_mode = True
+            self.text_fallback_reason = str(e)
+            logger.warning('[PersonalisedVoice] Live voice connection failed; fell back to text mode')
+            await self._send({'type': 'ready'})
+            await self._send({'type': 'status', 'message': 'Voice server offline. Text coaching mode is active.'})
+            await self._reply_with_text_fallback(initial_instruction)
 
     async def _reply_with_text_fallback(self, text: str):
         try:
