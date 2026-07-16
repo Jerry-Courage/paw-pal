@@ -3,47 +3,28 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi, getAuthToken, API_BASE } from '@/lib/api'
-import {
-  Loader2, ChevronLeft, Sparkles, AlertCircle, Mic, MicOff,
-  Hand, BookOpen, MessageCircle, X, Maximize2, RotateCcw, Volume2, VolumeX,
-} from 'lucide-react'
+import { Loader2, ChevronLeft, Sparkles, Mic, MicOff, Volume2, VolumeX, X } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 interface VRNode {
   id: string
   label: string
   description: string
   color: string
-  type: string
   sketchfab_keyword?: string
-}
-
-interface VREdge {
-  from: string
-  to: string
-  label: string
-  color: string
 }
 
 interface VRLayout {
   nodes: VRNode[]
-  edges: VREdge[]
 }
 
 interface SketchfabResult {
   found: boolean
   uid?: string
   embed_url?: string
-  keyword?: string
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Small helper: fetch Sketchfab model for a keyword
-// ─────────────────────────────────────────────────────────────────────────────
 async function fetchSketchfabModel(keyword: string): Promise<SketchfabResult> {
   const token = await getAuthToken()
   const res = await fetch(
@@ -54,503 +35,459 @@ async function fetchSketchfabModel(keyword: string): Promise<SketchfabResult> {
   return res.json()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock peers for the classroom panel
-// ─────────────────────────────────────────────────────────────────────────────
-const PEERS = ['Alex', 'Sam', 'Taylor', 'Jordan', 'Riley']
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main component
-// ─────────────────────────────────────────────────────────────────────────────
-export default function VRClassroomPage({ params }: { params: { id: string } }) {
+export default function VRPage({ params }: { params: { id: string } }) {
+  const resourceId = params.id
   const [activeNode, setActiveNode] = useState<VRNode | null>(null)
-  const [sketchfabUrl, setSketchfabUrl] = useState<string | null>(null)
+  const [modelUrl, setModelUrl] = useState<string | null>(null)
   const [loadingModel, setLoadingModel] = useState(false)
-  const [modelExpanded, setModelExpanded] = useState(false)
-
-  // AI tutor state
   const [sessionActive, setSessionActive] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
-  const [aiTranscript, setAiTranscript] = useState<string>('Click a concept below to start learning...')
+  const [isMuted, setIsMuted] = useState(false)
+  const [transcript, setTranscript] = useState('Tap a concept to begin...')
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [isHandRaised, setIsHandRaised] = useState(false)
-  const [showNotes, setShowNotes] = useState(false)
+  const [vrMode, setVrMode] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [nodeIndex, setNodeIndex] = useState(0)
 
-  // WebSocket / audio refs
   const wsRef = useRef<WebSocket | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
-  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nextPlayTimeRef = useRef(0)
+  const speakingTimerRef = useRef<any>(null)
+  const resumeIntervalRef = useRef<any>(null)
 
-  // Resource data
-  const { data: resource, isLoading: resourceLoading } = useQuery({
-    queryKey: ['resource', params.id],
-    queryFn: () => libraryApi.getResource(Number(params.id)).then(res => res.data),
+  const { data: resource } = useQuery({
+    queryKey: ['resource', resourceId],
+    queryFn: () => libraryApi.getResource(Number(resourceId)).then(r => r.data),
   })
 
-  const { data: vrLayout, isLoading: layoutLoading } = useQuery<VRLayout>({
-    queryKey: ['vr-layout', params.id],
+  const { data: vrLayout, isLoading } = useQuery<VRLayout>({
+    queryKey: ['vr-layout', resourceId],
     queryFn: async () => {
       const token = await getAuthToken()
-      const res = await fetch(`${API_BASE}/library/resources/${params.id}/vr-layout/`, {
+      const res = await fetch(`${API_BASE}/library/resources/${resourceId}/vr-layout/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) throw new Error('Failed to load VR layout')
+      if (!res.ok) throw new Error('VR layout unavailable')
       return res.json()
     },
-    enabled: !!params.id,
+    enabled: !!resourceId,
+    retry: false,
   })
 
-  // ── Select concept ──────────────────────────────────────────────────────────
-  const selectNode = useCallback(async (node: VRNode) => {
+  // Load 3D model for a node
+  const loadModel = useCallback(async (node: VRNode) => {
     setActiveNode(node)
-    setSketchfabUrl(null)
+    setModelUrl(null)
     setLoadingModel(true)
-    setModelExpanded(false)
-
-    const keyword = node.sketchfab_keyword || node.label
     try {
-      const result = await fetchSketchfabModel(keyword)
-      if (result.found && result.embed_url) {
-        setSketchfabUrl(result.embed_url)
-      } else {
-        setSketchfabUrl(null)
-      }
-    } catch {
-      setSketchfabUrl(null)
-    } finally {
-      setLoadingModel(false)
-    }
+      const result = await fetchSketchfabModel(node.sketchfab_keyword || node.label)
+      if (result.found && result.embed_url) setModelUrl(result.embed_url)
+    } catch { /* no model found */ }
+    finally { setLoadingModel(false) }
   }, [])
 
-  // Auto-select first node once layout loads
+  // Auto-load first node
   useEffect(() => {
     if (vrLayout?.nodes?.length && !activeNode) {
-      selectNode(vrLayout.nodes[0])
+      loadModel(vrLayout.nodes[0])
     }
-  }, [vrLayout, activeNode, selectNode])
+  }, [vrLayout, activeNode, loadModel])
 
-  // ── WebSocket AI Tutor ──────────────────────────────────────────────────────
-  function base64ToPcmFloat(b64: string): Float32Array {
+  // Play AI audio
+  const playAudioChunk = useCallback((b64: string) => {
+    if (isMuted) return
+    const ctx = audioCtxRef.current || new AudioContext({ sampleRate: 24000 })
+    audioCtxRef.current = ctx
     const bin = atob(b64)
     const bytes = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
     const i16 = new Int16Array(bytes.buffer)
     const f32 = new Float32Array(i16.length)
-    for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768.0
-    return f32
-  }
+    for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768
+    const buf = ctx.createBuffer(1, f32.length, 24000)
+    buf.copyToChannel(f32, 0)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
+    src.start(startAt)
+    nextPlayTimeRef.current = startAt + buf.duration
+    setIsSpeaking(true)
+    clearTimeout(speakingTimerRef.current)
+    speakingTimerRef.current = setTimeout(() => setIsSpeaking(false),
+      (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
+  }, [isMuted])
 
+  // Connect WebSocket AI tutor
   const startSession = useCallback(async () => {
-    if (sessionActive) return
+    if (sessionActive || isConnecting) return
+    setIsConnecting(true)
+    let micStream: MediaStream | null = null
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = micStream
+    } catch {
+      toast.error('Mic access needed for AI tutor')
+      setIsConnecting(false)
+      return
+    }
     try {
       const token = await getAuthToken()
-      const wsUrl = `${API_BASE.replace(/^http/, 'ws')}/library/resources/${params.id}/vr-session/?token=${token}`
-      const ws = new WebSocket(wsUrl)
+      const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api\/?$/, '')
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const ws = new WebSocket(`${protocol}//${backendHost}/ws/vr/${resourceId}/?token=${token}`)
       wsRef.current = ws
-      audioCtxRef.current = new AudioContext({ sampleRate: 24000 })
 
       ws.onopen = () => {
-        setSessionActive(true)
-        setAiTranscript('AI tutor connected! Ask me anything about this topic.')
-        toast.success('AI tutor connected')
+        const kit = resource?.ai_notes_json || {}
+        const sections = (kit.sections || []).slice(0, 8)
+        const context = sections.map((s: any) => `${s.title}: ${s.content?.slice(0, 200)}`).join('\n')
+        ws.send(JSON.stringify({
+          type: 'start',
+          resource_title: resource?.title || '',
+          resource_context: context,
+          current_concept: activeNode?.label || '',
+        }))
       }
 
-      ws.onmessage = async (e) => {
+      ws.onmessage = (e) => {
         const msg = JSON.parse(e.data)
-        if (msg.type === 'transcript') {
-          setAiTranscript(msg.text)
-          setIsSpeaking(true)
-          if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current)
-          speakingTimerRef.current = setTimeout(() => setIsSpeaking(false), 2000)
-        }
-        if (msg.type === 'audio' && msg.data && audioCtxRef.current) {
-          const pcm = base64ToPcmFloat(msg.data)
-          const buf = audioCtxRef.current.createBuffer(1, pcm.length, 24000)
-          buf.copyToChannel(pcm as any, 0)
-          const src = audioCtxRef.current.createBufferSource()
-          src.buffer = buf
-          src.connect(audioCtxRef.current.destination)
-          src.start()
-        }
+        if (msg.type === 'ready') { setSessionActive(true); setIsConnecting(false) }
+        if (msg.type === 'audio') playAudioChunk(msg.data)
+        if (msg.type === 'transcript') setTranscript(msg.text)
+        if (msg.type === 'error') { toast.error(msg.message); setIsConnecting(false) }
       }
+      ws.onclose = () => { setSessionActive(false); setIsConnecting(false) }
+      ws.onerror = () => { toast.error('AI tutor connection failed'); setIsConnecting(false) }
 
-      ws.onclose = () => {
-        setSessionActive(false)
-        setIsSpeaking(false)
-      }
-
-      // Mic capture
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      const micCtx = new AudioContext({ sampleRate: 16000 })
-      const src = micCtx.createMediaStreamSource(stream)
-      const proc = micCtx.createScriptProcessor(4096, 1, 1)
+      // Mic processor
+      const ctx = new AudioContext({ sampleRate: 16000 })
+      audioCtxRef.current = ctx
+      const src = ctx.createMediaStreamSource(micStream)
+      const proc = ctx.createScriptProcessor(2048, 1, 1)
       processorRef.current = proc
-      src.connect(proc)
-      proc.connect(micCtx.destination)
+      const resumeCtx = () => { if (ctx.state === 'suspended') ctx.resume().catch(() => {}) }
+      resumeIntervalRef.current = setInterval(resumeCtx, 500)
       proc.onaudioprocess = (ev) => {
-        if (!isMicMuted && ws.readyState === WebSocket.OPEN) {
-          const f32 = ev.inputBuffer.getChannelData(0)
-          const i16 = new Int16Array(f32.length)
-          for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768))
-          const bytes = new Uint8Array(i16.buffer)
-          let binary = ''
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i])
-          }
-          const b64 = btoa(binary)
-          ws.send(JSON.stringify({ type: 'audio', data: b64 }))
-        }
+        if (isMicMuted || ws.readyState !== WebSocket.OPEN) return
+        if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
+        const f32 = ev.inputBuffer.getChannelData(0)
+        const i16 = new Int16Array(f32.length)
+        for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768))
+        const bytes = new Uint8Array(i16.buffer)
+        let bin = ''
+        for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i])
+        ws.send(JSON.stringify({ type: 'audio', data: btoa(bin) }))
       }
+      const silentGain = ctx.createGain()
+      silentGain.gain.value = 0
+      src.connect(proc)
+      proc.connect(silentGain)
+      silentGain.connect(ctx.destination)
     } catch (err) {
-      toast.error('Could not start AI session')
-      console.error(err)
+      toast.error('Failed to start AI session')
+      setIsConnecting(false)
     }
-  }, [sessionActive, params.id, isMicMuted])
+  }, [sessionActive, isConnecting, resourceId, resource, activeNode, isMicMuted, playAudioChunk])
 
   const endSession = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ type: 'end' }))
     wsRef.current?.close()
-    streamRef.current?.getTracks().forEach(t => t.stop())
     processorRef.current?.disconnect()
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    clearInterval(resumeIntervalRef.current)
     setSessionActive(false)
-    setAiTranscript('Session ended.')
+    setTranscript('Session ended. Tap a concept to continue.')
   }, [])
 
-  // Cleanup on unmount
   useEffect(() => () => { endSession() }, [endSession])
 
-  // ── Loading state ───────────────────────────────────────────────────────────
-  if (resourceLoading || layoutLoading) {
-    return (
-      <div style={{ width: '100vw', height: '100vh', background: '#050816', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-        <Loader2 size={48} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
-        <p style={{ color: '#94a3b8', fontFamily: 'Inter, sans-serif', fontSize: 18 }}>Loading VR Classroom…</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    )
+  // Notify AI when concept changes
+  useEffect(() => {
+    if (activeNode && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'concept_changed',
+        concept: activeNode.label,
+        description: activeNode.description,
+      }))
+    }
+  }, [activeNode])
+
+  // Navigate concepts
+  const nodes = vrLayout?.nodes || []
+  const goNext = () => {
+    if (!nodes.length) return
+    const next = (nodeIndex + 1) % nodes.length
+    setNodeIndex(next)
+    loadModel(nodes[next])
+  }
+  const goPrev = () => {
+    if (!nodes.length) return
+    const prev = (nodeIndex - 1 + nodes.length) % nodes.length
+    setNodeIndex(prev)
+    loadModel(nodes[prev])
   }
 
-  if (!resource || !vrLayout) {
-    return (
-      <div style={{ width: '100vw', height: '100vh', background: '#050816', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#f43f5e', fontFamily: 'Inter, sans-serif' }}>
-          <AlertCircle size={48} style={{ margin: '0 auto 12px' }} />
-          <p>Failed to load classroom. <Link href={`/library/${params.id}`} style={{ color: '#6366f1' }}>Go back</Link></p>
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return (
+    <div className="fixed inset-0 bg-black flex items-center justify-center">
+      <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
+    </div>
+  )
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-  return (
-    <div style={{ width: '100vw', height: '100vh', background: 'linear-gradient(135deg, #050816 0%, #0a0f2e 50%, #050816 100%)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@400;600;700&display=swap" rel="stylesheet" />
-      <style>{`
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.5); border-radius: 4px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%,100% { opacity:1; transform: scale(1); } 50% { opacity:0.7; transform: scale(1.05); } }
-        @keyframes wave { 0%,100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
-        @keyframes slideIn { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
-        @keyframes glow { 0%,100% { box-shadow: 0 0 10px rgba(99,102,241,0.3); } 50% { box-shadow: 0 0 25px rgba(99,102,241,0.7); } }
-        .concept-btn:hover { background: rgba(99,102,241,0.25) !important; transform: translateX(4px); }
-        .control-btn:hover { background: rgba(255,255,255,0.12) !important; transform: scale(1.05); }
-        .control-btn:active { transform: scale(0.97); }
-      `}</style>
+  // ── VR MODE (Google Cardboard stereo split-screen) ──────────────────────────
+  if (vrMode) return (
+    <div style={{ position: 'fixed', inset: 0, background: '#000', overflow: 'hidden' }}>
+      {/* Stereo split: left eye | right eye */}
+      <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+        {/* Divider line */}
+        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 2, background: '#111', zIndex: 10 }} />
 
-      {/* ── TOP NAV BAR ────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: 'rgba(5,8,22,0.9)', borderBottom: '1px solid rgba(99,102,241,0.2)', backdropFilter: 'blur(20px)', zIndex: 50, flexShrink: 0 }}>
-        <Link href={`/library/${params.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', textDecoration: 'none', fontSize: 14, transition: 'color 0.2s' }}>
-          <ChevronLeft size={18} /><span>Back to Library</span>
-        </Link>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', animation: 'pulse 2s ease-in-out infinite' }} />
-          <span style={{ color: '#e2e8f0', fontFamily: 'Orbitron, sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VR CLASSROOM</span>
-          <span style={{ color: '#64748b', fontSize: 13 }}>—</span>
-          <span style={{ color: '#94a3b8', fontSize: 13, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resource.title}</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Peers count */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 20, fontSize: 13, color: '#10b981' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-            {PEERS.length + 7} online
-          </div>
-        </div>
-      </div>
-
-      {/* ── MAIN BODY ───────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px 1fr 280px', gap: 0, overflow: 'hidden' }}>
-
-        {/* ── LEFT SIDEBAR: Concepts ──────────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(5,8,22,0.8)', borderRight: '1px solid rgba(99,102,241,0.15)', overflow: 'hidden' }}>
-          {/* AI Tutor card */}
-          <div style={{ padding: '20px 16px', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, animation: isSpeaking ? 'glow 1s ease-in-out infinite' : 'none' }}>🤖</div>
-              <div>
-                <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 14 }}>AI Tutor</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: sessionActive ? '#10b981' : '#64748b' }} />
-                  <span style={{ color: sessionActive ? '#10b981' : '#64748b' }}>{sessionActive ? 'Live' : 'Offline'}</span>
+        {[0, 1].map((eye) => (
+          <div key={eye} style={{
+            flex: 1,
+            position: 'relative',
+            overflow: 'hidden',
+            /* Barrel distortion for Cardboard lenses */
+            filter: 'none',
+          }}>
+            {modelUrl ? (
+              <iframe
+                src={modelUrl + '&ui_vr=0&autostart=1&ui_infos=0&ui_watermark=0&ui_stop=0&camera=0'}
+                style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                allow="autoplay; fullscreen; xr-spatial-tracking"
+              />
+            ) : (
+              <div style={{
+                width: '100%', height: '100%',
+                background: 'radial-gradient(ellipse at center, #1a1a3e 0%, #050816 70%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{ textAlign: 'center', color: '#6366f1' }}>
+                  <div style={{ fontSize: 64, marginBottom: 16 }}>⬡</div>
+                  <p style={{ fontSize: 20, fontWeight: 700, color: '#e2e8f0' }}>{activeNode?.label}</p>
+                  <p style={{ fontSize: 14, color: '#94a3b8', marginTop: 8, maxWidth: 300 }}>{activeNode?.description}</p>
                 </div>
+              </div>
+            )}
+
+            {/* Concept label overlay */}
+            <div style={{
+              position: 'absolute', bottom: 80, left: 0, right: 0,
+              textAlign: 'center', padding: '0 20px',
+            }}>
+              <div style={{
+                display: 'inline-block',
+                background: 'rgba(0,0,0,0.7)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: 12,
+                padding: '8px 20px',
+                color: '#e2e8f0',
+                fontSize: 16,
+                fontWeight: 600,
+              }}>
+                {activeNode?.label || 'Loading...'}
               </div>
             </div>
 
-            {/* Soundwave visualizer */}
+            {/* AI speech indicator */}
             {isSpeaking && (
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28, marginBottom: 10, padding: '0 4px' }}>
-                {[0.3,0.7,1,0.6,0.9,0.4,0.8,0.5,1,0.7,0.4,0.9].map((h, i) => (
-                  <div key={i} style={{ flex: 1, background: 'linear-gradient(to top, #6366f1, #a855f7)', borderRadius: 2, animation: `wave ${0.3 + i * 0.07}s ease-in-out ${i * 0.05}s infinite alternate`, transformOrigin: 'bottom', height: `${h * 100}%` }} />
+              <div style={{
+                position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', gap: 3, alignItems: 'flex-end', height: 20,
+              }}>
+                {[0.4,0.8,1,0.6,0.9,0.5].map((h, i) => (
+                  <div key={i} style={{
+                    width: 3, background: '#6366f1', borderRadius: 2,
+                    height: `${h * 100}%`,
+                    animation: `wave ${0.4 + i * 0.08}s ease-in-out infinite alternate`,
+                  }} />
                 ))}
               </div>
             )}
-
-            {/* Transcript */}
-            <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.5, minHeight: 60, maxHeight: 90, overflow: 'hidden' }}>
-              {aiTranscript}
-            </div>
-
-            {/* Session controls */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              {!sessionActive ? (
-                <button onClick={startSession} className="control-btn" style={{ flex: 1, padding: '8px 12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'all 0.2s' }}>
-                  <Sparkles size={14} /> Start Session
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => setIsMicMuted(m => !m)} className="control-btn" style={{ flex: 1, padding: '8px 10px', background: isMicMuted ? 'rgba(244,63,94,0.2)' : 'rgba(16,185,129,0.2)', border: `1px solid ${isMicMuted ? 'rgba(244,63,94,0.4)' : 'rgba(16,185,129,0.4)'}`, borderRadius: 8, color: isMicMuted ? '#f43f5e' : '#10b981', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 0.2s' }}>
-                    {isMicMuted ? <MicOff size={13} /> : <Mic size={13} />}
-                    {isMicMuted ? 'Unmute' : 'Mute'}
-                  </button>
-                  <button onClick={endSession} className="control-btn" style={{ flex: 1, padding: '8px 10px', background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)', borderRadius: 8, color: '#f43f5e', fontSize: 12, cursor: 'pointer', transition: 'all 0.2s' }}>
-                    End
-                  </button>
-                </>
-              )}
-            </div>
           </div>
+        ))}
+      </div>
 
-          {/* Concept list */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px' }}>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, paddingLeft: 4 }}>Concepts</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(vrLayout?.nodes || []).map(node => (
-                <button
-                  key={node.id}
-                  className="concept-btn"
-                  onClick={() => selectNode(node)}
-                  style={{ width: '100%', padding: '12px 14px', background: activeNode?.id === node.id ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)', border: `1px solid ${activeNode?.id === node.id ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.06)'}`, borderLeft: `3px solid ${node.color}`, borderRadius: 10, textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: node.color, flexShrink: 0 }} />
-                    <span style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 500 }}>{node.label}</span>
-                  </div>
-                  {activeNode?.id === node.id && (
-                    <p style={{ color: '#94a3b8', fontSize: 11.5, marginTop: 6, lineHeight: 1.4, paddingLeft: 16 }}>{node.description}</p>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* VR Controls overlay — bottom center */}
+      <div style={{
+        position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', gap: 12, zIndex: 20, alignItems: 'center',
+      }}>
+        <button onClick={goPrev} style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+        <button onClick={() => setIsMicMuted(m => !m)} style={{ width: 44, height: 44, borderRadius: '50%', background: isMicMuted ? 'rgba(244,63,94,0.8)' : 'rgba(16,185,129,0.8)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {isMicMuted ? <MicOff size={18} /> : <Mic size={18} />}
+        </button>
+        <button onClick={() => setVrMode(false)} style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <X size={18} />
+        </button>
+        <button onClick={() => setIsMuted(m => !m)} style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </button>
+        <button onClick={goNext} style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+      </div>
+
+      <style>{`
+        @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1); } }
+      `}</style>
+    </div>
+  )
+
+  // ── NORMAL VIEW (pre-VR setup + concept browser) ───────────────────────────
+  return (
+    <div className="fixed inset-0 bg-[#050816] flex flex-col overflow-hidden">
+      <style>{`
+        @keyframes wave { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        @keyframes glow { 0%,100% { box-shadow:0 0 10px rgba(99,102,241,0.3); } 50% { box-shadow:0 0 30px rgba(99,102,241,0.7); } }
+      `}</style>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-indigo-500/20 bg-black/60 backdrop-blur shrink-0">
+        <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm">
+          <ChevronLeft className="w-4 h-4" /> Back
+        </Link>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+          <span className="text-indigo-300 text-xs font-black uppercase tracking-widest">VR Classroom</span>
         </div>
+        <div className="text-slate-500 text-xs max-w-48 truncate">{resource?.title}</div>
+      </div>
 
-        {/* ── CENTER: Sketchfab 3D Model Viewer ──────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-          {/* Model header */}
-          {activeNode && (
-            <div style={{ padding: '14px 20px', background: 'rgba(5,8,22,0.6)', borderBottom: '1px solid rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: activeNode.color }} />
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+        {/* Left: Concept list */}
+        <div className="w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-indigo-500/15 flex flex-col bg-black/40 overflow-hidden">
+          <div className="px-4 py-3 border-b border-indigo-500/10">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Concepts</p>
+            {/* AI tutor card */}
+            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-3 mb-3">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg shrink-0"
+                  style={{ animation: isSpeaking ? 'glow 1.5s ease-in-out infinite' : 'none' }}>
+                  🤖
+                </div>
                 <div>
-                  <h2 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: 0 }}>{activeNode.label}</h2>
-                  <p style={{ color: '#64748b', fontSize: 12, margin: '2px 0 0' }}>{activeNode.description}</p>
+                  <p className="text-xs font-black text-white">AI Tutor</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${sessionActive ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                    <span className={`text-[10px] font-medium ${sessionActive ? 'text-emerald-400' : 'text-slate-600'}`}>
+                      {isConnecting ? 'Connecting...' : sessionActive ? 'Live' : 'Offline'}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {sketchfabUrl && (
-                  <button onClick={() => setModelExpanded(e => !e)} className="control-btn" style={{ padding: '6px 10px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#818cf8', cursor: 'pointer', transition: 'all 0.2s' }}>
-                    <Maximize2 size={14} />
+              {/* Waveform */}
+              {isSpeaking && (
+                <div className="flex items-end gap-0.5 h-5 mb-2">
+                  {[0.3,0.7,1,0.5,0.9,0.4,0.8,0.6,1,0.7].map((h, i) => (
+                    <div key={i} className="flex-1 bg-indigo-400 rounded-sm"
+                      style={{ height: `${h*100}%`, animation: `wave ${0.3+i*0.07}s ease-in-out ${i*0.05}s infinite alternate` }} />
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-slate-300 leading-relaxed bg-black/30 rounded-xl px-3 py-2 min-h-[40px]">
+                {transcript}
+              </p>
+              <div className="flex gap-2 mt-2">
+                {!sessionActive ? (
+                  <button onClick={startSession} disabled={isConnecting}
+                    className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-500 disabled:opacity-50 transition-all flex items-center justify-center gap-1">
+                    {isConnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {isConnecting ? 'Connecting...' : 'Start Tutor'}
                   </button>
+                ) : (
+                  <>
+                    <button onClick={() => setIsMicMuted(m => !m)}
+                      className={`flex-1 py-2 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 ${isMicMuted ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                      {isMicMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                      {isMicMuted ? 'Muted' : 'Live'}
+                    </button>
+                    <button onClick={endSession}
+                      className="px-3 py-2 rounded-xl bg-red-500/15 text-red-400 border border-red-500/25 text-[11px] font-black hover:bg-red-500/25 transition-all">
+                      End
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-          )}
-
-          {/* Model viewer area */}
-          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            {/* Background grid */}
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px)', backgroundSize: '40px 40px', pointerEvents: 'none' }} />
-
-            {loadingModel && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, animation: 'slideIn 0.3s ease' }}>
-                <div style={{ width: 64, height: 64, borderRadius: '50%', border: '3px solid rgba(99,102,241,0.2)', borderTopColor: '#6366f1', animation: 'spin 1s linear infinite' }} />
-                <p style={{ color: '#64748b', fontSize: 14 }}>Loading 3D model…</p>
-              </div>
-            )}
-
-            {!loadingModel && sketchfabUrl && (
-              <div style={{ position: 'absolute', inset: 0, animation: 'slideIn 0.4s ease' }}>
-                <iframe
-                  key={sketchfabUrl}
-                  src={sketchfabUrl}
-                  title={activeNode?.label || '3D Model'}
-                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                  allow="autoplay; fullscreen; xr-spatial-tracking"
-                  allowFullScreen
-                />
-              </div>
-            )}
-
-            {!loadingModel && !sketchfabUrl && activeNode && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: 40, animation: 'slideIn 0.3s ease' }}>
-                {/* Animated placeholder */}
-                <div style={{ width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${activeNode.color}33, transparent)`, border: `2px solid ${activeNode.color}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 3s ease-in-out infinite' }}>
-                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: `${activeNode.color}44`, border: `2px solid ${activeNode.color}` }} />
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <h3 style={{ color: '#e2e8f0', fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{activeNode.label}</h3>
-                  <p style={{ color: '#64748b', fontSize: 14, maxWidth: 340, lineHeight: 1.6 }}>{activeNode.description}</p>
-                  <p style={{ color: '#475569', fontSize: 12, marginTop: 16 }}>No 3D model found for this concept. Add your Sketchfab API token in backend .env to enable dynamic search.</p>
-                </div>
-              </div>
-            )}
-
-            {!loadingModel && !activeNode && (
-              <div style={{ textAlign: 'center', color: '#475569' }}>
-                <Sparkles size={48} style={{ margin: '0 auto 16px', color: '#6366f1', opacity: 0.5 }} />
-                <p style={{ fontSize: 16 }}>Select a concept to view its 3D model</p>
-              </div>
-            )}
           </div>
 
-          {/* ── BOTTOM CONTROLS ────────────────────────────────────────────── */}
-          <div style={{ padding: '12px 20px', background: 'rgba(5,8,22,0.8)', borderTop: '1px solid rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0 }}>
-            <button
-              className="control-btn"
-              onClick={() => setIsMicMuted(m => !m)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: isMicMuted ? 'rgba(244,63,94,0.15)' : 'rgba(16,185,129,0.15)', border: `1px solid ${isMicMuted ? 'rgba(244,63,94,0.4)' : 'rgba(16,185,129,0.4)'}`, borderRadius: 10, color: isMicMuted ? '#f43f5e' : '#10b981', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              {isMicMuted ? <MicOff size={16} /> : <Mic size={16} />}
-              {isMicMuted ? 'Unmuted' : 'Mic On'}
-            </button>
-
-            <button
-              className="control-btn"
-              onClick={() => setIsHandRaised(h => !h)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: isHandRaised ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isHandRaised ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, color: isHandRaised ? '#a855f7' : '#94a3b8', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              <Hand size={16} />
-              {isHandRaised ? 'Hand Raised' : 'Raise Hand'}
-            </button>
-
-            <button
-              className="control-btn"
-              onClick={() => !sessionActive && startSession()}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.4)', borderRadius: 10, color: '#06b6d4', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              <MessageCircle size={16} />
-              Ask AI
-            </button>
-
-            <button
-              className="control-btn"
-              onClick={() => setShowNotes(n => !n)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: showNotes ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${showNotes ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, color: showNotes ? '#a855f7' : '#94a3b8', fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              <BookOpen size={16} />
-              Notes
-            </button>
+          {/* Concept buttons */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+            {nodes.map((node, i) => (
+              <button key={node.id} onClick={() => { setNodeIndex(i); loadModel(node) }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
+                  activeNode?.id === node.id
+                    ? 'border-indigo-500/50 bg-indigo-500/15'
+                    : 'border-white/5 bg-white/[0.02] hover:border-white/15 hover:bg-white/5'
+                }`}
+                style={{ borderLeft: `3px solid ${node.color}` }}>
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: node.color }} />
+                <span className="text-xs font-bold text-slate-200 truncate">{node.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* ── RIGHT SIDEBAR ───────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(5,8,22,0.8)', borderLeft: '1px solid rgba(99,102,241,0.15)', overflow: 'hidden' }}>
-          {/* Classmates */}
-          <div style={{ padding: '20px 16px', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Classmates Online</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {PEERS.map(name => (
-                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: `linear-gradient(135deg, hsl(${name.charCodeAt(0) * 5 % 360},70%,50%), hsl(${name.charCodeAt(0) * 5 + 60 % 360},70%,40%))`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                    {name[0]}
-                  </div>
-                  <span style={{ color: '#e2e8f0', fontSize: 13, flex: 1 }}>{name}</span>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                </div>
-              ))}
-              <div style={{ padding: '8px 10px', color: '#64748b', fontSize: 12 }}>+ 7 more online</div>
-            </div>
-          </div>
+        {/* Center: 3D model preview + VR launch */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Grid background */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ backgroundImage: 'linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
-          {/* Lesson Progress */}
-          <div style={{ padding: '16px', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Lesson Progress</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              {/* Circle progress */}
-              <svg width="56" height="56" viewBox="0 0 56 56" style={{ flexShrink: 0 }}>
-                <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(99,102,241,0.15)" strokeWidth="4" />
-                <circle cx="28" cy="28" r="22" fill="none" stroke="#6366f1" strokeWidth="4" strokeDasharray={`${2 * Math.PI * 22 * 0.45} ${2 * Math.PI * 22 * 0.55}`} strokeDashoffset={2 * Math.PI * 22 * 0.25} strokeLinecap="round" style={{ transform: 'rotate(-90deg)', transformOrigin: '28px 28px' }} />
-                <text x="28" y="33" textAnchor="middle" fill="#e2e8f0" fontSize="12" fontWeight="700">45%</text>
-              </svg>
-              <div>
-                <div style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 600 }}>In Progress</div>
-                <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
-                  {activeNode ? `Studying: ${activeNode.label}` : 'Select a concept'}
+          {/* Model area */}
+          <div className="flex-1 relative flex items-center justify-center p-4">
+            {loadingModel && (
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
+                <p className="text-slate-500 text-sm">Loading 3D model…</p>
+              </div>
+            )}
+            {!loadingModel && modelUrl && (
+              <div className="w-full h-full min-h-64 rounded-2xl overflow-hidden border border-indigo-500/20 shadow-2xl">
+                <iframe key={modelUrl} src={modelUrl} className="w-full h-full" style={{ border: 'none' }}
+                  allow="autoplay; fullscreen; xr-spatial-tracking" allowFullScreen />
+              </div>
+            )}
+            {!loadingModel && !modelUrl && activeNode && (
+              <div className="flex flex-col items-center gap-5 text-center px-6">
+                <div className="w-32 h-32 rounded-full flex items-center justify-center"
+                  style={{ background: `radial-gradient(circle, ${activeNode.color}30, transparent)`, border: `2px solid ${activeNode.color}60` }}>
+                  <div className="w-14 h-14 rounded-full" style={{ background: activeNode.color + '60' }} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white mb-2">{activeNode.label}</h3>
+                  <p className="text-slate-400 text-sm leading-relaxed max-w-sm">{activeNode.description}</p>
+                  <p className="text-slate-600 text-xs mt-4">No 3D model found. Add SKETCHFAB_API_TOKEN to enable search.</p>
                 </div>
               </div>
-            </div>
+            )}
+            {!loadingModel && !activeNode && (
+              <div className="text-center text-slate-600">
+                <p className="text-lg">← Select a concept</p>
+              </div>
+            )}
           </div>
 
-          {/* Concept map mini */}
-          <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>All Topics</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {(vrLayout?.nodes || []).map((node, i) => (
-                <div key={node.id} onClick={() => selectNode(node)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, background: activeNode?.id === node.id ? 'rgba(99,102,241,0.15)' : 'transparent', cursor: 'pointer', transition: 'all 0.15s' }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: node.color, flexShrink: 0 }} />
-                  <span style={{ color: activeNode?.id === node.id ? '#e2e8f0' : '#94a3b8', fontSize: 12.5 }}>{node.label}</span>
-                  {activeNode?.id === node.id && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#6366f1', marginLeft: 'auto' }} />}
-                </div>
-              ))}
+          {/* VR launch bar */}
+          <div className="px-5 py-4 border-t border-indigo-500/15 bg-black/50 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-white font-black text-sm">{activeNode?.label || 'Select a concept'}</p>
+              <p className="text-slate-500 text-xs mt-0.5">{nodes.length} concepts in this lesson</p>
             </div>
+            <button onClick={() => {
+                if (!sessionActive) { toast('Start the AI tutor first for the best experience', { icon: '💡', duration: 2000 }) }
+                setVrMode(true)
+              }}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm text-white transition-all active:scale-95"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
+              📱 Enter VR
+            </button>
           </div>
         </div>
       </div>
-
-      {/* ── NOTES OVERLAY ──────────────────────────────────────────────────── */}
-      {showNotes && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'slideIn 0.3s ease' }}>
-          <div style={{ width: '90%', maxWidth: 680, maxHeight: '80vh', background: 'linear-gradient(135deg, #0a0f2e, #050816)', border: '1px solid rgba(168,85,247,0.4)', borderRadius: 20, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(168,85,247,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <BookOpen size={18} color="#a855f7" />
-                <h3 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: 0 }}>Study Notes</h3>
-              </div>
-              <button onClick={() => setShowNotes(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}>
-                <X size={20} />
-              </button>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-              <h4 style={{ color: '#a855f7', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>{resource.title}</h4>
-              {activeNode && (
-                <div style={{ marginBottom: 20, padding: '14px 16px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12 }}>
-                  <div style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: 6, fontSize: 14 }}>{activeNode.label}</div>
-                  <div style={{ color: '#94a3b8', fontSize: 13, lineHeight: 1.6 }}>{activeNode.description}</div>
-                </div>
-              )}
-              <div style={{ color: '#94a3b8', fontSize: 14, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                {resource.content ? resource.content.slice(0, 2000) : 'No notes available yet. Start an AI tutor session to generate notes!'}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
