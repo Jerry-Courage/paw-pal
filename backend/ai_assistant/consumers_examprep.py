@@ -180,6 +180,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
+                            'silenceDurationMs': 800,
                         }
                     },
                 }

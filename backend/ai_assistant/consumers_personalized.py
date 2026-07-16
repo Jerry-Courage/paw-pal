@@ -222,6 +222,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
+                            'silenceDurationMs': 800,
                         }
                     },
                 }
