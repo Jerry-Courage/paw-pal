@@ -66,11 +66,24 @@ CURATED_MODELS: dict[str, str] = {
 
 SKETCHFAB_SEARCH_URL = "https://api.sketchfab.com/v3/models"
 
+# Models to never show — popular non-educational models that appear in every search
+BLOCKED_UIDS = {
+    "5d9e9765887342f8b7a3b3ef00a9e37e",  # Littlest Tokyo (Japanese street)
+    "a8d7e4f3b2c1d0e9f8a7b6c5d4e3f2a1",  # other commonly returned irrelevant models
+}
+
+# Educational categories on Sketchfab
+EDUCATION_TAGS = [
+    'anatomy', 'biology', 'science', 'medical', 'educational',
+    'chemistry', 'physics', 'history', 'geography', 'math',
+    'engineering', 'architecture', 'nature', 'animal', 'plant',
+]
+
 
 def get_model_uid(keyword: str) -> str | None:
     """
-    Returns the best Sketchfab model UID for an educational keyword.
-    Uses targeted search with anatomy/science filters to avoid irrelevant results.
+    Returns a relevant educational Sketchfab model UID for the keyword.
+    Filters out popular non-educational models and prioritizes science/anatomy content.
     """
     keyword_lower = keyword.lower().strip()
 
@@ -79,12 +92,12 @@ def get_model_uid(keyword: str) -> str | None:
         logger.warning("[Sketchfab] No SKETCHFAB_API_TOKEN set.")
         return None
 
-    # Build education-specific search queries (most specific first)
+    # Build education-specific search queries
     search_queries = [
         f"{keyword} anatomy",
-        f"{keyword} biology",
-        f"{keyword} science education",
-        f"{keyword} medical",
+        f"{keyword} biology",  
+        f"{keyword} science",
+        f"{keyword} 3d model",
         keyword,
     ]
 
@@ -92,49 +105,76 @@ def get_model_uid(keyword: str) -> str | None:
         try:
             params = {
                 'q': query,
-                'sort_by': '-likeCount',
-                'count': 10,
+                'sort_by': '-relevance',  # relevance, not likes — avoids popular non-educational
+                'count': 20,
                 'type': 'models',
             }
             headers = {'Authorization': f'Token {token}'}
             resp = requests.get(SKETCHFAB_SEARCH_URL, params=params, headers=headers, timeout=8)
             resp.raise_for_status()
-            data = resp.json()
-            results = data.get('results', [])
+            results = resp.json().get('results', [])
 
-            # Filter: prefer models where keyword appears in name/tags/categories
-            # but fall back to first result if nothing matches exactly
-            keyword_words = [w for w in keyword_lower.split() if len(w) > 3]
+            keyword_words = [w for w in keyword_lower.split() if len(w) > 2]
             best_match = None
-            first_result = None
+            acceptable = None
 
             for model in results:
-                uid = model.get('uid')
-                if not uid:
+                uid = model.get('uid', '')
+                if not uid or uid in BLOCKED_UIDS:
                     continue
-                if not first_result:
-                    first_result = uid
 
                 name = model.get('name', '').lower()
                 tags = [t.get('name', '').lower() for t in model.get('tags', [])]
                 categories = [c.get('name', '').lower() for c in model.get('categories', [])]
-                all_text = name + ' ' + ' '.join(tags) + ' ' + ' '.join(categories)
+                description = model.get('description', '').lower()
+                all_text = f"{name} {' '.join(tags)} {' '.join(categories)} {description}"
 
-                if any(word in all_text for word in keyword_words):
+                # Skip clearly non-educational models
+                non_edu_names = ['littlest tokyo', 'tokyo', 'japan', 'street scene']
+                non_edu_keywords = ['town', 'city', 'street', 'building', 'house',
+                           'character', 'game', 'fantasy', 'cartoon', 'anime', 'cute',
+                           'low poly', 'stylized', 'environment', 'scene']
+                
+                # Block by model name directly
+                if any(bad in name for bad in non_edu_names):
+                    continue
+                    
+                if any(bad in all_text for bad in non_edu_keywords) and not any(edu in all_text for edu in EDUCATION_TAGS):
+                    continue
+
+                # Strong match: keyword appears in name or tags
+                if any(word in name or word in ' '.join(tags) for word in keyword_words):
                     best_match = uid
-                    logger.info(f"[Sketchfab] Keyword match '{keyword}' → '{model.get('name')}' ({uid})")
+                    logger.info(f"[Sketchfab] Strong match '{keyword}' → '{model.get('name')}' ({uid})")
                     break
 
-            # Use best keyword match; fall back to first result on final query attempt
-            result_uid = best_match or (first_result if query == search_queries[-1] else None)
-            if result_uid:
-                logger.info(f"[Sketchfab] Using {'matched' if best_match else 'fallback'} model for '{keyword}': {result_uid}")
-                return result_uid
+                # Acceptable match: keyword appears anywhere in metadata
+                if acceptable is None and any(word in all_text for word in keyword_words):
+                    acceptable = uid
+
+            result = best_match or acceptable
+            if result:
+                logger.info(f"[Sketchfab] Using model for '{keyword}': {result}")
+                return result
 
         except Exception as e:
             logger.warning(f"[Sketchfab] Search failed for '{query}': {e}")
 
-    logger.warning(f"[Sketchfab] No relevant model found for '{keyword}'")
+    # Last resort: search by keyword only and skip blocked models
+    try:
+        params = {'q': keyword, 'sort_by': '-likeCount', 'count': 10, 'type': 'models'}
+        resp = requests.get(SKETCHFAB_SEARCH_URL, params={'q': keyword, 'count': 10},
+                           headers={'Authorization': f'Token {token}'}, timeout=8)
+        if resp.ok:
+            for model in resp.json().get('results', []):
+                uid = model.get('uid', '')
+                if uid and uid not in BLOCKED_UIDS:
+                    logger.info(f"[Sketchfab] Last resort model for '{keyword}': {uid}")
+                    return uid
+    except Exception:
+        pass
+
+    logger.warning(f"[Sketchfab] No suitable model found for '{keyword}'")
     return None
 
 
