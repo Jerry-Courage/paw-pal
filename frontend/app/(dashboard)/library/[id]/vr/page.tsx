@@ -177,7 +177,27 @@ export default function VRPage({ params }: { params: { id: string } }) {
   const subject = resource.subject || resource.title
   const skyboxPrompt = `equirectangular 360 panorama of ${subject}, detailed scientific visualization, 8k resolution, virtual reality workspace`
   const skyboxUrl = notes.vr_skybox_url || `https://image.pollinations.ai/prompt/${encodeURIComponent(skyboxPrompt)}?width=1024&height=512&enhance=false`
-  const modelUrl = notes.vr_model_url || null
+  
+  const curatedModels: Record<string, string> = {
+    heart: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Heart/glTF-Binary/Heart.glb',
+    brain: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
+    cell: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
+    duck: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
+    avocado: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF-Binary/Avocado.glb',
+    lantern: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/glTF-Binary/Lantern.glb',
+    gear: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/glTF-Binary/SciFiHelmet.glb',
+    helmet: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/glTF-Binary/SciFiHelmet.glb',
+  }
+
+  let modelUrl = notes.vr_model_url || null
+  if (!modelUrl) {
+    for (const [key, url] of Object.entries(curatedModels)) {
+      if (subject.toLowerCase().includes(key) || resource.title.toLowerCase().includes(key)) {
+        modelUrl = url
+        break
+      }
+    }
+  }
 
   // Card Positions in semicircle (angles: -45, -15, 15, 45 degrees)
   const cardCoordinates = [

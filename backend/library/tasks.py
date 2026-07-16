@@ -390,38 +390,6 @@ def process_resource_task(res_id):
                         vision_data=vision_data
                     )
 
-                # ── VR Integration Sourcing ──
-                try:
-                    subject = res.subject or res.title
-                    vr_prompt = f"equirectangular 360 panorama of {subject}, highly detailed scientific visualization, 8k resolution, virtual reality environment"
-                    import urllib.parse
-                    encoded_prompt = urllib.parse.quote(vr_prompt)
-                    skybox_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=512&enhance=false"
-                    
-                    curated_models = {
-                        'heart': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Heart/glTF-Binary/Heart.glb',
-                        'brain': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-                        'cell': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-                        'duck': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-                        'avocado': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF-Binary/Avocado.glb',
-                        'lantern': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/glTF-Binary/Lantern.glb',
-                        'gear': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/glTF-Binary/SciFiHelmet.glb',
-                        'helmet': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/glTF-Binary/SciFiHelmet.glb',
-                    }
-                    
-                    matched_model = None
-                    for key, url in curated_models.items():
-                        if key in subject.lower() or key in res.title.lower():
-                            matched_model = url
-                            break
-                            
-                    kit['vr_skybox_url'] = skybox_url
-                    kit['vr_skybox_prompt'] = vr_prompt
-                    if matched_model:
-                        kit['vr_model_url'] = matched_model
-                except Exception as vre:
-                    logger.warning(f"Failed to generate VR metadata: {vre}")
-
                 res.ai_notes_json = kit
                 res.has_study_kit = True
                 res.processing_progress = 100
