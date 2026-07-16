@@ -647,36 +647,41 @@ class ResourceVRLayoutView(APIView):
         
         prompt = (
             f"You are a 3D visual design assistant for a WebVR educational app.\n"
-            f"Analyze this study material and create a concept map of the most important concepts.\n"
-            f"This could be ANY subject: biology, chemistry, physics, history, geography, math, " 
-            f"engineering, computer science, economics, literature, art, music, or anything else.\n\n"
+            f"Analyze this study material and create a concept map of the most important concepts.\n\n"
             f"Topic: {subject}\n"
             f"Overview: {overview.get('summary', '')[:300]}\n"
             f"Key Sections:\n{sections_summary}\n\n"
             "IMPORTANT: Return ONLY valid JSON. No markdown, no code fences, no explanation.\n\n"
-            "Each node MUST have a 'sketchfab_keyword' field — a short 1-3 word search term\n"
-            "that best describes what 3D model should represent this concept on Sketchfab.\n"
-            "Examples: 'human heart', 'water molecule', 'roman colosseum', 'pendulum', 'dna helix'\n\n"
+            "Each node MUST have a 'sketchfab_keyword' field.\n"
+            "This is the EXACT search query to find a relevant 3D anatomy/science model on Sketchfab.\n"
+            "RULES for sketchfab_keyword:\n"
+            "  - Must be 2-4 words\n"
+            "  - Must be a PHYSICAL OBJECT that exists as a 3D model\n"
+            "  - For anatomy: use 'human [organ] anatomy' e.g. 'human liver anatomy', 'human stomach anatomy'\n"
+            "  - For chemistry: use '[molecule] molecule 3d' e.g. 'water molecule 3d', 'dna helix 3d'\n"
+            "  - For physics: use the object name e.g. 'pendulum physics', 'electric circuit'\n"
+            "  - For history: use specific artifact e.g. 'pyramids giza', 'roman colosseum'\n"
+            "  - For abstract concepts (digestion, absorption): use the ORGAN that performs it\n"
+            "  - NEVER use abstract process words like 'digestion', 'absorption', 'regulation'\n"
+            "  - NEVER use vague words like 'system', 'process', 'function', 'mechanism'\n\n"
+            "GOOD examples: 'human liver anatomy', 'small intestine anatomy', 'dna helix 3d'\n"
+            "BAD examples: 'digestion', 'mechanical digestion', 'nutrient absorption', 'mouth'\n\n"
             "Each node must have ONE of these exact type values:\n"
-            "  'object'     -> physical object, structure, organ, artefact, device\n"
-            "  'concept'    -> abstract idea, process, theory, principle, law\n"
-            "  'event'      -> historical event, reaction, phenomenon, occurrence\n"
-            "  'entity'     -> person, organism, element, compound, material\n"
-            "  'default'    -> anything else\n\n"
-            "Use vivid, subject-appropriate hex colors:\n"
-            "  Red #ef4444, Purple #8b5cf6, Cyan #06b6d4, Green #10b981,\n"
-            "  Orange #f59e0b, Rose #f43f5e, Blue #3b82f6, Yellow #eab308.\n\n"
+            "  'object' -> physical object, organ, structure, device\n"
+            "  'concept' -> abstract idea, process, theory\n"
+            "  'entity' -> organism, element, compound\n"
+            "  'default' -> anything else\n\n"
             "Labels: max 4 words. Descriptions: exactly 1 factual sentence.\n"
-            "Generate 4 to 7 nodes and edges connecting related concepts.\n\n"
+            "Generate 5 to 7 nodes representing physical objects/organs (not processes).\n\n"
             "Return JSON in this exact format:\n"
             "{\n"
             '  "nodes": [\n'
-            '    {"id": "n1", "type": "object", "color": "#ef4444", "label": "Human Heart", '
-            '"description": "A muscular organ that pumps blood throughout the body.", '
-            '"sketchfab_keyword": "human heart"}\n'
+            '    {"id": "n1", "type": "object", "color": "#ef4444", "label": "Liver", '
+            '"description": "The liver filters blood and produces bile for digestion.", '
+            '"sketchfab_keyword": "human liver anatomy"}\n'
             '  ],\n'
             '  "edges": [\n'
-            '    {"from": "n1", "to": "n2", "color": "#ffffff", "label": "pumps blood to"}\n'
+            '    {"from": "n1", "to": "n2", "color": "#ffffff", "label": "connects to"}\n'
             '  ]\n'
             "}"
         )

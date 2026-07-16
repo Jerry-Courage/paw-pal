@@ -47,20 +47,38 @@ def get_model_uid(keyword: str) -> str | None:
 
     for i, query in enumerate(queries):
         try:
-            # First query: sort by likes (most popular human liver = best quality)
+            # First query: sort by likes (most popular "human liver" = high quality anatomy)
             # Subsequent queries: sort by relevance
             sort_by = '-likeCount' if i == 0 else '-relevance'
+
+            # Add science/medical category filter for anatomy/biology topics
+            params = {
+                'q': query,
+                'sort_by': sort_by,
+                'count': 24,
+                'type': 'models',
+                'categories': 'science-technology',  # Sketchfab category filter
+            }
             resp = requests.get(
                 SKETCHFAB_SEARCH_URL,
-                params={
-                    'q': query,
-                    'sort_by': sort_by,
-                    'count': 24,
-                    'type': 'models',
-                },
+                params=params,
                 headers=headers,
                 timeout=10,
             )
+
+            # If category filter returns nothing, try without it
+            if not resp.ok or not resp.json().get('results'):
+                resp = requests.get(
+                    SKETCHFAB_SEARCH_URL,
+                    params={
+                        'q': query,
+                        'sort_by': sort_by,
+                        'count': 24,
+                        'type': 'models',
+                    },
+                    headers=headers,
+                    timeout=10,
+                )
             if not resp.ok:
                 continue
 
@@ -86,14 +104,16 @@ def get_model_uid(keyword: str) -> str | None:
                     logger.info(f"[Sketchfab] '{keyword}' matched '{model.get('name')}' ({uid})")
                     return uid
 
-            # If no strong match, return the first non-blocked result
-            for model in results:
-                uid = model.get('uid', '')
-                name = (model.get('name') or '').lower()
-                if uid and uid not in BLOCKED_UIDS:
-                    if not any(bad in name for bad in ['tokyo', 'littlest', 'street scene']):
-                        logger.info(f"[Sketchfab] '{keyword}' fallback '{model.get('name')}' ({uid})")
-                        return uid
+            # If no strong match on name/tags, try first non-blocked result
+            # but ONLY if this is not the first (most general) query
+            if i > 0:
+                for model in results:
+                    uid = model.get('uid', '')
+                    name = (model.get('name') or '').lower()
+                    if uid and uid not in BLOCKED_UIDS:
+                        if not any(bad in name for bad in ['tokyo', 'littlest', 'street', 'warehouse', 'interior', 'house', 'building', 'city']):
+                            logger.info(f"[Sketchfab] '{keyword}' fallback '{model.get('name')}' ({uid})")
+                            return uid
 
         except Exception as e:
             logger.warning(f"[Sketchfab] Search error for '{query}': {e}")
