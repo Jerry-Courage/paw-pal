@@ -13,10 +13,10 @@ declare global {
       'a-sky': any;
       'a-light': any;
       'a-entity': any;
-      'a-octahedron': any;
       'a-sphere': any;
       'a-box': any;
       'a-cylinder': any;
+      'a-torus': any;
       'a-ring': any;
       'a-plane': any;
       'a-text': any;
@@ -25,25 +25,22 @@ declare global {
   }
 }
 
-// Pre-calculated semicircle layout coordinates centered around the user camera
-// Spreads out 7 positions evenly to prevent any overlapping or crowding.
-const SEMICIRCLE_POSITIONS = [
-  '-2.0 1.5 -2.2', // Far Left
-  '-1.3 1.5 -2.7', // Mid Left
-  '-0.6 1.5 -3.1', // Inner Left
-  '0.0 1.5 -3.3',  // Center
-  '0.6 1.5 -3.1',  // Inner Right
-  '1.3 1.5 -2.7',  // Mid Right
-  '2.0 1.5 -2.2',  // Far Right
+// Rich biology color palette — maps to vibrant node colours
+const NODE_COLORS = [
+  '#f43f5e', '#8b5cf6', '#06b6d4', '#10b981',
+  '#f59e0b', '#ec4899', '#3b82f6', '#a3e635',
 ]
 
-// Twinkling stars database coordinates
-const STARS = [
-  { x: -5, y: 4, z: -5 }, { x: 5, y: 3, z: -6 }, { x: -3, y: 6, z: -8 },
-  { x: 2, y: 5, z: -7 }, { x: -6, y: 3, z: 2 }, { x: 6, y: 4, z: 3 },
-  { x: -2, y: 5, z: 6 }, { x: 3, y: 6, z: 5 }, { x: 0, y: 7, z: -4 },
-  { x: -4, y: 4, z: 4 }, { x: 4, y: 5, z: -2 }, { x: -1, y: 6, z: -3 },
-  { x: 5, y: 6, z: 4 }, { x: -5, y: 5, z: -3 }, { x: 1, y: 4, z: -5 }
+// Semicircle positions — close to camera, spread at eye level
+// These are hand-tuned for a dramatic, immersive feel
+const SEMICIRCLE_POSITIONS = [
+  { x: -2.4, y: 1.6, z: -2.0 },
+  { x: -1.5, y: 1.6, z: -2.6 },
+  { x: -0.6, y: 1.6, z: -2.9 },
+  { x:  0.0, y: 1.6, z: -3.0 },
+  { x:  0.6, y: 1.6, z: -2.9 },
+  { x:  1.5, y: 1.6, z: -2.6 },
+  { x:  2.4, y: 1.6, z: -2.0 },
 ]
 
 export default function VRPage({ params }: { params: { id: string } }) {
@@ -51,419 +48,360 @@ export default function VRPage({ params }: { params: { id: string } }) {
   const [aframeLoaded, setAframeLoaded] = useState(false)
   const [scriptError, setScriptError] = useState(false)
 
-  // ── Fetch Study Resource ──
   const { data: resource, isLoading: isResourceLoading } = useQuery({
     queryKey: ['resource', resourceId],
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
-    enabled: !!resourceId
+    enabled: !!resourceId,
   })
 
-  // ── Fetch AI-generated VR layout ──
-  const { data: vrLayout, isLoading: isLayoutLoading } = useQuery({
-    queryKey: ['vr-layout', resourceId],
-    queryFn: () => libraryApi.getVRLayout(resourceId).then(r => r.data),
-    enabled: !!resourceId
+  const [shouldRefresh, setShouldRefresh] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const { data: vrLayout, isLoading: isLayoutLoading, refetch: refetchLayout } = useQuery({
+    queryKey: ['vr-layout', resourceId, shouldRefresh],
+    queryFn: () => libraryApi.getVRLayout(resourceId, shouldRefresh).then(r => r.data),
+    enabled: !!resourceId,
   })
 
-  // ── Dynamically load A-Frame script ──
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    setShouldRefresh(true)
+    setTimeout(async () => {
+      await refetchLayout()
+      setShouldRefresh(false)
+      setIsRefreshing(false)
+    }, 100)
+  }
+
+
   useEffect(() => {
     const scriptId = 'aframe-cdn-script'
-    let script = document.getElementById(scriptId) as HTMLScriptElement
-
-    if (script) {
-      setAframeLoaded(true)
-      return
-    }
-
-    script = document.createElement('script')
+    if (document.getElementById(scriptId)) { setAframeLoaded(true); return }
+    const script = document.createElement('script')
     script.id = scriptId
     script.src = 'https://aframe.io/releases/1.4.2/aframe.min.js'
     script.async = true
-    script.onload = () => {
-      setAframeLoaded(true)
-    }
-    script.onerror = () => {
-      setScriptError(true)
-    }
+    script.onload = () => setAframeLoaded(true)
+    script.onerror = () => setScriptError(true)
     document.head.appendChild(script)
-
-    return () => {
-      try {
-        const styleNodes = document.querySelectorAll('style[data-aframe-canvas-container]')
-        styleNodes.forEach(node => node.remove())
-        const aframeCanvas = document.querySelector('.a-canvas')
-        if (aframeCanvas) aframeCanvas.remove()
-      } catch (e) {}
-    }
   }, [])
 
-  // ── Register A-Frame Hover Component ──
+  // Register hover component once A-Frame is ready
   useEffect(() => {
     if (!aframeLoaded || !(window as any).AFRAME) return
     const AFRAME = (window as any).AFRAME
 
-    if (!AFRAME.components['interactive-panel']) {
-      AFRAME.registerComponent('interactive-panel', {
-        schema: {
-          title: { type: 'string', default: '' },
-          content: { type: 'string', default: '' }
-        },
-        init: function() {
+    if (!AFRAME.components['node-hover']) {
+      AFRAME.registerComponent('node-hover', {
+        schema: { label: { type: 'string', default: '' }, desc: { type: 'string', default: '' } },
+        init: function () {
           const el = this.el
-          const data = this.data
-
+          const { label, desc } = this.data
           el.addEventListener('mouseenter', () => {
-            el.setAttribute('animation', {
-              property: 'scale',
-              to: '1.15 1.15 1.15',
-              dur: 150,
-              easing: 'easeOutQuad'
-            })
-
-            const detailBoard = document.querySelector('#detail-board')
-            const detailTitle = document.querySelector('#detail-title')
-            const detailText = document.querySelector('#detail-text')
-
-            if (detailBoard) detailBoard.setAttribute('visible', 'true')
-            if (detailTitle) detailTitle.setAttribute('value', data.title)
-            if (detailText) {
-              const formattedContent = data.content.length > 150 
-                ? data.content.slice(0, 147) + '...' 
-                : data.content
-              detailText.setAttribute('value', formattedContent)
-            }
+            el.setAttribute('animation__scale', 'property: scale; to: 1.2 1.2 1.2; dur: 200; easing: easeOutQuad')
+            const t = document.querySelector('#info-title')
+            const d = document.querySelector('#info-desc')
+            if (t) t.setAttribute('value', label)
+            if (d) d.setAttribute('value', desc.slice(0, 160))
           })
-
           el.addEventListener('mouseleave', () => {
-            el.setAttribute('animation', {
-              property: 'scale',
-              to: '1 1 1 1',
-              dur: 150,
-              easing: 'easeOutQuad'
-            })
+            el.setAttribute('animation__scale', 'property: scale; to: 1 1 1; dur: 200; easing: easeOutQuad')
           })
-        }
-      })
-    }
-
-    if (!AFRAME.components['exit-trigger']) {
-      AFRAME.registerComponent('exit-trigger', {
-        init: function() {
-          const el = this.el
-          el.addEventListener('mouseenter', () => {
-            window.history.back()
-          })
-        }
+        },
       })
     }
   }, [aframeLoaded])
 
   if (isResourceLoading || isLayoutLoading || (!aframeLoaded && !scriptError)) {
     return (
-      <div className="w-full h-screen bg-black flex flex-col items-center justify-center space-y-4">
+      <div className="w-full h-screen bg-[#050507] flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-10 h-10 text-rose-500 animate-spin" />
         <div className="text-center">
-          <p className="text-sm font-black text-white uppercase tracking-widest">Constructing VR Space...</p>
-          <p className="text-[10px] text-slate-500 mt-1">AI is analyzing notes and designing the 3D topology</p>
+          <p className="text-sm font-black text-white uppercase tracking-widest">Building VR Space...</p>
+          <p className="text-[10px] text-slate-500 mt-1">AI is designing your 3D knowledge map</p>
         </div>
       </div>
     )
   }
 
-  if (scriptError || !resource || !vrLayout || !vrLayout.nodes) {
+  if (scriptError || !resource || !vrLayout?.nodes) {
     return (
       <div className="w-full h-screen bg-black flex flex-col items-center justify-center p-6 space-y-4">
         <AlertCircle className="w-12 h-12 text-rose-500" />
         <div className="text-center">
-          <h2 className="text-lg font-black text-white uppercase">VR Generation Failed</h2>
-          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-normal">
-            We couldn't compile the 3D visual scene layout for this topic. Please try again.
-          </p>
+          <h2 className="text-lg font-black text-white uppercase">VR Scene Failed</h2>
+          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Could not build the 3D layout. Please try again.</p>
         </div>
-        <Link 
-          href={`/library/${resourceId}`}
-          className="px-5 py-2.5 rounded-xl bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all"
-        >
+        <Link href={`/library/${resourceId}`}
+          className="px-5 py-2.5 rounded-xl bg-white text-black font-black text-xs uppercase tracking-widest">
           Return to Notes
         </Link>
       </div>
     )
   }
 
-  // Map AI layout nodes to semicircle layout to prevent overlapping
-  const nodes = (vrLayout.nodes || []).map((node: any, idx: number) => ({
+  const nodes = (vrLayout.nodes as any[]).map((node, idx) => ({
     ...node,
-    assignedPosition: SEMICIRCLE_POSITIONS[idx % SEMICIRCLE_POSITIONS.length],
-    index: idx
+    pos: SEMICIRCLE_POSITIONS[idx % SEMICIRCLE_POSITIONS.length],
+    color: node.color || NODE_COLORS[idx % NODE_COLORS.length],
   }))
 
-  const edges = vrLayout.edges || []
-
-  // Helpers to get connection vector coordinates
-  const getNodeById = (id: string) => nodes.find((n: any) => n.id === id)
+  const edges = (vrLayout.edges as any[]) || []
 
   return (
     <div className="w-full h-screen relative bg-black select-none">
-      
-      {/* HUD Controls */}
-      <div className="absolute top-6 left-6 z-[100] pointer-events-auto">
-        <Link
-          href={`/library/${resourceId}`}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-black/60 backdrop-blur-md border border-white/[0.06] text-white hover:text-rose-400 hover:border-rose-500/20 text-xs font-bold uppercase tracking-widest transition-all duration-200"
-        >
+
+      {/* ── HUD ─────────────────────────────────────────────────────────── */}
+      <div className="absolute top-5 left-5 z-50 pointer-events-auto flex items-center gap-3">
+        <Link href={`/library/${resourceId}`}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 text-white hover:text-rose-400 text-xs font-bold uppercase tracking-widest transition-all">
           <ChevronLeft className="w-4 h-4" /> Back to Notes
         </Link>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 text-white hover:text-rose-400 disabled:opacity-50 text-xs font-bold uppercase tracking-widest transition-all"
+        >
+          {isRefreshing ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Regenerating...</>
+          ) : (
+            <><Sparkles className="w-3.5 h-3.5 text-rose-400 animate-pulse" /> Regenerate Layout</>
+          )}
+        </button>
       </div>
-
-      <div className="absolute top-6 right-6 z-[100] hidden sm:flex flex-col items-end pointer-events-none">
-        <span className="text-[10px] font-black uppercase tracking-widest text-white/50 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/[0.04] flex items-center gap-1.5 animate-pulse">
-          <Sparkles className="w-3.5 h-3.5 text-rose-400" /> Topic: {resource.subject || 'General'}
+      <div className="absolute top-5 right-5 z-50 hidden sm:flex items-center gap-2 pointer-events-none">
+        <span className="text-[10px] font-black uppercase tracking-widest text-white/50 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/[0.06] flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+          {resource.subject || resource.title}
         </span>
       </div>
 
-      {/* A-Frame scene */}
+      {/* ── A-Frame Scene ───────────────────────────────────────────────── */}
       {/* @ts-ignore */}
-      <a-scene embedded vr-mode-ui="enabled: true">
-        
-        {/* Solid deep space background — completely CORS safe */}
-        {/* @ts-ignore */}
-        <a-sky color="#030006"></a-sky>
+      <a-scene embedded vr-mode-ui="enabled: true" renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true">
 
-        {/* Twinkling Space Stars details */}
-        {STARS.map((s, i) => (
-          // @ts-ignore
-          <a-sphere
-            key={i}
-            position={`${s.x} ${s.y} ${s.z}`}
-            radius="0.03"
-            color="#ffffff"
-            material="shader: flat"
-            animation="property: scale; to: 0.1 0.1 0.1; dir: alternate; loop: true; dur: 1200; easing: easeInOutQuad"
-          ></a-sphere>
-        ))}
+        {/* Deep space dark sky */}
+        {/* @ts-ignore */}
+        <a-sky color="#04030a"></a-sky>
 
-        {/* Floor grid / concentric glowing rings deck */}
+        {/* Lights — bright enough to see everything */}
         {/* @ts-ignore */}
-        <a-ring radius-inner="0" radius-outer="5" color="#010003" rotation="-90 0 0" position="0 -0.5 0"></a-ring>
+        <a-light type="ambient" color="#ffffff" intensity="1.2"></a-light>
         {/* @ts-ignore */}
-        <a-ring radius-inner="1" radius-outer="1.01" color="#f43f5e" opacity="0.15" rotation="-90 0 0" position="0 -0.49 0" material="shader: flat"></a-ring>
+        <a-light type="directional" color="#ffffff" intensity="1.5" position="3 5 2"></a-light>
         {/* @ts-ignore */}
-        <a-ring radius-inner="2" radius-outer="2.01" color="#f43f5e" opacity="0.1" rotation="-90 0 0" position="0 -0.49 0" material="shader: flat"></a-ring>
-        {/* @ts-ignore */}
-        <a-ring radius-inner="3" radius-outer="3.01" color="#f43f5e" opacity="0.05" rotation="-90 0 0" position="0 -0.49 0" material="shader: flat"></a-ring>
+        <a-light type="point" color="#f43f5e" intensity="1.0" position="0 3 -2"></a-light>
 
-        {/* Ambient Lights */}
-        {/* @ts-ignore */}
-        <a-light type="ambient" intensity="0.5" color="#ffffff"></a-light>
-        {/* @ts-ignore */}
-        <a-light type="directional" intensity="0.8" position="2 4 3" color="#ffffff"></a-light>
-
-        {/* ── Render AI layout nodes ── */}
-        {nodes.map((node: any) => {
+        {/* ── Starfield ── */}
+        {Array.from({ length: 40 }).map((_, i) => {
+          const px = (Math.random() - 0.5) * 16
+          const py = Math.random() * 6 + 1
+          const pz = -(Math.random() * 10 + 3)
           return (
             // @ts-ignore
-            <a-entity 
-              key={node.id} 
-              position={node.assignedPosition}
-              interactive-panel={`title: ${node.label}; content: ${node.description || ''}`}
+            <a-sphere
+              key={`star-${i}`}
+              position={`${px} ${py} ${pz}`}
+              radius="0.025"
+              material={`shader: flat; color: #ffffff; opacity: ${0.3 + Math.random() * 0.5}`}
+              animation={`property: scale; to: ${0.3 + Math.random() * 0.5} ${0.3 + Math.random() * 0.5} ${0.3 + Math.random() * 0.5}; dir: alternate; loop: true; dur: ${800 + Math.floor(Math.random() * 1400)}; easing: easeInOutSine`}
+            ></a-sphere>
+          )
+        })}
+
+        {/* ── Ground deck ── */}
+        {/* @ts-ignore */}
+        <a-ring radius-inner="0.01" radius-outer="4" color="#0a0010" material="shader: flat; opacity: 0.9" rotation="-90 0 0" position="0 0.01 -1.5"></a-ring>
+        {[0.8, 1.6, 2.4, 3.2].map((r, i) => (
+          // @ts-ignore
+          <a-ring
+            key={`ring-${i}`}
+            radius-inner={r - 0.015}
+            radius-outer={r}
+            material={`shader: flat; color: #f43f5e; opacity: ${0.15 - i * 0.03}`}
+            rotation="-90 0 0"
+            position="0 0.02 -1.5"
+          ></a-ring>
+        ))}
+
+        {/* ── Node entities ── */}
+        {nodes.map((node: any, idx: number) => {
+          const { pos, color } = node
+          const label = (node.label || 'Node').slice(0, 28)
+          const desc = (node.description || '').slice(0, 160)
+
+          // Pick geometry based on type
+          const type = (node.type || 'default').toLowerCase()
+
+          return (
+            // @ts-ignore
+            <a-entity
+              key={node.id || idx}
+              position={`${pos.x} ${pos.y} ${pos.z}`}
+              node-hover={`label: ${label}; desc: ${desc}`}
             >
-              {/* Glowing Hologram pedestal/ring */}
+              {/* Glowing pedestal ring flat-shaded so always visible */}
               {/* @ts-ignore */}
               <a-ring
-                radius-inner="0.28"
-                radius-outer="0.3"
+                radius-inner="0.30"
+                radius-outer="0.34"
                 rotation="90 0 0"
-                position="0 -0.45 0"
-                color={node.color || '#f43f5e'}
-                opacity="0.8"
-                material="shader: flat"
-                animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 1500; easing: easeInOutQuad"
+                position="0 -0.60 0"
+                material={`shader: flat; color: ${color}; opacity: 0.85`}
+                animation="property: scale; to: 1.12 1.12 1.12; dir: alternate; loop: true; dur: 1400; easing: easeInOutSine"
               ></a-ring>
+              {/* Thin stem from pedestal to object */}
+              {/* @ts-ignore */}
+              <a-cylinder
+                radius="0.018"
+                height="0.55"
+                position="0 -0.32 0"
+                material={`shader: flat; color: ${color}; opacity: 0.35`}
+              ></a-cylinder>
 
-              {/* Procedural Holographic Geometry — CORS safe & instantly loads */}
-              {node.type === 'server' ? (
-                // Server stack primitive representation
+              {/* ── Shape by type ── */}
+              {(type.includes('organ') || type.includes('cell') || type.includes('nucl')) ? (
+                // Biology cell: sphere with orbital ring
                 // @ts-ignore
-                <a-entity position="0 0.1 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-box width="0.3" height="0.08" depth="0.3" color={node.color || '#f43f5e'} material="roughness: 0.2; metalness: 0.8" position="0 0.12 0"></a-box>
-                  {/* @ts-ignore */}
-                  <a-box width="0.3" height="0.08" depth="0.3" color={node.color || '#f43f5e'} material="roughness: 0.2; metalness: 0.8" position="0 0 0"></a-box>
-                  {/* @ts-ignore */}
-                  <a-box width="0.3" height="0.08" depth="0.3" color={node.color || '#f43f5e'} material="roughness: 0.2; metalness: 0.8" position="0 -0.12 0"></a-box>
-                </a-entity>
-              ) : node.type === 'database' ? (
-                // Cylinder database primitive representation
-                // @ts-ignore
-                <a-entity position="0 0.1 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-cylinder radius="0.16" height="0.3" color={node.color || '#3b82f6'} material="roughness: 0.2; metalness: 0.8"></a-cylinder>
-                  {/* @ts-ignore */}
-                  <a-ring radius-inner="0.18" radius-outer="0.2" rotation="90 0 0" position="0 0.08 0" color="#ffffff" opacity="0.8" material="shader: flat"></a-ring>
-                  {/* @ts-ignore */}
-                  <a-ring radius-inner="0.18" radius-outer="0.2" rotation="90 0 0" position="0 -0.08 0" color="#ffffff" opacity="0.8" material="shader: flat"></a-ring>
-                </a-entity>
-              ) : node.type === 'client_device' ? (
-                // Screen device primitive representation
-                // @ts-ignore
-                <a-entity position="0 0.1 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 12000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-box width="0.35" height="0.22" depth="0.03" color={node.color || '#10b981'} material="roughness: 0.1; metalness: 0.9"></a-box>
-                  {/* @ts-ignore */}
-                  <a-cylinder radius="0.02" height="0.1" position="0 -0.12 0" color="#a1a1aa"></a-cylinder>
-                  {/* @ts-ignore */}
-                  <a-box width="0.18" height="0.02" depth="0.12" position="0 -0.17 0" color="#a1a1aa"></a-box>
-                </a-entity>
-              ) : node.type === 'organelle' || node.type === 'nucleus' ? (
-                // Biology Organelle / Nucleus orbitals representation
-                // @ts-ignore
-                <a-entity position="0 0.1 0" animation="property: rotation; to: 360 360 0; loop: true; dur: 10000; easing: linear">
-                  {/* @ts-ignore */}
-                  <a-sphere radius="0.12" color={node.color || '#a855f7'} material="roughness: 0.3; metalness: 0.7"></a-sphere>
-                  {/* @ts-ignore */}
-                  <a-ring radius-inner="0.2" radius-outer="0.22" rotation="45 45 0" color={node.color || '#a855f7'} opacity="0.8" material="shader: flat"></a-ring>
-                  {/* @ts-ignore */}
-                  <a-ring radius-inner="0.2" radius-outer="0.22" rotation="-45 45 0" color={node.color || '#a855f7'} opacity="0.8" material="shader: flat"></a-ring>
-                </a-entity>
-              ) : node.type === 'heart' ? (
-                // Heart beat pulsating primitive representation
-                // @ts-ignore
-                <a-entity position="0 0.1 0" animation="property: scale; to: 1.25 1.25 1.25; dir: alternate; loop: true; dur: 850; easing: easeInOutQuad">
-                  {/* @ts-ignore */}
-                  <a-octahedron radius="0.18" color={node.color || '#ef4444'} material="roughness: 0.2; metalness: 0.8"></a-octahedron>
-                </a-entity>
-              ) : (
-                // Standard default generic floating sphere
-                // @ts-ignore
-                <a-entity position="0 0.1 0" animation="property: rotation; to: 360 0 360; loop: true; dur: 10000; easing: linear">
+                <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear">
                   {/* @ts-ignore */}
                   <a-sphere
-                    radius="0.15"
-                    color={node.color || '#e2e8f0'}
-                    material="roughness: 0.2; metalness: 0.8"
+                    radius="0.28"
+                    material={`color: ${color}; roughness: 0.3; metalness: 0.1; emissive: ${color}; emissiveIntensity: 0.4`}
                   ></a-sphere>
+                  {/* @ts-ignore */}
+                  <a-torus radius="0.38" radius-tubular="0.012"
+                    rotation="80 0 0"
+                    material={`shader: flat; color: ${color}; opacity: 0.7`}
+                  ></a-torus>
+                </a-entity>
+              ) : (type.includes('enzyme') || type.includes('acid') || type.includes('chem')) ? (
+                // Chemical/Enzyme: two interlocked rings
+                // @ts-ignore
+                <a-entity animation="property: rotation; to: 360 180 0; loop: true; dur: 7000; easing: linear">
+                  {/* @ts-ignore */}
+                  <a-torus radius="0.22" radius-tubular="0.04"
+                    rotation="0 0 0"
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.5; roughness: 0.2; metalness: 0.6`}
+                  ></a-torus>
+                  {/* @ts-ignore */}
+                  <a-torus radius="0.22" radius-tubular="0.04"
+                    rotation="90 0 0"
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.5; roughness: 0.2; metalness: 0.6`}
+                  ></a-torus>
+                </a-entity>
+              ) : (type.includes('vessel') || type.includes('tube') || type.includes('duct') || type.includes('intestin')) ? (
+                // Tube/Vessel: cylinder
+                // @ts-ignore
+                <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
+                  {/* @ts-ignore */}
+                  <a-cylinder
+                    radius="0.18"
+                    height="0.5"
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.3; roughness: 0.4; metalness: 0.2`}
+                  ></a-cylinder>
+                  {/* @ts-ignore */}
+                  <a-ring radius-inner="0.20" radius-outer="0.22" rotation="90 0 0" position="0 0.18 0"
+                    material={`shader: flat; color: #ffffff; opacity: 0.5`}></a-ring>
+                  {/* @ts-ignore */}
+                  <a-ring radius-inner="0.20" radius-outer="0.22" rotation="90 0 0" position="0 -0.18 0"
+                    material={`shader: flat; color: #ffffff; opacity: 0.5`}></a-ring>
+                </a-entity>
+              ) : (type.includes('muscle') || type.includes('stomach') || type.includes('organ')) ? (
+                // Organ: rounded box
+                // @ts-ignore
+                <a-entity animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 1200; easing: easeInOutSine">
+                  {/* @ts-ignore */}
+                  <a-box width="0.45" height="0.38" depth="0.32"
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.35; roughness: 0.5; metalness: 0.1`}
+                  ></a-box>
+                </a-entity>
+              ) : (
+                // Default: glowing sphere
+                // @ts-ignore
+                <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 11000; easing: linear">
+                  {/* @ts-ignore */}
+                  <a-sphere
+                    radius="0.25"
+                    material={`color: ${color}; emissive: ${color}; emissiveIntensity: 0.45; roughness: 0.2; metalness: 0.5`}
+                  ></a-sphere>
+                  {/* Equatorial glow ring */}
+                  {/* @ts-ignore */}
+                  <a-torus radius="0.30" radius-tubular="0.010"
+                    material={`shader: flat; color: ${color}; opacity: 0.6`}
+                    rotation="90 0 0"
+                  ></a-torus>
                 </a-entity>
               )}
 
-              {/* Floating label above the model */}
+              {/* Node label — big, bright, always readable */}
               {/* @ts-ignore */}
               <a-text
-                value={node.label}
-                position="0 0.5 0"
+                value={label}
+                position="0 0.70 0"
                 align="center"
-                width="1.8"
+                width="2.2"
                 color="#ffffff"
-                font="klykov"
+                wrap-count="18"
               ></a-text>
             </a-entity>
           )
         })}
 
-        {/* ── Render layout connection edges ── */}
+        {/* ── Connection lines ── */}
         {edges.map((edge: any, idx: number) => {
-          const fromNode = getNodeById(edge.from)
-          const toNode = getNodeById(edge.to)
-
-          if (!fromNode || !toNode) return null
-
-          // Parse position coordinates "x y z" from semicircle assignment
-          const [x1, y1, z1] = fromNode.assignedPosition.split(' ').map(Number)
-          const [x2, y2, z2] = toNode.assignedPosition.split(' ').map(Number)
-
-          // Calculate connection label position (midpoint of the vector, slightly raised)
-          const midX = (x1 + x2) / 2
-          const midY = (y1 + y2) / 2 + 0.12
-          const midZ = (z1 + z2) / 2
-
+          const from = nodes.find((n: any) => n.id === edge.from)
+          const to   = nodes.find((n: any) => n.id === edge.to)
+          if (!from || !to) return null
+          const { x: x1, y: y1, z: z1 } = from.pos
+          const { x: x2, y: y2, z: z2 } = to.pos
           return (
             // @ts-ignore
-            <a-entity key={idx}>
-              {/* glowing connection line */}
-              {/* @ts-ignore */}
-              <a-entity
-                line={`start: ${x1} ${y1} ${z1}; end: ${x2} ${y2} ${z2}; color: ${edge.color || '#a1a1aa'}; opacity: 0.35`}
-              ></a-entity>
-              
-              {/* edge label card */}
-              {/* @ts-ignore */}
-              <a-text
-                value={edge.label || ''}
-                position={`${midX} ${midY} ${midZ}`}
-                align="center"
-                width="1.3"
-                color="#94a3b8"
-                font="klykov"
-              ></a-text>
-            </a-entity>
+            <a-entity key={`edge-${idx}`}
+              line={`start: ${x1} ${y1} ${z1}; end: ${x2} ${y2} ${z2}; color: #ffffff; opacity: 0.18`}
+            ></a-entity>
           )
         })}
 
-        {/* ── Central Details Board ── */}
+        {/* ── Info panel — appears at bottom of view ── */}
         {/* @ts-ignore */}
         <a-plane
-          id="detail-board"
-          position="0 0.5 -2.4"
-          rotation="-20 0 0"
-          width="2.5"
-          height="0.9"
-          color="#0a0a0d"
-          material="shader: flat; transparent: true; opacity: 0.9"
+          position="0 0.6 -2.2"
+          rotation="-15 0 0"
+          width="3.2"
+          height="0.95"
+          material="shader: flat; color: #060410; opacity: 0.92"
         >
           {/* @ts-ignore */}
-          <a-text
-            id="detail-title"
+          <a-text id="info-title"
             value={resource.title}
             align="center"
-            width="2.2"
+            width="3.0"
             color="#f43f5e"
-            position="0 0.22 0.02"
-            font="klykov"
+            position="0 0.24 0.01"
           ></a-text>
           {/* @ts-ignore */}
-          <a-text
-            id="detail-text"
-            value="Gaze at any floating hologram node to explore concepts"
+          <a-text id="info-desc"
+            value="Gaze at any concept node to see details"
             align="center"
-            width="2.0"
+            width="2.8"
             color="#94a3b8"
-            position="0 -0.12 0.02"
-            font="klykov"
+            wrap-count="52"
+            position="0 -0.12 0.01"
           ></a-text>
         </a-plane>
 
-        {/* ── Exit Sign (Gaze back for VR headsets) ── */}
+        {/* ── Camera + gaze cursor ── */}
         {/* @ts-ignore */}
-        <a-plane
-          position="0 2.2 2.0"
-          rotation="0 180 0"
-          width="0.8"
-          height="0.3"
-          color="#b91c1c"
-          opacity="0.85"
-          exit-trigger=""
-        >
-          {/* @ts-ignore */}
-          <a-text
-            value="GAZE TO EXIT"
-            align="center"
-            width="1.8"
-            color="#ffffff"
-            position="0 0 0.02"
-            font="klykov"
-          ></a-text>
-        </a-plane>
-
-        {/* ── Camera with Gaze Cursor ── */}
-        {/* @ts-ignore */}
-        <a-entity camera look-controls position="0 1.6 0">
+        <a-entity camera look-controls wasd-controls position="0 1.6 0.5">
           {/* @ts-ignore */}
           <a-cursor
             fuse="true"
-            fuse-timeout="1500"
+            fuse-timeout="1200"
             color="#f43f5e"
-            scale="0.6 0.6 0.6"
-            animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dur: 1500; from: 0.6 0.6 0.6; to: 0.1 0.1 0.1"
-            animation__mouseleave="property: scale; startEvents: mouseleave; easing: easeOutQuad; dur: 500; to: 0.6 0.6 0.6"
+            scale="0.7 0.7 0.7"
+            animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dur: 1200; from: 0.7 0.7 0.7; to: 0.15 0.15 0.15"
+            animation__leave="property: scale; startEvents: mouseleave; easing: easeOutQuad; dur: 400; to: 0.7 0.7 0.7"
           ></a-cursor>
         </a-entity>
 

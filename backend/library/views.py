@@ -632,34 +632,46 @@ class ResourceVRLayoutView(APIView):
     def get(self, request, pk):
         resource = get_object_or_404(Resource, Q(id=pk) & (Q(owner=request.user) | Q(is_public=True)))
         
-        # Check if already cached
+        # Return cached layout unless ?refresh=1 is requested
         notes = resource.ai_notes_json or {}
         vr_layout = notes.get('vr_layout')
-        if vr_layout:
+        if vr_layout and not request.query_params.get('refresh'):
             return Response(vr_layout)
             
         overview = notes.get('overview', {})
         sections = notes.get('sections', [])
         
-        sections_summary = "\n".join([f"- {s.get('title')}: {s.get('content', '')[:150]}" for s in sections[:5]])
+        sections_summary = "\n".join([f"- {s.get('title')}: {s.get('content', '')[:150]}" for s in sections[:7]])
         subject = resource.subject or resource.title
         
         prompt = (
-            f"You are a 3D spatial design assistant for a WebVR learning app.\n"
-            f"Analyze this study material and design a 3D schematic/concept topology map representing the main ideas, architecture, or biological structure described.\n\n"
+            f"You are a 3D visual design assistant for a WebVR educational app.\n"
+            f"Analyze this study material and create a concept map of the most important concepts.\n\n"
             f"Topic: {subject}\n"
             f"Overview: {overview.get('summary', '')[:300]}\n"
             f"Key Sections:\n{sections_summary}\n\n"
-            "Return a structured JSON object containing a list of 'nodes' (each with an id, type, position, color, and label) and 'edges' (connections between node ids).\n"
-            "Keep the scene clean and spacing comfortable for VR (coordinates x, y, z in meters, centering around y=1.2 to y=1.8, and z=-1.5 to z=-3.5).\n\n"
-            "For each node, map its visual meaning to one of these allowed 3D model types: 'server' (infrastructure rack), 'database' (cylinder stack), 'client_device' (laptop/phone), 'organelle' (mitochondria), 'nucleus' (cell center), 'cell_membrane', 'atom', 'molecule', or 'state_node' (generic sphere).\n\n"
-            "Format the response exactly as this JSON:\n"
+            "IMPORTANT: Return ONLY valid JSON. No markdown, no code fences, no explanation.\n\n"
+            "Each node must have ONE of these exact type values (controls the 3D shape rendered):\n"
+            "  'organelle'  -> biology cell sphere with orbital ring (cells, organelles, biological structures)\n"
+            "  'nucleus'    -> biology cell sphere with orbital ring (nucleus, control centers, core concepts)\n"
+            "  'enzyme'     -> two interlocked torus rings (enzymes, catalysts, chemical agents, hormones)\n"
+            "  'vessel'     -> cylinder with glow bands (tubes, intestines, ducts, vessels, tracts, pathways)\n"
+            "  'organ'      -> pulsating box (organs, chambers, stomach, liver, heart, reservoirs)\n"
+            "  'molecule'   -> two interlocked torus rings (molecules, compounds, nutrients, vitamins)\n"
+            "  'atom'       -> sphere with equatorial ring (atoms, ions, particles, elements)\n"
+            "  'default'    -> glowing sphere with ring (general concepts, facts, processes, steps)\n\n"
+            "Use vivid hex colors appropriate to biology:\n"
+            "  Red #ef4444 for organs, Purple #8b5cf6 for enzymes, Cyan #06b6d4 for vessels,\n"
+            "  Green #10b981 for organelles, Orange #f59e0b for molecules, Rose #f43f5e for nucleus.\n\n"
+            "Labels: max 4 words. Descriptions: exactly 1 factual sentence.\n"
+            "Generate 4 to 7 nodes and edges connecting related concepts.\n\n"
+            "Return JSON in this exact format:\n"
             "{\n"
             '  "nodes": [\n'
-            '    {"id": "node1", "type": "server"|"database"|"client_device"|"organelle"|"nucleus"|"cell_membrane"|"atom"|"molecule"|"state_node", "position": "x y z", "color": "#hex", "label": "Short label", "description": "1-sentence fact about this component"}\n'
+            '    {"id": "n1", "type": "organ", "color": "#ef4444", "label": "Stomach", "description": "Churns food with gastric acid and pepsin to form chyme."}\n'
             '  ],\n'
             '  "edges": [\n'
-            '    {"from": "node1", "to": "node2", "color": "#hex", "label": "Relation text"}\n'
+            '    {"from": "n1", "to": "n2", "color": "#ffffff", "label": "sends chyme to"}\n'
             '  ]\n'
             "}"
         )
@@ -678,3 +690,4 @@ class ResourceVRLayoutView(APIView):
         except Exception as e:
             logger.error(f"Failed to generate VR layout: {e}")
             return Response({"error": f"Failed to generate layout: {str(e)}"}, status=500)
+
