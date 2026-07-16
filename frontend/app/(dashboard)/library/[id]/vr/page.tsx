@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi, getAuthToken, API_BASE } from '@/lib/api'
-import { Loader2, ChevronLeft, Sparkles, AlertCircle, Mic, MicOff, Volume2 } from 'lucide-react'
+import { Loader2, ChevronLeft, Sparkles, AlertCircle, Mic, MicOff } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -12,7 +12,6 @@ declare global {
     interface IntrinsicElements {
       'a-scene': any;
       'a-sky': any;
-      'a-camera': any;
       'a-light': any;
       'a-entity': any;
       'a-sphere': any;
@@ -23,29 +22,41 @@ declare global {
       'a-plane': any;
       'a-text': any;
       'a-cursor': any;
+      'a-camera': any;
     }
   }
 }
 
-// Gemini Native Audio helper
-function base64ToPcmFloat(b64: string): Float32Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  const int16 = new Int16Array(bytes.buffer)
-  const float32 = new Float32Array(int16.length)
-  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768
-  return float32
+// Rich biology color palette
+const NODE_COLORS = [
+  '#f43f5e', '#8b5cf6', '#06b6d4', '#10b981',
+  '#f59e0b', '#ec4899', '#3b82f6', '#a3e635',
+]
+
+function base64ToPcmFloat(base64: string): Float32Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const int16 = new Int16Array(bytes.buffer);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768.0;
+  }
+  return float32;
 }
 
 // ── Realistic Composite 3D Organ Models ──
-function renderOrganModel(label: string, color: string) {
+function renderOrganModel(label: string, color: string, posStr: string) {
   const clean = label.toLowerCase();
   
+  // 1. Teeth: Jaw arch and individual teeth
   if (clean.includes('teeth') || clean.includes('tooth') || clean.includes('mouth')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.35 -2.0" rotation="20 0 0" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} rotation="20 0 0" scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-torus radius="0.18" radius-tubular="0.02" arc="180" rotation="90 0 0" position="0 -0.04 0" color="#e2e8f0"></a-torus>
         {/* @ts-ignore */}
@@ -62,10 +73,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 2. Tongue: Realistic pink tongue with groove
   if (clean.includes('tongue')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.35 -2.0" rotation="25 0 0" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} rotation="25 0 0" scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-box width="0.28" height="0.06" depth="0.40" color="#fda4af" roughness="0.8" position="0 0 0"></a-box>
         {/* @ts-ignore */}
@@ -76,10 +88,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 3. Stomach: Curved J-shape organ
   if (clean.includes('stomach')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.38 -2.0" rotation="0 0 20" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} rotation="0 0 20" scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-sphere radius="0.22" scale="1.3 0.9 0.75" color="#f43f5e" position="0 0 0" roughness="0.6"></a-sphere>
         {/* @ts-ignore */}
@@ -90,10 +103,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 4. Liver: Dark-red wedge bi-lobed organ with green gallbladder peaking underneath
   if (clean.includes('liver')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.38 -2.0" rotation="0 15 -10" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} rotation="0 15 -10" scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-sphere radius="0.28" scale="1.2 0.65 0.75" position="0.06 0 0" color="#7f1d1d" roughness="0.7"></a-sphere>
         {/* @ts-ignore */}
@@ -104,10 +118,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 5. Pancreas: Elongated orange gland
   if (clean.includes('pancreas')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.35 -2.0" rotation="0 0 -15" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} rotation="0 0 -15" scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-sphere radius="0.10" position="-0.11 0 0" color="#ea580c" roughness="0.9"></a-sphere>
         {/* @ts-ignore */}
@@ -122,10 +137,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 6. Salivary Glands: Grape-like cluster representation
   if (clean.includes('salivary') || clean.includes('gland')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.35 -2.0" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-cylinder radius="0.015" height="0.22" color="#f43f5e" rotation="45 0 0"></a-cylinder>
         {/* @ts-ignore */}
@@ -140,10 +156,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 7. Esophagus / Throat: Muscular pink cylinder tube
   if (clean.includes('esophagus') || clean.includes('throat') || clean.includes('vessel') || clean.includes('pharynx')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.38 -2.0" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-cylinder radius="0.065" height="0.50" color="#fda4af" roughness="0.9"></a-cylinder>
         {/* @ts-ignore */}
@@ -156,10 +173,11 @@ function renderOrganModel(label: string, color: string) {
     );
   }
   
+  // 8. Intestines: Convoluted winding loops
   if (clean.includes('intestine') || clean.includes('colon') || clean.includes('rectum')) {
     return (
       // @ts-ignore
-      <a-entity position="0.75 0.35 -2.0" scale="1.2 1.2 1.2">
+      <a-entity position={posStr} scale="1.2 1.2 1.2">
         {/* @ts-ignore */}
         <a-torus radius="0.15" radius-tubular="0.038" position="-0.05 0.06 0" rotation="20 40 10" color="#f43f5e" roughness="0.7"></a-torus>
         {/* @ts-ignore */}
@@ -170,10 +188,10 @@ function renderOrganModel(label: string, color: string) {
     );
   }
 
-  // Default projection node (molecule)
+  // 9. Default / process node: molecular break-down nutrient diagram
   return (
     // @ts-ignore
-    <a-entity position="0.75 0.35 -2.0" animation="property: rotation; to: 360 360 0; loop: true; dur: 12000; easing: linear">
+    <a-entity position={posStr} animation="property: rotation; to: 360 360 0; loop: true; dur: 12000; easing: linear">
       {/* @ts-ignore */}
       <a-sphere radius="0.14" color={color} material="roughness: 0.2; metalness: 0.8"></a-sphere>
       {/* @ts-ignore */}
@@ -449,7 +467,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
         },
         init: function () {
           const el = this.el
-          const { label, desc } = this.data
+          const { label } = this.data
 
           el.addEventListener('mouseenter', () => {
             el.setAttribute('material', 'color: #f43f5e; opacity: 0.95')
@@ -551,94 +569,117 @@ export default function VRPage({ params }: { params: { id: string } }) {
       {/* @ts-ignore */}
       <a-scene embedded vr-mode-ui="enabled: true" renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true">
         
-        {/* Skybox */}
+        {/* Solid wall and floor textures simulating an enclosed high-tech classroom */}
+        {/* Floor */}
         {/* @ts-ignore */}
-        <a-sky color="#030206"></a-sky>
+        <a-plane width="12" height="12" color="#0b0a12" rotation="-90 0 0" position="0 -0.5 0"></a-plane>
+        {/* Front wall */}
+        {/* @ts-ignore */}
+        <a-plane width="12" height="6" color="#030206" position="0 2.5 -5"></a-plane>
+        {/* Left wall */}
+        {/* @ts-ignore */}
+        <a-plane width="12" height="6" color="#05040a" position="-6 2.5 0" rotation="0 90 0"></a-plane>
+        {/* Right wall */}
+        {/* @ts-ignore */}
+        <a-plane width="12" height="6" color="#05040a" position="6 2.5 0" rotation="0 -90 0"></a-plane>
 
-        {/* Dynamic stars */}
-        {Array.from({ length: 30 }).map((_, i) => {
-          const px = (Math.random() - 0.5) * 12
-          const py = Math.random() * 5 + 1.5
-          const pz = -(Math.random() * 8 + 2)
-          return (
-            // @ts-ignore
-            <a-sphere
-              key={`star-${i}`}
-              position={`${px} ${py} ${pz}`}
-              radius="0.015"
-              material="shader: flat; color: #ffffff; opacity: 0.6"
-            ></a-sphere>
-          )
-        })}
+        {/* High-tech trim neon outline vectors */}
+        {/* @ts-ignore */}
+        <a-entity line="start: -6 -0.48 -4.95; end: 6 -0.48 -4.95; color: #a855f7; opacity: 0.5"></a-entity>
+        {/* @ts-ignore */}
+        <a-entity line="start: -5.95 -0.48 -5; end: -5.95 -0.48 5; color: #06b6d4; opacity: 0.3"></a-entity>
+        {/* @ts-ignore */}
+        <a-entity line="start: 5.95 -0.48 -5; end: 5.95 -0.48 5; color: #06b6d4; opacity: 0.3"></a-entity>
+
+        {/* Ceiling light panel */}
+        {/* @ts-ignore */}
+        <a-plane width="4" height="4" color="#0f0d1a" rotation="90 0 0" position="0 4.5 -1"></a-plane>
 
         {/* Ambient Lights */}
         {/* @ts-ignore */}
-        <a-light type="ambient" color="#ffffff" intensity="1.1"></a-light>
+        <a-light type="ambient" color="#ffffff" intensity="1.2"></a-light>
         {/* @ts-ignore */}
-        <a-light type="directional" color="#ffffff" intensity="1.3" position="2 4 1"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="1.4" position="2 4 1"></a-light>
         {/* @ts-ignore */}
-        <a-light type="point" color="#a855f7" intensity="1.2" position="0 2 -2"></a-light>
+        <a-light type="point" color="#a855f7" intensity="1.2" position="0 3.2 -2.5"></a-light>
 
-        {/* Floor circles */}
+        {/* ── SMARTBOARD (Large screen at the back of the classroom) ── */}
         {/* @ts-ignore */}
-        <a-ring radius-inner="0" radius-outer="4" color="#080512" rotation="-90 0 0" position="0 -0.5 -1"></a-ring>
-        {/* @ts-ignore */}
-        <a-ring radius-inner="2" radius-outer="2.02" color="#a855f7" opacity="0.2" rotation="-90 0 0" position="0 -0.49 -1" material="shader: flat"></a-ring>
-
-        {/* ── LEFT PANEL: Gaze Interactive Concept Menu ── */}
-        {/* @ts-ignore */}
-        <a-entity position="-0.85 0.5 -1.6" rotation="0 25 0">
-          {/* Menu Backing plate */}
+        <a-plane
+          position="0 2.2 -4.8"
+          width="5.0"
+          height="2.2"
+          material="shader: flat; color: #020205; transparent: true; opacity: 0.95"
+        >
+          {/* Outer glowing border */}
           {/* @ts-ignore */}
-          <a-plane
-            width="0.8"
-            height="1.0"
-            material="shader: flat; color: #07050e; transparent: true; opacity: 0.85; side: double"
-          >
-            {/* Title */}
-            {/* @ts-ignore */}
-            <a-text
-              value="CONCEPTS MENU"
-              align="center"
-              width="1.8"
-              color="#a855f7"
-              position="0 0.4 0.01"
-              font="klykov"
-            ></a-text>
+          <a-ring radius-inner="2.7" radius-outer="2.72" scale="1 0.44 1" color="#a855f7" opacity="0.6" material="shader: flat"></a-ring>
+          
+          {/* Header */}
+          {/* @ts-ignore */}
+          <a-text
+            value="HOLOGRAPHIC LECTURE DECK"
+            align="center"
+            width="2.5"
+            color="#06b6d4"
+            position="0 0.85 0.01"
+            font="klykov"
+          ></a-text>
 
-            {/* Menu List of concepts */}
-            {concepts.map((concept: any, idx: number) => {
-              const buttonY = 0.22 - idx * 0.125
-              return (
-                // @ts-ignore
-                <a-plane
-                  key={concept.id}
-                  class="raycastable"
-                  width="0.7"
-                  height="0.09"
-                  position={`0 ${buttonY} 0.02`}
-                  material="shader: flat; color: #0c0a12; transparent: true; opacity: 0.85"
-                  menu-trigger={`label: ${concept.label}; desc: ${concept.description}`}
-                >
-                  {/* @ts-ignore */}
-                  <a-text
-                    value={concept.label}
-                    align="center"
-                    width="1.6"
-                    color="#ffffff"
-                    position="0 0 0.01"
-                  ></a-text>
-                </a-plane>
-              )
-            })}
-          </a-plane>
-        </a-entity>
+          {/* Topic Title */}
+          {/* @ts-ignore */}
+          <a-text
+            value={resource.title}
+            align="center"
+            width="4.0"
+            color="#f43f5e"
+            position="0 0.5 0.01"
+            font="klykov"
+          ></a-text>
 
-        {/* ── CENTER: Futuristic Holographic Tutor Avatar ── */}
+          {/* Lecture text transcripts / subtitle output */}
+          {/* @ts-ignore */}
+          <a-text
+            value={tutorText}
+            align="center"
+            width="4.4"
+            color="#ffffff"
+            position="0 -0.2 0.01"
+            wrap-count="48"
+          ></a-text>
+
+          {/* Status Bar */}
+          {/* @ts-ignore */}
+          <a-text
+            value={isAiSpeaking ? "• TUTOR SPEAKING" : "• LISTENING FOR STUDENT QUESTIONS"}
+            align="center"
+            width="2.0"
+            color={isAiSpeaking ? "#a855f7" : "#10b981"}
+            position="0 -0.85 0.01"
+            font="klykov"
+          ></a-text>
+        </a-plane>
+
+        {/* ── TEACHER LECTERN / DESK ── */}
+        {/* @ts-ignore */}
+        <a-box
+          position="0 -0.15 -3.0"
+          width="1.2"
+          height="0.7"
+          depth="0.6"
+          color="#0f0e15"
+          material="roughness: 0.4; metalness: 0.8"
+        >
+          {/* Glowing trim */}
+          {/* @ts-ignore */}
+          <a-box width="1.22" height="0.02" depth="0.62" position="0 0.35 0" color="#a855f7" material="shader: flat"></a-box>
+        </a-box>
+
+        {/* ── AI TUTOR AVATAR ── */}
         {/* @ts-ignore */}
         <a-entity
-          position="0 0.25 -2.2"
-          animation="property: position; to: 0 0.35 -2.2; dir: alternate; loop: true; dur: 2200; easing: easeInOutSine"
+          position="0 0.75 -3.2"
+          animation="property: position; to: 0 0.85 -3.2; dir: alternate; loop: true; dur: 2200; easing: easeInOutSine"
         >
           {/* Head (glowing glass sphere) */}
           {/* @ts-ignore */}
@@ -671,62 +712,77 @@ export default function VRPage({ params }: { params: { id: string } }) {
           {/* Floating Base Platform */}
           {/* @ts-ignore */}
           <a-cone radius-bottom="0.18" radius-top="0.02" height="0.25" position="0 -0.62 0" color="#1e1b4b" rotation="180 0 0"></a-cone>
+        </a-entity>
+
+        {/* ── LEFT PANEL: Gaze Interactive Concept Menu ── */}
+        {/* @ts-ignore */}
+        <a-entity position="-1.4 0.5 -2.5" rotation="0 25 0">
+          {/* Menu Backing plate */}
           {/* @ts-ignore */}
-          <a-ring radius-inner="0" radius-outer="0.24" color="#06b6d4" rotation="-90 0 0" position="0 -0.74 0" material="shader: flat; opacity: 0.5"></a-ring>
+          <a-plane
+            width="0.8"
+            height="1.1"
+            material="shader: flat; color: #07050e; transparent: true; opacity: 0.85; side: double"
+          >
+            {/* Title */}
+            {/* @ts-ignore */}
+            <a-text
+              value="CONCEPTS"
+              align="center"
+              width="2.0"
+              color="#06b6d4"
+              position="0 0.45 0.01"
+              font="klykov"
+            ></a-text>
+
+            {/* Menu List of concepts */}
+            {concepts.map((concept: any, idx: number) => {
+              const buttonY = 0.25 - idx * 0.13
+              return (
+                // @ts-ignore
+                <a-plane
+                  key={concept.id}
+                  class="raycastable"
+                  width="0.72"
+                  height="0.10"
+                  position={`0 ${buttonY} 0.02`}
+                  material="shader: flat; color: #0c0a12; transparent: true; opacity: 0.85"
+                  menu-trigger={`label: ${concept.label}; desc: ${concept.description}`}
+                >
+                  {/* @ts-ignore */}
+                  <a-text
+                    value={concept.label}
+                    align="center"
+                    width="1.6"
+                    color="#ffffff"
+                    position="0 0 0.01"
+                  ></a-text>
+                </a-plane>
+              )
+            })}
+          </a-plane>
         </a-entity>
 
         {/* ── RIGHT PANEL: Holographic Projector Display Stage ── */}
         {/* Base Ring on the floor */}
         {/* @ts-ignore */}
-        <a-ring radius-inner="0" radius-outer="0.4" color="#06b6d4" rotation="-90 0 0" position="0.75 -0.49 -2.0" material="shader: flat; opacity: 0.85"></a-ring>
+        <a-ring radius-inner="0" radius-outer="0.45" color="#06b6d4" rotation="-90 0 0" position="1.4 -0.49 -2.5" material="shader: flat; opacity: 0.85"></a-ring>
         {/* Light beam cylinder */}
         {/* @ts-ignore */}
-        <a-cylinder radius="0.4" height="1.6" position="0.75 0.3 -2.0" material="shader: flat; transparent: true; opacity: 0.08; color: #06b6d4; side: double"></a-cylinder>
+        <a-cylinder radius="0.45" height="1.8" position="1.4 0.4 -2.5" material="shader: flat; transparent: true; opacity: 0.08; color: #06b6d4; side: double"></a-cylinder>
 
         {/* Dynamic projected anatomical 3D structure */}
-        {renderOrganModel(activeModel, '#06b6d4')}
+        {renderOrganModel(activeModel, '#06b6d4', '1.4 0.4 -2.5')}
 
         {/* Concept label card floating right above the projection stage */}
         {/* @ts-ignore */}
-        <a-entity look-at-camera position="0.75 0.95 -2.0">
+        <a-entity look-at-camera position="1.4 1.2 -2.5">
           {/* @ts-ignore */}
-          <a-plane width="0.7" height="0.16" material="shader: flat; color: #07050e; transparent: true; opacity: 0.85">
+          <a-plane width="0.75" height="0.18" material="shader: flat; color: #07050e; transparent: true; opacity: 0.85">
             {/* @ts-ignore */}
-            <a-text value={activeModel} align="center" width="1.8" color="#a855f7" font="klykov"></a-text>
+            <a-text value={activeModel} align="center" width="2.0" color="#06b6d4" font="klykov"></a-text>
           </a-plane>
         </a-entity>
-
-        {/* ── BOTTOM PANEL: Large Translucent Dialogue/Transcript Board ── */}
-        {/* @ts-ignore */}
-        <a-plane
-          position="0 0.65 -1.7"
-          rotation="-12 0 0"
-          width="2.6"
-          height="0.75"
-          material="shader: flat; color: #05040a; transparent: true; opacity: 0.9"
-        >
-          {/* Status / Speaker title */}
-          {/* @ts-ignore */}
-          <a-text
-            value={isAiSpeaking ? "TUTOR SPEAKING..." : "TUTOR LISTENING / AWAITING SELECTION..."}
-            align="center"
-            width="1.6"
-            color="#06b6d4"
-            position="0 0.26 0.01"
-            font="klykov"
-          ></a-text>
-
-          {/* Subtitles text body */}
-          {/* @ts-ignore */}
-          <a-text
-            value={tutorText}
-            align="center"
-            width="2.3"
-            color="#ffffff"
-            position="0 -0.06 0.01"
-            wrap-count="45"
-          ></a-text>
-        </a-plane>
 
         {/* ── Camera + raycasting gaze cursor ── */}
         {/* @ts-ignore */}
