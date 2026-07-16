@@ -271,7 +271,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
             const t = document.querySelector('#info-title')
             const d = document.querySelector('#info-desc')
             if (t) t.setAttribute('value', label)
-            if (d) d.setAttribute('value', desc.slice(0, 160))
+            if (d) d.setAttribute('value', desc)
           })
           el.addEventListener('mouseleave', () => {
             el.setAttribute('animation__scale', 'property: scale; to: 1 1 1; dur: 200; easing: easeOutQuad')
@@ -338,7 +338,9 @@ export default function VRPage({ params }: { params: { id: string } }) {
     // Circular coordinates around the viewer
     const x = Math.sin(angle) * radius
     const z = centerZ - Math.cos(angle) * (radius * 0.8)
-    const y = 1.5
+    
+    // Stagger heights vertically: upper (1.75m) and lower (1.25m) to prevent label/model overcrowding
+    const y = idx % 2 === 0 ? 1.70 : 1.25
 
     return {
       ...node,
@@ -432,8 +434,8 @@ export default function VRPage({ params }: { params: { id: string } }) {
           const label = (node.label || 'Node').slice(0, 24)
           const desc = (node.description || '').slice(0, 160)
 
-          // Staggered Y position for labels to completely prevent text overlaps
-          const labelY = idx % 2 === 0 ? 0.75 : 0.48
+          // Compact staggered label offset relative to individual organ height
+          const labelY = 0.55
 
           return (
             // @ts-ignore
@@ -442,6 +444,14 @@ export default function VRPage({ params }: { params: { id: string } }) {
               position={`${pos.x} ${pos.y} ${pos.z}`}
               node-hover={`label: ${label}; desc: ${desc}`}
             >
+              {/* Invisible raycast target sphere for reliable desktop gaze hover detection */}
+              {/* @ts-ignore */}
+              <a-sphere
+                class="raycastable"
+                radius="0.45"
+                material="visible: false; transparent: true"
+              ></a-sphere>
+
               {/* Glowing pedestal ring */}
               {/* @ts-ignore */}
               <a-ring
@@ -465,25 +475,26 @@ export default function VRPage({ params }: { params: { id: string } }) {
               {/* ── Render Realistic Composite Model ── */}
               {renderOrganModel(label, color)}
 
-              {/* Staggered Billboard Label Tag */}
+              {/* Billboarded Label Tag with a clean dark backing card */}
               {/* @ts-ignore */}
-              <a-plane
-                width="0.9"
-                height="0.26"
-                position={`0 ${labelY} 0.02`}
-                material="shader: flat; color: #07060a; transparent: true; opacity: 0.85"
-                look-at-camera
-              >
+              <a-entity look-at-camera position={`0 ${labelY} 0`}>
                 {/* @ts-ignore */}
-                <a-text
-                  value={label}
-                  align="center"
-                  width="1.6"
-                  color="#ffffff"
-                  wrap-count="12"
-                  position="0 0 0.01"
-                ></a-text>
-              </a-plane>
+                <a-plane
+                  width="0.8"
+                  height="0.22"
+                  material="shader: flat; color: #07060a; transparent: true; opacity: 0.8"
+                >
+                  {/* @ts-ignore */}
+                  <a-text
+                    value={label}
+                    align="center"
+                    width="1.3"
+                    color="#ffffff"
+                    wrap-count="12"
+                    position="0 0 0.01"
+                  ></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           )
         })}
@@ -539,6 +550,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
         <a-entity camera look-controls wasd-controls position="0 1.6 0.5">
           {/* @ts-ignore */}
           <a-cursor
+            raycaster="objects: .raycastable"
             fuse="true"
             fuse-timeout="1200"
             color="#f43f5e"
