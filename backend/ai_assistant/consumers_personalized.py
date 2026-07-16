@@ -17,7 +17,7 @@ from library.models import Resource
 
 logger = logging.getLogger('nitemind')
 
-GEMINI_LIVE_MODEL = 'gemini-2.5-flash'
+GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
@@ -229,13 +229,14 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             await self.gemini_ws.send(json.dumps(config))
 
             setup_ready = False
-            for _ in range(3):
+            for _ in range(5):
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=6)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True
                         break
+                    logger.debug(f'[PersonalisedVoice] Pre-setup message: {list(setup_data.keys())}')
                 except asyncio.TimeoutError:
                     break
 
