@@ -149,14 +149,19 @@ class FlowAgent:
     async def process_request(self, user_query, current_page_context=None, history=None, is_tutor_mode=False):
         if not hasattr(self, 'context'):
             await self._initialize_context()
-            
-        messages = await self._build_messages(user_query, current_page_context, history, is_tutor_mode)
         
-        logger.info(f"[Agent] Processing async request via Unified Triple-Engine...")
+        # OPTIMIZATION: For tutor mode, skip building messages with full context on every request
+        # Use a lighter, faster message construction
+        if is_tutor_mode:
+            messages = await self._build_tutor_messages(user_query, current_page_context, history)
+        else:
+            messages = await self._build_messages(user_query, current_page_context, history, is_tutor_mode)
+        
+        logger.info(f"[Agent] Processing async request via Unified Triple-Engine (tutor_mode={is_tutor_mode})...")
         start_chat = time.time()
-        raw_response = await self.ai.chat(messages)
+        raw_response = await self.ai.chat(messages, is_tutor_mode=is_tutor_mode)
              
-        logger.info(f"[Perf] AI Chat Call took {time.time() - start_chat:.3f}s")
+        logger.info(f"[Perf] AI Chat Call took {time.time() - start_chat:.3f}s (tutor_mode={is_tutor_mode})")
         return raw_response, self._extract_action(raw_response)
 
     async def process_request_stream(self, user_query, current_page_context=None, history=None, is_tutor_mode=False):
@@ -185,7 +190,8 @@ class FlowAgent:
         has_academic_intent = any(kw in user_query.lower() for kw in academic_keywords)
         
         library_context = ""
-        if has_academic_intent:
+        # OPTIMIZATION: Skip RAG search in tutor mode if context is already provided
+        if has_academic_intent and not (is_tutor_mode and current_page_context):
             logger.info(f"[Agent] Academic intent detected. Running Library Search...")
             start_rag = time.time()
             # NATIVE ASYNC: No more sync_to_async overhead
@@ -203,6 +209,29 @@ class FlowAgent:
             messages.extend(history[-10:])
         if current_page_context:
             messages.append({'role': 'system', 'content': f"Current Page Context: {current_page_context}"})
+        messages.append({'role': 'user', 'content': user_query})
+        return messages
+    
+    async def _build_tutor_messages(self, user_query, current_page_context, history):
+        """Lightweight message builder optimized for tutor mode - skips heavy context building."""
+        now = timezone.now()
+        current_time_str = now.strftime("%A, %B %d, %Y at %H:%M")
+        
+        # Minimal system prompt for faster processing
+        tutor_prompt = f"{AGENT_SYSTEM_PROMPT}\n\n{TUTOR_SYSTEM_PROMPT}"
+        
+        messages = [
+            {'role': 'system', 'content': f"{tutor_prompt}\n\nCURRENT TIME: {current_time_str}"},
+        ]
+        
+        # Include only recent history (last 6 messages instead of 10)
+        if history and isinstance(history, list):
+            messages.extend(history[-6:])
+        
+        # Add current page context if provided
+        if current_page_context:
+            messages.append({'role': 'system', 'content': f"Study Material Context: {current_page_context}"})
+        
         messages.append({'role': 'user', 'content': user_query})
         return messages
 

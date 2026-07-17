@@ -14,6 +14,7 @@ def check_db_integrity():
         print(f"Vendor: {conn.vendor}")
         print(f"Database Name: {conn.settings_dict['NAME']}")
         print(f"Host: {conn.settings_dict['HOST']}")
+
         
         with conn.cursor() as cursor:
             # Check for tables
@@ -33,7 +34,7 @@ def check_db_integrity():
                 print("[!] Table 'library_resource' NOT found!")
                 
     except Exception as e:
-        print(f"[ERROR] Connection failure: {e}")
+        print(f"[ERROR] Connection failure: {e}") 
 
 if __name__ == "__main__":
     check_db_integrity()

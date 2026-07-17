@@ -15,6 +15,8 @@ email = input('Admin email: ').strip()
 username = input('Admin username: ').strip()
 password = input('Admin password: ').strip()
 
+
+
 if User.objects.filter(email=email).exists():
     print(f'User {email} already exists.')
 else:

@@ -81,18 +81,24 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
 
     return result
 
-def generate_tts_file(text, voice, output_path):
+def generate_tts_file(text, voice, output_path, fast_mode=False):
     """
     TTS engine: edge-tts (Microsoft Neural) — Ava, Andrew, etc. sound human.
+    fast_mode: Uses faster TTS settings for real-time tutoring (shorter timeout, faster rate)
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     clean_text = VoiceSanitizer.clean(text)
     if not clean_text.strip():
         clean_text = "..."
 
-    rate = "+0%"
-    if 'AndrewNeural' in voice:
-        rate = "-5%"
+    # OPTIMIZATION: Faster speaking rate for tutor mode
+    if fast_mode:
+        rate = "+10%"  # 10% faster for snappy tutor responses
+    else:
+        rate = "+0%"
+        if 'AndrewNeural' in voice:
+            rate = "-5%"
+    
     cmd = [
         sys.executable, "-m", "edge_tts",
         "--voice", voice,
@@ -100,17 +106,23 @@ def generate_tts_file(text, voice, output_path):
         f"--rate={rate}",
         "--write-media", output_path
     ]
-    for attempt in range(3):
+    
+    # OPTIMIZATION: Fewer retries and shorter timeout for fast mode
+    max_attempts = 2 if fast_mode else 3
+    timeout = 15 if fast_mode else 30
+    retry_delay = 1 if fast_mode else 2
+    
+    for attempt in range(max_attempts):
         try:
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=timeout)
             if result.returncode == 0:
-                print(f"[TTS] edge-tts success for voice={voice}")
+                print(f"[TTS] edge-tts success for voice={voice} (fast_mode={fast_mode})")
                 return True
             print(f"TTS Error [Attempt {attempt+1}]: {result.stderr[:200]}")
-            time.sleep(2)
+            time.sleep(retry_delay)
         except Exception as e:
             print(f"TTS Exception: {str(e)}")
-            time.sleep(2)
+            time.sleep(retry_delay)
 
     print(f"[TTS-FATAL] edge-tts failed for path: {output_path}")
     return False

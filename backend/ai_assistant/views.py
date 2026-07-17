@@ -876,9 +876,11 @@ class AgentView(APIView):
                     
                     if not os.path.exists(f_path):
                         v_id = voice_id or SUPPORTED_VOICES.get('Andrew', 'en-US-AndrewNeural')
-                        generate_tts_file(speech_text, v_id, f_path)
+                        # OPTIMIZATION: For tutor mode, use faster TTS settings
+                        generate_tts_file(speech_text, v_id, f_path, fast_mode=is_tutor)
                     
-                    audio_url = request.build_absolute_uri(f"{settings.MEDIA_URL}agent_responses/{f_name}")
+                    if os.path.exists(f_path):
+                        audio_url = request.build_absolute_uri(f"{settings.MEDIA_URL}agent_responses/{f_name}")
                 except Exception as e:
                     logger.error(f"Agent Voice Synthesis Error: {e}")
 

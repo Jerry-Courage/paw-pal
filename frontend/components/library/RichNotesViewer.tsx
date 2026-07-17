@@ -15,7 +15,8 @@ import { API_BASE, libraryApi } from '@/lib/api'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   X, Maximize2, Sparkles, Flame, ChevronLeft, ChevronRight, 
-  CheckCircle2, Lock, BookOpen, Layers, Award, Eye, FileText
+  CheckCircle2, Lock, BookOpen, Layers, Award, Eye, FileText,
+  Map, Wand2, Radio, Calculator, Brain
 } from 'lucide-react'
 
 interface RichNotesViewerProps {
@@ -156,56 +157,89 @@ export default function RichNotesViewer({
   }
 
   return (
-    <div className="w-full px-3 py-4 sm:px-6 md:px-8 sm:py-8 text-[#e2e2e2] max-w-7xl mx-auto">
+    <div className="w-full h-full text-[#e2e2e2]">
       
-      {/* ── Header / Controls ─────────────────────────────────── */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-white/[0.06] pb-5 sm:pb-6">
-        <div>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-500/10 text-orange-400 mb-2 border border-orange-500/20">
-            <Sparkles className="w-3 h-3" />
-            {isMathMode ? 'Logical Derivation' : 'Study Notes'}
-          </span>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-snug tracking-tight">
-            {notes.overview?.title || 'Study Material'}
-          </h1>
-        </div>
+      {/* ── Header with Title / Controls ─────────────────────────────────── */}
+      <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-white/[0.06]">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-orange-500/10 text-orange-400 mb-2 border border-orange-500/20">
+              <Sparkles className="w-2.5 h-2.5" />
+              {isMathMode ? 'Logical Derivation' : 'Study Notes'}
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
+              {notes.overview?.title || 'Study Material'}
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              {notes.overview?.description || 'Understand how the digestive system breaks down food and absorbs nutrients.'}
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
-          {/* View Mode Toggle */}
-          <div className="flex items-center bg-[#121214] border border-white/5 p-1 rounded-2xl">
-            <Link
-              href={`/library/${resourceId}/study`}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-white text-black shadow-lg hover:bg-orange-500 hover:text-white"
-            >
-              <Layers className="w-3.5 h-3.5" />
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+            {/* Study Mode */}
+            <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all bg-white text-black border border-white/20">
+              <FileText className="w-3.5 h-3.5" />
               Study Mode
-            </Link>
+            </button>
+            
+            {/* Scroll Mode */}
             <button
               onClick={() => setViewMode('scroll')}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
-                viewMode === 'scroll' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
-              )}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all bg-[#1a1a1a] text-slate-400 hover:text-white border border-white/10 hover:border-white/20"
             >
               <Eye className="w-3.5 h-3.5" />
               Scroll Mode
             </button>
+            
+            {/* Explore in VR */}
+            <Link
+              href={`/library/${resourceId}/vr`}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-rose-500/20 to-pink-500/20 hover:from-rose-500/30 hover:to-pink-500/30 border border-rose-500/30 text-rose-400 text-[10px] font-bold uppercase tracking-wide transition-all"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Explore in VR 🥽
+            </Link>
           </div>
+        </div>
+      </div>
 
-          {/* Explore in VR Button */}
-          <Link
-            href={`/library/${resourceId}/vr`}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 hover:border-rose-500/35 text-rose-400 text-xs font-bold uppercase tracking-widest transition-all duration-200 active:scale-95 shadow-lg shadow-rose-500/5 hover:-translate-y-0.5"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
-            Explore in VR 🥽
+      {/* ── Tool Tabs ────────────────────────────────────────────────────── */}
+      <div className="px-4 sm:px-6 py-4 border-b border-white/[0.04] overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 min-w-max">
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#2d2416] border border-[#4a3a1f] text-orange-400 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <BookOpen className="w-3.5 h-3.5" />
+            Study
+          </button>
+          <Link href={`/library/${resourceId}/flashcards`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <Layers className="w-3.5 h-3.5" />
+            Flashcards
+          </Link>
+          <Link href={`/library/${resourceId}/mindmap`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <Map className="w-3.5 h-3.5" />
+            Mind Map
+          </Link>
+          <Link href={`/library/${resourceId}/practice`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <Wand2 className="w-3.5 h-3.5" />
+            Practice
+          </Link>
+          <Link href={`/library/${resourceId}/podcast`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <Radio className="w-3.5 h-3.5" />
+            Podcast
+          </Link>
+          <Link href={`/library/${resourceId}/examprep`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <Brain className="w-3.5 h-3.5" />
+            Exam Prep
+          </Link>
+          <Link href={`/library/${resourceId}/solver`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
+            <Calculator className="w-3.5 h-3.5" />
+            Math
           </Link>
         </div>
       </div>
 
       {/* ── Study Mode Layout (Interactive Pages) ────────────── */}
       {viewMode === 'study' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-start h-[calc(100vh-280px)]">
           
           {/* Mobile Horizontal Progress Scroller */}
           <div className="lg:hidden w-full overflow-x-auto scrollbar-hide py-1 mb-2">
@@ -246,47 +280,42 @@ export default function RichNotesViewer({
           </div>
 
           {/* Desktop Table of Contents Sidebar */}
-          <div className="hidden lg:block lg:col-span-3 sticky top-24 bg-[#121214]/60 border border-white/5 p-5 rounded-[2rem] backdrop-blur-2xl">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500 mb-4 px-2">Table of Contents</h3>
-            <div className="space-y-2">
+          <div className="hidden lg:block lg:col-span-3 h-full overflow-y-auto scrollbar-hide bg-[#080809] border-r border-white/[0.05] px-4 py-6">
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-600 mb-4">Table of Contents</h3>
+            <div className="space-y-0">
               {sections.map((sec: any, idx: number) => {
                 const isCompleted = idx < currentPart
                 const isActive = idx === currentPart
                 const isLocked = idx > unlockedProgress
-                const accentClass = ACCENT[idx % ACCENT.length]
-                const accentText = accentClass.split(' ')[0]
-
+                
                 return (
                   <button
                     key={idx}
                     disabled={isLocked}
                     onClick={() => handleStepClick(idx)}
                     className={cn(
-                      "w-full text-left flex items-start gap-3 p-3 rounded-2xl border transition-all group",
+                      "w-full text-left flex items-center gap-3 px-3 py-3 transition-all group border-l-2",
                       isActive 
-                        ? "bg-[#1d1d22] border-white/10 text-white" 
+                        ? "border-orange-400 bg-orange-500/5 text-white" 
                         : isLocked
-                          ? "bg-transparent border-transparent text-zinc-600 cursor-not-allowed opacity-40"
-                          : "bg-transparent border-transparent text-zinc-400 hover:bg-[#18181c] hover:text-white"
+                          ? "border-transparent text-slate-700 cursor-not-allowed opacity-40"
+                          : "border-transparent text-slate-500 hover:bg-white/[0.02] hover:text-slate-300 hover:border-slate-700"
                     )}
                   >
-                    <div className="mt-0.5 shrink-0">
-                      {isCompleted ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      ) : isLocked ? (
-                        <Lock className="w-4 h-4" />
-                      ) : (
-                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center border-orange-500/50", isActive && "border-orange-500 animate-pulse")}>
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                        </div>
-                      )}
+                    <div className={cn(
+                      "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                      isActive 
+                        ? "bg-orange-500 text-black" 
+                        : isCompleted
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : isLocked
+                            ? "bg-slate-800/30 text-slate-700"
+                            : "bg-slate-800/50 text-slate-500"
+                    )}>
+                      {isCompleted ? "✓" : idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-[9px] font-black tracking-widest uppercase text-zinc-500">Part {idx + 1}</span>
-                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
-                      </div>
-                      <p className="text-xs font-bold truncate leading-relaxed mt-0.5">
+                      <p className="text-xs font-semibold leading-snug truncate">
                         {cleanTitle(sec.title)}
                       </p>
                     </div>
@@ -297,7 +326,7 @@ export default function RichNotesViewer({
           </div>
 
           {/* Active Canvas Column */}
-          <div className="lg:col-span-9" ref={contentRef}>
+          <div className="lg:col-span-9 h-full overflow-y-auto scrollbar-hide px-6 py-6" ref={contentRef}>
             <AnimatePresence mode="wait">
               {sections.map((section: any, idx: number) => {
                 if (idx !== currentPart) return null
@@ -424,135 +453,150 @@ export default function RichNotesViewer({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -15 }}
                     transition={{ duration: 0.3 }}
-                    className="bg-[#121214]/30 border border-white/5 p-4 sm:p-6 md:p-8 rounded-[2rem] backdrop-blur-2xl shadow-xl"
+                    className="max-w-5xl"
                   >
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 pb-4 border-b border-white/[0.06]">
-                      <div className="flex items-center gap-3">
-                        <span className={cn('text-3xl font-black tracking-tight tabular-nums', accentText)}>
-                          {String(idx + 1).padStart(2, '0')}
-                        </span>
-                        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-                          {cleanTitle(section.title)}
-                        </h2>
-                      </div>
-                      <span className="self-start sm:self-center px-3 py-1 bg-white/5 rounded-full text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                        {images.length} Media Attached
-                      </span>
+                    {/* Section Header */}
+                    <div className="mb-8">
+                      <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">
+                        {cleanTitle(section.title)}
+                      </h2>
+                      <p className="text-sm text-slate-400">
+                        Understand how the digestive system breaks down food and absorbs nutrients.
+                      </p>
                     </div>
+
+                    {/* Content Section with Right-Floating Image */}
+                    <div className="relative">
+                      <div className="flex gap-8">
+                        {/* Left Content Area */}
+                        <div className="flex-1 min-w-0">
+                          
+                          {/* Section Number Badge */}
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className="flex items-center gap-3">
+                              <span className={cn('text-5xl font-black tracking-tighter', accentText)}>
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              <h3 className="text-2xl font-bold text-white">
+                                {cleanTitle(section.title)}
+                              </h3>
+                            </div>
+                            {images.length > 0 && (
+                              <span className="ml-auto text-[9px] text-slate-600 uppercase tracking-wider">
+                                📎 media attached
+                              </span>
+                            )}
+                          </div>
 
                     {/* Content Section */}
                     <div className="clearfix">
-                      {/* Floating Images (Desktop only, inline floating) */}
+                      {/* Floating Images on Right (Desktop) */}
                       {images.length > 0 && (
-                        <div className="float-right ml-6 mb-4 space-y-4 w-[38%] max-w-[280px] hidden sm:block">
-                          {images.slice(0, 2).map((img: any, i: number) => {
+                        <div className="hidden lg:block float-right ml-8 mb-6 w-[420px] max-w-[45%]">
+                          {images.slice(0, 1).map((img: any, i: number) => {
                             const url = resolveUrl(img.url)
                             if (!url) return null
                             return (
                               <div
                                 key={i}
-                                className="group cursor-zoom-in rounded-2xl overflow-hidden border border-white/[0.08] hover:border-white/20 transition-all bg-black/20"
+                                className="group cursor-zoom-in rounded-2xl overflow-hidden border border-white/[0.08] hover:border-white/15 transition-all bg-white/[0.02] shadow-2xl"
                                 onClick={() => setZoomedImage(url)}
                               >
-                                <img src={url} alt={img.caption} className="w-full h-auto object-cover" />
-                                {img.caption && (
-                                  <p className="text-[10px] text-zinc-400 px-3 py-2 italic border-t border-white/[0.05] text-center leading-normal">
-                                    {cleanContent(img.caption)}
-                                  </p>
-                                )}
+                                <img src={url} alt={img.caption} className="w-full h-auto object-contain bg-white/5" />
                               </div>
                             )
                           })}
                         </div>
                       )}
 
-                      {/* Markdown Text Body */}
-                      {section.content ? (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkMath, remarkGfm]}
-                          rehypePlugins={[rehypeKatex]}
-                          components={md}
-                        >
-                          {normalizeMath(cleanContent(section.content))}
-                        </ReactMarkdown>
-                      ) : (
-                        <div className="space-y-6">
-                          {/* Key Question */}
-                          {section.key_question && (
-                            <div className="p-4 rounded-2xl border border-white/5 bg-[#18181c]/50 relative overflow-hidden">
-                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-indigo-600" />
-                              <div className="flex gap-3">
-                                <span className="text-xl shrink-0">❓</span>
-                                <div>
-                                  <span className="block text-[10px] font-black uppercase tracking-wider text-blue-400">Key Question</span>
-                                  <p className="text-sm sm:text-base font-bold text-white mt-0.5">{cleanContent(section.key_question)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Plain English Explanation */}
-                          {section.plain_english && (
-                            <div className="p-5 rounded-2xl border border-white/5 bg-[#121214]/60 relative overflow-hidden">
-                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-600" />
-                              <div className="flex gap-3">
-                                <span className="text-xl shrink-0">💡</span>
-                                <div>
-                                  <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-400">Simple Analogy / Plain English</span>
-                                  <p className="text-sm sm:text-base leading-relaxed text-zinc-300 mt-1">{cleanContent(section.plain_english)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Deep Dive Academic Content */}
-                          {section.deep_dive && (
-                            <div className="py-2">
-                              <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-3 px-1">Detailed Explanation</span>
-                              <ReactMarkdown
-                                remarkPlugins={[remarkMath, remarkGfm]}
-                                rehypePlugins={[rehypeKatex]}
-                                components={md}
-                              >
-                                {normalizeMath(cleanContent(section.deep_dive))}
-                              </ReactMarkdown>
-                            </div>
-                          )}
-
-                          {/* Memory Trick Acronym / Analogy */}
-                          {section.memory_trick && (
-                            <div className="p-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 relative overflow-hidden shadow-lg shadow-orange-500/5">
-                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
-                              <div className="flex gap-3">
-                                <span className="text-xl shrink-0">⚡</span>
-                                <div>
-                                  <span className="block text-[10px] font-black uppercase tracking-wider text-orange-400">Memory Mnemonic / Trick</span>
-                                  <p className="text-sm sm:text-base text-zinc-300 mt-1 leading-relaxed">{cleanContent(section.memory_trick)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Quick Summary Feynman Recap */}
-                          {section.quick_summary && (
-                            <div className="p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 relative overflow-hidden">
-                              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-400 to-fuchsia-500" />
-                              <div className="flex gap-3">
-                                <span className="text-xl shrink-0">🎯</span>
-                                <div>
-                                  <span className="block text-[10px] font-black uppercase tracking-wider text-purple-400">Feynman Recap</span>
-                                  <p className="text-sm sm:text-base text-zinc-300 mt-1 leading-relaxed">{cleanContent(section.quick_summary)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                      {/* Key Question Section */}
+                      {section.key_question && (
+                        <div className="mb-8">
+                          <div className="mb-3">
+                            <span className="inline-block text-[10px] font-black uppercase tracking-[0.2em] text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded">
+                              Key Question
+                            </span>
+                          </div>
+                          <h4 className="text-lg font-bold text-white mb-4 leading-relaxed">
+                            {cleanContent(section.key_question)}
+                          </h4>
                         </div>
                       )}
 
-                      {/* Mobile Images (renders under text flow) */}
+                      {/* Plain English / Answer */}
+                      {section.plain_english && (
+                        <div className="mb-8">
+                          <p className="text-base leading-relaxed text-slate-300">
+                            {cleanContent(section.plain_english)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Deep Dive Section */}
+                      {section.deep_dive && (
+                        <div className="mb-8">
+                          <div className="mb-4 flex items-center gap-2">
+                            <Flame className="w-4 h-4 text-orange-400" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">
+                              Deep Dive
+                            </span>
+                          </div>
+                          <div className="prose prose-invert prose-sm max-w-none">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkMath, remarkGfm]}
+                              rehypePlugins={[rehypeKatex]}
+                              components={md}
+                            >
+                              {normalizeMath(cleanContent(section.deep_dive))}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Markdown Content (if using unified content field) */}
+                      {section.content && (
+                        <div className="prose prose-invert prose-sm max-w-none">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath, remarkGfm]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={md}
+                          >
+                            {normalizeMath(cleanContent(section.content))}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+
+                      {/* Memory Trick */}
+                      {section.memory_trick && (
+                        <div className="mt-8 p-5 rounded-2xl border border-orange-500/20 bg-orange-500/5 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
+                          <div className="flex gap-3">
+                            <span className="text-xl shrink-0">⚡</span>
+                            <div>
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-orange-400 mb-2">Memory Trick</span>
+                              <p className="text-sm text-slate-300 leading-relaxed">{cleanContent(section.memory_trick)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quick Summary */}
+                      {section.quick_summary && (
+                        <div className="mt-8 p-5 rounded-2xl border border-purple-500/20 bg-purple-500/5 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-400 to-fuchsia-500" />
+                          <div className="flex gap-3">
+                            <span className="text-xl shrink-0">🎯</span>
+                            <div>
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-purple-400 mb-2">Quick Summary</span>
+                              <p className="text-sm text-slate-300 leading-relaxed">{cleanContent(section.quick_summary)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mobile Images */}
                       {images.length > 0 && (
-                        <div className="sm:hidden mt-6 space-y-4">
+                        <div className="lg:hidden mt-8 space-y-4">
                           {images.slice(0, 2).map((img: any, i: number) => {
                             const url = resolveUrl(img.url)
                             if (!url) return null
@@ -563,35 +607,6 @@ export default function RichNotesViewer({
                                 onClick={() => setZoomedImage(url)}
                               >
                                 <img src={url} alt={img.caption} className="w-full h-auto" />
-                                {img.caption && (
-                                  <p className="text-[10px] text-zinc-400 px-3 py-2.5 italic text-center border-t border-white/[0.05] leading-normal">
-                                    {cleanContent(img.caption)}
-                                  </p>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {/* Extra Overflow Images (3+) */}
-                      {images.length > 2 && (
-                        <div className="mt-6 grid grid-cols-2 gap-4 clear-both">
-                          {images.slice(2).map((img: any, i: number) => {
-                            const url = resolveUrl(img.url)
-                            if (!url) return null
-                            return (
-                              <div
-                                key={i}
-                                className="rounded-2xl overflow-hidden border border-white/[0.08] bg-black/20 cursor-zoom-in"
-                                onClick={() => setZoomedImage(url)}
-                              >
-                                <img src={url} alt={img.caption} className="w-full h-auto" />
-                                {img.caption && (
-                                  <p className="text-[10px] text-zinc-400 px-3 py-2 italic text-center border-t border-white/[0.05] leading-normal">
-                                    {cleanContent(img.caption)}
-                                  </p>
-                                )}
                               </div>
                             )
                           })}
@@ -599,27 +614,34 @@ export default function RichNotesViewer({
                       )}
                     </div>
 
-                    {/* Progress navigation at bottom of card */}
-                    <div className="mt-8 pt-5 border-t border-white/[0.06] flex items-center justify-between">
+                        </div>
+
+                        {/* Right Sidebar - Empty for spacing */}
+                        <div className="hidden lg:block w-[420px] shrink-0"></div>
+                      </div>
+                    </div>
+
+                    {/* Progress navigation at bottom */}
+                    <div className="mt-12 pt-6 border-t border-white/[0.06] flex items-center justify-between">
                       <button
                         onClick={handlePrevious}
                         disabled={currentPart === 0}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-white/5 border border-white/5 text-zinc-300 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] text-slate-400 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-white/[0.06] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ChevronLeft className="w-4 h-4" />
-                        Prev
+                        Previous
                       </button>
 
                       <button
                         onClick={handleAdvance}
                         className={cn(
-                          "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                          "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all",
                           isLastPart 
-                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-lg shadow-orange-500/10 hover:brightness-110"
-                            : "bg-white text-black hover:bg-zinc-200"
+                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-lg shadow-orange-500/20 hover:brightness-110"
+                            : "bg-orange-500 text-black hover:bg-orange-400"
                         )}
                       >
-                        {isLastPart ? 'Complete Kit' : 'Next Part'}
+                        {isLastPart ? 'Complete' : 'Next'}
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>

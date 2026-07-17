@@ -27,42 +27,37 @@ GEMINI_LIVE_WS_URL = (
 @sync_to_async
 def _get_personalized_context(user):
     try:
-        # Get last 5 messages from global sessions for fast setup
+        # Get last 2 messages from global sessions for faster setup (reduced from 3)
         global_sessions = ChatSession.objects.filter(user=user, context_type='global')
-        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:5]
+        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:2]
         recent_messages = list(recent_messages)[::-1]  # chronological order
         
         history = []
         for msg in recent_messages:
-            role_label = "Student" if msg.role == 'user' else "AI Coach"
-            history.append(f"{role_label}: {msg.content[:100]}")
-        history_str = "\n".join(history) if history else "No previous chat history."
+            role_label = "Student" if msg.role == 'user' else "AI"
+            # Reduced to 40 chars for even faster processing
+            history.append(f"{role_label}: {msg.content[:40]}")
+        history_str = "\n".join(history) if history else "No history."
         
-        # Get resources they are studying (limit to top 3)
-        resources = Resource.objects.filter(owner=user).values('title', 'subject')[:3]
-        materials = [f"- {r['title']} ({r['subject'] or 'General'})" for r in resources]
-        materials_str = "\n".join(materials) if materials else "No materials uploaded yet."
+        # Get only top 1 resource for speed
+        resources = Resource.objects.filter(owner=user).values('title')[:1]
+        materials = [f"- {r['title']}" for r in resources]
+        materials_str = "\n".join(materials) if materials else "No materials."
         
-        # Get XP stats
+        # Quick XP level check without full calculation
         from library.models import ResourceProgress
         xp = ResourceProgress.objects.filter(user=user).aggregate(total=models.Sum('xp_earned'))['total'] or 0
         
-        # Level title
-        if xp < 500:
-            level_name = "Freshman"
-        elif xp < 1500:
-            level_name = "Sophomore"
-        elif xp < 3500:
-            level_name = "Junior"
-        elif xp < 7000:
-            level_name = "Senior"
+        # Simplified level name
+        if xp < 1000:
+            level_name = "Beginner"
+        elif xp < 3000:
+            level_name = "Intermediate"
         else:
-            level_name = "Graduate"
+            level_name = "Advanced"
             
         return {
             'username': user.username,
-            'university': getattr(user, 'university', 'General'),
-            'study_streak': getattr(user, 'study_streak', 0),
             'xp': xp,
             'level_name': level_name,
             'history_str': history_str,
@@ -72,12 +67,10 @@ def _get_personalized_context(user):
         logger.error(f"Failed to fetch personalized context: {e}")
         return {
             'username': user.username,
-            'university': 'General',
-            'study_streak': 0,
             'xp': 0,
-            'level_name': 'Freshman',
-            'history_str': 'No previous chat history.',
-            'materials_str': 'No materials uploaded yet.',
+            'level_name': 'Beginner',
+            'history_str': 'No history.',
+            'materials_str': 'No materials.',
         }
 
 
@@ -170,23 +163,11 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             return
 
         ctx = await _get_personalized_context(self.scope['user'])
+        # Ultra-shortened system prompt for minimal latency
         system_prompt = (
-            "You are a highly supportive, intelligent personal tutor who knows the student intimately. "
-            "Your goal is to run an open, conversational study session, helping them master their current subjects, answering questions, proposing study techniques, and giving them personalized coaching. "
-            "Guide the conversation based on their past chats, their level, and the materials in their library.\n\n"
-            f"STUDENT PROFILE:\n"
-            f"- Name: {ctx['username']}\n"
-            f"- Level: {ctx['level_name']} ({ctx['xp']} XP)\n"
-            f"- Study Streak: {ctx['study_streak']} days\n"
-            f"- University: {ctx['university']}\n\n"
-            f"CURRENT STUDY MATERIALS IN LIBRARY:\n{ctx['materials_str']}\n\n"
-            f"RECENT CONVERSATION HISTORY WITH STUDENT (use for context and continuity):\n{ctx['history_str']}\n\n"
-            "CRITICAL RULES:\n"
-            "1. This is a VOICE conversation — speak naturally, not like a textbook.\n"
-            "2. Keep ALL responses short — under 3 sentences.\n"
-            "3. Be encouraging, warm, and adaptive. Proactively refer to their past questions or materials they have in their library.\n"
-            "4. ALWAYS wait for the student to finish speaking before responding.\n"
-            "5. Never break character or mention you are an AI language model."
+            f"You're a supportive tutor for {ctx['username']} (Level {ctx['level_name']}).\n"
+            f"Materials: {ctx['materials_str']}\n"
+            "Keep responses to 1 sentence. Be encouraging."
         )
 
         ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
@@ -215,6 +196,9 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         },
+                        # ULTRA-FAST OPTIMIZATIONS for minimal latency
+                        'temperature': 0.7,  # Lower for faster, more direct responses
+                        'maxOutputTokens': 60,  # Reduced from 100 for shorter, snappier responses
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -222,14 +206,14 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 800,
+                            'silenceDurationMs': 400,  # Reduced from 600ms for FASTER response trigger
                         }
                     },
                 }
             }
             await self.gemini_ws.send(json.dumps(config))
 
-            initial_instruction = f"Say hello to the student, {ctx['username']}, and invite them to kick off this study session."
+            initial_instruction = f"Hi {ctx['username']}! Ready to study?"
 
             # Start session and background receive task immediately
             self.session_active = True

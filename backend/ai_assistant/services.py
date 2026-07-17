@@ -322,15 +322,21 @@ class AIService:
                 contents.append({'role': role, 'parts': parts})
         return contents, system_instruction.strip()
 
-    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 4096, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30) -> str:
+    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 4096, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False) -> str:
         """
         Hyper-Resilient Chat — optimised for SPEED (conversational use).
         Chain: Groq (1000 t/s) → SambaNova (12K RPD) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
+        
+        TUTOR MODE OPTIMIZATION: When is_tutor_mode=True, uses ultra-fast models with aggressive timeouts
         """
         if not self.api_key: return "API Key missing."
         
         messages = self._sanitize_messages(messages)
         target_model = forced_model or target_model or self.model
+        
+        # TUTOR MODE: Reduce max_tokens for faster responses (tutors don't need essays)
+        if is_tutor_mode:
+            max_tokens = min(max_tokens, 1024)  # Cap at 1K tokens for speed
         
         # Detect Multi-Modal request
         has_images = any(
@@ -382,12 +388,18 @@ class AIService:
         groq_keys = self._groq_keys()
 
         if groq_keys and not has_images:
+            # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
+            models_to_try = [
+                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),   # 1000 t/s — fastest
+                ('llama-3.1-8b-instant', 4 if is_tutor_mode else 6), # 560 t/s — fast
+            ] if is_tutor_mode else [
+                ('groq/compound', 8),              # 2026 MoE Flagship
+                ('openai/gpt-oss-20b', 6),         # 1000 t/s — absolute fastest
+                ('llama-3.1-8b-instant', 6),       # 560 t/s  — reliable fast
+            ]
+            
             for key in groq_keys:
-                for groq_model, groq_timeout in [
-                    ('groq/compound', 8),              # 2026 MoE Flagship
-                    ('openai/gpt-oss-20b', 6),         # 1000 t/s — absolute fastest
-                    ('llama-3.1-8b-instant', 6),       # 560 t/s  — reliable fast
-                ]:
+                for groq_model, groq_timeout in models_to_try:
                     try:
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
@@ -399,10 +411,10 @@ class AIService:
                             if resp.status_code == 200:
                                 result = self._extract_content(resp.json())
                                 if result and result.strip():
-                                    logger.info(f"[Groq Chat] ✓ {groq_model}")
+                                    logger.info(f"[Groq Chat] ✓ {groq_model} (tutor_mode={is_tutor_mode})")
                                     return result
                             elif resp.status_code == 429:
-                                await asyncio.sleep(0.3)
+                                await asyncio.sleep(0.2 if is_tutor_mode else 0.3)
                     except Exception as e:
                         logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
 
