@@ -142,7 +142,7 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 100,  # Reduced to 100ms for ultra-low latency turn-taking
+                            'silenceDurationMs': 800,  # 800ms gives natural word pauses without false cutoffs
                         }
                     },
                 }
