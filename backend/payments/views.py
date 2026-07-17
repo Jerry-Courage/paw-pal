@@ -84,7 +84,6 @@ class InitializePaymentView(APIView):
                             'plan': 'premium_monthly',
                             'promo_code': promo_code_str,
                         },
-                        'channels': ['card'],
                     }
                     try:
                         resp = requests.post(
@@ -146,7 +145,6 @@ class InitializePaymentView(APIView):
                 'username': user.username,
                 'plan': 'premium_monthly',
             },
-            'channels': ['card'],
         }
 
         try:
