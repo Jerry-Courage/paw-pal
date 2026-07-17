@@ -172,6 +172,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const transcriptEndRef = useRef<HTMLDivElement>(null)
   const isSpeakingTimeoutRef = useRef<any>(null)
   const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
+  const isAiSpeakingRef = useRef(false)
 
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],
@@ -189,6 +190,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       nextPlayTimeRef.current = playAudioCtxRef.current.currentTime
     }
     setIsAiSpeaking(false)
+    isAiSpeakingRef.current = false
     clearTimeout(isSpeakingTimeoutRef.current)
   }, [])
 
@@ -230,10 +232,12 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     }
 
     setIsAiSpeaking(true)
+    isAiSpeakingRef.current = true
     // Clear speaking indicator 500ms after last chunk ends
     clearTimeout(isSpeakingTimeoutRef.current)
     isSpeakingTimeoutRef.current = setTimeout(() => {
       setIsAiSpeaking(false)
+      isAiSpeakingRef.current = false
     }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
   }, [])
 
@@ -382,7 +386,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
       processor.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        if (isMicMutedRef.current) return
+        if (isMicMutedRef.current || isAiSpeakingRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         // Inline int16 conversion — avoids async resampling which can stall

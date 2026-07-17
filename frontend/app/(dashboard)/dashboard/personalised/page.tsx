@@ -76,6 +76,7 @@ export default function PersonalisedLearningPage() {
   const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
   const endSessionTimeoutRef = useRef<any>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
+  const isAiSpeakingRef = useRef(false)
 
   // Keep isMicMutedRef in sync with state
   useEffect(() => { isMicMutedRef.current = isMicMuted }, [isMicMuted])
@@ -120,6 +121,7 @@ export default function PersonalisedLearningPage() {
       nextPlayTimeRef.current = playAudioCtxRef.current.currentTime
     }
     setIsAiSpeaking(false)
+    isAiSpeakingRef.current = false
     clearTimeout(isSpeakingTimeoutRef.current)
   }, [])
 
@@ -146,9 +148,11 @@ export default function PersonalisedLearningPage() {
     }
 
     setIsAiSpeaking(true)
+    isAiSpeakingRef.current = true
     clearTimeout(isSpeakingTimeoutRef.current)
     isSpeakingTimeoutRef.current = setTimeout(() => {
       setIsAiSpeaking(false)
+      isAiSpeakingRef.current = false
     }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
   }, [])
 
@@ -267,7 +271,7 @@ export default function PersonalisedLearningPage() {
 
       processor.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        if (isMicMutedRef.current) return
+        if (isMicMutedRef.current || isAiSpeakingRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         // Inline int16 conversion — identical to examprep
