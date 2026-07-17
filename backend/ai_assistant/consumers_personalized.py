@@ -212,7 +212,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 400,  # Reduced to 400ms for faster, more responsive turn-taking
+                            'silenceDurationMs': 100,  # Reduced to 100ms for ultra-low latency turn-taking
                         }
                     },
                 }

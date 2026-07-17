@@ -173,6 +173,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         },
+                        'temperature': 0.8,
+                        'maxOutputTokens': 150,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -181,7 +183,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 800,
+                            'silenceDurationMs': 100,  # Reduced to 100ms for ultra-low latency turn-taking
                         }
                     },
                 }
