@@ -116,6 +116,8 @@ export const libraryApi = {
   completeStep: (id: number, step: string, score = 100) =>
     api.post(`/library/resources/${id}/progress/complete/`, { step, score }),
   reprocessResource: (id: number) => api.post(`/library/resources/${id}/reprocess/`),
+  getSectionQuiz: (id: number, section_title: string, section_content: string) =>
+    api.post(`/library/resources/${id}/section-quiz/`, { section_title, section_content }),
 }
 
 // AI

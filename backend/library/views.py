@@ -690,7 +690,19 @@ class ResourceVRLayoutView(APIView):
             ai = AIService()
             raw_result = ai.chat_sync([{'role': 'user', 'content': prompt}])
             result = ai._parse_json(raw_result, {})
-            
+
+            # Pre-fetch Sketchfab model UIDs for each node during layout generation
+            # This stores the exact model UID so runtime display is instant and accurate
+            from .sketchfab_service import get_model_uid, get_embed_url
+            if result.get('nodes'):
+                for node in result['nodes']:
+                    keyword = node.get('sketchfab_keyword') or node.get('label', '')
+                    if keyword:
+                        uid = get_model_uid(keyword)
+                        if uid:
+                            node['model_uid'] = uid
+                            node['embed_url'] = get_embed_url(uid)
+
             # Cache layout in notes
             notes['vr_layout'] = result
             resource.ai_notes_json = notes
@@ -722,3 +734,51 @@ class SketchfabModelView(APIView):
             'embed_url': get_embed_url(uid),
             'viewer_url': f'https://sketchfab.com/models/{uid}',
         })
+
+
+class SectionQuizView(APIView):
+    """
+    POST /api/library/resources/<id>/section-quiz/
+    Body: { "section_title": "...", "section_content": "..." }
+    Returns 3 quick MCQ questions generated from that specific section.
+    Used by Study Mode to quiz the user before advancing to the next section.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, resource_id):
+        section_title = request.data.get('section_title', '').strip()
+        section_content = request.data.get('section_content', '').strip()
+
+        if not section_title or not section_content:
+            return Response({'error': 'section_title and section_content are required'}, status=400)
+
+        prompt = (
+            f"Generate exactly 3 multiple-choice questions to test understanding of this study section.\n\n"
+            f"SECTION: {section_title}\n"
+            f"CONTENT: {section_content[:1500]}\n\n"
+            "RULES:\n"
+            "- Each question tests ONE specific fact from this section\n"
+            "- 4 options each (A, B, C, D)\n"
+            "- Only ONE correct answer per question\n"
+            "- Wrong options should be plausible, not obviously silly\n"
+            "- Questions should be answerable from the content above\n"
+            "- Keep questions concise — max 20 words each\n\n"
+            "Return ONLY valid JSON:\n"
+            '{"questions": ['
+            '{"question": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], '
+            '"correct": "A. ...", "explanation": "Brief 1-sentence explanation"}'
+            ']}'
+        )
+
+        try:
+            from ai_assistant.services import AIService
+            ai = AIService()
+            raw = ai.chat_sync([{'role': 'user', 'content': prompt}])
+            result = ai._parse_json(raw, {})
+            questions = result.get('questions', [])
+            if not questions:
+                return Response({'error': 'Could not generate questions'}, status=500)
+            return Response({'questions': questions[:3]})
+        except Exception as e:
+            logger.error(f'[SectionQuiz] Failed for resource {resource_id}: {e}')
+            return Response({'error': str(e)}, status=500)
