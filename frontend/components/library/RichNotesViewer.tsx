@@ -453,7 +453,7 @@ export default function RichNotesViewer({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -15 }}
                     transition={{ duration: 0.3 }}
-                    className="max-w-5xl"
+                    className="w-full"
                   >
                     {/* Section Header */}
                     <div className="mb-8">
@@ -467,9 +467,9 @@ export default function RichNotesViewer({
 
                     {/* Content Section with Right-Floating Image */}
                     <div className="relative">
-                      <div className="flex gap-8">
+                      <div className="flex gap-6">
                         {/* Left Content Area */}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 max-w-3xl">
                           
                           {/* Section Number Badge */}
                           <div className="flex items-center gap-4 mb-6">
@@ -492,14 +492,14 @@ export default function RichNotesViewer({
                     <div className="clearfix">
                       {/* Floating Images on Right (Desktop) */}
                       {images.length > 0 && (
-                        <div className="hidden lg:block float-right ml-8 mb-6 w-[420px] max-w-[45%]">
+                        <div className="hidden lg:block shrink-0 w-[340px]">
                           {images.slice(0, 1).map((img: any, i: number) => {
                             const url = resolveUrl(img.url)
                             if (!url) return null
                             return (
                               <div
                                 key={i}
-                                className="group cursor-zoom-in rounded-2xl overflow-hidden border border-white/[0.08] hover:border-white/15 transition-all bg-white/[0.02] shadow-2xl"
+                                className="sticky top-24 group cursor-zoom-in rounded-2xl overflow-hidden border border-white/[0.08] hover:border-white/15 transition-all bg-white/[0.02] shadow-2xl"
                                 onClick={() => setZoomedImage(url)}
                               >
                                 <img src={url} alt={img.caption} className="w-full h-auto object-contain bg-white/5" />
@@ -615,9 +615,6 @@ export default function RichNotesViewer({
                     </div>
 
                         </div>
-
-                        {/* Right Sidebar - Empty for spacing */}
-                        <div className="hidden lg:block w-[420px] shrink-0"></div>
                       </div>
                     </div>
 
