@@ -177,7 +177,15 @@ export default function RichNotesViewer({
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
             {/* Study Mode */}
-            <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all bg-white text-black border border-white/20">
+            <button
+              onClick={() => setViewMode('study')}
+              className={cn(
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                viewMode === 'study'
+                  ? "bg-white text-black border-white/20 shadow-md"
+                  : "bg-white/[0.02] text-slate-400 border-white/[0.08] hover:text-white hover:bg-white/[0.05]"
+              )}
+            >
               <FileText className="w-3.5 h-3.5" />
               Study Mode
             </button>
@@ -185,7 +193,12 @@ export default function RichNotesViewer({
             {/* Scroll Mode */}
             <button
               onClick={() => setViewMode('scroll')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all bg-[#1a1a1a] text-slate-400 hover:text-white border border-white/10 hover:border-white/20"
+              className={cn(
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                viewMode === 'scroll'
+                  ? "bg-white text-black border-white/20 shadow-md"
+                  : "bg-white/[0.02] text-slate-400 border-white/[0.08] hover:text-white hover:bg-white/[0.05]"
+              )}
             >
               <Eye className="w-3.5 h-3.5" />
               Scroll Mode
@@ -194,7 +207,7 @@ export default function RichNotesViewer({
             {/* Explore in VR */}
             <Link
               href={`/library/${resourceId}/vr`}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-rose-500/20 to-pink-500/20 hover:from-rose-500/30 hover:to-pink-500/30 border border-rose-500/30 text-rose-400 text-[10px] font-bold uppercase tracking-wide transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-500/20 to-pink-500/20 hover:from-rose-500/30 hover:to-pink-500/30 border border-rose-500/30 text-rose-400 text-[10px] font-black uppercase tracking-wider transition-all"
             >
               <Sparkles className="w-3.5 h-3.5" />
               Explore in VR 🥽
@@ -203,43 +216,11 @@ export default function RichNotesViewer({
         </div>
       </div>
 
-      {/* ── Tool Tabs ────────────────────────────────────────────────────── */}
-      <div className="px-4 sm:px-6 py-4 border-b border-white/[0.04] overflow-x-auto scrollbar-hide">
-        <div className="flex gap-2 min-w-max">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#2d2416] border border-[#4a3a1f] text-orange-400 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <BookOpen className="w-3.5 h-3.5" />
-            Study
-          </button>
-          <Link href={`/library/${resourceId}/flashcards`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <Layers className="w-3.5 h-3.5" />
-            Flashcards
-          </Link>
-          <Link href={`/library/${resourceId}/mindmap`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <Map className="w-3.5 h-3.5" />
-            Mind Map
-          </Link>
-          <Link href={`/library/${resourceId}/practice`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <Wand2 className="w-3.5 h-3.5" />
-            Practice
-          </Link>
-          <Link href={`/library/${resourceId}/podcast`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <Radio className="w-3.5 h-3.5" />
-            Podcast
-          </Link>
-          <Link href={`/library/${resourceId}/examprep`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <Brain className="w-3.5 h-3.5" />
-            Exam Prep
-          </Link>
-          <Link href={`/library/${resourceId}/solver`} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 border border-white/[0.08] text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all">
-            <Calculator className="w-3.5 h-3.5" />
-            Math
-          </Link>
-        </div>
-      </div>
+
 
       {/* ── Study Mode Layout (Interactive Pages) ────────────── */}
       {viewMode === 'study' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-start h-[calc(100vh-280px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-start h-[calc(100vh-220px)]">
           
           {/* Mobile Horizontal Progress Scroller */}
           <div className="lg:hidden w-full overflow-x-auto scrollbar-hide py-1 mb-2">
@@ -455,40 +436,35 @@ export default function RichNotesViewer({
                     transition={{ duration: 0.3 }}
                     className="w-full"
                   >
-                    {/* Section Header */}
-                    <div className="mb-8">
-                      <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">
-                        {cleanTitle(section.title)}
-                      </h2>
-                      {section.quick_summary && (
-                        <p className="text-sm text-slate-400">
-                          {cleanContent(section.quick_summary)}
-                        </p>
-                      )}
-                    </div>
+                    {/* Modern Integrated Section Header (No Duplicate Titles) */}
+                     <div className="mb-8 pb-6 border-b border-white/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                       <div className="flex items-center gap-4">
+                         <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner shrink-0", accentBg)}>
+                           <span className={accentText}>{String(idx + 1).padStart(2, '0')}</span>
+                         </div>
+                         <div>
+                           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+                             {cleanTitle(section.title)}
+                           </h2>
+                           {section.quick_summary && (
+                             <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl leading-relaxed">
+                               {cleanContent(section.quick_summary)}
+                             </p>
+                           )}
+                         </div>
+                       </div>
+                       {images.length > 0 && (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-[9px] font-black uppercase tracking-widest text-slate-400 self-start sm:self-center">
+                           📎 media attached
+                         </span>
+                       )}
+                     </div>
 
                     {/* Content Section with Right-Floating Image */}
                     <div className="relative">
                       <div className="flex gap-6">
                         {/* Left Content Area */}
                         <div className="flex-1 min-w-0 max-w-3xl">
-                          
-                          {/* Section Number Badge */}
-                          <div className="flex items-center gap-4 mb-6">
-                            <div className="flex items-center gap-3">
-                              <span className={cn('text-5xl font-black tracking-tighter', accentText)}>
-                                {String(idx + 1).padStart(2, '0')}
-                              </span>
-                              <h3 className="text-2xl font-bold text-white">
-                                {cleanTitle(section.title)}
-                              </h3>
-                            </div>
-                            {images.length > 0 && (
-                              <span className="ml-auto text-[9px] text-slate-600 uppercase tracking-wider">
-                                📎 media attached
-                              </span>
-                            )}
-                          </div>
 
                     {/* Content Section */}
                     <div className="clearfix">
@@ -511,39 +487,42 @@ export default function RichNotesViewer({
                         </div>
                       )}
 
-                      {/* Key Question Section */}
+                      {/* Glassmorphic Key Question Card */}
                       {section.key_question && (
-                        <div className="mb-8">
-                          <div className="mb-3">
-                            <span className="inline-block text-[10px] font-black uppercase tracking-[0.2em] text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded">
-                              Key Question
-                            </span>
-                          </div>
-                          <h4 className="text-lg font-bold text-white mb-4 leading-relaxed">
+                        <div className="mb-6 p-5 rounded-2xl border border-indigo-500/10 bg-gradient-to-br from-indigo-500/[0.02] to-transparent relative overflow-hidden backdrop-blur-sm shadow-md">
+                          <div className="absolute top-0 left-0 w-[3px] h-full bg-indigo-500" />
+                          <span className="inline-block text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg mb-3">
+                            Key Question
+                          </span>
+                          <h4 className="text-base sm:text-lg font-bold text-white leading-relaxed">
                             {cleanContent(section.key_question)}
                           </h4>
                         </div>
                       )}
 
-                      {/* Plain English / Answer */}
+                      {/* Glassmorphic Plain English card */}
                       {section.plain_english && (
-                        <div className="mb-8">
-                          <p className="text-base leading-relaxed text-slate-300">
+                        <div className="mb-8 p-5 rounded-2xl border border-emerald-500/10 bg-gradient-to-br from-emerald-500/[0.02] to-transparent relative overflow-hidden backdrop-blur-sm shadow-md">
+                          <div className="absolute top-0 left-0 w-[3px] h-full bg-emerald-500" />
+                          <span className="inline-block text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg mb-3">
+                            Simple Analogy / Plain English
+                          </span>
+                          <p className="text-sm sm:text-base leading-relaxed text-slate-300">
                             {cleanContent(section.plain_english)}
                           </p>
                         </div>
                       )}
 
-                      {/* Deep Dive Section */}
+                      {/* Deep Dive Section Card */}
                       {section.deep_dive && (
                         <div className="mb-8">
                           <div className="mb-4 flex items-center gap-2">
-                            <Flame className="w-4 h-4 text-orange-400" />
+                            <div className="w-1.5 h-4 bg-orange-500 rounded-full" />
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">
-                              Deep Dive
+                              Detailed Explanation
                             </span>
                           </div>
-                          <div className="prose prose-invert prose-sm max-w-none">
+                          <div className="prose prose-invert prose-sm max-w-none bg-white/[0.01] border border-white/[0.03] rounded-2xl p-5 sm:p-6 shadow-sm">
                             <ReactMarkdown
                               remarkPlugins={[remarkMath, remarkGfm]}
                               rehypePlugins={[rehypeKatex]}
@@ -557,7 +536,7 @@ export default function RichNotesViewer({
 
                       {/* Markdown Content (if using unified content field) */}
                       {section.content && (
-                        <div className="prose prose-invert prose-sm max-w-none">
+                        <div className="prose prose-invert prose-sm max-w-none bg-white/[0.01] border border-white/[0.03] rounded-2xl p-5 sm:p-6 shadow-sm mb-8">
                           <ReactMarkdown
                             remarkPlugins={[remarkMath, remarkGfm]}
                             rehypePlugins={[rehypeKatex]}
@@ -568,31 +547,29 @@ export default function RichNotesViewer({
                         </div>
                       )}
 
-                      {/* Memory Trick */}
+                      {/* Glassmorphic Memory Trick Card */}
                       {section.memory_trick && (
-                        <div className="mt-8 p-5 rounded-2xl border border-orange-500/20 bg-orange-500/5 relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
-                          <div className="flex gap-3">
-                            <span className="text-xl shrink-0">⚡</span>
-                            <div>
-                              <span className="block text-[10px] font-black uppercase tracking-wider text-orange-400 mb-2">Memory Trick</span>
-                              <p className="text-sm text-slate-300 leading-relaxed">{cleanContent(section.memory_trick)}</p>
-                            </div>
-                          </div>
+                        <div className="mb-6 p-5 rounded-2xl border border-orange-500/15 bg-gradient-to-br from-orange-500/[0.02] to-transparent relative overflow-hidden backdrop-blur-sm shadow-md">
+                          <div className="absolute top-0 left-0 w-[3px] h-full bg-orange-500" />
+                          <span className="inline-block text-[9px] font-black uppercase tracking-[0.2em] text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-lg mb-3">
+                            Memory Trick
+                          </span>
+                          <p className="text-sm text-slate-300 leading-relaxed">
+                            {cleanContent(section.memory_trick)}
+                          </p>
                         </div>
                       )}
 
-                      {/* Quick Summary */}
+                      {/* Glassmorphic Quick Summary Card */}
                       {section.quick_summary && (
-                        <div className="mt-8 p-5 rounded-2xl border border-purple-500/20 bg-purple-500/5 relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-400 to-fuchsia-500" />
-                          <div className="flex gap-3">
-                            <span className="text-xl shrink-0">🎯</span>
-                            <div>
-                              <span className="block text-[10px] font-black uppercase tracking-wider text-purple-400 mb-2">Quick Summary</span>
-                              <p className="text-sm text-slate-300 leading-relaxed">{cleanContent(section.quick_summary)}</p>
-                            </div>
-                          </div>
+                        <div className="mb-6 p-5 rounded-2xl border border-purple-500/15 bg-gradient-to-br from-purple-500/[0.02] to-transparent relative overflow-hidden backdrop-blur-sm shadow-md">
+                          <div className="absolute top-0 left-0 w-[3px] h-full bg-purple-500" />
+                          <span className="inline-block text-[9px] font-black uppercase tracking-[0.2em] text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg mb-3">
+                            Quick Summary
+                          </span>
+                          <p className="text-sm text-slate-300 leading-relaxed">
+                            {cleanContent(section.quick_summary)}
+                          </p>
                         </div>
                       )}
 
