@@ -26,5 +26,6 @@ export const config = {
     '/assignments/:path*',
     '/workspace/:path*',
     '/settings/:path*',
+    '/upgrade/:path*',
   ],
 }
