@@ -173,16 +173,13 @@ export default function RichNotesViewer({
         <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
           {/* View Mode Toggle */}
           <div className="flex items-center bg-[#121214] border border-white/5 p-1 rounded-2xl">
-            <button
-              onClick={() => setViewMode('study')}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
-                viewMode === 'study' ? "bg-white text-black shadow-lg" : "text-zinc-500 hover:text-white"
-              )}
+            <Link
+              href={`/library/${resourceId}/study`}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-white text-black shadow-lg hover:bg-orange-500 hover:text-white"
             >
               <Layers className="w-3.5 h-3.5" />
               Study Mode
-            </button>
+            </Link>
             <button
               onClick={() => setViewMode('scroll')}
               className={cn(
