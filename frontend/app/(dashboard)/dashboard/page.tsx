@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useEffect } from 'react'
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
