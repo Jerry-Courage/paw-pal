@@ -27,20 +27,20 @@ GEMINI_LIVE_WS_URL = (
 @sync_to_async
 def _get_personalized_context(user):
     try:
-        # Get last 2 messages from global sessions for faster setup (reduced from 3)
+        # Get last 3 messages from global sessions for fast setup (reduced from 5)
         global_sessions = ChatSession.objects.filter(user=user, context_type='global')
-        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:2]
+        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:3]
         recent_messages = list(recent_messages)[::-1]  # chronological order
         
         history = []
         for msg in recent_messages:
             role_label = "Student" if msg.role == 'user' else "AI"
-            # Reduced to 40 chars for even faster processing
-            history.append(f"{role_label}: {msg.content[:40]}")
+            # Reduced to 60 chars for faster processing
+            history.append(f"{role_label}: {msg.content[:60]}")
         history_str = "\n".join(history) if history else "No history."
         
-        # Get only top 1 resource for speed
-        resources = Resource.objects.filter(owner=user).values('title')[:1]
+        # Get resources they are studying (limit to top 2 for speed)
+        resources = Resource.objects.filter(owner=user).values('title')[:2]
         materials = [f"- {r['title']}" for r in resources]
         materials_str = "\n".join(materials) if materials else "No materials."
         
@@ -163,11 +163,17 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             return
 
         ctx = await _get_personalized_context(self.scope['user'])
-        # Ultra-shortened system prompt for minimal latency
+        # Shortened system prompt for faster processing and lower latency
         system_prompt = (
-            f"You're a supportive tutor for {ctx['username']} (Level {ctx['level_name']}).\n"
-            f"Materials: {ctx['materials_str']}\n"
-            "Keep responses to 1 sentence. Be encouraging."
+            "You are a supportive personal tutor. Run a conversational study session.\n\n"
+            f"STUDENT: {ctx['username']} | Level: {ctx['level_name']} ({ctx['xp']} XP)\n"
+            f"MATERIALS:\n{ctx['materials_str']}\n"
+            f"RECENT CHATS:\n{ctx['history_str']}\n\n"
+            "RULES:\n"
+            "1. Voice conversation — speak naturally\n"
+            "2. Keep responses under 2 sentences\n"
+            "3. Be encouraging and refer to their materials\n"
+            "4. Wait for student to finish before responding"
         )
 
         ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
@@ -196,9 +202,9 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         },
-                        # ULTRA-FAST OPTIMIZATIONS for minimal latency
-                        'temperature': 0.7,  # Lower for faster, more direct responses
-                        'maxOutputTokens': 60,  # Reduced from 100 for shorter, snappier responses
+                        # Performance optimizations for lower latency
+                        'temperature': 0.8,  # Slightly lower for faster, more focused responses
+                        'maxOutputTokens': 100,  # Limit token count for shorter responses
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -206,7 +212,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 400,  # Reduced from 600ms for FASTER response trigger
+                            'silenceDurationMs': 600,  # Reduced from 800ms for faster detection
                         }
                     },
                 }
