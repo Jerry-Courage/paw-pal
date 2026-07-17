@@ -99,6 +99,16 @@ export default function TopNav() {
 
           {/* Right side */}
           <div className="flex items-center gap-1.5 ml-auto shrink-0">
+
+            {/* Upgrade button — only for free users, hidden once premium */}
+            <Link
+              href="/upgrade"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[11px] font-black hover:bg-orange-500/20 hover:border-orange-500/40 transition-all"
+            >
+              <Zap className="w-3 h-3" />
+              Upgrade
+            </Link>
+
             <NotificationsPanel />
 
             {/* User avatar + dropdown */}
@@ -201,6 +211,13 @@ export default function TopNav() {
 
             {/* Drawer footer */}
             <div className="px-3 py-4 border-t border-white/[0.06] space-y-0.5">
+              <Link
+                href="/upgrade"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-semibold text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 transition-all"
+              >
+                <Zap className="w-4 h-4" /> Upgrade to Premium
+              </Link>
               <Link
                 href="/settings"
                 onClick={() => setMobileOpen(false)}
