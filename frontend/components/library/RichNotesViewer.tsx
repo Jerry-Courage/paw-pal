@@ -171,7 +171,7 @@ export default function RichNotesViewer({
               {notes.overview?.title || 'Study Material'}
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              {notes.overview?.description || 'Understand how the digestive system breaks down food and absorbs nutrients.'}
+              {notes.overview?.summary || notes.overview?.description || 'Study notes and key concepts for this topic.'}
             </p>
           </div>
 
@@ -460,9 +460,11 @@ export default function RichNotesViewer({
                       <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">
                         {cleanTitle(section.title)}
                       </h2>
-                      <p className="text-sm text-slate-400">
-                        Understand how the digestive system breaks down food and absorbs nutrients.
-                      </p>
+                      {section.quick_summary && (
+                        <p className="text-sm text-slate-400">
+                          {cleanContent(section.quick_summary)}
+                        </p>
+                      )}
                     </div>
 
                     {/* Content Section with Right-Floating Image */}
