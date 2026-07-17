@@ -133,6 +133,8 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         },
+                        'temperature': 0.8,
+                        'maxOutputTokens': 150,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -140,10 +142,7 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'startOfSpeechSensitivity': 'START_SENSITIVITY_LOW',
-                            'endOfSpeechSensitivity': 'END_SENSITIVITY_LOW',
-                            'prefixPaddingMs': 200,
-                            'silenceDurationMs': 800,
+                            'silenceDurationMs': 400,  # Reduced to 400ms for faster, more responsive turn-taking
                         }
                     },
                 }

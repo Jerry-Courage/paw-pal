@@ -120,7 +120,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     if (passed) {
       const xp = XP_PER_SECTION
       setTotalXP(prev => prev + xp)
-      setSectionsCompleted(prev => new Set([...prev, sectionIndex]))
+      setSectionsCompleted(prev => {
+        const next = new Set(prev)
+        next.add(sectionIndex)
+        return next
+      })
       toast.success(`+${xp} XP! Well done 🎉`, { duration: 2000 })
       // Award XP to progress
       libraryApi.completeStep(resourceId, 'notes', Math.round((sectionsCompleted.size + 1) / totalSections * 100))
