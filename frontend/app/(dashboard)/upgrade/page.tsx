@@ -1,6 +1,4 @@
-'use client'
-
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { paymentsApi } from '@/lib/api'
 import { usePricing } from '@/hooks/usePricing'
@@ -50,11 +48,43 @@ export default function UpgradePage() {
   const notesUsed = subStatus?.notes_used ?? 0
   const notesLimit = subStatus?.notes_limit ?? 5
 
+  // Parse redirect callback URL parameters on mobile return
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const reference = params.get('reference')
+    const payment = params.get('payment')
+    
+    if (reference && payment === 'success') {
+      // Clear URL params immediately so it doesn't verify on every refresh
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, document.title, newUrl)
+      
+      const verifyPayment = async () => {
+        setVerifying(true)
+        try {
+          const res = await paymentsApi.verify(reference)
+          if (res.data.success) {
+            toast.success('Payment confirmed! You\'re now Premium 🎉')
+            refetch()
+          } else {
+            toast.error('Payment verification failed.')
+          }
+        } catch (e) {
+          toast.error('Failed to verify payment status.')
+        } finally {
+          setVerifying(false)
+        }
+      }
+      verifyPayment()
+    }
+  }, [refetch])
+
   const handlePay = async () => {
     setLoading(true)
     try {
+      const callbackUrl = `${window.location.origin}/upgrade?payment=success`
       const res = await paymentsApi.initialize(
-        undefined,
+        callbackUrl,
         promoCode || undefined,
         priceInfo.paystackCurrency,
         priceInfo.amount,
@@ -65,24 +95,34 @@ export default function UpgradePage() {
         return
       }
       const { authorization_url, reference } = res.data
-      const popup = window.open(authorization_url, 'paystack_popup', 'width=500,height=700,scrollbars=yes')
-      const pollTimer = setInterval(async () => {
-        if (popup?.closed) {
-          clearInterval(pollTimer)
-          setLoading(false)
-          setVerifying(true)
-          try {
-            const vres = await paymentsApi.verify(reference)
-            if (vres.data.success) {
-              toast.success('Payment confirmed! You\'re now Premium 🎉')
-              refetch()
-            } else {
-              toast.error('Payment not completed.')
-            }
-          } catch { /* user closed without paying */ }
-          finally { setVerifying(false) }
-        }
-      }, 800)
+      
+      // Detect if user is on a mobile device
+      const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      
+      if (isMobile) {
+        // Direct redirect on mobile to avoid aggressive popup blockers
+        window.location.href = authorization_url
+      } else {
+        // Desktop popup fallback
+        const popup = window.open(authorization_url, 'paystack_popup', 'width=500,height=700,scrollbars=yes')
+        const pollTimer = setInterval(async () => {
+          if (popup?.closed) {
+            clearInterval(pollTimer)
+            setLoading(false)
+            setVerifying(true)
+            try {
+              const vres = await paymentsApi.verify(reference)
+              if (vres.data.success) {
+                toast.success('Payment confirmed! You\'re now Premium 🎉')
+                refetch()
+              } else {
+                toast.error('Payment not completed.')
+              }
+            } catch { /* user closed without paying */ }
+            finally { setVerifying(false) }
+          }
+        }, 800)
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Payment service unavailable.')
     } finally {

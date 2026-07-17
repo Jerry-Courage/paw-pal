@@ -1,6 +1,4 @@
-'use client'
-
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { plannerApi, libraryApi, aiApi, authApi, workspaceApi, paymentsApi } from '@/lib/api'
@@ -13,6 +11,7 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
+import { toast } from 'sonner'
 import { usePricing } from '@/hooks/usePricing'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
@@ -99,6 +98,32 @@ export default function DashboardPage() {
   const weekHours    = analyticsData?.week_hours ?? 0
   const weeklyGoal   = analyticsData?.goal_hours ?? profileData?.weekly_goal_hours ?? 10
   const weeklyPct    = Math.min(100, Math.round((weekHours / Math.max(weeklyGoal, 1)) * 100))
+
+  // Parse redirect callback URL parameters on mobile/redirect return
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const reference = params.get('reference')
+    const payment = params.get('payment')
+    
+    if (reference && payment === 'success') {
+      // Clear URL params immediately so it doesn't verify on every refresh
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, document.title, newUrl)
+      
+      const verifyPayment = async () => {
+        try {
+          const res = await paymentsApi.verify(reference)
+          if (res.data.success) {
+            toast.success('Payment confirmed! You\'re now Premium 🎉')
+            refetchSub()
+          }
+        } catch (e) {
+          console.error('Failed to verify payment status on return', e)
+        }
+      }
+      verifyPayment()
+    }
+  }, [refetchSub])
 
   const quickActions = [
     {
