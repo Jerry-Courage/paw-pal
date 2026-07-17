@@ -107,7 +107,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
   // Play AI audio
   const playAudioChunk = useCallback((b64: string) => {
     if (isMuted) return
-    const ctx = audioCtxRef.current || new AudioContext({ sampleRate: 24000 })
+    const ctx = audioCtxRef.current || new AudioContext()
     audioCtxRef.current = ctx
     const bin = atob(b64)
     const bytes = new Uint8Array(bin.length)

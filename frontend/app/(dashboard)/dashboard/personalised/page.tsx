@@ -127,7 +127,7 @@ export default function PersonalisedLearningPage() {
 
   // ── Play AI audio — IDENTICAL to examprep ─────────────────────────────────
   const playAudioChunk = useCallback((pcm: Float32Array) => {
-    const ctx = playAudioCtxRef.current || new AudioContext({ sampleRate: 24000 })
+    const ctx = playAudioCtxRef.current || new AudioContext()
     playAudioCtxRef.current = ctx
 
     const buffer = ctx.createBuffer(1, pcm.length, 24000)
@@ -271,7 +271,11 @@ export default function PersonalisedLearningPage() {
 
       processor.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        if (isMicMutedRef.current || isAiSpeakingRef.current) return
+        if (isMicMutedRef.current) return
+        
+        // Mute mic if the AI is playing audio (or finished playing < 500ms ago)
+        const isSpeaking = playAudioCtxRef.current && (nextPlayTimeRef.current > playAudioCtxRef.current.currentTime - 0.5)
+        if (isSpeaking) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         // Inline int16 conversion — identical to examprep

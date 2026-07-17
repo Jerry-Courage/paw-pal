@@ -176,7 +176,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     const float32 = new Float32Array(int16.length)
     for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768
 
-    const ctx = liveAudioCtxRef.current || new AudioContext({ sampleRate: 24000 })
+    const ctx = liveAudioCtxRef.current || new AudioContext()
     liveAudioCtxRef.current = ctx
     const buf = ctx.createBuffer(1, float32.length, 24000)
     buf.copyToChannel(float32, 0)
