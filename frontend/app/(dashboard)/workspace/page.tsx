@@ -3,268 +3,163 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workspaceApi } from '@/lib/api'
-import { Plus, Users, BookOpen, Sparkles, X, Loader2, Link2, ArrowRight, Clock, MessageSquare, LayoutGrid } from 'lucide-react'
-import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-import { format } from 'date-fns'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { cn, timeAgo } from '@/lib/utils'
+import { toast } from 'sonner'
 
-const COLORS = [
-  'from-violet-500 to-fuchsia-600',
-  'from-cyan-500 to-blue-600',
-  'from-emerald-500 to-teal-600',
-  'from-orange-500 to-red-600',
-  'from-amber-400 to-orange-500',
-  'from-rose-500 to-pink-600',
-]
+const WS_BG = ['bg-secondary-container', 'bg-tertiary-container', 'bg-primary-container/50', 'bg-surface-container-high']
+const WS_ICONS = ['public', 'calculate', 'science', 'history_edu', 'language', 'code']
 
-export default function WorkspacePortal() {
+export default function WorkspacesPage() {
+  const queryClient = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
-  const [showJoin, setShowJoin] = useState(false)
-  const qc = useQueryClient()
+  const [newName, setNewName] = useState('')
+  const [newSubject, setNewSubject] = useState('')
 
-  const { data: workspaces, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['workspaces'],
     queryFn: () => workspaceApi.getAll().then(r => r.data),
   })
 
-  const workspaceList = Array.isArray(workspaces) ? workspaces : workspaces?.results || []
+  const createMutation = useMutation({
+    mutationFn: (d: any) => workspaceApi.create(d),
+    onSuccess: () => { toast.success('Workspace created!'); queryClient.invalidateQueries({ queryKey: ['workspaces'] }); setShowCreate(false); setNewName('') },
+    onError: () => toast.error('Failed to create workspace.'),
+  })
+
+  const workspaces = Array.isArray(data) ? data : data?.results || []
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-stack-md mb-stack-lg">
         <div>
-          <h1 className="text-xl font-black text-white tracking-tight uppercase">Collab Space</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Collaborative group study with <span className="text-violet-400">Flow AI</span> as your third member.</p>
+          <h1 className="text-[32px] font-bold text-on-surface mb-2">My Workspaces</h1>
+          <p className="text-[16px] text-on-surface-variant">Jump into your collaborative studio environments.</p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={() => setShowJoin(true)}
-            className="btn-secondary text-xs px-4 py-2">
-            <Link2 className="w-3.5 h-3.5" /> Join
-          </button>
-          <button onClick={() => setShowCreate(true)}
-            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-violet-600/20">
-            <Plus className="w-3.5 h-3.5" /> Initialize
-          </button>
-        </div>
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-base bg-primary-container text-on-primary-container px-gutter py-stack-sm rounded-full btn-3d font-bold hover:brightness-110 transition-all">
+          <span className="material-symbols-outlined text-[18px]">add_circle</span>
+          Create Workspace
+        </button>
       </div>
 
-      {/* --- Content Area --- */}
+      {/* Workspace grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1,2,3].map(i => (
-            <div key={i} className="h-48 bg-white/3 rounded-2xl border border-white/5 animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-surface-container rounded-[1.5rem] overflow-hidden animate-pulse">
+              <div className="h-32 bg-surface-container-high" />
+              <div className="p-gutter">
+                <div className="h-5 bg-surface-container-high rounded w-3/4 mb-2" />
+                <div className="h-4 bg-surface-container-high rounded w-1/2" />
+              </div>
+            </div>
           ))}
-        </div>
-      ) : workspaceList.length === 0 ? (
-        <div className="border border-dashed border-white/8 rounded-2xl p-16 text-center">
-          <div className="w-16 h-16 bg-violet-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
-            <MessageSquare className="w-8 h-8 text-violet-400" />
-          </div>
-          <h3 className="font-black text-lg text-white mb-2">The studio is quiet</h3>
-          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Create a space for your study group. Sync your library, mention Flow, and master anything together.</p>
-          <button onClick={() => setShowCreate(true)} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95">
-            Create Your First Studio
-          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-8">
-          {workspaceList.map((ws: any, i: number) => (
-            <Link key={ws.id} href={`/workspace/${ws.id}`} className="group">
-              <motion.div 
-                whileHover={{ y: -5 }}
-                className="relative h-full bg-[#0d0d0d] border border-white/5 rounded-3xl p-6 overflow-hidden transition-all hover:border-violet-500/30 hover:shadow-2xl hover:shadow-violet-600/10"
-              >
-                <div className={cn('absolute top-0 right-0 w-32 h-32 bg-gradient-to-br blur-[80px] opacity-10 group-hover:opacity-30 transition-opacity', COLORS[i % COLORS.length])} />
-                
-                <div className="relative z-10 flex flex-col h-full">
-                  <div className="flex items-start justify-between mb-6">
-                    <div className={cn('w-12 h-12 bg-gradient-to-br rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg ring-1 ring-white/10', COLORS[i % COLORS.length])}>
-                      {ws.name[0].toUpperCase()}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+          {workspaces.map((ws: any, idx: number) => {
+            const bgColor = WS_BG[idx % WS_BG.length]
+            const icon = WS_ICONS[idx % WS_ICONS.length]
+            return (
+              <div key={ws.id} className="squishy-card bg-surface-container rounded-[1.5rem] overflow-hidden flex flex-col shadow-sm border border-outline-variant/20 hover:border-outline-variant transition-all">
+                <div className={cn('h-32 relative flex items-center justify-center', bgColor)}>
+                  <span className="material-symbols-outlined text-[64px] opacity-40 text-on-surface">{icon}</span>
+                  {(ws.unread_count || 0) > 0 && (
+                    <div className="absolute top-3 right-3 bg-primary text-on-primary text-[11px] font-black px-2 py-0.5 rounded-full">
+                      {ws.unread_count} new
                     </div>
-                    <div className="flex items-center gap-2">
-                      <AnimatePresence>
-                        {ws.unread_count > 0 && (
-                          <motion.div
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="px-2 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-orange-500/20"
-                          >
-                            {ws.unread_count}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
-                        <Users className="w-3 h-3 text-zinc-500" />
-                        <span className="text-[10px] font-black text-zinc-400">{ws.member_count}</span>
-                      </div>
+                  )}
+                </div>
+                <div className="p-gutter flex flex-col flex-grow">
+                  <h3 className="text-[16px] font-bold text-on-surface mb-1">{ws.name}</h3>
+                  <p className="text-[13px] text-on-surface-variant mb-stack-md">{ws.updated_at ? `Last active: ${timeAgo(ws.updated_at)}` : 'No activity yet'}</p>
+                  <div className="flex items-center justify-between mt-auto">
+                    <div className="flex -space-x-3">
+                      {(ws.members || []).slice(0, 3).map((m: any, i: number) => (
+                        <div key={i} className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant">
+                          {(m.username || m.email || 'U')[0].toUpperCase()}
+                        </div>
+                      ))}
+                      {(ws.members?.length || 0) > 3 && (
+                        <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant">
+                          +{(ws.members?.length || 0) - 3}
+                        </div>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="flex-1">
-                    <h3 className="text-lg font-black text-white mb-1 group-hover:text-violet-400 transition-colors uppercase italic tracking-tight truncate">{ws.name}</h3>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-4 truncate">{ws.subject || 'Neural Link'}</p>
-                    
-                    {ws.description && (
-                      <p className="text-xs text-zinc-600 line-clamp-2 leading-relaxed mb-4">{ws.description}</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto">
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-700 font-bold uppercase">
-                      <Clock className="w-3 h-3" />
-                      {format(new Date(ws.updated_at), 'MMM d')}
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-violet-500 group-hover:gap-3 transition-all">
-                      ENTER <ArrowRight className="w-3 h-3" />
-                    </div>
+                    <Link href={`/workspace/${ws.id}`} className="bg-surface-container-highest text-primary font-bold px-stack-md py-2 rounded-full border-2 border-primary/20 hover:border-primary/50 transition-all text-[13px] squishy-card">
+                      Enter Studio
+                    </Link>
                   </div>
                 </div>
-              </motion.div>
-            </Link>
-          ))}
+              </div>
+            )
+          })}
+
+          {/* Empty state / create card */}
+          <div
+            className="squishy-card bg-surface-container-low border-2 border-dashed border-outline-variant rounded-[1.5rem] p-gutter flex flex-col items-center justify-center text-center gap-stack-sm min-h-[250px] cursor-pointer hover:border-primary/30 transition-all"
+            onClick={() => setShowCreate(true)}
+          >
+            <div className="w-16 h-16 bg-surface-container-highest rounded-full flex items-center justify-center">
+              <span className="material-symbols-outlined text-outline text-[32px]">rocket_launch</span>
+            </div>
+            <h3 className="text-[16px] font-bold text-on-surface">Start something new!</h3>
+            <p className="text-[13px] text-on-surface-variant">Team up to tackle big projects together.</p>
+            <button className="text-primary font-bold hover:underline mt-2 text-[14px]">Browse templates</button>
+          </div>
         </div>
       )}
 
-      {/* --- Modals --- */}
-      <AnimatePresence>
-        {showCreate && <CreateModal onClose={() => setShowCreate(false)} />}
-        {showJoin && <JoinModal onClose={() => setShowJoin(false)} />}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-function CreateModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', subject: '', description: '' })
-  const qc = useQueryClient()
-
-  const mutation = useMutation({
-    mutationFn: () => workspaceApi.create(form),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['workspaces'] })
-      onClose()
-      toast.success('Space Initialized!')
-      window.location.href = `/workspace/${res.data.id}`
-    },
-  })
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-6 overflow-y-auto">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-[#0d0d0d] border border-white/5 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg shadow-[0_0_100px_rgba(139,92,246,0.1)] p-6 sm:p-10 overflow-hidden relative my-auto"
-      >
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-1 bg-gradient-to-r from-transparent via-violet-600 to-transparent" />
-        
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h2 className="font-black text-2xl text-white uppercase italic tracking-tighter">Initialize Collab Space</h2>
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Configure your workspace</p>
+      {/* Daily focus challenge */}
+      <section className="mt-stack-lg">
+        <h2 className="text-[22px] font-bold text-on-surface mb-stack-md">Daily Focus Challenge</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+          <div className="md:col-span-2 bg-gradient-to-br from-primary-container/20 to-surface-container rounded-[1.5rem] p-gutter relative overflow-hidden flex flex-col justify-between min-h-[200px] border-l-4 border-primary shadow-sm">
+            <div className="z-10">
+              <span className="inline-block bg-primary/20 text-primary text-[13px] font-bold px-base py-1 rounded-full mb-base">Live Now</span>
+              <h3 className="text-[22px] font-bold text-on-surface">The Great Library Quiet-Off</h3>
+              <p className="text-[15px] text-on-surface-variant max-w-md">Join students in a shared focus session. Earn double reward XP!</p>
+            </div>
+            <div className="mt-stack-md z-10">
+              <button className="bg-primary-container text-on-primary-container px-gutter py-stack-sm rounded-full font-bold shadow-[0_4px_0_0_#763300] btn-squishy text-[14px]">
+                Join Session
+              </button>
+            </div>
+            <div className="absolute -right-10 -bottom-10 w-48 h-48 opacity-10">
+              <span className="material-symbols-outlined text-[180px] text-primary">auto_stories</span>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-zinc-500 transition-colors"><X className="w-5 h-5" /></button>
-        </div>
-
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Studio Name</label>
-            <input 
-              placeholder="e.g. Molecular Bio Hub" 
-              value={form.name} 
-              onChange={e => setForm(f => ({...f, name: e.target.value}))} 
-              className="w-full bg-[#050505] border border-white/5 rounded-2xl px-5 py-4 text-xs sm:text-sm focus:outline-none focus:border-violet-500/50 transition-all placeholder:text-zinc-800" 
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Subject Area</label>
-            <input 
-              placeholder="e.g. Life Sciences" 
-              value={form.subject} 
-              onChange={e => setForm(f => ({...f, subject: e.target.value}))} 
-              className="w-full bg-[#050505] border border-white/5 rounded-2xl px-5 py-4 text-xs sm:text-sm focus:outline-none focus:border-violet-500/50 transition-all placeholder:text-zinc-800" 
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Objective (Optional)</label>
-            <textarea 
-              placeholder="What's the mission?" 
-              value={form.description} 
-              onChange={e => setForm(f => ({...f, description: e.target.value}))} 
-              className="w-full bg-[#050505] border border-white/5 rounded-2xl px-5 py-4 text-xs sm:text-sm focus:outline-none focus:border-violet-500/50 transition-all placeholder:text-zinc-800 resize-none" 
-              rows={3} 
-            />
+          <div className="bg-surface-container rounded-[1.5rem] p-gutter flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 bg-tertiary-container/30 rounded-full flex items-center justify-center mb-stack-sm">
+              <span className="material-symbols-outlined text-[40px] text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
+            </div>
+            <h3 className="text-[16px] font-bold text-on-surface">Weekly Goal</h3>
+            <p className="text-[14px] text-on-surface-variant">{workspaces.length}/5 Workspaces joined</p>
+            <div className="w-full h-3 bg-surface-container-highest rounded-full mt-stack-sm overflow-hidden">
+              <div className="h-full bg-tertiary rounded-full shadow-[0_0_12px_rgba(212,187,255,0.4)]" style={{ width: `${Math.min(100, workspaces.length * 20)}%` }} />
+            </div>
           </div>
         </div>
+      </section>
 
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-10">
-          <button onClick={onClose} className="order-2 sm:order-1 flex-1 py-4 bg-zinc-900 text-zinc-400 font-bold uppercase tracking-widest text-[10px] sm:text-xs rounded-2xl hover:bg-zinc-800 transition-all">Cancel</button>
-          <button 
-            onClick={() => mutation.mutate()} 
-            disabled={!form.name || mutation.isPending}
-            className="order-1 sm:order-2 flex-1 py-4 bg-violet-600 hover:bg-violet-500 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs rounded-2xl transition-all shadow-lg shadow-violet-600/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-          >
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Initialize
-          </button>
+      {/* Create modal */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-4">
+          <div className="bg-surface-container-low rounded-[2rem] p-stack-md w-full max-w-md space-y-stack-sm border border-outline-variant">
+            <h3 className="text-[20px] font-bold text-on-surface">Create Workspace</h3>
+            <input className="w-full bg-surface-container-high border border-outline-variant rounded-[1rem] px-stack-md py-3 text-on-surface focus:outline-none focus:border-secondary transition-all" placeholder="Workspace name" value={newName} onChange={e => setNewName(e.target.value)} />
+            <input className="w-full bg-surface-container-high border border-outline-variant rounded-[1rem] px-stack-md py-3 text-on-surface focus:outline-none focus:border-secondary transition-all" placeholder="Subject (optional)" value={newSubject} onChange={e => setNewSubject(e.target.value)} />
+            <div className="flex gap-base pt-2">
+              <button onClick={() => { if (!newName.trim()) return toast.error('Name required'); createMutation.mutate({ name: newName, subject: newSubject }) }} disabled={createMutation.isPending} className="flex-1 bg-primary text-on-primary font-bold py-3 rounded-[1rem] btn-3d hover:brightness-110 transition-all disabled:opacity-50">
+                {createMutation.isPending ? 'Creating…' : 'Create'}
+              </button>
+              <button onClick={() => setShowCreate(false)} className="px-stack-md bg-surface-container-high text-on-surface-variant font-bold rounded-[1rem]">Cancel</button>
+            </div>
+          </div>
         </div>
-      </motion.div>
-    </div>
-  )
-}
-
-function JoinModal({ onClose }: { onClose: () => void }) {
-  const [code, setCode] = useState('')
-  const qc = useQueryClient()
-  const mutation = useMutation({
-    mutationFn: () => workspaceApi.join(code),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['workspaces'] })
-      onClose()
-      toast.success('Access Granted!')
-      window.location.href = `/workspace/${res.data.id}`
-    },
-    onError: () => toast.error('Neural key invalid.'),
-  })
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-[#0d0d0d] border border-white/5 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-sm shadow-2xl p-6 sm:p-10 relative"
-      >
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="font-black text-xl text-white uppercase italic tracking-tighter">Enter Studio</h2>
-          <button onClick={onClose} className="p-1.5 rounded-full text-zinc-500 hover:bg-white/5"><X className="w-5 h-5" /></button>
-        </div>
-        
-        <input 
-          value={code} 
-          onChange={e => setCode(e.target.value.toUpperCase())}
-          placeholder="ENTER KEY"
-          className="w-full bg-[#050505] border border-white/5 rounded-2xl py-6 text-center text-xl sm:text-2xl font-black tracking-[0.3em] text-violet-400 focus:outline-none focus:border-violet-500/50 mb-8 uppercase placeholder:text-zinc-900"
-          maxLength={8} 
-        />
-
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <button onClick={onClose} className="order-2 sm:order-1 flex-1 py-4 bg-zinc-900 text-zinc-400 font-bold uppercase tracking-widest text-[10px] rounded-2xl">Abort</button>
-          <button 
-            onClick={() => mutation.mutate()} 
-            disabled={code.length < 6 || mutation.isPending}
-            className="order-1 sm:order-2 flex-1 py-4 bg-violet-600 hover:bg-violet-500 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl shadow-lg shadow-violet-600/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-          >
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-            Connect
-          </button>
-        </div>
-      </motion.div>
+      )}
     </div>
   )
 }

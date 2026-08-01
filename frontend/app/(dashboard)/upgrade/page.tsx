@@ -1,300 +1,220 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { paymentsApi } from '@/lib/api'
-import { usePricing } from '@/hooks/usePricing'
-import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-import {
-  Sparkles, Check, Loader2, Tag, ChevronDown, ChevronUp,
-  BookOpen, Headphones, Brain, Layers, Zap, Infinity,
-  Shield, Star, Crown
-} from 'lucide-react'
+import { usePricing } from '@/hooks/usePricing'
 
-const FREE_FEATURES = [
-  '5 AI study kits',
-  'Notes, flashcards & quizzes',
-  'Basic AI chat',
-  'Study planner',
+const FEATURES = [
+  { icon: 'all_inclusive', color: 'text-primary', title: 'Unlimited Study Kits', desc: 'Create and store as many subjects as you need. No monthly caps.' },
+  { icon: 'psychology', color: 'text-secondary', title: 'AI Voice Tutor', desc: 'Interactive exam prep that speaks with you like a real teacher.' },
+  { icon: 'podcasts', color: 'text-tertiary', title: 'AI Podcast Generation', desc: 'Turn your notes into 5-minute study podcasts for your commute.' },
+  { icon: 'view_in_ar', color: 'text-primary', title: 'VR Classroom', desc: 'Immersive study environments to boost focus and recall.' },
+  { icon: 'bolt', color: 'text-secondary', title: 'Priority AI Processing', desc: 'No wait times. Instant summaries and question generation.' },
+  { icon: 'insights', color: 'text-tertiary', title: 'Advanced Analytics', desc: 'See exactly where you\'re struggling and how to improve.' },
 ]
 
-const PREMIUM_FEATURES = [
-  { icon: Infinity,   text: 'Unlimited AI study kits' },
-  { icon: Brain,      text: 'Live AI voice tutor sessions' },
-  { icon: Headphones, text: 'AI podcasts from any material' },
-  { icon: Layers,     text: 'Spaced repetition flashcards' },
-  { icon: BookOpen,   text: 'VR classroom experience' },
-  { icon: Zap,        text: 'Priority AI processing' },
-  { icon: Shield,     text: 'Study Mode with section quizzes' },
-  { icon: Star,       text: 'XP & level system' },
+const TESTIMONIALS = [
+  { stars: 5, text: '"The AI Voice Tutor is a game changer for my Bio exams. I actually feel like I have a personal tutor available at 2 AM."', name: 'Leo, 11th Grade' },
+  { stars: 5, text: '"I used to spend hours summarizing chapters. Now the AI Podcast does it for me while I\'m on the bus. Worth every penny."', name: 'Maya, University Freshman' },
+  { stars: 5, text: '"The VR Classroom environment helps my ADHD so much. It\'s the only way I can stay focused for more than 20 minutes."', name: 'James, 10th Grade' },
 ]
 
 export default function UpgradePage() {
-  const { data: session } = useSession()
-  const { priceInfo } = usePricing()
-  const [loading, setLoading] = useState(false)
-  const [verifying, setVerifying] = useState(false)
+  const [isAnnual, setIsAnnual] = useState(false)
   const [promoCode, setPromoCode] = useState('')
-  const [promoOpen, setPromoOpen] = useState(false)
-  const [promoLoading, setPromoLoading] = useState(false)
+  const [applyingPromo, setApplyingPromo] = useState(false)
+  const { priceInfo } = usePricing()
 
-  const { data: subStatus, refetch } = useQuery({
+  const { data: subStatus } = useQuery({
     queryKey: ['subscription-status'],
     queryFn: () => paymentsApi.getStatus().then(r => r.data),
-    staleTime: 30000,
+    staleTime: 60000,
   })
 
-  const isPremium = subStatus?.is_premium
   const notesUsed = subStatus?.notes_used ?? 0
   const notesLimit = subStatus?.notes_limit ?? 5
+  const isPremium = subStatus?.is_premium ?? false
 
-  // Parse redirect callback URL parameters on mobile return
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const reference = params.get('reference')
-    const payment = params.get('payment')
-    
-    if (reference && payment === 'success') {
-      // Clear URL params immediately so it doesn't verify on every refresh
-      const newUrl = window.location.pathname
-      window.history.replaceState({}, document.title, newUrl)
-      
-      const verifyPayment = async () => {
-        setVerifying(true)
-        try {
-          const res = await paymentsApi.verify(reference)
-          if (res.data.success) {
-            toast.success('Payment confirmed! You\'re now Premium 🎉')
-            refetch()
-          } else {
-            toast.error('Payment verification failed.')
-          }
-        } catch (e) {
-          toast.error('Failed to verify payment status.')
-        } finally {
-          setVerifying(false)
-        }
-      }
-      verifyPayment()
-    }
-  }, [refetch])
-
-  const handlePay = async () => {
-    setLoading(true)
-    try {
-      const callbackUrl = `${window.location.origin}/upgrade?payment=success`
-      const res = await paymentsApi.initialize(
-        callbackUrl,
-        promoCode || undefined,
-        priceInfo.paystackCurrency,
-        priceInfo.amount,
-      )
+  const initMutation = useMutation({
+    mutationFn: ({ promo_code, currency, amount }: any) =>
+      paymentsApi.initialize(undefined, promo_code, currency, amount),
+    onSuccess: (res) => {
       if (res.data.promo_applied) {
-        toast.success(res.data.message || 'Promo applied! You\'re now Premium 🎉')
-        refetch()
+        toast.success(res.data.message)
         return
       }
-      const { authorization_url, reference } = res.data
-      
-      // Detect if user is on a mobile device
-      const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      
-      if (isMobile) {
-        // Direct redirect on mobile to avoid aggressive popup blockers
-        window.location.href = authorization_url
-      } else {
-        // Desktop popup fallback
-        const popup = window.open(authorization_url, 'paystack_popup', 'width=500,height=700,scrollbars=yes')
-        const pollTimer = setInterval(async () => {
-          if (popup?.closed) {
-            clearInterval(pollTimer)
-            setLoading(false)
-            setVerifying(true)
-            try {
-              const vres = await paymentsApi.verify(reference)
-              if (vres.data.success) {
-                toast.success('Payment confirmed! You\'re now Premium 🎉')
-                refetch()
-              } else {
-                toast.error('Payment not completed.')
-              }
-            } catch { /* user closed without paying */ }
-            finally { setVerifying(false) }
-          }
-        }, 800)
+      if (res.data.authorization_url) {
+        window.open(res.data.authorization_url, '_blank')
       }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Payment service unavailable.')
-    } finally {
-      setLoading(false)
-    }
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error || 'Payment initialization failed.'),
+  })
+
+  const promoMutation = useMutation({
+    mutationFn: (code: string) => paymentsApi.applyPromo(code),
+    onSuccess: (res) => {
+      toast.success(res.data.message)
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error || 'Invalid promo code.'),
+  })
+
+  const handleUpgrade = () => {
+    initMutation.mutate({ promo_code: promoCode || undefined })
   }
 
-  const handlePromo = async () => {
+  const handlePromo = () => {
     if (!promoCode.trim()) return
-    setPromoLoading(true)
-    try {
-      const res = await paymentsApi.applyPromo(promoCode.trim().toUpperCase())
-      if (res.data.success) {
-        toast.success(res.data.message || 'Promo applied!')
-        refetch()
-      } else if (res.data.requires_payment) {
-        setPromoOpen(false)
-        await handlePay()
-      }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Invalid promo code.')
-    } finally {
-      setPromoLoading(false)
-    }
+    promoMutation.mutate(promoCode.trim().toUpperCase())
   }
 
-  const isWorking = loading || verifying || promoLoading
+  if (isPremium) {
+    return (
+      <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-4xl mx-auto text-center">
+        <div className="bg-surface-container-low rounded-[2rem] p-stack-lg border-2 border-primary glow-primary">
+          <span className="material-symbols-outlined text-[64px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
+          <h2 className="text-[32px] font-bold text-on-surface mt-stack-md mb-base">You&apos;re Premium! 🎉</h2>
+          <p className="text-on-surface-variant text-[16px]">
+            {subStatus?.subscription_expires_at
+              ? `Your access is active until ${new Date(subStatus.subscription_expires_at).toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' })}.`
+              : 'Enjoy unlimited access to all FlowState tools.'}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] -m-4 md:-m-6 px-4 md:px-8 pb-20">
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-5xl mx-auto pb-stack-lg">
 
       {/* Hero */}
-      <div className="max-w-2xl mx-auto pt-16 pb-10 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-black uppercase tracking-widest mb-6">
-          <Crown className="w-3 h-3" /> Premium Plan
-        </div>
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-4">
-          Unlock your full<br />
-          <span className="text-orange-400">study potential</span>
+      <div className="text-center mb-stack-lg">
+        <h1 className="text-[36px] md:text-[48px] font-bold text-primary mb-base leading-tight">
+          Unlock Your Full Potential<br />with FlowState Premium
         </h1>
-        <p className="text-slate-500 text-base max-w-md mx-auto">
-          One price. Unlimited study kits, AI tools, VR classroom, and everything Flow State has to offer.
+        <p className="text-on-surface-variant text-[16px] max-w-2xl mx-auto">
+          Join thousands of students achieving their best grades with our most advanced learning tools.
         </p>
       </div>
 
-      {/* If already premium */}
-      {isPremium && (
-        <div className="max-w-lg mx-auto mb-10">
-          <div className="flex items-center gap-4 p-5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl">
-            <Crown className="w-8 h-8 text-emerald-400 shrink-0" />
+      {/* Usage bar */}
+      <div className="bg-surface-container-low rounded-[1.5rem] p-stack-md mb-stack-lg border border-outline-variant glow-primary">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-stack-sm">
+          <div className="flex items-center gap-base mb-base md:mb-0">
+            <div className="p-base bg-primary/10 rounded-full">
+              <span className="material-symbols-outlined text-primary">inventory_2</span>
+            </div>
             <div>
-              <p className="font-black text-white">You're on Premium 🎉</p>
-              <p className="text-sm text-slate-400 mt-0.5">
-                Expires: {subStatus?.subscription_expires_at
-                  ? new Date(subStatus.subscription_expires_at).toLocaleDateString()
-                  : 'Never'}
-              </p>
+              <h3 className="text-[16px] font-bold text-on-surface">You&apos;ve used {notesUsed} of {notesLimit} free study kits</h3>
+              <p className="text-[13px] text-on-surface-variant">Upgrade for unlimited access</p>
             </div>
           </div>
         </div>
-      )}
+        <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden">
+          <div className="h-full bg-primary rounded-full transition-all shadow-[0_0_15px_rgba(255,182,141,0.5)]" style={{ width: `${Math.min(100, (notesUsed / notesLimit) * 100)}%` }} />
+        </div>
+      </div>
 
-      {/* Pricing card */}
-      <div className="max-w-lg mx-auto">
-        <div className="bg-[#111] border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
 
-          {/* Price header */}
-          <div className="bg-gradient-to-br from-orange-500/20 to-amber-500/10 border-b border-white/8 px-8 py-8 text-center">
-            <div className="flex items-baseline justify-center gap-1 mb-2">
-              <span className="text-5xl font-black text-white">{priceInfo.display}</span>
-              <span className="text-slate-400 text-base font-medium">/ month</span>
-            </div>
-            <p className="text-slate-400 text-sm">Cancel anytime. No hidden fees.</p>
-
-            {/* Usage bar for free users */}
-            {!isPremium && (
-              <div className="mt-5 space-y-2">
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>Free kits used</span>
-                  <span className="font-bold text-slate-300">{notesUsed} / {notesLimit}</span>
-                </div>
-                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all"
-                    style={{ width: `${(notesUsed / notesLimit) * 100}%` }}
-                  />
-                </div>
-              </div>
-            )}
+        {/* Pricing card */}
+        <div className="lg:col-span-7 flex flex-col items-center">
+          {/* Billing toggle */}
+          <div className="flex items-center gap-stack-md mb-stack-md bg-surface-container-high p-base rounded-full border border-outline-variant">
+            <span className={`text-[13px] font-bold transition-colors ${!isAnnual ? 'text-primary' : 'text-on-surface-variant'}`}>Monthly</span>
+            <button onClick={() => setIsAnnual(!isAnnual)} className={`w-16 h-7 rounded-full relative transition-colors ${isAnnual ? 'bg-primary-container' : 'bg-surface-container-highest'}`}>
+              <div className={`absolute top-0.5 w-6 h-6 bg-on-primary rounded-full shadow-md transition-all duration-300 ${isAnnual ? 'right-0.5' : 'left-0.5'}`} />
+            </button>
+            <span className={`text-[13px] font-bold flex items-center gap-base transition-colors ${isAnnual ? 'text-primary' : 'text-on-surface-variant'}`}>
+              Annual
+              <span className="bg-secondary-container text-on-secondary-container px-base py-0.5 rounded-full text-[10px] font-bold">Save 30%</span>
+            </span>
           </div>
 
-          {/* Features */}
-          <div className="px-8 py-6 space-y-3">
-            {PREMIUM_FEATURES.map((f, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                  <f.icon className="w-3.5 h-3.5 text-orange-400" />
-                </div>
-                <span className="text-sm text-slate-200 flex-1">{f.text}</span>
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          {/* Main card */}
+          <div className="w-full bg-surface-container-high rounded-[2rem] border-4 border-primary p-stack-lg glow-primary relative overflow-hidden">
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary opacity-5 blur-3xl rounded-full"></div>
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <span className="bg-primary text-on-primary px-stack-md py-1 rounded-full text-[13px] font-bold mb-stack-md">MOST POPULAR</span>
+              <h2 className="text-[28px] font-bold text-on-surface mb-base">FlowState Premium</h2>
+              <div className="flex items-baseline gap-base mb-stack-md">
+                <span className="text-[48px] font-bold text-on-surface">{isAnnual ? '$79' : priceInfo?.displayPrice || '$0.99'}</span>
+                <span className="text-[18px] text-on-surface-variant">{isAnnual ? '/year' : '/mo'}</span>
               </div>
-            ))}
-          </div>
 
-          {/* CTA */}
-          <div className="px-8 pb-8 space-y-3">
-            {!isPremium ? (
-              <>
-                <button
-                  onClick={handlePay}
-                  disabled={isWorking}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-orange-500 text-white font-black text-base hover:bg-orange-400 active:scale-[0.98] disabled:opacity-60 transition-all shadow-xl shadow-orange-500/25"
-                >
-                  {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Opening payment…</>
-                  : verifying ? <><Loader2 className="w-5 h-5 animate-spin" /> Confirming…</>
-                  : <><Sparkles className="w-5 h-5" /> Upgrade Now — {priceInfo.display}/mo</>}
-                </button>
+              <ul className="w-full space-y-stack-sm mb-stack-lg border-t border-outline-variant pt-stack-lg text-left">
+                {['Full access to all 6 premium study tools', 'No limits, no ads, no interruptions', 'Cancel anytime with 1-click'].map(f => (
+                  <li key={f} className="flex items-center gap-base text-[15px] text-on-surface">
+                    <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
 
-                {/* Promo code */}
-                <button
-                  onClick={() => setPromoOpen(v => !v)}
-                  className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors py-1"
-                >
-                  <Tag className="w-3.5 h-3.5" />
-                  Have a promo code?
-                  {promoOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </button>
-
-                {promoOpen && (
-                  <div className="flex gap-2">
-                    <input
-                      value={promoCode}
-                      onChange={e => setPromoCode(e.target.value.toUpperCase())}
-                      onKeyDown={e => e.key === 'Enter' && handlePromo()}
-                      placeholder="PROMO CODE"
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500/50 font-mono uppercase tracking-widest transition-colors"
-                    />
-                    <button
-                      onClick={handlePromo}
-                      disabled={!promoCode.trim() || promoLoading}
-                      className="px-5 py-2.5 bg-white/8 hover:bg-white/12 border border-white/10 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all"
-                    >
-                      {promoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
-                    </button>
-                  </div>
+              {/* Promo code */}
+              <div className="w-full flex gap-base mb-stack-md">
+                <input
+                  className="flex-1 bg-surface-container border border-outline-variant rounded-full px-stack-md py-2 text-[14px] text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/60 uppercase"
+                  placeholder="Promo code (optional)"
+                  value={promoCode}
+                  onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                />
+                {promoCode && (
+                  <button onClick={handlePromo} disabled={promoMutation.isPending} className="px-stack-md bg-secondary-container text-on-secondary-container font-bold rounded-full text-[13px] disabled:opacity-50">
+                    Apply
+                  </button>
                 )}
-              </>
-            ) : (
-              <div className="text-center py-2">
-                <p className="text-sm text-slate-500">You already have an active Premium subscription.</p>
               </div>
-            )}
 
-            <p className="text-center text-xs text-slate-700 mt-2">
-              Secured by Paystack · SSL encrypted
-            </p>
+              <button
+                onClick={handleUpgrade}
+                disabled={initMutation.isPending}
+                className="w-full py-stack-md bg-primary-container text-on-primary-container text-[20px] font-bold rounded-[1.5rem] border-b-4 border-on-primary-fixed-variant btn-squishy transition-all hover:brightness-110 disabled:opacity-50"
+              >
+                {initMutation.isPending ? 'Processing…' : 'Upgrade to Blast Off! 🚀'}
+              </button>
+              <p className="mt-stack-sm text-[13px] text-on-surface-variant">Secure checkout powered by Paystack</p>
+            </div>
           </div>
         </div>
 
-        {/* Free tier comparison */}
-        <div className="mt-6 bg-[#111] border border-white/5 rounded-2xl p-5">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Free tier includes</p>
-          <div className="grid grid-cols-2 gap-2">
-            {FREE_FEATURES.map((f, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-700 shrink-0" />
-                {f}
+        {/* Feature list */}
+        <div className="lg:col-span-5 space-y-stack-md">
+          <h3 className="text-[18px] font-bold text-on-surface border-b border-outline-variant pb-base">Why Go Premium?</h3>
+          <div className="space-y-base">
+            {FEATURES.map(f => (
+              <div key={f.title} className="p-stack-sm rounded-[1rem] border border-outline-variant hover:bg-surface-container-high transition-all cursor-default">
+                <div className="flex items-start gap-base">
+                  <div className="p-base bg-surface-container-highest rounded-[1rem]">
+                    <span className={`material-symbols-outlined ${f.color} text-[22px]`}>{f.icon}</span>
+                  </div>
+                  <div>
+                    <h4 className="text-[16px] font-bold text-on-surface">{f.title}</h4>
+                    <p className="text-[13px] text-on-surface-variant">{f.desc}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Testimonials */}
+      <div className="mt-stack-lg border-t border-outline-variant pt-stack-lg">
+        <h3 className="text-[28px] font-bold text-center text-on-surface mb-stack-lg">Loved by 10,000+ Students</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+          {TESTIMONIALS.map((t, i) => (
+            <div key={i} className="bg-surface-container p-stack-md rounded-[1.5rem] flex flex-col gap-base">
+              <div className="flex gap-1 text-primary">
+                {[...Array(t.stars)].map((_, j) => (
+                  <span key={j} className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                ))}
+              </div>
+              <p className="italic text-on-surface-variant text-[14px] flex-1">{t.text}</p>
+              <p className="text-[13px] font-bold text-on-surface">{t.name}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

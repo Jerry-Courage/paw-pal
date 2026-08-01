@@ -1,480 +1,291 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSession } from 'next-auth/react'
-import { libraryApi, paymentsApi, getAuthToken, SERVER_URL } from '@/lib/api'
-import {
-  Upload, Link2, Mic, Search, Sparkles, Trash2, BookOpen,
-  FileText, Video, Code2, Layers, Brain, Zap,
-  Folder, ChevronRight, MoreHorizontal, X
-} from 'lucide-react'
-import { formatBytes, timeAgo } from '@/lib/utils'
-import { toast } from 'sonner'
-import UploadModal from '@/components/library/UploadModal'
-import ProcessingView from '@/components/library/ProcessingView'
+import { useState, useRef, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { libraryApi, paymentsApi } from '@/lib/api'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-import { usePricing } from '@/hooks/usePricing'
+import { toast } from 'sonner'
+import dynamic from 'next/dynamic'
 
-const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
-const SUBJECT_FILTERS = [
-  'All', 'Biology', 'Physics', 'History', 'Mathematics',
-  'Computer Science', 'Medicine', 'Economics', 'Chemistry', 'Law',
-]
-
-const TYPE_ICONS: Record<string, any> = {
-  pdf: FileText, video: Video, code: Code2, slides: Layers,
+function getMasteryBadge(mastery: number) {
+  if (mastery >= 80) return { label: 'Mastered', color: 'text-primary', bg: 'bg-primary/10' }
+  if (mastery >= 40) return { label: 'Learning', color: 'text-secondary', bg: 'bg-secondary/10' }
+  return { label: 'New', color: 'text-on-surface-variant', bg: 'bg-surface-container-highest' }
 }
 
-const SUBJECT_GRADIENTS: Record<string, string> = {
-  Biology:          'from-emerald-600 to-teal-800',
-  Physics:          'from-violet-600 to-purple-900',
-  Mathematics:      'from-blue-600 to-indigo-900',
-  'Computer Science': 'from-slate-700 to-slate-900',
-  Medicine:         'from-rose-600 to-pink-900',
-  Economics:        'from-amber-600 to-orange-900',
-  Chemistry:        'from-cyan-600 to-sky-900',
-  History:          'from-yellow-700 to-amber-900',
-  Law:              'from-stone-600 to-stone-900',
-  General:          'from-indigo-600 to-blue-900',
-}
-
-function getGradient(subject: string, title: string) {
-  const key = Object.keys(SUBJECT_GRADIENTS).find(k =>
-    subject?.toLowerCase().includes(k.toLowerCase()) ||
-    title?.toLowerCase().includes(k.toLowerCase())
-  )
-  return SUBJECT_GRADIENTS[key || 'General']
-}
-
-function ProcessingCard({ resource, onDelete }: { resource: any; onDelete: () => void }) {
-  const Icon = TYPE_ICONS[resource.resource_type] || FileText
-  return (
-    <Link href={`/library/${resource.id}`} className="block">
-      <div className="relative overflow-hidden rounded-2xl bg-[#1a1a1a] border border-orange-500/20 p-5 flex flex-col gap-4 hover:border-orange-500/40 transition-all cursor-pointer">
-        {/* Subtle animated top border */}
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500/60 to-transparent animate-shine" />
-
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-              <Icon className="w-5 h-5 text-orange-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-white truncate max-w-[160px]">{resource.title}</p>
-              <p className="text-[10px] text-slate-500 font-medium">{formatBytes(resource.file_size)}</p>
-            </div>
-          </div>
-          <button
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
-            className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors rounded-lg hover:bg-rose-400/10"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-
-        <ProcessingView resource={resource} compact />
-      </div>
-    </Link>
-  )
-}
-
-function ResourceCard({ resource: r, onDelete }: { resource: any; onDelete: () => void }) {
-  const Icon = TYPE_ICONS[r.resource_type] || FileText
-  const gradient = getGradient(r.subject, r.title)
-  const thumbnail = r.cover_image_url || r.thumbnail_url
-
-  return (
-    <Link href={`/library/${r.id}`} className="group block">
-      <div className="relative rounded-2xl overflow-hidden bg-[#1a1a1a] border border-white/5 hover:border-white/15 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/40">
-        {/* Thumbnail */}
-        <div className="h-40 relative overflow-hidden">
-          {thumbnail ? (
-            <img
-              src={thumbnail}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              alt={r.title}
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden') }}
-            />
-          ) : null}
-          <div className={cn('w-full h-full bg-gradient-to-br flex items-center justify-center absolute inset-0', gradient, thumbnail ? 'hidden' : '')}>
-            <Icon className="w-10 h-10 text-white/30" />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-transparent to-transparent" />
-
-          {/* Type badge */}
-          <div className="absolute top-3 left-3">
-            <span className="px-2 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-[9px] font-black text-white/70 uppercase tracking-widest border border-white/10">
-              {r.resource_type}
-            </span>
-          </div>
-
-          {/* Delete on hover */}
-          <button
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
-            className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/50 hover:text-rose-400 hover:bg-rose-400/20 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* AI Ready badge */}
-          {r.has_study_kit && (
-            <div className="absolute bottom-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/30">
-              <Sparkles className="w-3 h-3 text-emerald-400" />
-              <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Ready</span>
-            </div>
-          )}
-        </div>
-
-        {/* Info */}
-        <div className="p-4">
-          {r.subject && (
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{r.subject}</span>
-          )}
-          <h3 className="text-sm font-bold text-white mt-1 line-clamp-2 leading-snug group-hover:text-orange-400 transition-colors">
-            {r.title}
-          </h3>
-          <div className="flex items-center justify-between mt-3">
-            <span className="text-[10px] text-slate-600 font-medium">{timeAgo(r.created_at)}</span>
-            <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-orange-400 group-hover:translate-x-0.5 transition-all" />
-          </div>
-        </div>
-      </div>
-    </Link>
-  )
-}
+const TYPE_ICON: Record<string, string> = { pdf: 'description', video: 'play_circle', slides: 'slideshow', code: 'code', other: 'article' }
+const TYPE_COLOR: Record<string, string> = { pdf: 'text-primary', video: 'text-secondary', slides: 'text-tertiary', code: 'text-green-400', other: 'text-on-surface-variant' }
 
 export default function LibraryPage() {
-  const { data: session } = useSession()
-  const firstName = session?.user?.name?.split(' ')[0] || 'there'
-
-  const [subjectFilter, setSubjectFilter] = useState('All')
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [showUpload, setShowUpload] = useState(false)
-  const [uploadMode, setUploadMode] = useState<'file' | 'paste' | 'record'>('file')
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [showPaywall, setShowPaywall] = useState(false)
-  const [nudgeDismissed, setNudgeDismissed] = useState(false)
-  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; resourceId: number | null; title: string }>({
-    isOpen: false, resourceId: null, title: ''
-  })
-  const qc = useQueryClient()
+  const [textMode, setTextMode] = useState(false)
+  const [pastedText, setPastedText] = useState('')
+  const [pastedTitle, setPastedTitle] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data: resourcesData, isLoading } = useQuery({
     queryKey: ['resources'],
     queryFn: () => libraryApi.getResources().then(r => r.data),
-  })
-
-  const { data: curatedData } = useQuery({
-    queryKey: ['curated-resources'],
-    queryFn: () => libraryApi.getCuratedResources().then(r => r.data),
   })
 
   const { data: subStatus, refetch: refetchSub } = useQuery({
     queryKey: ['subscription-status'],
     queryFn: () => paymentsApi.getStatus().then(r => r.data),
-    staleTime: 30000,
+    staleTime: 60000,
   })
 
-  const isPremium = subStatus?.is_premium ?? false
-  const notesUsed = subStatus?.notes_used ?? 0
-  const notesLimit = subStatus?.notes_limit ?? 5
-  // Show nudge when free user has used 60%+ of their limit and hasn't dismissed it
-  const showNudge = !isPremium && notesUsed >= Math.ceil(notesLimit * 0.6) && !nudgeDismissed
+  const resources = resourcesData?.results || []
+  const filtered = resources.filter((r: any) =>
+    !search ||
+    r.title.toLowerCase().includes(search.toLowerCase()) ||
+    (r.subject || '').toLowerCase().includes(search.toLowerCase())
+  )
 
-  const { priceInfo } = usePricing()
-
-  const resourcesKey = (data?.results || []).map((r: any) => `${r.id}:${r.status}`).join(',')
-
-  // SSE for real-time processing updates
-  useEffect(() => {
-    const resources = (data?.results || []) as any[]
-    const hasProcessing = resources.some((r: any) => r.status !== 'ready' && r.status !== 'failed' && r.status !== 'error')
-    if (!hasProcessing) return
-
-    let aborted = false
-    const ctrl = new AbortController()
-
-    const connectSSE = async () => {
-      try {
-        const token = await getAuthToken()
-        if (!token || aborted) return
-        const res = await fetch(`${SERVER_URL}/api/library/resources/status-stream/`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: ctrl.signal,
+  const handleFileUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const notesUsed = subStatus?.notes_used ?? 0
+    const notesLimit = subStatus?.notes_limit ?? 5
+    const isPremium = subStatus?.is_premium ?? false
+    if (!isPremium && notesUsed >= notesLimit) { setShowPaywall(true); return }
+    setUploading(true); setUploadProgress(0)
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('title', file.name.replace(/\.[^/.]+$/, ''))
+        await libraryApi.uploadResource(fd, (e) => {
+          if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100))
         })
-        if (!res.ok || !res.body) return
-        const reader = res.body.getReader()
-        const dec = new TextDecoder()
-        let buf = ''
-        while (!aborted) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buf += dec.decode(value, { stream: true })
-          const parts = buf.split('\n\n')
-          buf = parts.pop() || ''
-          for (const part of parts) {
-            const dataLine = part.split('\n').find(l => l.startsWith('data:'))
-            const eventLine = part.split('\n').find(l => l.startsWith('event:'))
-            const evt = eventLine?.replace('event:', '').trim()
-            if (!dataLine || evt === 'heartbeat' || evt === 'timeout') continue
-            try {
-              const pulse = JSON.parse(dataLine.replace('data:', '').trim())
-              if (evt === 'status' || evt === 'snapshot') {
-                const updates = Array.isArray(pulse) ? pulse : [pulse]
-                qc.setQueryData(['resources'], (old: any) => {
-                  if (!old?.results) return old
-                  const newResults = [...old.results]
-                  updates.forEach((up: any) => {
-                    const idx = newResults.findIndex((r: any) => r.id === up.id)
-                    if (idx !== -1) {
-                      newResults[idx] = {
-                        ...newResults[idx],
-                        status: up.status,
-                        processing_progress: up.progress,
-                        status_text: up.text,
-                        has_study_kit: up.status === 'ready',
-                      }
-                    }
-                  })
-                  return { ...old, results: newResults }
-                })
-              }
-              if (evt === 'done') { reader.cancel(); return }
-            } catch {}
-          }
-        }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') console.warn('SSE error', e)
       }
-    }
-    connectSSE()
-    return () => { aborted = true; ctrl.abort() }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resourcesKey, qc])
+      toast.success('Material uploaded! AI is processing…')
+      queryClient.invalidateQueries({ queryKey: ['resources'] })
+      refetchSub()
+    } catch { toast.error('Upload failed. Please try again.') }
+    finally { setUploading(false); setUploadProgress(0) }
+  }, [subStatus, queryClient, refetchSub])
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => libraryApi.deleteResource(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['resources'] })
-      toast.success('Resource deleted.')
-      setConfirmModal({ isOpen: false, resourceId: null, title: '' })
-    },
-    onError: (err: any) => {
-      let msg = 'Delete failed.'
-      if (err.response) {
-        if (typeof err.response.data === 'object' && err.response.data !== null) {
-          msg = err.response.data.error || err.response.data.detail || msg
-        } else {
-          msg = `Delete failed: Server returned status ${err.response.status}`
-        }
-      } else if (err.request) {
-        msg = 'Delete failed: No response received from server.'
-      } else {
-        msg = `Delete failed: ${err.message}`
-      }
-      toast.error(msg)
-      setConfirmModal({ isOpen: false, resourceId: null, title: '' })
-    }
-  })
-
-  const allResources: any[] = data?.results || []
-  const curatedResources: any[] = curatedData?.results || curatedData || []
-
-  const myResources = allResources.filter(r => {
-    const matchesSearch = r.title.toLowerCase().includes(search.toLowerCase())
-    const matchesSubject = subjectFilter === 'All' ||
-      r.subject?.toLowerCase().includes(subjectFilter.toLowerCase()) ||
-      r.title?.toLowerCase().includes(subjectFilter.toLowerCase())
-    return matchesSearch && matchesSubject
-  })
-
-  const exploreResources = curatedResources.filter(r => {
-    return subjectFilter === 'All' ||
-      r.subject?.toLowerCase().includes(subjectFilter.toLowerCase()) ||
-      r.title?.toLowerCase().includes(subjectFilter.toLowerCase())
-  })
-
-  const handleOpenUpload = (mode: 'file' | 'paste' | 'record') => {
-    setUploadMode(mode)
-    setShowUpload(true)
+  const handlePasteSubmit = async () => {
+    if (!pastedText.trim()) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('title', pastedTitle || 'Pasted Text')
+      fd.append('text_content', pastedText)
+      await libraryApi.uploadResource(fd)
+      toast.success('Text added to library!')
+      queryClient.invalidateQueries({ queryKey: ['resources'] })
+      setPastedText(''); setPastedTitle(''); setTextMode(false)
+    } catch { toast.error('Failed to add text.') }
+    finally { setUploading(false) }
   }
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    handleFileUpload(e.dataTransfer.files)
+  }, [handleFileUpload])
+
   return (
-    <div className="min-h-screen bg-[#0d0d0d] -m-4 md:-m-6 px-4 md:px-8 pb-16">
-
-      {/* ── Hero ──────────────────────────────────────────────────── */}
-      <div className="max-w-4xl mx-auto pt-16 pb-12 text-center">
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-3">
-          Hey {firstName}, what do you wanna master?
-        </h1>
-        <p className="text-slate-500 text-base">
-          Upload anything and get interactive notes, flashcards, quizzes, and more
-        </p>
-
-        {/* Upload cards */}
-        <div className="grid grid-cols-3 gap-3 mt-10 max-w-2xl mx-auto">
-          {/* Hidden Sparkles anchor - ensures icon stays in bundle */}
-          <span style={{ display: 'none' }}><Sparkles size={0} /></span>
-          {[
-            { mode: 'file' as const, icon: Upload, label: 'Upload', sub: 'Image, file, audio, video' },
-            { mode: 'paste' as const, icon: Link2, label: 'Paste', sub: 'YouTube, website, text' },
-            { mode: 'record' as const, icon: Mic, label: 'Record', sub: 'Record live lecture' },
-          ].map(({ mode, icon: Icon, label, sub }) => (
-            <button
-              key={mode}
-              onClick={() => handleOpenUpload(mode)}
-              className="group flex flex-col items-start gap-3 p-5 rounded-2xl bg-[#1a1a1a] border border-white/8 hover:border-orange-500/40 hover:bg-[#1f1f1f] transition-all text-left active:scale-[0.98]"
-            >
-              <div className="w-10 h-10 rounded-xl bg-white/5 group-hover:bg-orange-500/10 flex items-center justify-center transition-colors">
-                <Icon className="w-5 h-5 text-slate-400 group-hover:text-orange-400 transition-colors" />
-              </div>
-              <div>
-                <p className="text-sm font-black text-white">{label}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
-              </div>
-            </button>
-          ))}
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-stack-md mb-stack-lg">
+        <div>
+          <h2 className="text-[32px] font-bold text-on-surface mb-base">My Library</h2>
+          <p className="text-on-surface-variant text-[16px]">All your study materials in one place.</p>
+        </div>
+        <div className="relative w-full md:w-96">
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+          <input
+            className="w-full bg-surface-container-high border border-outline-variant rounded-full py-4 pl-12 pr-stack-md text-on-surface text-[16px] focus:outline-none focus:border-secondary transition-all placeholder:text-on-surface-variant/60"
+            placeholder="Search your materials..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
-      {/* ── Upgrade nudge banner (free users near limit) ─────── */}
-      {showNudge && (
-        <div className="max-w-2xl mx-auto mb-2 -mt-6">
-          <div className="relative flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-orange-500/15 to-amber-500/10 border border-orange-500/25">
-            <div className="w-9 h-9 shrink-0 rounded-xl bg-orange-500/15 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-orange-400" />
+      {/* Upload action buttons */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-stack-md mb-stack-lg">
+        <div
+          className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group"
+          onClick={() => fileRef.current?.click()}
+          onDrop={handleDrop}
+          onDragOver={e => e.preventDefault()}
+        >
+          <div className="w-16 h-16 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
+            <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>upload_file</span>
+          </div>
+          <span className="text-[18px] font-bold text-primary">Add File</span>
+          <span className="text-[13px] text-on-surface-variant mt-1">PDF, Docs, Slides</span>
+          {uploading && (
+            <div className="mt-stack-sm w-full">
+              <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <p className="text-[11px] text-on-surface-variant text-center mt-1">{uploadProgress}%</p>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-black text-white">
-                {notesUsed >= notesLimit
-                  ? "You've hit your free limit"
-                  : `${notesLimit - notesUsed} free kit${notesLimit - notesUsed !== 1 ? 's' : ''} left`}
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Upgrade to Premium for unlimited kits, faster AI, and more.
-              </p>
-            </div>
+          )}
+          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.pptx,.txt,.py,.js,.ts,.jpg,.jpeg,.png,.mp4" multiple onChange={e => handleFileUpload(e.target.files)} />
+        </div>
+
+        <button onClick={() => setTextMode(!textMode)} className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy group">
+          <div className="w-16 h-16 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
+            <span className="material-symbols-outlined text-[32px]">edit_note</span>
+          </div>
+          <span className="text-[18px] font-bold text-secondary">Type Text</span>
+          <span className="text-[13px] text-on-surface-variant mt-1">Notes &amp; Summaries</span>
+        </button>
+
+        <div className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group opacity-60">
+          <div className="w-16 h-16 bg-tertiary-container text-on-tertiary-container rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
+            <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>mic</span>
+          </div>
+          <span className="text-[18px] font-bold text-tertiary">Speak</span>
+          <span className="text-[13px] text-on-surface-variant mt-1">Voice memos (coming soon)</span>
+        </div>
+      </section>
+
+      {/* Text paste panel */}
+      {textMode && (
+        <div className="mb-stack-lg bg-surface-container-low rounded-[2rem] p-stack-md border border-outline-variant space-y-stack-sm">
+          <h3 className="font-bold text-on-surface text-[18px]">Paste Your Text</h3>
+          <input
+            className="w-full bg-surface-container-high border border-outline-variant rounded-[1rem] px-stack-md py-3 text-on-surface focus:outline-none focus:border-secondary transition-all"
+            placeholder="Title (optional)"
+            value={pastedTitle}
+            onChange={e => setPastedTitle(e.target.value)}
+          />
+          <textarea
+            className="w-full h-40 bg-surface-container-high border border-outline-variant rounded-[1rem] px-stack-md py-3 text-on-surface focus:outline-none focus:border-secondary transition-all resize-none"
+            placeholder="Paste your study text here..."
+            value={pastedText}
+            onChange={e => setPastedText(e.target.value)}
+          />
+          <div className="flex gap-stack-sm">
             <button
-              onClick={() => setShowPaywall(true)}
-              className="shrink-0 text-xs font-black px-3 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20"
+              onClick={handlePasteSubmit}
+              disabled={uploading}
+              className="bg-primary text-on-primary font-bold px-stack-lg py-stack-sm rounded-[1rem] btn-3d hover:brightness-110 transition-all disabled:opacity-50"
             >
-              {priceInfo.displayShort}
+              {uploading ? 'Adding…' : 'Add to Library'}
             </button>
-            <button
-              onClick={() => setNudgeDismissed(true)}
-              className="absolute top-2 right-2 p-1 text-slate-600 hover:text-slate-400 transition-colors"
-              aria-label="Dismiss"
-            >
-              <X className="w-3.5 h-3.5" />
+            <button onClick={() => setTextMode(false)} className="bg-surface-container-high text-on-surface-variant font-bold px-stack-md py-stack-sm rounded-[1rem] hover:bg-surface-container-highest transition-all">
+              Cancel
             </button>
           </div>
         </div>
       )}
 
-      {/* ── My Resources (if any) ─────────────────────────────────── */}
-      {myResources.length > 0 && (
-        <div className="max-w-6xl mx-auto mb-12">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <Folder className="w-4 h-4 text-slate-500" />
-              <h2 className="text-sm font-black text-white uppercase tracking-widest">My Library</h2>
-              <span className="text-[10px] font-black text-slate-600 bg-white/5 px-2 py-0.5 rounded-full">{myResources.length}</span>
-            </div>
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search..."
-                className="pl-8 pr-4 py-2 bg-white/5 border border-white/8 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-white/20 w-48"
-              />
-            </div>
-          </div>
+      {/* Materials grid */}
+      <section>
+        <div className="flex items-center justify-between mb-stack-md">
+          <h3 className="text-[16px] font-bold text-on-surface flex items-center gap-base">
+            Recent Materials
+            <span className="px-2 py-0.5 bg-surface-container-highest rounded-full text-[13px] font-bold text-primary">{resources.length} items</span>
+          </h3>
+        </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {myResources.map(r => (
-              r.status !== 'ready'
-                ? <ProcessingCard key={r.id} resource={r} onDelete={() => setConfirmModal({ isOpen: true, resourceId: r.id, title: r.title })} />
-                : <ResourceCard key={r.id} resource={r} onDelete={() => setConfirmModal({ isOpen: true, resourceId: r.id, title: r.title })} />
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-surface-container-low rounded-[1.5rem] p-stack-md border border-outline-variant/20 animate-pulse">
+                <div className="w-10 h-10 bg-surface-container-high rounded-[1rem] mb-stack-sm" />
+                <div className="h-5 bg-surface-container-high rounded w-3/4 mb-2" />
+                <div className="h-4 bg-surface-container-high rounded w-1/2" />
+              </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* ── Explore ───────────────────────────────────────────────── */}
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-1 h-5 bg-orange-500 rounded-full" />
-          <h2 className="text-sm font-black text-white uppercase tracking-widest">Explore</h2>
-        </div>
-
-        {/* Subject filter pills */}
-        <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide mb-6">
-          {SUBJECT_FILTERS.map(s => (
-            <button
-              key={s}
-              onClick={() => setSubjectFilter(s)}
-              className={cn(
-                'shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all border',
-                subjectFilter === s
-                  ? 'bg-white text-black border-white'
-                  : 'bg-white/5 text-slate-400 border-white/8 hover:border-white/20 hover:text-white'
+        ) : filtered.length === 0 ? (
+          <div className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] p-stack-lg text-center flex flex-col items-center gap-stack-md">
+            <div className="w-20 h-20 bg-surface-container rounded-full flex items-center justify-center">
+              <span className="material-symbols-outlined text-[40px] text-on-surface-variant">menu_book</span>
+            </div>
+            <div>
+              <p className="font-bold text-on-surface text-[18px] mb-base">{search ? 'No results found' : 'Library is empty'}</p>
+              <p className="text-[14px] text-on-surface-variant mb-stack-md">
+                {search ? 'Try a different search term.' : 'Upload your first material to unlock AI study tools.'}
+              </p>
+              {!search && (
+                <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-base bg-primary text-on-primary text-[14px] font-bold px-stack-md py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  Upload Now
+                </button>
               )}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-
-        {/* Explore grid */}
-        {exploreResources.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {exploreResources.map(r => (
-              <ResourceCard key={r.id} resource={r} onDelete={() => {}} />
-            ))}
+            </div>
           </div>
         ) : (
-          <div className="text-center py-16 text-slate-600">
-            <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">No resources found for this subject yet.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+            {/* Wide featured card for first item */}
+            {filtered.slice(0, 1).map((r: any) => {
+              const badge = getMasteryBadge(r.mastery ?? 0)
+              return (
+                <Link key={r.id} href={`/library/${r.id}`} className="md:col-span-2 bg-surface-container-high rounded-[1.5rem] border border-outline-variant overflow-hidden flex flex-col md:flex-row shadow-xl hover:border-primary/40 transition-all group">
+                  <div className="w-full md:w-1/3 h-48 md:h-full relative bg-surface-container-highest flex items-center justify-center">
+                    <span className={cn('material-symbols-outlined text-[64px]', TYPE_COLOR[r.resource_type] || TYPE_COLOR.other)} style={{ fontVariationSettings: "'FILL' 1" }}>
+                      {TYPE_ICON[r.resource_type] || TYPE_ICON.other}
+                    </span>
+                    <div className="absolute bottom-3 left-3">
+                      <span className="bg-primary text-on-primary text-[11px] font-bold px-3 py-1 rounded-full uppercase">Featured</span>
+                    </div>
+                  </div>
+                  <div className="p-stack-md flex flex-col justify-center gap-base md:w-2/3">
+                    <h4 className="text-[20px] font-bold text-on-surface group-hover:text-primary transition-colors">{r.title}</h4>
+                    <p className="text-[14px] text-on-surface-variant line-clamp-2">{r.ai_summary || `${r.subject || r.resource_type} study material`}</p>
+                    <div className="flex items-center gap-base">
+                      <span className={cn('text-[12px] font-bold px-2 py-0.5 rounded-full', badge.color, badge.bg)}>{badge.label}</span>
+                      {r.has_study_kit && <span className="text-[12px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Kit Ready</span>}
+                    </div>
+                    <button className="w-full bg-primary text-on-primary py-3 rounded-[1rem] font-bold btn-3d hover:brightness-110 transition-all text-[15px]">
+                      Resume Study Path
+                    </button>
+                  </div>
+                </Link>
+              )
+            })}
+
+            {/* Regular cards */}
+            {filtered.slice(1).map((r: any) => {
+              const badge = getMasteryBadge(r.mastery ?? 0)
+              return (
+                <Link key={r.id} href={`/library/${r.id}`} className="bg-surface-container rounded-[1.5rem] p-stack-md border border-outline-variant hover:border-primary/40 transition-all flex flex-col gap-stack-sm group">
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 bg-surface-container-high rounded-[1rem]">
+                      <span className={cn('material-symbols-outlined text-[28px]', TYPE_COLOR[r.resource_type] || TYPE_COLOR.other)}>
+                        {TYPE_ICON[r.resource_type] || TYPE_ICON.other}
+                      </span>
+                    </div>
+                    <div className={cn('flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold', badge.color, badge.bg)}>
+                      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                      {badge.label}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[18px] font-bold text-on-surface mb-1 group-hover:text-primary transition-colors line-clamp-1">{r.title}</h4>
+                    <p className="text-[13px] text-on-surface-variant line-clamp-2">{r.ai_summary || `${r.subject || r.resource_type} — tap to study`}</p>
+                  </div>
+                  <div className="mt-auto flex items-center justify-between">
+                    <span className="text-[12px] text-on-surface-variant">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}</span>
+                    <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">more_vert</span>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Upload Modal */}
-      {showUpload && (
-        <UploadModal
-          onClose={() => setShowUpload(false)}
-          initialMode={uploadMode}
-        />
-      )}
-
-      {/* Delete Confirmation */}
-      {confirmModal.isOpen && (
-        <ConfirmationModal
-          isOpen={confirmModal.isOpen}
-          title="Delete Resource"
-          message={`Are you sure you want to delete "${confirmModal.title}"? This cannot be undone.`}
-          confirmText="Delete"
-          type="danger"
-          onConfirm={() => confirmModal.resourceId && deleteMutation.mutate(confirmModal.resourceId)}
-          onClose={() => setConfirmModal({ isOpen: false, resourceId: null, title: '' })}
-          isLoading={deleteMutation.isPending}
-        />
-      )}
-
-      {/* Paywall */}
       {showPaywall && subStatus && (
         <PaywallModal
           onClose={() => setShowPaywall(false)}
-          notesUsed={notesUsed}
-          notesLimit={notesLimit}
-          onSuccess={() => { refetchSub(); setShowPaywall(false); setNudgeDismissed(true) }}
+          notesUsed={subStatus.notes_used}
+          notesLimit={subStatus.notes_limit}
+          onSuccess={() => { refetchSub(); setShowPaywall(false) }}
         />
       )}
     </div>

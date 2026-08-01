@@ -1,425 +1,328 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { groupsApi, aiApi } from '@/lib/api'
-import { Users, Sparkles, Send, Calendar, ArrowRight, MessageCircle, Pin } from 'lucide-react'
-import { timeAgo, getInitials } from '@/lib/utils'
+import { groupsApi } from '@/lib/api'
+import { cn, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
-import { normalizeReadableMath } from '@/lib/mathFormatting'
-import ReactMarkdown from 'react-markdown'
-import CollabEditor from '@/components/groups/CollabEditor'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 
-const TABS = ['Overview', 'Workspace', 'Files', 'Members', 'Events', 'Chat']
+const TABS = ['Overview', 'Chat', 'Files', 'Members']
 
-export default function GroupPage({ params }: { params: { id: string } }) {
-  const id = parseInt(params.id)
-  const [tab, setTab] = useState('Overview')
-  const qc = useQueryClient()
+export default function GroupDetailPage({ params }: { params: { id: string } }) {
+  const groupId = parseInt(params.id)
+  const { data: session } = useSession()
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState('Overview')
+  const [message, setMessage] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { data: group, isLoading } = useQuery({
-    queryKey: ['group', id],
-    queryFn: () => groupsApi.getGroup(id).then((r) => r.data),
+    queryKey: ['group', groupId],
+    queryFn: () => groupsApi.getGroup(groupId).then(r => r.data),
   })
 
-  if (isLoading) return (
-    <div className="max-w-5xl mx-auto space-y-4 animate-pulse">
-      <div className="h-32 bg-gray-200 dark:bg-gray-800 rounded-xl" />
-      <div className="h-8 bg-gray-100 dark:bg-gray-800 rounded-xl w-1/2" />
-    </div>
-  )
-
-  return (
-    <div className="max-w-5xl mx-auto">
-      {/* Group header — matches design page 9 */}
-      <div className="card mb-5 overflow-hidden">
-        <div className="h-36 bg-gradient-to-r from-sky-400 via-sky-500 to-teal-400 relative">
-          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-        </div>
-        <div className="px-5 pb-5">
-          <div className="flex items-end gap-4 -mt-8 mb-3">
-            <div className="w-16 h-16 bg-white dark:bg-gray-900 rounded-xl border-4 border-white dark:border-gray-900 shadow-lg flex items-center justify-center text-2xl font-bold text-sky-500 flex-shrink-0">
-              {group?.name?.[0] || 'G'}
-            </div>
-            <div className="flex-1 pb-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">{group?.name}</h1>
-                {group?.is_verified && (
-                  <span className="text-xs bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Verified Group
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{group?.description}</p>
-            </div>
-            <div className="flex gap-2 pb-1">
-              <button className="btn-secondary text-sm">Leave Group</button>
-              <button className="btn-secondary text-sm">+ Invite</button>
-              <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2">···</button>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">
-            <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {group?.member_count || 0} Members</span>
-            <span>{group?.is_public ? '🌐 Public Group' : '🔒 Private Group'}</span>
-            {group?.is_verified && <span className="text-sky-500 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI Moderated</span>}
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-0 border-b border-gray-100 dark:border-gray-800 mb-5 overflow-x-auto scrollbar-hide">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              tab === t
-                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'Overview' && <GroupOverview groupId={id} />}
-      {tab === 'Workspace' && <CollabEditor groupId={id} />}
-      {tab === 'Chat' && <GroupChat groupId={id} />}
-      {tab === 'Members' && <GroupMembers groupId={id} />}
-      {tab === 'Events' && <GroupEvents groupId={id} />}
-      {tab === 'Files' && <GroupFiles groupId={id} />}
-    </div>
-  )
-}
-
-function GroupOverview({ groupId }: { groupId: number }) {
-  const { data: sessionsData } = useQuery({
-    queryKey: ['group-sessions', groupId],
-    queryFn: () => groupsApi.getSessions(groupId).then((r) => r.data),
-  })
-  const sessions = sessionsData?.results || []
-
-  return (
-    <div className="grid lg:grid-cols-3 gap-5">
-      <div className="lg:col-span-2 space-y-4">
-        {/* Enter workspace CTA — matches design page 9 */}
-        <div className="card p-5 border-l-4 border-sky-500 bg-gradient-to-r from-sky-50 to-white dark:from-sky-950/30 dark:to-transparent">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">ACTIVE NOW</span>
-            <span className="text-xs text-gray-400">12 peers collaborating</span>
-          </div>
-          <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1">Enter Group Workspace</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Our AI "Third Member" has summarized last night's discussion. Join the shared editor to contribute to the final paper.
-          </p>
-          <button className="btn-primary text-sm flex items-center gap-2">
-            Join Workspace <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Pinned Resources */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Pin className="w-4 h-4 text-gray-400" /> Pinned Resources
-              <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded-full">4</span>
-            </h3>
-            <button className="text-xs text-sky-500 hover:underline">View all Files</button>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { name: 'Ethical Frameworks in LLMs', by: 'Sarah Jenkins', date: 'Oct 12', icon: '📄' },
-              { name: 'Bias Detection Workshop', by: 'Dr. Miller', date: 'Oct 15', icon: '🎥' },
-              { name: 'Group Discussion Notes', by: 'AI Assistant', date: 'Oct 20', icon: '📝' },
-            ].map((r) => (
-              <div key={r.name} className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 hover:border-sky-200 dark:hover:border-sky-800 transition-colors">
-                <div className="text-2xl mb-2">{r.icon}</div>
-                <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 line-clamp-2">{r.name}</div>
-                <div className="text-xs text-gray-400">Shared by {r.by} • {r.date}</div>
-                <div className="flex gap-2 mt-2">
-                  <button className="text-xs text-sky-500 hover:underline">Ask AI</button>
-                  <button className="text-xs text-sky-500 hover:underline">Quiz Me</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Latest Discussions */}
-        <div className="card p-4">
-          <h3 className="font-semibold text-sm mb-3">Latest Discussions</h3>
-          <div className="space-y-3">
-            {[
-              { name: 'Marcus Thorne', time: '2h ago', content: "I've been looking into the reinforcement learning from human feedback (RLHF) section of the new paper. Does anyone want to do a deep dive tonight at 8 PM? I think the alignment problem is being simplified too much.", replies: 12 },
-            ].map((d, i) => (
-              <div key={i} className="flex gap-3 pb-3 border-b border-gray-50 dark:border-gray-800 last:border-0 last:pb-0">
-                <div className="w-8 h-8 bg-sky-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                  {getInitials(d.name)}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{d.name}</span>
-                    <span className="text-xs text-gray-400">{d.time}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{d.content}</p>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3" /> {d.replies} replies
-                    </span>
-                    <span className="text-xs text-sky-500 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> AI Summary Available
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Right sidebar */}
-      <div className="space-y-4">
-        {/* Group Sessions */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Group Sessions</h3>
-            <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-              <Calendar className="w-4 h-4" />
-            </button>
-          </div>
-          {sessions.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-3">No sessions scheduled</p>
-          ) : (
-            <div className="space-y-2">
-              {sessions.slice(0, 3).map((s: any) => (
-                <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
-                  <div className="text-center w-10 flex-shrink-0">
-                    <div className="text-xs font-bold text-sky-500">{new Date(s.scheduled_at).toLocaleDateString('en', { month: 'short' }).toUpperCase()}</div>
-                    <div className="text-lg font-bold text-gray-900 dark:text-white leading-none">{new Date(s.scheduled_at).getDate()}</div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium truncate text-gray-700 dark:text-gray-300">{s.title}</div>
-                    <div className="text-xs text-gray-400">{s.attendee_count} attending</div>
-                  </div>
-                  <button className="text-sky-500 hover:text-sky-600 flex-shrink-0">
-                    <span className="text-lg">+</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <button className="btn-secondary w-full text-xs mt-3">Open Group Calendar</button>
-        </div>
-
-        {/* Active Now */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Active Now</h3>
-            <span className="text-xs bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">24 Online</span>
-          </div>
-          <div className="space-y-2">
-            {[
-              { name: 'Alex Rivers', role: 'AI Advisor', status: 'online', badge: null },
-              { name: 'Elena Rodriguez', role: 'focus', status: 'focus', badge: 'Focus Mode' },
-              { name: 'David Kim', role: 'online', status: 'online', badge: null },
-              { name: 'Sophie Chen', role: 'focus', status: 'focus', badge: 'Focus Mode' },
-            ].map((m) => (
-              <div key={m.name} className="flex items-center gap-2.5">
-                <div className="relative">
-                  <div className="w-8 h-8 bg-sky-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                    {getInitials(m.name)}
-                  </div>
-                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 ${m.status === 'online' ? 'bg-emerald-400' : 'bg-yellow-400'}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{m.name}</div>
-                  <div className="text-xs text-gray-400">{m.role}</div>
-                </div>
-                {m.badge && (
-                  <span className="text-xs bg-yellow-100 dark:bg-yellow-950 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full">{m.badge}</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <button className="text-xs text-sky-500 hover:underline mt-3 block">View all members</button>
-        </div>
-
-        {/* Group Stats & AI Insight */}
-        <div className="card p-4">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-sky-500" /> Group Stats & AI Insight
-          </h3>
-          <div className="bg-sky-50 dark:bg-sky-950/50 rounded-xl p-3 text-xs text-gray-600 dark:text-gray-400 italic mb-3">
-            "This week, your group focused most on <strong>Algorithmic Transparency</strong>. Activity is 22% compared to last week.
-            I recommend the new 'Ethics in Robotics' dataset for your next session."
-            <div className="text-sky-500 font-medium mt-1 not-italic">— FlowState AI</div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-              <div className="text-xl font-bold text-gray-900 dark:text-white">12</div>
-              <div className="text-xs text-gray-400">Files Added</div>
-            </div>
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-              <div className="text-xl font-bold text-gray-900 dark:text-white">48.5</div>
-              <div className="text-xs text-gray-400">Study Hours</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function GroupChat({ groupId }: { groupId: number }) {
-  const [input, setInput] = useState('')
-  const qc = useQueryClient()
-
-  const { data } = useQuery({
+  const { data: messagesData } = useQuery({
     queryKey: ['group-messages', groupId],
-    queryFn: () => groupsApi.getMessages(groupId).then((r) => r.data),
-    refetchInterval: 4000,
+    queryFn: () => groupsApi.getMessages(groupId).then(r => r.data),
+    refetchInterval: 5000,
+    enabled: activeTab === 'Chat',
+  })
+
+  const { data: documentsData } = useQuery({
+    queryKey: ['group-docs', groupId],
+    queryFn: () => groupsApi.getDocuments(groupId).then(r => r.data),
+    enabled: activeTab === 'Files',
   })
 
   const sendMutation = useMutation({
-    mutationFn: (text: string) => groupsApi.sendMessage(groupId, text),
+    mutationFn: (content: string) => groupsApi.sendMessage(groupId, content),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['group-messages', groupId] })
-      setInput('')
+      queryClient.invalidateQueries({ queryKey: ['group-messages', groupId] })
+      setMessage('')
     },
-    onError: () => {
-      toast.error('Failed to send message. Please try again.')
-    },
+    onError: () => toast.error('Failed to send message.'),
   })
 
-  const handleSend = () => {
-    const text = input.trim()
-    if (!text || sendMutation.isPending) return
-    sendMutation.mutate(text)
-  }
+  const messages = messagesData?.results || messagesData || []
+  const documents = documentsData?.results || documentsData || []
 
-  const messages = data?.results || []
+  useEffect(() => {
+    if (activeTab === 'Chat') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, activeTab])
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center animate-pulse">
+        <span className="material-symbols-outlined text-primary text-[24px]">group</span>
+      </div>
+    </div>
+  )
+
+  if (!group) return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+      <span className="material-symbols-outlined text-[48px] text-on-surface-variant">group_off</span>
+      <h2 className="text-[20px] font-bold text-on-surface">Group not found</h2>
+      <Link href="/groups" className="text-primary hover:underline">← Back to Groups</Link>
+    </div>
+  )
 
   return (
-    <div className="card flex flex-col h-[520px]">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((m: any) => (
-          <div key={m.id} className="flex gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${m.is_ai ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
-              {m.is_ai ? <Sparkles className="w-4 h-4" /> : getInitials(m.sender_name || 'U')}
+    <div className="min-h-screen">
+      {/* ── Cinematic Header ─────────────────────────── */}
+      <div className="star-field relative w-full h-[300px] md:h-[360px] flex items-end overflow-hidden bg-surface-container-lowest">
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent"></div>
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-gradient-to-br from-tertiary/20 to-transparent blur-3xl"></div>
+
+        <div className="relative z-10 w-full flex flex-col md:flex-row md:items-end justify-between gap-stack-md px-margin-mobile md:px-margin-desktop pb-stack-md">
+          <div className="flex items-end gap-stack-md">
+            <div className="w-20 h-20 md:w-28 md:h-28 rounded-[1.5rem] bg-surface-container border-4 border-primary shadow-xl flex items-center justify-center overflow-hidden">
+              {group.cover_image ? (
+                <img src={group.cover_image} alt={group.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[48px] font-bold text-primary">{(group.name || 'G')[0]}</span>
+              )}
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{m.sender_name}</span>
-                {m.is_ai && <span className="text-xs bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded">AI</span>}
-                <span className="text-xs text-gray-400">{timeAgo(m.created_at)}</span>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="bg-primary/20 text-primary text-[12px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {group.member_count || 0} Members
+                </span>
+                {group.is_verified && (
+                  <span className="flex items-center gap-1 text-secondary text-[13px] font-medium">
+                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                    Verified
+                  </span>
+                )}
               </div>
-              <div className={`text-sm rounded-2xl px-3 py-2 max-w-lg ${m.is_ai ? 'bg-sky-50 dark:bg-sky-950/50 text-gray-700 dark:text-gray-300' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}>
-                {m.is_ai
-                  ? <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">{normalizeReadableMath(m.content)}</ReactMarkdown>
-                  : m.content}
-              </div>
+              <h2 className="text-[28px] md:text-[36px] font-bold text-on-surface">{group.name}</h2>
+              <p className="text-on-surface-variant text-[15px] max-w-md">{group.description || `A study group for ${group.subject || 'all subjects'}.`}</p>
             </div>
           </div>
-        ))}
-        {messages.length === 0 && (
-          <div className="text-center text-gray-400 py-12">
-            <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No messages yet</p>
-            <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">Mention @FlowAI for AI assistance</p>
-          </div>
-        )}
-      </div>
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Message the group... (mention @FlowAI for AI help)"
-            className="input flex-1 text-sm"
-          />
-          <button onClick={handleSend} disabled={!input.trim() || sendMutation.isPending} className="btn-primary p-2.5">
-            <Send className="w-4 h-4" />
+          <button className="bg-primary text-on-primary px-8 py-4 rounded-[1rem] font-bold text-[16px] flex items-center justify-center gap-2 shadow-[0_6px_0_0_#763300] btn-squishy hover:brightness-110 transition-all self-start md:self-auto">
+            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>play_circle</span>
+            Join Session
           </button>
         </div>
       </div>
-    </div>
-  )
-}
 
-function GroupMembers({ groupId }: { groupId: number }) {
-  return (
-    <div className="card p-8 text-center text-gray-400">
-      <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
-      <p className="text-sm">Members list</p>
-      <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">Invite members using the button in the group header</p>
-    </div>
-  )
-}
-
-function GroupEvents({ groupId }: { groupId: number }) {
-  const { data } = useQuery({
-    queryKey: ['group-sessions', groupId],
-    queryFn: () => groupsApi.getSessions(groupId).then((r) => r.data),
-  })
-  const sessions = data?.results || []
-
-  return (
-    <div className="space-y-3">
-      {sessions.map((s: any) => (
-        <div key={s.id} className="card p-4 flex items-center gap-4">
-          <div className="text-center w-14 flex-shrink-0">
-            <div className="text-xs font-bold text-sky-500">{new Date(s.scheduled_at).toLocaleDateString('en', { month: 'short' }).toUpperCase()}</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{new Date(s.scheduled_at).getDate()}</div>
-          </div>
-          <div className="flex-1">
-            <div className="font-medium text-gray-900 dark:text-white">{s.title}</div>
-            <div className="text-sm text-gray-400">{s.description}</div>
-            <div className="text-xs text-gray-400 mt-1">{s.attendee_count} attending · {s.duration_minutes} mins</div>
-          </div>
-          <button className="btn-secondary text-sm">+ RSVP</button>
+      {/* ── Tabs ─────────────────────────────────────── */}
+      <div className="px-margin-mobile md:px-margin-desktop mt-stack-md">
+        <div className="flex gap-stack-md border-b border-outline-variant/30 overflow-x-auto no-scrollbar">
+          {TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'pb-stack-sm border-b-4 font-bold px-base transition-all whitespace-nowrap text-[15px]',
+                activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              {tab}
+              {tab === 'Chat' && messages.length > 0 && (
+                <span className="ml-1 bg-error rounded-full px-1.5 py-0.5 text-[10px] text-on-error">{messages.length > 9 ? '9+' : messages.length}</span>
+              )}
+            </button>
+          ))}
         </div>
-      ))}
-      {sessions.length === 0 && (
-        <div className="card p-12 text-center text-gray-400">
-          <Calendar className="w-10 h-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No events scheduled</p>
-        </div>
-      )}
-    </div>
-  )
-}
+      </div>
 
-function GroupFiles({ groupId }: { groupId: number }) {
-  const { data } = useQuery({
-    queryKey: ['group-docs', groupId],
-    queryFn: () => groupsApi.getDocuments(groupId).then((r) => r.data),
-  })
-  const docs = data?.results || []
+      {/* ── Tab Content ──────────────────────────────── */}
+      <div className="px-margin-mobile md:px-margin-desktop mt-stack-lg grid grid-cols-1 lg:grid-cols-12 gap-gutter pb-stack-lg">
 
-  return (
-    <div className="space-y-2">
-      {docs.map((d: any) => (
-        <div key={d.id} className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-sky-50 dark:bg-sky-950 rounded-lg flex items-center justify-center text-lg">📝</div>
-          <div className="flex-1">
-            <div className="font-medium text-sm text-gray-900 dark:text-white">{d.title}</div>
-            <div className="text-xs text-gray-400">Last edited by {d.last_edited_by_name} · {timeAgo(d.updated_at)}</div>
+        {/* ── OVERVIEW TAB ─────────────────────────────── */}
+        {activeTab === 'Overview' && (
+          <>
+            <div className="lg:col-span-8 space-y-stack-lg">
+              {/* Study Tools */}
+              <section>
+                <h3 className="text-[22px] font-bold text-on-surface mb-stack-md flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>push_pin</span>
+                  Study Tools
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-gutter">
+                  {[
+                    { icon: 'account_tree', color: 'text-tertiary bg-tertiary-container', label: 'Group Mind Map', desc: 'Collaborative concept mapping', badge: 'Interactive' },
+                    { icon: 'quiz', color: 'text-secondary bg-secondary-container', label: 'Challenge Quiz', desc: 'Test your knowledge together', badge: `High Score: ${Math.floor(Math.random() * 500 + 500)}` },
+                  ].map(tool => (
+                    <div key={tool.label} className="glass-panel p-stack-md rounded-[1.5rem] group cursor-pointer hover:bg-surface-container-high transition-all">
+                      <div className={cn('w-12 h-12 rounded-[1rem] flex items-center justify-center mb-stack-sm', tool.color)}>
+                        <span className="material-symbols-outlined text-[28px]">{tool.icon}</span>
+                      </div>
+                      <h4 className="text-[16px] font-bold text-on-surface mb-1">{tool.label}</h4>
+                      <p className="text-on-surface-variant text-[13px] mb-stack-md">{tool.desc}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] font-bold text-secondary bg-secondary/10 px-2 py-1 rounded">{tool.badge}</span>
+                        <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">arrow_forward</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Resource library */}
+              {documents.length > 0 && (
+                <section>
+                  <h3 className="text-[22px] font-bold text-on-surface mb-stack-md flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>library_books</span>
+                    Group Resources
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-base">
+                    {documents.slice(0, 6).map((doc: any) => (
+                      <div key={doc.id} className="glass-panel p-stack-sm rounded-[1rem] flex flex-col gap-2 hover:bg-surface-container-high transition-all cursor-pointer">
+                        <span className="material-symbols-outlined text-primary text-[24px]">description</span>
+                        <span className="text-[13px] font-bold text-on-surface truncate">{doc.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            {/* Right sidebar */}
+            <div className="lg:col-span-4 space-y-stack-lg">
+              {/* Squad Achievements */}
+              <div className="glass-panel p-stack-md rounded-[1.5rem] border-2 border-primary/20">
+                <h3 className="text-[16px] font-bold text-on-surface mb-stack-md">Squad Achievements</h3>
+                <div className="space-y-stack-md">
+                  {[
+                    { label: 'Hours Studied', val: 128, max: 150, color: 'bg-primary' },
+                    { label: 'Goals Met', val: 12, max: 20, color: 'bg-tertiary' },
+                  ].map(stat => (
+                    <div key={stat.label}>
+                      <div className="flex justify-between text-[13px] mb-1">
+                        <span className="text-on-surface-variant">{stat.label}</span>
+                        <span className="text-primary font-bold">{stat.val} / {stat.max}</span>
+                      </div>
+                      <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full', stat.color)} style={{ width: `${(stat.val / stat.max) * 100}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* AI Tip */}
+              <div className="bg-gradient-to-br from-secondary-container to-secondary/30 p-stack-md rounded-[1.5rem] shadow-xl relative overflow-hidden">
+                <div className="absolute -right-4 -bottom-4 opacity-20">
+                  <span className="material-symbols-outlined text-[80px] text-white">auto_awesome</span>
+                </div>
+                <div className="flex items-center gap-base mb-stack-sm relative z-10">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-white text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                  </div>
+                  <h4 className="text-white font-bold text-[13px] uppercase tracking-widest">FlowAI Quick Tip</h4>
+                </div>
+                <p className="text-white text-[14px] relative z-10 leading-relaxed italic">
+                  &quot;Study groups that quiz each other regularly perform 35% better on exams. Try the Flashcard Race tool!&quot;
+                </p>
+                <button className="mt-stack-sm bg-white text-secondary-container px-4 py-2 rounded-full font-bold text-[12px] uppercase tracking-wider relative z-10 shadow-lg">
+                  Try It Now
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── CHAT TAB ──────────────────────────────────── */}
+        {activeTab === 'Chat' && (
+          <div className="lg:col-span-12 flex flex-col h-[600px] bg-surface-container-low rounded-[1.5rem] border border-outline-variant overflow-hidden">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-stack-md space-y-stack-sm">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-4">
+                  <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40">chat</span>
+                  <p className="text-on-surface-variant text-[15px]">No messages yet. Start the conversation!</p>
+                </div>
+              ) : (
+                messages.map((msg: any) => {
+                  const isMe = msg.sender?.id === (session?.user as any)?.id || msg.sender_id === (session?.user as any)?.id
+                  return (
+                    <div key={msg.id} className={cn('flex gap-3', isMe ? 'flex-row-reverse' : 'flex-row')}>
+                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-[12px] font-bold shrink-0">
+                        {(msg.sender?.username || msg.sender?.email || 'U')[0].toUpperCase()}
+                      </div>
+                      <div className={cn('max-w-[70%] rounded-[1rem] px-4 py-3', isMe ? 'bg-primary text-on-primary rounded-tr-sm' : 'bg-surface-container text-on-surface rounded-tl-sm')}>
+                        {!isMe && <p className="text-[11px] font-bold mb-1 opacity-70">{msg.sender?.username || 'Unknown'}</p>}
+                        <p className="text-[14px]">{msg.content}</p>
+                        <p className={cn('text-[10px] mt-1 opacity-60', isMe ? 'text-right' : '')}>{timeAgo(msg.created_at)}</p>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="p-stack-sm border-t border-outline-variant/30 flex items-center gap-base">
+              <input
+                className="flex-1 bg-surface-container rounded-full px-stack-md py-3 text-on-surface text-[15px] focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
+                placeholder="Type a message…"
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && message.trim() && sendMutation.mutate(message)}
+              />
+              <button
+                onClick={() => message.trim() && sendMutation.mutate(message)}
+                disabled={sendMutation.isPending || !message.trim()}
+                className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-lg btn-3d hover:brightness-110 transition-all disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[20px]">send</span>
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button className="text-xs text-sky-500 hover:underline">Ask AI</button>
-            <button className="text-xs text-sky-500 hover:underline">Quiz Me</button>
+        )}
+
+        {/* ── FILES TAB ─────────────────────────────────── */}
+        {activeTab === 'Files' && (
+          <div className="lg:col-span-12">
+            {documents.length === 0 ? (
+              <div className="text-center py-stack-lg">
+                <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40">folder_open</span>
+                <p className="text-on-surface-variant text-[15px] mt-4">No files shared yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+                {documents.map((doc: any) => (
+                  <div key={doc.id} className="bg-surface-container-low rounded-[1.5rem] p-stack-md border border-outline-variant hover:border-primary/30 transition-all">
+                    <div className="flex items-start gap-base mb-stack-sm">
+                      <span className="material-symbols-outlined text-primary text-[28px]">description</span>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-on-surface truncate">{doc.title}</h4>
+                        <p className="text-[12px] text-on-surface-variant">{doc.author?.username || 'Unknown'} · {timeAgo(doc.created_at)}</p>
+                      </div>
+                    </div>
+                    {doc.content && <p className="text-[13px] text-on-surface-variant line-clamp-2">{doc.content}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
-      {docs.length === 0 && (
-        <div className="card p-12 text-center text-gray-400">
-          <p className="text-sm">No files yet. Create a document in the Workspace tab.</p>
-        </div>
-      )}
+        )}
+
+        {/* ── MEMBERS TAB ───────────────────────────────── */}
+        {activeTab === 'Members' && (
+          <div className="lg:col-span-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-gutter">
+              {(group.memberships || group.members || []).map((member: any, i: number) => (
+                <div key={member.id || i} className="bg-surface-container-low rounded-[1.5rem] p-stack-md border border-outline-variant/20 flex flex-col items-center text-center gap-base">
+                  <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-on-primary text-[24px] font-bold">
+                    {(member.user?.username || member.username || member.email || 'U')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-on-surface text-[15px]">{member.user?.username || member.username || 'Member'}</p>
+                    <p className="text-[12px] text-on-surface-variant capitalize">{member.role || 'Member'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

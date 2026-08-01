@@ -1,184 +1,204 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { assignmentsApi } from '@/lib/api'
-import {
-  Plus, Sparkles, FileText, Loader2,
-  Zap, Search, Grid, List, Filter
-} from 'lucide-react'
-import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import ShareAssignmentModal from '@/components/assignments/ShareAssignmentModal'
-import AssignmentCard from '@/components/assignments/AssignmentCard'
+import { cn } from '@/lib/utils'
+
+const STATUS_STYLES: Record<string, { label: string; icon: string; badge: string; pulse?: boolean }> = {
+  processing: { label: 'AI Working', icon: 'bolt', badge: 'bg-secondary-container text-on-secondary-container', pulse: true },
+  completed:  { label: 'Completed',  icon: 'check_circle', badge: 'bg-green-500/20 text-green-400' },
+  pending:    { label: 'Pending',    icon: 'schedule', badge: 'bg-surface-container-highest text-on-surface-variant' },
+  error:      { label: 'Error',      icon: 'error', badge: 'bg-error-container/20 text-error' },
+}
+
+const SUBJECT_COLORS: Record<string, string> = {
+  science: 'bg-tertiary/10 text-tertiary border-tertiary/20',
+  math:    'bg-primary/10 text-primary border-primary/20',
+  english: 'bg-pink-500/10 text-pink-400 border-pink-400/20',
+  history: 'bg-secondary/10 text-secondary border-secondary/20',
+}
+function getSubjectColor(subject: string) {
+  const s = (subject || '').toLowerCase()
+  if (s.includes('science') || s.includes('bio') || s.includes('chem') || s.includes('physics')) return SUBJECT_COLORS.science
+  if (s.includes('math') || s.includes('calc') || s.includes('stat') || s.includes('alg')) return SUBJECT_COLORS.math
+  if (s.includes('english') || s.includes('lit') || s.includes('writing')) return SUBJECT_COLORS.english
+  if (s.includes('history') || s.includes('social') || s.includes('geo')) return SUBJECT_COLORS.history
+  return 'bg-surface-container-highest text-on-surface-variant border-outline-variant'
+}
 
 export default function AssignmentsPage() {
-  const qc = useQueryClient()
-  const router = useRouter()
+  const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
-  const [view, setView] = useState<'grid' | 'list'>('grid')
-  const [sharingAssignment, setSharingAssignment] = useState<any>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   const { data, isLoading } = useQuery({
     queryKey: ['assignments'],
     queryFn: () => assignmentsApi.getAll().then(r => r.data),
-  })
-  
-  const allAssignments = data?.results || []
-  const assignments = allAssignments.filter((a: any) => 
-    a.title.toLowerCase().includes(search.toLowerCase()) || 
-    (a.subject && a.subject.toLowerCase().includes(search.toLowerCase()))
-  )
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => assignmentsApi.delete(id),
-    onSuccess: () => { 
-      qc.invalidateQueries({ queryKey: ['assignments'] })
-      toast.success('Assignment deleted.') 
-    },
+    refetchInterval: 5000,
   })
 
-  const processingCount = allAssignments.filter((a: any) => a.status === 'processing').length
+  const assignments = data?.results || data || []
+  const processing = assignments.filter((a: any) => a.status === 'processing')
+
+  const filtered = assignments.filter((a: any) => {
+    const matchesFilter = filter === 'All' || a.status === filter.toLowerCase()
+    const matchesSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || (a.subject || '').toLowerCase().includes(search.toLowerCase())
+    return matchesFilter && matchesSearch
+  })
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 px-4 md:px-0">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
-              <FileText className="w-4 h-4 text-orange-500" />
-            </div>
-            <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Academic Suite</span>
-          </div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Assignments</h1>
-          <p className="text-slate-500 text-sm font-medium">
-            {allAssignments.length} active tasks · Powered by FlowAI Synthesis
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center p-1 bg-white/5 border border-white/10 rounded-xl">
-            <button 
-              onClick={() => setView('grid')}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                view === 'grid' ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-white"
-              )}
-            >
-              <Grid className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => setView('list')}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                view === 'list' ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-white"
-              )}
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
-          <Link href="/assignments/new" className="btn-primary h-11 px-6 text-sm whitespace-nowrap">
-            <Plus className="w-4 h-4" /> New Assignment
-          </Link>
-        </div>
-      </div>
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
 
-      {/* Processing Banner */}
-      {processingCount > 0 && (
-        <div className="relative group overflow-hidden px-6 py-5 rounded-3xl bg-sky-500/5 border border-sky-500/20 shadow-lg shadow-sky-500/5">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[60px] rounded-full -mr-16 -mt-16" />
-          <div className="flex items-center gap-5 relative">
-            <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-2xl bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
-                <Zap className="w-6 h-6 text-sky-400" />
-              </div>
-              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-sky-500 animate-ping" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-sky-500 border-2 border-[#0d0d0d]" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-base font-bold text-white tracking-tight">FlowAI is synthesizing {processingCount} assignment{processingCount > 1 ? 's' : ''}</p>
-              <p className="text-sm text-slate-500 font-medium mt-0.5">High-fidelity academic generation in progress. Usually takes 15-30s.</p>
-            </div>
-            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20">
-               <Loader2 className="w-4 h-4 text-sky-400 animate-spin" />
-               <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Active</span>
+      {/* ── AI Processing Banner ──────────────────────── */}
+      {processing.length > 0 && (
+        <div className="mb-stack-lg relative overflow-hidden rounded-[1.5rem] bg-secondary-container p-stack-sm md:p-stack-md flex items-center gap-gutter text-on-secondary-container shadow-lg pulse-ai">
+          <div className="relative z-10 flex items-center justify-center bg-white/20 p-2 rounded-full backdrop-blur-sm">
+            <span className="material-symbols-outlined text-[24px] animate-spin">autorenew</span>
+          </div>
+          <div className="relative z-10">
+            <h3 className="font-bold text-[18px]">AI Writing Assistant Active</h3>
+            <p className="text-[14px] opacity-90">Synthesizing {processing.length} assignment{processing.length > 1 ? 's' : ''}…</p>
+          </div>
+          <div className="relative z-10 ml-auto hidden sm:block">
+            <div className="w-32 h-3 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-full bg-white rounded-full animate-[shimmer_2s_infinite]" style={{ width: '60%' }} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Controls Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pt-2">
-        <div className="relative w-full sm:max-w-md group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-orange-500 transition-colors" />
-          <input 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            placeholder="Search titles, subjects, or keywords..."
-            className="input pl-11 h-12 text-sm bg-white/5 border-white/10 hover:border-white/20 focus:border-orange-500/50 transition-all rounded-2xl" 
-          />
+      {/* ── Header ───────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-stack-md mb-stack-lg">
+        <div>
+          <span className="text-secondary font-bold tracking-widest text-[13px] mb-2 block uppercase">Academic Suite</span>
+          <h2 className="text-[32px] font-bold text-on-surface flex items-center gap-base">
+            My Assignments
+            <span className="bg-surface-container-highest text-primary text-[15px] px-3 py-1 rounded-full">{assignments.length} active</span>
+          </h2>
         </div>
-        <button className="hidden sm:flex items-center gap-2 px-4 h-12 rounded-2xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all text-xs font-bold">
-          <Filter className="w-4 h-4" /> Filter by Subject
-        </button>
-      </div>
-
-      {/* Content Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-48 rounded-[2rem] bg-white/5 animate-pulse border border-white/5" />
-          ))}
-        </div>
-      ) : assignments.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className={view === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6' : 'space-y-4'}>
-          {assignments.map((a: any) => (
-            <AssignmentCard 
-              key={a.id} 
-              assignment={a} 
-              view={view}
-              onClick={() => router.push(`/assignments/${a.id}`)}
-              onDelete={(e) => { e.stopPropagation(); deleteMutation.mutate(a.id) }}
-              onShare={(e) => { e.stopPropagation(); setSharingAssignment(a) }} 
+        <div className="flex flex-wrap items-center gap-base">
+          {/* Search */}
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+            <input
+              className="bg-surface-container-low border border-outline-variant rounded-full pl-10 pr-stack-md py-2 text-[14px] text-on-surface focus:outline-none focus:border-secondary transition-all w-48"
+              placeholder="Search assignments..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
             />
+          </div>
+          {/* View toggle */}
+          <div className="flex bg-surface-container rounded-[1rem] p-1">
+            <button onClick={() => setViewMode('grid')} className={cn('p-2 rounded-[0.75rem] transition-all', viewMode === 'grid' ? 'bg-surface-container-highest text-primary' : 'text-on-surface-variant')}>
+              <span className="material-symbols-outlined text-[18px]">grid_view</span>
+            </button>
+            <button onClick={() => setViewMode('list')} className={cn('p-2 rounded-[0.75rem] transition-all', viewMode === 'list' ? 'bg-surface-container-highest text-primary' : 'text-on-surface-variant')}>
+              <span className="material-symbols-outlined text-[18px]">list</span>
+            </button>
+          </div>
+          {/* Filter */}
+          <select
+            className="bg-surface-container-low border border-outline-variant rounded-[1rem] px-stack-md py-2 text-[14px] text-on-surface focus:outline-none appearance-none"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+          >
+            <option>All</option>
+            <option>Pending</option>
+            <option>Processing</option>
+            <option>Completed</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ── Assignment Cards ──────────────────────────── */}
+      {isLoading ? (
+        <div className={cn('grid gap-gutter', viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1')}>
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-surface-container-low rounded-[1.5rem] p-stack-md border border-outline-variant animate-pulse">
+              <div className="h-4 bg-surface-container-high rounded w-1/3 mb-3" />
+              <div className="h-6 bg-surface-container-high rounded w-3/4 mb-2" />
+              <div className="h-4 bg-surface-container-high rounded w-1/2" />
+            </div>
           ))}
         </div>
-      )}
-
-      {sharingAssignment && (
-        <ShareAssignmentModal 
-          isOpen={!!sharingAssignment} 
-          onClose={() => setSharingAssignment(null)}
-          assignmentId={sharingAssignment.id} 
-          assignmentTitle={sharingAssignment.title} 
-        />
-      )}
-    </div>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-32 text-center group">
-      <div className="relative mb-8">
-        <div className="absolute inset-0 bg-orange-500 blur-[80px] opacity-10 group-hover:opacity-20 transition-opacity" />
-        <div className="w-24 h-24 bg-white/5 border border-white/10 rounded-[2.5rem] flex items-center justify-center relative transition-transform group-hover:scale-110 duration-500">
-          <Sparkles className="w-10 h-10 text-slate-700 group-hover:text-orange-500 transition-colors" />
+      ) : filtered.length === 0 ? (
+        <div className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] p-stack-lg text-center flex flex-col items-center gap-stack-md">
+          <div className="w-20 h-20 bg-surface-container rounded-full flex items-center justify-center">
+            <span className="material-symbols-outlined text-[40px] text-on-surface-variant">edit_document</span>
+          </div>
+          <div>
+            <p className="font-bold text-on-surface text-[18px] mb-base">{search ? 'No results found' : 'No assignments yet'}</p>
+            <p className="text-[14px] text-on-surface-variant mb-stack-md">Create your first assignment and let AI help you write it.</p>
+            <Link href="/assignments/new" className="inline-flex items-center gap-base bg-primary text-on-primary text-[14px] font-bold px-stack-md py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              New Assignment
+            </Link>
+          </div>
         </div>
-      </div>
-      <div className="space-y-2 mb-10">
-        <h3 className="text-2xl font-black text-white tracking-tight">No assignments initialized</h3>
-        <p className="text-slate-500 text-base font-medium max-w-sm mx-auto">Upload an assignment prompt and let FlowAI synthesize a comprehensive, academic solution for you.</p>
-      </div>
-      <Link href="/assignments/new" className="btn-primary h-12 px-8 rounded-2xl shadow-xl shadow-orange-500/20 active:scale-95 transition-all">
-        <Plus className="w-5 h-5" /> Initialize First Assignment
+      ) : (
+        <div className={cn('grid gap-gutter', viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1')}>
+          {filtered.map((a: any) => {
+            const status = STATUS_STYLES[a.status] || STATUS_STYLES.pending
+            return (
+              <div key={a.id} className="bg-surface-container-low rounded-[1.5rem] p-stack-md flex flex-col border border-outline-variant hover:-translate-y-1 transition-all card-shadow">
+                {/* Status + overflow */}
+                <div className="flex justify-between items-start mb-stack-sm">
+                  <span className={cn('flex items-center gap-1 text-[13px] px-3 py-1 rounded-full font-bold', status.badge)}>
+                    <span className={cn('material-symbols-outlined text-[16px]', status.pulse && 'animate-pulse')} style={{ fontVariationSettings: "'FILL' 1" }}>{status.icon}</span>
+                    {status.label}
+                  </span>
+                  <span className="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-on-surface transition-colors">more_vert</span>
+                </div>
+
+                {/* Title */}
+                <h3 className="text-[18px] font-bold text-on-surface mb-2 leading-tight">{a.title}</h3>
+
+                {/* Tags */}
+                <div className="flex gap-2 mb-stack-md flex-wrap">
+                  {a.subject && (
+                    <span className={cn('text-[12px] px-2 py-0.5 rounded border', getSubjectColor(a.subject))}>{a.subject}</span>
+                  )}
+                </div>
+
+                {/* Due date */}
+                {a.due_date && (
+                  <div className="flex items-center gap-2 text-on-surface-variant text-[14px] mb-stack-md">
+                    <span className="material-symbols-outlined text-[18px]">event</span>
+                    Due {new Date(a.due_date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                  </div>
+                )}
+
+                {/* CTA */}
+                <div className="mt-auto">
+                  {a.status === 'completed' ? (
+                    <Link href={`/assignments/${a.id}`} className="block w-full text-center bg-surface-container-high text-on-surface font-bold py-2 rounded-[1rem] border-2 border-outline-variant hover:bg-surface-container-highest transition-all text-[14px]">
+                      Open Draft
+                    </Link>
+                  ) : a.status === 'processing' ? (
+                    <Link href={`/assignments/${a.id}`} className="block w-full text-center bg-surface-container-high text-primary font-bold py-2 rounded-[1rem] border-2 border-primary/20 hover:bg-primary/10 transition-all text-[14px]">
+                      View Progress
+                    </Link>
+                  ) : (
+                    <Link href={`/assignments/${a.id}`} className="block w-full text-center bg-primary text-on-primary font-bold py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all text-[14px]">
+                      Start Now
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── FAB ──────────────────────────────────────── */}
+      <Link
+        href="/assignments/new"
+        className="fixed bottom-24 md:bottom-margin-desktop right-margin-mobile md:right-margin-desktop w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_8px_30px_rgba(255,138,61,0.5)] btn-3d hover:brightness-110 transition-all z-50 group"
+      >
+        <span className="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform duration-300">add</span>
       </Link>
     </div>
   )
 }
-

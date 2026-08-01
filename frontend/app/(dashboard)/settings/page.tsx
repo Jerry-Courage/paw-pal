@@ -1,394 +1,261 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { authApi, paymentsApi } from '@/lib/api'
-import { User, Bell, Shield, Palette, Upload, Check, Loader2, Sparkles, CreditCard } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { authApi } from '@/lib/api'
+import { useSession, signOut } from 'next-auth/react'
 import { toast } from 'sonner'
-import { getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import dynamic from 'next/dynamic'
-import { usePricing } from '@/hooks/usePricing'
 
-const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
+const TABS = ['My Profile', 'Notifications', 'Account']
 
-const TABS = [
-  { id: 'profile',       label: 'Profile',       icon: User },
-  { id: 'billing',       label: 'Billing',        icon: CreditCard },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'appearance',    label: 'Appearance',    icon: Palette },
-  { id: 'security',      label: 'Security',      icon: Shield },
+const WEEKLY_QUOTES = [
+  "Every minute counts, Buddy!",
+  "You're doing great, Champ!",
+  "Whoa, a real Study Pro!",
+  "Look at those goals fly!",
+  "Focus Master in training!",
+  "Unstoppable Learner!",
+  "Flow state activated!"
 ]
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState('profile')
+  const { data: session } = useSession()
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState('My Profile')
+  const [bio, setBio] = useState('')
+  const [university, setUniversity] = useState('')
+  const [weeklyGoal, setWeeklyGoal] = useState(10)
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => authApi.me().then(r => r.data),
+  })
+
+  useEffect(() => {
+    if (profileData) {
+      setBio((profileData as any).bio || '')
+      setUniversity((profileData as any).university || '')
+      setWeeklyGoal((profileData as any).weekly_goal_hours || 10)
+    }
+  }, [profileData])
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => authApi.updateProfile(data),
+    onSuccess: () => { toast.success('Profile saved!'); queryClient.invalidateQueries({ queryKey: ['profile'] }) },
+    onError: () => toast.error('Failed to save profile.'),
+  })
+
+  const goalMutation = useMutation({
+    mutationFn: (hours: number) => authApi.setWeeklyGoal(hours),
+    onSuccess: () => { toast.success('Weekly goal updated!'); queryClient.invalidateQueries({ queryKey: ['analytics'] }) },
+    onError: () => toast.error('Failed to update goal.'),
+  })
+
+  const handleSave = () => {
+    updateMutation.mutate({ bio, university })
+    goalMutation.mutate(weeklyGoal)
+  }
+
+  const name = session?.user?.name || 'Student'
+  const email = session?.user?.email || ''
+  const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const quoteIdx = Math.floor((weeklyGoal / 20) * (WEEKLY_QUOTES.length - 1))
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-white tracking-tight">Settings</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Manage your account and preferences</p>
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-4xl mx-auto">
+
+      {/* Header */}
+      <div className="mb-stack-lg">
+        <h2 className="text-[32px] font-bold text-primary mb-base">Profile &amp; Settings</h2>
+        <p className="text-on-surface-variant text-[16px]">Make FlowState yours!</p>
       </div>
 
-      {/* Tab pills */}
-      <div className="flex gap-1 p-1 bg-white/3 rounded-2xl w-fit flex-wrap">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
-              tab === t.id ? 'bg-orange-500/10 text-orange-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            )}>
-            <t.icon className="w-3.5 h-3.5" />
-            {t.label}
+      {/* Tabs */}
+      <div className="flex overflow-x-auto gap-stack-sm mb-stack-lg no-scrollbar pb-base">
+        {TABS.map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              'whitespace-nowrap px-gutter py-stack-sm rounded-full font-bold text-[14px] transition-all',
+              activeTab === tab
+                ? 'bg-primary-container text-on-primary-container shadow-[0_4px_0_0_#763300]'
+                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+            )}
+          >
+            {tab}
           </button>
         ))}
       </div>
 
-      <div>
-        {tab === 'profile'       && <ProfileSettings />}
-        {tab === 'billing'       && <BillingSettings />}
-        {tab === 'notifications' && <NotificationSettings />}
-        {tab === 'appearance'    && <AppearanceSettings />}
-        {tab === 'security'      && <SecuritySettings />}
-      </div>
-    </div>
-  )
-}
+      {/* ── My Profile Tab ────────────────────────────── */}
+      {activeTab === 'My Profile' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+          {/* Profile Card */}
+          <div className="lg:col-span-7 bg-surface-container-low p-gutter rounded-[1.5rem] shadow-md border-b-4 border-surface-container-highest">
+            <div className="flex flex-col md:flex-row items-center gap-gutter mb-stack-md">
+              {/* Avatar */}
+              <div className="relative group">
+                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-primary shadow-[0_8px_0_0_#763300] overflow-hidden bg-surface-container-highest flex items-center justify-center">
+                  {(session?.user as any)?.avatar ? (
+                    <img src={(session?.user as any).avatar} alt={name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[48px] font-bold text-primary">{initials}</span>
+                  )}
+                </div>
+                <button className="absolute bottom-1 right-1 bg-secondary-container p-base rounded-full border-2 border-on-secondary shadow-md active:scale-95 transition-transform">
+                  <span className="material-symbols-outlined text-on-secondary-container text-[18px]">add_a_photo</span>
+                </button>
+              </div>
 
-function ProfileSettings() {
-  const { data: session } = useSession()
-  const [saved, setSaved] = useState(false)
-  const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: () => authApi.me().then(r => r.data) })
-  const [form, setForm] = useState({ first_name: '', last_name: '', username: '', bio: '', university: '', weekly_goal_hours: 10 })
-
-  useEffect(() => {
-    if (profileData) setForm({
-      first_name: profileData.first_name || '',
-      last_name: profileData.last_name || '',
-      username: profileData.username || '',
-      bio: profileData.bio || '',
-      university: profileData.university || '',
-      weekly_goal_hours: profileData.weekly_goal_hours || 10,
-    })
-  }, [profileData])
-
-  const mutation = useMutation({
-    mutationFn: () => authApi.updateProfile(form),
-    onSuccess: () => { setSaved(true); toast.success('Profile updated!'); setTimeout(() => setSaved(false), 2000) },
-    onError: () => toast.error('Failed to update profile.'),
-  })
-
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }))
-
-  const name = profileData?.first_name
-    ? `${profileData.first_name} ${profileData.last_name || ''}`.trim()
-    : session?.user?.name || 'User'
-
-  return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-6 space-y-6">
-      <h2 className="text-sm font-black text-white uppercase tracking-widest">Profile Information</h2>
-
-      <div className="flex items-center gap-4">
-        <div className="relative">
-          <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center text-white text-xl font-black">
-            {getInitials(name)}
-          </div>
-        </div>
-        <div>
-          <p className="font-bold text-white">{name}</p>
-          <p className="text-sm text-slate-500">{session?.user?.email}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">First Name</label>
-          <input value={form.first_name} onChange={set('first_name')} placeholder="First name" className="input" />
-        </div>
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Last Name</label>
-          <input value={form.last_name} onChange={set('last_name')} placeholder="Last name" className="input" />
-        </div>
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Username</label>
-          <input value={form.username} onChange={set('username')} placeholder="username" className="input" />
-        </div>
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">University</label>
-          <input value={form.university} onChange={set('university')} placeholder="e.g. MIT" className="input" />
-        </div>
-        <div className="col-span-2">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Bio</label>
-          <textarea value={form.bio} onChange={set('bio')} placeholder="Tell us about yourself..." className="input resize-none" rows={3} />
-        </div>
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Weekly Goal (hours)</label>
-          <input type="number" min={1} max={100} value={form.weekly_goal_hours}
-            onChange={e => setForm(f => ({ ...f, weekly_goal_hours: Number(e.target.value) }))} className="input" />
-        </div>
-      </div>
-
-      <div className="flex justify-end">
-        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="btn-primary text-sm">
-          {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : saved ? <><Check className="w-4 h-4" /> Saved!</> : 'Save Changes'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function BillingSettings() {
-  const [showPaywall, setShowPaywall] = useState(false)
-  const [loading, setLoading] = useState(false)
-
-  const { data: sub, refetch } = useQuery({
-    queryKey: ['subscription-status'],
-    queryFn: () => paymentsApi.getStatus().then(r => r.data),
-    staleTime: 30000,
-  })
-
-  const { priceInfo } = usePricing()
-
-  const isPremium = sub?.is_premium ?? false
-  const notesUsed = sub?.notes_used ?? 0
-  const notesLimit = sub?.notes_limit ?? 5
-  const notesRemaining = sub?.notes_remaining ?? notesLimit
-  const expiresAt = sub?.subscription_expires_at
-    ? new Date(sub.subscription_expires_at)
-    : null
-
-  const formatExpiry = (d: Date) =>
-    d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-
-  const daysLeft = expiresAt
-    ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 86400000))
-    : null
-
-  const handleRenew = () => setShowPaywall(true)
-
-  return (
-    <div className="space-y-4">
-      {/* Plan card */}
-      <div className={cn(
-        'rounded-2xl p-6 border',
-        isPremium
-          ? 'bg-gradient-to-br from-orange-500/10 to-amber-500/5 border-orange-500/25'
-          : 'bg-[#1a1a1a] border-white/8'
-      )}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              'w-11 h-11 rounded-xl flex items-center justify-center',
-              isPremium ? 'bg-orange-500/15' : 'bg-white/5'
-            )}>
-              {isPremium
-                ? <Sparkles className="w-5 h-5 text-orange-400" />
-                : <CreditCard className="w-5 h-5 text-slate-400" />
-              }
+              {/* Name & bio */}
+              <div className="flex-1 w-full space-y-stack-sm">
+                <div>
+                  <label className="text-[13px] font-bold text-primary block mb-base">Full Name</label>
+                  <div className="w-full bg-surface-container-highest border border-outline-variant rounded-full px-gutter py-stack-sm text-[16px] text-on-surface-variant">{name}</div>
+                  <p className="text-[11px] text-on-surface-variant mt-1 pl-2">Name is tied to your login — contact support to change.</p>
+                </div>
+                <div>
+                  <label className="text-[13px] font-bold text-primary block mb-base">University / School</label>
+                  <input
+                    className="w-full bg-surface-container-highest border border-outline-variant focus:border-secondary rounded-full px-gutter py-stack-sm text-[16px] text-on-surface focus:outline-none transition-all"
+                    placeholder="e.g. University of Ghana"
+                    value={university}
+                    onChange={e => setUniversity(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-black text-white">
-                {isPremium ? 'Premium Plan' : 'Free Plan'}
-              </p>
-              {isPremium && expiresAt ? (
-                <p className={cn(
-                  'text-xs mt-0.5',
-                  daysLeft !== null && daysLeft <= 5 ? 'text-orange-400 font-bold' : 'text-slate-400'
-                )}>
-                  {daysLeft !== null && daysLeft <= 5
-                    ? `⏰ Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`
-                    : `Active until ${formatExpiry(expiresAt)}`
-                  }
-                </p>
-              ) : !isPremium ? (
-                <p className="text-xs text-slate-500 mt-0.5">{priceInfo.displayShort} to unlock unlimited</p>
-              ) : null}
+
+            {/* Bio */}
+            <div className="mb-stack-md">
+              <label className="text-[13px] font-bold text-primary block mb-base">Bio</label>
+              <textarea
+                className="w-full h-24 bg-surface-container-highest border border-outline-variant focus:border-secondary rounded-[1.5rem] px-gutter py-3 text-[15px] text-on-surface focus:outline-none transition-all resize-none"
+                placeholder="Tell your study squad a bit about yourself..."
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+              />
+            </div>
+
+            {/* Weekly goal slider */}
+            <div className="bg-surface-container p-gutter rounded-[1.5rem] border-2 border-outline-variant/30">
+              <div className="flex justify-between items-end mb-stack-sm">
+                <div>
+                  <label className="text-[13px] font-bold text-primary block">My Weekly Goal</label>
+                  <span className="text-[36px] font-bold text-on-surface">{weeklyGoal}<span className="text-[16px] text-on-surface-variant"> hours</span></span>
+                </div>
+                <div className="hidden md:block bg-tertiary-container/20 p-stack-sm rounded-[1rem] border-l-4 border-tertiary max-w-[180px]">
+                  <p className="text-[13px] italic text-tertiary">&quot;{WEEKLY_QUOTES[quoteIdx]}&quot;</p>
+                </div>
+              </div>
+              <input
+                type="range" min={1} max={20} value={weeklyGoal}
+                onChange={e => setWeeklyGoal(Number(e.target.value))}
+                className="w-full accent-primary-container h-3 rounded-full appearance-none cursor-pointer bg-surface-container-highest"
+              />
+              <div className="flex justify-between mt-base text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">
+                <span>1 hr</span><span>10 hrs</span><span>20 hrs</span>
+              </div>
             </div>
           </div>
 
-          {isPremium ? (
-            <button
-              onClick={handleRenew}
-              className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 transition-colors"
-            >
-              Renew
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowPaywall(true)}
-              className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20"
-            >
-              <Sparkles className="w-3.5 h-3.5" /> {priceInfo.displayShort}
-            </button>
-          )}
-        </div>
-      </div>
+          {/* Account info sidebar */}
+          <div className="lg:col-span-5 space-y-stack-md">
+            <div className="bg-surface-container-low p-gutter rounded-[1.5rem] border border-outline-variant/20">
+              <h3 className="text-[16px] font-bold text-on-surface mb-stack-md">Account Info</h3>
+              <div className="space-y-stack-sm text-[14px]">
+                <div className="flex justify-between items-center">
+                  <span className="text-on-surface-variant">Email</span>
+                  <span className="text-on-surface font-medium truncate max-w-[160px]">{email}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-on-surface-variant">Member since</span>
+                  <span className="text-on-surface font-medium">{profileData?.created_at ? new Date(profileData.created_at).getFullYear() : '2025'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-on-surface-variant">Study streak</span>
+                  <span className="text-primary font-bold">{profileData?.study_streak || 0} days 🔥</span>
+                </div>
+              </div>
+            </div>
 
-      {/* Usage card */}
-      <div className="bg-[#1a1a1a] rounded-2xl p-6 border border-white/8 space-y-4">
-        <h2 className="text-sm font-black text-white uppercase tracking-widest">Usage</h2>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-400 font-medium">Study Kits</span>
-            <span className="text-xs font-black text-white">
-              {isPremium ? `${notesUsed} used` : `${notesUsed} / ${notesLimit}`}
-            </span>
+            <div className="bg-surface-container-low p-gutter rounded-[1.5rem] border border-outline-variant/20">
+              <h3 className="text-[16px] font-bold text-on-surface mb-stack-md">Danger Zone</h3>
+              <button onClick={() => signOut({ callbackUrl: '/login' })} className="w-full flex items-center gap-base px-stack-sm py-3 rounded-[1rem] text-error hover:bg-error-container/10 transition-all font-semibold text-[14px]">
+                <span className="material-symbols-outlined text-[18px]">logout</span>
+                Sign out
+              </button>
+            </div>
           </div>
-          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all',
-                isPremium
-                  ? 'bg-orange-500'
-                  : notesUsed >= notesLimit
-                    ? 'bg-red-500'
-                    : notesUsed >= notesLimit * 0.8
-                      ? 'bg-orange-500'
-                      : 'bg-emerald-500'
-              )}
-              style={{ width: isPremium ? '100%' : `${Math.min(100, (notesUsed / notesLimit) * 100)}%` }}
-            />
-          </div>
-          <p className="text-[10px] text-slate-600 mt-1.5">
-            {isPremium
-              ? 'Unlimited study kits included'
-              : notesRemaining > 0
-                ? `${notesRemaining} free kit${notesRemaining !== 1 ? 's' : ''} remaining`
-                : 'Limit reached — upgrade to continue'
-            }
-          </p>
         </div>
-
-        <div className="flex items-center justify-between py-3 border-t border-white/5">
-          <div>
-            <p className="text-xs font-bold text-white">AI Requests / hour</p>
-            <p className="text-[10px] text-slate-600 mt-0.5">Rate limit for AI features</p>
-          </div>
-          <span className={cn(
-            'text-xs font-black px-2 py-1 rounded-lg',
-            isPremium
-              ? 'bg-orange-500/10 text-orange-400'
-              : 'bg-white/5 text-slate-400'
-          )}>
-            {isPremium ? '600 / hr' : '100 / hr'}
-          </span>
-        </div>
-      </div>
-
-      {/* Payment history note */}
-      <div className="bg-[#1a1a1a] rounded-2xl p-5 border border-white/8">
-        <p className="text-xs text-slate-500 leading-relaxed">
-          Payments are processed securely via Paystack. Each payment grants 30 days of Premium access.
-          Your subscription does <span className="text-white font-bold">not</span> auto-renew — you'll receive a reminder 3 days before expiry.
-        </p>
-      </div>
-
-      {showPaywall && sub && (
-        <PaywallModal
-          onClose={() => setShowPaywall(false)}
-          notesUsed={notesUsed}
-          notesLimit={notesLimit}
-          onSuccess={() => { refetch(); setShowPaywall(false) }}
-        />
       )}
-    </div>
-  )
-}
 
-function NotificationSettings() {
-  const [settings, setSettings] = useState({
-    study_reminders: true, group_messages: true, ai_nudges: true,
-    community_posts: false, deadline_alerts: true, weekly_summary: true,
-  })
-  const toggle = (k: string) => setSettings(s => ({ ...s, [k]: !s[k as keyof typeof s] }))
-  const items = [
-    { key: 'study_reminders', label: 'Study Reminders',  sub: 'Get notified when a study session is about to start' },
-    { key: 'group_messages',  label: 'Group Messages',   sub: 'Notifications for new messages in your groups' },
-    { key: 'ai_nudges',       label: 'AI Nudges',        sub: 'FlowAI suggestions and study tips' },
-    { key: 'community_posts', label: 'Community Posts',  sub: 'New posts from people you follow' },
-    { key: 'deadline_alerts', label: 'Deadline Alerts',  sub: 'Reminders 24h and 1h before deadlines' },
-    { key: 'weekly_summary',  label: 'Weekly Summary',   sub: 'Your weekly study stats and achievements' },
-  ]
-  return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-6">
-      <h2 className="text-sm font-black text-white uppercase tracking-widest mb-5">Notification Preferences</h2>
-      <div className="space-y-1">
-        {items.map(item => (
-          <div key={item.key} className="flex items-center justify-between py-3.5 border-b border-white/5 last:border-0">
-            <div>
-              <div className="text-sm font-bold text-white">{item.label}</div>
-              <div className="text-xs text-slate-600 mt-0.5">{item.sub}</div>
-            </div>
-            <button onClick={() => toggle(item.key)}
-              className={cn('relative w-10 h-5.5 rounded-full transition-colors', settings[item.key as keyof typeof settings] ? 'bg-orange-500' : 'bg-white/10')}>
-              <div className={cn('absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', settings[item.key as keyof typeof settings] ? 'translate-x-5' : 'translate-x-0.5')} />
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function AppearanceSettings() {
-  return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-6 space-y-6">
-      <h2 className="text-sm font-black text-white uppercase tracking-widest">Appearance</h2>
-      <div className="flex items-center justify-between py-3 border-b border-white/5">
-        <div>
-          <div className="text-sm font-bold text-white">Theme</div>
-          <div className="text-xs text-slate-600 mt-0.5">FlowState uses a dark theme by default</div>
-        </div>
-        <div className="px-3 py-1.5 bg-white/5 border border-white/8 rounded-xl text-xs font-bold text-slate-400">Dark</div>
-      </div>
-      <div>
-        <div className="text-sm font-bold text-white mb-3">Accent Color</div>
-        <div className="flex gap-3">
+      {/* ── Notifications Tab ─────────────────────────── */}
+      {activeTab === 'Notifications' && (
+        <div className="bg-surface-container-low rounded-[1.5rem] p-gutter border border-outline-variant/20 space-y-stack-md">
+          <h3 className="text-[18px] font-bold text-on-surface">Notification Preferences</h3>
           {[
-            { c: 'bg-orange-500', active: true },
-            { c: 'bg-violet-500', active: false },
-            { c: 'bg-emerald-500', active: false },
-            { c: 'bg-sky-500', active: false },
-            { c: 'bg-pink-500', active: false },
-          ].map(({ c, active }) => (
-            <button key={c} className={cn(`w-7 h-7 rounded-full ${c} transition-all`, active ? 'ring-2 ring-offset-2 ring-offset-[#1a1a1a] ring-orange-500 scale-110' : 'opacity-50 hover:opacity-80')} />
+            { label: 'Study reminders', desc: 'Get reminded before scheduled sessions', default: true },
+            { label: 'Streak alerts', desc: 'Daily nudges to keep your streak alive', default: true },
+            { label: 'Flashcard due', desc: 'Spaced repetition review reminders', default: false },
+            { label: 'Group activity', desc: 'Messages and updates from your study groups', default: true },
+            { label: 'AI nudges', desc: 'Personalised study tips from FlowAI', default: true },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center justify-between py-3 border-b border-outline-variant/20 last:border-0">
+              <div>
+                <p className="font-semibold text-on-surface text-[15px]">{item.label}</p>
+                <p className="text-on-surface-variant text-[13px]">{item.desc}</p>
+              </div>
+              <button
+                className={cn('w-12 h-6 rounded-full transition-colors relative', item.default ? 'bg-primary-container' : 'bg-surface-container-highest')}
+              >
+                <div className={cn('absolute top-1 w-4 h-4 rounded-full bg-on-primary shadow-md transition-all', item.default ? 'right-1' : 'left-1')} />
+              </button>
+            </div>
           ))}
         </div>
-      </div>
-    </div>
-  )
-}
+      )}
 
-function SecuritySettings() {
-  const [form, setForm] = useState({ current: '', new_pass: '', confirm: '' })
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
-  return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-6 space-y-6">
-      <h2 className="text-sm font-black text-white uppercase tracking-widest">Security</h2>
-      <div className="space-y-4">
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Current Password</label>
-          <input type="password" value={form.current} onChange={set('current')} placeholder="••••••••" className="input" />
+      {/* ── Account Tab ───────────────────────────────── */}
+      {activeTab === 'Account' && (
+        <div className="bg-surface-container-low rounded-[1.5rem] p-gutter border border-outline-variant/20 space-y-stack-md">
+          <h3 className="text-[18px] font-bold text-on-surface">Account Settings</h3>
+          <div className="space-y-3">
+            <button className="w-full flex items-center justify-between px-stack-md py-4 rounded-[1rem] bg-surface-container hover:bg-surface-container-high transition-all">
+              <span className="text-[15px] font-semibold text-on-surface">Change Password</span>
+              <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+            </button>
+            <button className="w-full flex items-center justify-between px-stack-md py-4 rounded-[1rem] bg-surface-container hover:bg-surface-container-high transition-all">
+              <span className="text-[15px] font-semibold text-on-surface">Connected Accounts</span>
+              <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+            </button>
+            <button className="w-full flex items-center justify-between px-stack-md py-4 rounded-[1rem] bg-surface-container hover:bg-surface-container-high transition-all">
+              <span className="text-[15px] font-semibold text-on-surface">Export My Data</span>
+              <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+            </button>
+            <button className="w-full flex items-center justify-between px-stack-md py-4 rounded-[1rem] bg-error-container/10 hover:bg-error-container/20 transition-all">
+              <span className="text-[15px] font-semibold text-error">Delete Account</span>
+              <span className="material-symbols-outlined text-error">chevron_right</span>
+            </button>
+          </div>
         </div>
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">New Password</label>
-          <input type="password" value={form.new_pass} onChange={set('new_pass')} placeholder="••••••••" className="input" />
+      )}
+
+      {/* Save button */}
+      {activeTab === 'My Profile' && (
+        <div className="mt-stack-lg flex justify-end gap-stack-md">
+          <button className="px-gutter py-stack-sm text-on-surface-variant font-bold hover:text-error transition-colors">Discard changes</button>
+          <button
+            onClick={handleSave}
+            disabled={updateMutation.isPending || goalMutation.isPending}
+            className="px-margin-desktop py-stack-sm bg-primary text-on-primary font-bold rounded-full shadow-[0_6px_0_0_#763300] active:translate-y-[2px] active:shadow-none transition-all disabled:opacity-50"
+          >
+            {(updateMutation.isPending || goalMutation.isPending) ? 'Saving…' : 'Save Profile'}
+          </button>
         </div>
-        <div>
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block">Confirm New Password</label>
-          <input type="password" value={form.confirm} onChange={set('confirm')} placeholder="••••••••" className="input" />
-        </div>
-        <button className="btn-primary text-sm">Update Password</button>
-      </div>
-      <div className="border-t border-white/5 pt-5">
-        <h3 className="text-xs font-black text-red-400 uppercase tracking-widest mb-3">Danger Zone</h3>
-        <p className="text-xs text-slate-600 mb-3">Once you delete your account, there is no going back.</p>
-        <button className="text-sm text-red-400 border border-red-500/20 px-4 py-2 rounded-xl hover:bg-red-500/5 transition-colors">
-          Delete Account
-        </button>
-      </div>
+      )}
     </div>
   )
 }

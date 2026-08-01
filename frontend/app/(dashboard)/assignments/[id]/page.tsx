@@ -128,10 +128,10 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       <div className="flex items-center justify-center h-[80vh]">
         <div className="flex flex-col items-center gap-6">
           <div className="relative">
-            <div className="absolute inset-0 bg-orange-500 blur-2xl opacity-20 animate-pulse" />
-            <Loader2 className="w-12 h-12 text-orange-500 animate-spin relative z-10" />
+            <div className="absolute inset-0 bg-primary blur-2xl opacity-20 animate-pulse" />
+            <Loader2 className="w-12 h-12 text-primary animate-spin relative z-10" />
           </div>
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
+          <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.3em] animate-pulse">Synchronizing Workspace...</p>
         </div>
       </div>
     )
@@ -140,24 +140,24 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
   if (!a) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
-        <AlertCircle className="w-12 h-12 text-rose-500 opacity-20" />
-        <p className="text-slate-500 font-bold">Assignment not found in initialization records.</p>
-        <Link href="/assignments" className="btn-secondary text-xs">Back to Theater</Link>
+        <AlertCircle className="w-12 h-12 text-error opacity-40" />
+        <p className="text-on-surface-variant font-bold">Assignment not found.</p>
+        <Link href="/assignments" className="text-primary font-bold hover:underline text-sm">← Back to Assignments</Link>
       </div>
     )
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#0d0d0d] z-50">
-      <header className="flex flex-col border-b border-white/5 bg-[#111]/80 backdrop-blur-xl z-40 shrink-0"
+    <div className="fixed inset-0 md:left-64 flex flex-col bg-background z-[60]">
+      <header className="flex flex-col border-b border-outline-variant/20 bg-surface-container-low/90 backdrop-blur-xl z-40 shrink-0"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-2 md:gap-6 min-w-0">
-          <Link href="/assignments" className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white shrink-0">
+          <Link href="/assignments" className="p-2 hover:bg-surface-container-high rounded-xl transition-all text-on-surface-variant hover:text-on-surface shrink-0">
             <ArrowLeft className="w-4 h-4 md:w-5 h-5" />
           </Link>
-          <div className="h-6 w-px bg-white/5 hidden sm:block" />
+          <div className="h-6 w-px bg-outline-variant/30 hidden sm:block" />
           <div className="flex flex-col min-w-0">
             <h1 className="text-xs md:text-sm font-black text-white tracking-tight truncate max-w-[150px] sm:max-w-[300px]">{a.title}</h1>
             <div className="flex items-center gap-2 mt-0.5">
@@ -170,7 +170,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
-          <div className="hidden lg:flex items-center gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl mr-2">
+          <div className="hidden lg:flex items-center gap-1.5 p-1 bg-surface-container border border-outline-variant/30 rounded-xl mr-2">
             {[
               { id: 'document', icon: FileText, label: 'Draft' },
               { id: 'sanitization', icon: ShieldCheck, label: 'Clean Draft' },
@@ -181,7 +181,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                 onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
-                  activeTab === tab.id ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-white"
+                  activeTab === tab.id ? "bg-primary-container text-on-primary-container shadow-lg" : "text-on-surface-variant hover:text-on-surface"
                 )}
               >
                 <tab.icon className="w-3.5 h-3.5" />
@@ -191,10 +191,10 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
           </div>
           
           <div className="flex items-center gap-1.5 md:gap-2">
-            <button onClick={() => handleExport('pdf')} disabled={a.status !== 'completed'} className="p-2 md:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
+            <button onClick={() => handleExport('pdf')} disabled={a.status !== 'completed'} className="p-2 md:p-2.5 bg-surface-container border border-outline-variant rounded-xl hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-all disabled:opacity-30">
               <FileText className="w-3.5 h-3.5 md:w-4 h-4" />
             </button>
-            <button onClick={() => handleExport('docx')} disabled={a.status !== 'completed'} className="p-2 md:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30">
+            <button onClick={() => handleExport('docx')} disabled={a.status !== 'completed'} className="p-2 md:p-2.5 bg-surface-container border border-outline-variant rounded-xl hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-all disabled:opacity-30">
               <FileDown className="w-3.5 h-3.5 md:w-4 h-4" />
             </button>
             <button 
@@ -205,13 +205,13 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                 }
               }} 
               disabled={a.status !== 'completed'} 
-              className="p-2 md:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all disabled:opacity-30"
+              className="p-2 md:p-2.5 bg-surface-container border border-outline-variant rounded-xl hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-all disabled:opacity-30"
               title="Copy to clipboard"
             >
               <Copy className="w-3.5 h-3.5 md:w-4 h-4" />
             </button>
-            <div className="hidden sm:block w-px h-6 bg-white/5 mx-1" />
-            <button onClick={() => setIsShareModalOpen(true)} className="btn-primary h-9 md:h-10 px-3 md:px-4 text-[9px] md:text-[10px] whitespace-nowrap">
+            <div className="hidden sm:block w-px h-6 bg-outline-variant/30 mx-1" />
+            <button onClick={() => setIsShareModalOpen(true)} className="h-9 md:h-10 px-3 md:px-4 bg-primary-container text-on-primary-container font-black text-[9px] md:text-[10px] uppercase tracking-widest rounded-xl flex items-center gap-2 hover:brightness-110 transition-all shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none whitespace-nowrap">
               <Share2 className="w-3 md:w-3.5 h-3 md:h-3.5" /> Share
             </button>
           </div>
@@ -220,7 +220,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       </header>
 
       {/* Mobile Tabs */}
-      <div className="lg:hidden flex items-center justify-around bg-[#111] border-b border-white/5 px-2 py-2 shrink-0">
+      <div className="lg:hidden flex items-center justify-around bg-surface-container-low border-b border-outline-variant/20 px-2 py-2 shrink-0">
         {[
           { id: 'document', icon: FileText, label: 'Draft' },
           { id: 'sanitization', icon: ShieldCheck, label: 'Clean' },
@@ -231,7 +231,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
               "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all min-w-[70px]",
-              activeTab === tab.id ? "text-orange-500 bg-orange-500/5" : "text-slate-500"
+              activeTab === tab.id ? "text-primary bg-primary/5" : "text-on-surface-variant"
             )}
           >
             <tab.icon className="w-4 h-4" />
@@ -243,7 +243,7 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
       <div className="flex-1 flex overflow-hidden">
         
         {/* ── Main Canvas ─────────────────────────── */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-[#0a0a0a]">
+        <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-background">
           <div className="max-w-4xl mx-auto px-5 py-10 md:px-16 md:py-16 pb-32 md:pb-40">
             
             {activeTab === 'document' && (
@@ -272,24 +272,24 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                 ) : a.status === 'processing' ? (
                   <div className="h-[50vh] flex flex-col items-center justify-center text-center space-y-8">
                     <div className="relative">
-                      <div className="absolute inset-0 bg-orange-500 blur-3xl opacity-20 animate-pulse" />
-                      <div className="w-24 h-24 bg-[#111] border border-white/10 rounded-[2.5rem] shadow-2xl flex items-center justify-center relative">
-                        <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+                      <div className="absolute inset-0 bg-primary blur-3xl opacity-20 animate-pulse" />
+                      <div className="w-24 h-24 bg-surface-container border border-outline-variant rounded-[2.5rem] shadow-2xl flex items-center justify-center relative">
+                        <Loader2 className="w-10 h-10 text-primary animate-spin" />
                       </div>
                     </div>
                     <div className="space-y-3">
-                      <h3 className="text-3xl font-black text-white tracking-tight">Working...</h3>
-                      <p className="text-slate-500 font-bold text-sm uppercase tracking-widest max-w-xs mx-auto leading-relaxed">
+                      <h3 className="text-3xl font-black text-on-surface tracking-tight">Working...</h3>
+                      <p className="text-on-surface-variant font-bold text-sm uppercase tracking-widest max-w-xs mx-auto leading-relaxed">
                         FlowAI is writing your draft.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="h-[50vh] flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-white/5 rounded-[4rem] group hover:border-orange-500/20 transition-all duration-700">
-                    <Sparkles className="w-20 h-20 text-white/5 mb-8 transition-transform group-hover:scale-110 group-hover:text-orange-500 duration-700" />
-                    <h2 className="text-3xl font-black text-white tracking-tight mb-4">Ready to Generate</h2>
-                    <p className="text-slate-500 max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your materials are ready. Click below to generate your initial draft.</p>
-                    <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="btn-primary px-12 py-5 text-lg font-black rounded-3xl shadow-2xl shadow-orange-500/20 hover:-translate-y-1 transition-all active:scale-95 flex items-center gap-3">
+                  <div className="h-[50vh] flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-outline-variant/20 rounded-[4rem] group hover:border-primary/20 transition-all duration-700">
+                    <Sparkles className="w-20 h-20 text-on-surface-variant/10 mb-8 transition-transform group-hover:scale-110 group-hover:text-primary duration-700" />
+                    <h2 className="text-3xl font-black text-on-surface tracking-tight mb-4">Ready to Generate</h2>
+                    <p className="text-on-surface-variant max-w-md mx-auto font-medium text-lg leading-relaxed mb-10">Your materials are ready. Click below to generate your initial draft.</p>
+                    <button onClick={()=>solveMutation.mutate()} disabled={solveMutation.isPending} className="bg-primary-container text-on-primary-container px-12 py-5 text-lg font-black rounded-3xl shadow-[0_6px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all flex items-center gap-3 disabled:opacity-50">
                       {solveMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Zap className="w-6 h-6" />}
                       {solveMutation.isPending ? 'Working...' : 'Create Draft'}
                     </button>
@@ -300,24 +300,24 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
 
             {activeTab === 'sanitization' && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
-                {/* AI Humanizer Card - Full Width */}
-                <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6 relative overflow-hidden group">
+                {/* AI Humanizer Card */}
+                <div className="p-8 rounded-[2.5rem] bg-surface-container border border-outline-variant space-y-6 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <Zap className="w-16 h-16 text-emerald-500" />
+                    <Zap className="w-16 h-16 text-green-400" />
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                    <div className="w-10 h-10 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-400 border border-green-500/20">
                       <UserCheck className="w-5 h-5" />
                     </div>
-                    <h4 className="text-lg font-bold text-white tracking-tight">AI Humanizer</h4>
+                    <h4 className="text-lg font-bold text-on-surface tracking-tight">AI Humanizer</h4>
                   </div>
-                  <p className="text-sm text-slate-400 font-medium leading-relaxed max-w-xl">
+                  <p className="text-sm text-on-surface-variant font-medium leading-relaxed max-w-xl">
                     Rewrite your work to sound like a human and bypass all AI detectors. Formulas and technical terms are kept intact.
                   </p>
                   <button 
                     onClick={() => humanizeMutation.mutate()}
                     disabled={a.status !== 'completed' || humanizeMutation.isPending}
-                    className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-emerald-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 relative"
+                    className="w-full flex items-center justify-center gap-3 py-6 rounded-[1.5rem] bg-green-500 text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-green-500/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-30 relative"
                   >
                     {humanizeMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                     {humanizeMutation.isPending ? 'Humanizing...' : 'Run AI Humanizer'}
@@ -330,58 +330,58 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Instructions Card */}
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Core Instructions</h4>
-                    <p className="text-sm font-medium text-slate-300 leading-relaxed line-clamp-[12]">
+                  <div className="p-8 rounded-[2.5rem] bg-surface-container border border-outline-variant space-y-4">
+                    <h4 className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-4">Core Instructions</h4>
+                    <p className="text-sm font-medium text-on-surface leading-relaxed line-clamp-[12]">
                       {a.instructions || 'No textual instructions provided.'}
                     </p>
                   </div>
 
                   {/* Attached Sources */}
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Initialization Sources</h4>
+                  <div className="p-8 rounded-[2.5rem] bg-surface-container border border-outline-variant space-y-4">
+                    <h4 className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Attached Sources</h4>
                     <div className="space-y-3">
                       {a.file_name && (
-                        <div className="flex items-center gap-4 p-4 bg-[#0d0d0d] border border-white/5 rounded-2xl">
-                          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+                        <div className="flex items-center gap-4 p-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
                             <FileText className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-white truncate">{a.file_name}</p>
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Master PDF</p>
+                            <p className="text-xs font-bold text-on-surface truncate">{a.file_name}</p>
+                            <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest">Master PDF</p>
                           </div>
                         </div>
                       )}
                       {a.sources?.filter((s: any) => s.file_type === 'image').map((src: any, i: number) => (
-                        <div key={src.id} className="flex items-center gap-4 p-4 bg-[#0d0d0d] border border-white/5 rounded-2xl">
-                          <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center overflow-hidden shrink-0">
+                        <div key={src.id} className="flex items-center gap-4 p-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl">
+                          <div className="w-10 h-10 rounded-xl bg-tertiary/10 border border-tertiary/20 flex items-center justify-center overflow-hidden shrink-0">
                             <img src={src.file} alt="" className="w-full h-full object-cover opacity-80" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-white truncate">{src.file_name || `Image Source ${i + 1}`}</p>
-                            <p className="text-[9px] font-black text-violet-400 uppercase tracking-widest">Visual Source</p>
+                            <p className="text-xs font-bold text-on-surface truncate">{src.file_name || `Image Source ${i + 1}`}</p>
+                            <p className="text-[9px] font-black text-tertiary uppercase tracking-widest">Visual Source</p>
                           </div>
                         </div>
                       ))}
                       {!a.file_name && !a.sources?.length && (
-                        <p className="text-xs text-slate-600 font-bold py-6 text-center">No file sources attached.</p>
+                        <p className="text-xs text-on-surface-variant font-bold py-6 text-center">No file sources attached.</p>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {a.resource_titles?.length > 0 && (
-                  <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-5">Linked Library Resources</h4>
+                  <div className="p-8 rounded-[2.5rem] bg-surface-container border border-outline-variant">
+                    <h4 className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-5">Linked Library Resources</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {a.resource_titles.map((r: any) => (
-                        <div key={r.id} className="flex items-center gap-3 p-4 bg-[#0d0d0d] border border-white/5 rounded-2xl">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                        <div key={r.id} className="flex items-center gap-3 p-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl">
+                          <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400 shrink-0">
                             <Layers className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-white truncate">{r.title}</p>
-                            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{r.type}</p>
+                            <p className="text-xs font-bold text-on-surface truncate">{r.title}</p>
+                            <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest">{r.type}</p>
                           </div>
                         </div>
                       ))}
@@ -397,8 +397,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
         {/* ── Chat/Refinement Island ─────────────────────────── */}
         {a.status === 'completed' && activeTab === 'document' && (
           <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-40">
-            <div className="bg-[#161616]/90 backdrop-blur-3xl border border-white/10 rounded-3xl md:rounded-[2.5rem] p-1.5 md:p-2 shadow-2xl focus-within:border-orange-500/50 transition-all flex items-center gap-2 group">
-              <div className="ml-2 p-2.5 md:p-3 bg-orange-500/10 text-orange-500 rounded-xl md:rounded-2xl group-focus-within:bg-orange-500 group-focus-within:text-white transition-all">
+            <div className="bg-surface-container-low/95 backdrop-blur-3xl border border-outline-variant rounded-3xl md:rounded-[2.5rem] p-1.5 md:p-2 shadow-2xl focus-within:border-primary/50 transition-all flex items-center gap-2 group">
+              <div className="ml-2 p-2.5 md:p-3 bg-primary/10 text-primary rounded-xl md:rounded-2xl group-focus-within:bg-primary-container group-focus-within:text-on-primary-container transition-all">
                 <Sparkles className="w-4 h-4 md:w-5 h-5" />
               </div>
               <input 
@@ -406,14 +406,14 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                 onChange={e=>setRefinePrompt(e.target.value)} 
                 onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&refineMutation.mutate(refinePrompt)} 
                 placeholder="Ask AI to refine or edit..." 
-                className="flex-1 bg-transparent border-none focus:outline-none text-white font-bold placeholder:text-slate-600 text-xs md:text-sm py-3 md:py-4 px-1 min-w-0" 
+                className="flex-1 bg-transparent border-none focus:outline-none text-on-surface font-bold placeholder:text-on-surface-variant/40 text-xs md:text-sm py-3 md:py-4 px-1 min-w-0" 
               />
               <button 
                 onClick={()=>refineMutation.mutate(refinePrompt)} 
                 disabled={!refinePrompt || refineMutation.isPending} 
                 className={cn(
                   "h-10 md:h-12 px-4 md:px-6 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all",
-                  refinePrompt ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "bg-white/5 text-slate-600"
+                  refinePrompt ? "bg-primary-container text-on-primary-container shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none" : "bg-surface-container-high text-on-surface-variant"
                 )}
               >
                 {refineMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
@@ -430,15 +430,15 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setIsAuditModalOpen(false)}
-              className="fixed inset-0 bg-[#0d0d0d]/90 backdrop-blur-xl"
+              className="fixed inset-0 bg-background/90 backdrop-blur-xl"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }} 
               animate={{ opacity: 1, scale: 1, y: 0 }} 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-6xl bg-[#111] rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col my-auto"
+              className="relative w-full max-w-6xl bg-surface-container-low rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-outline-variant overflow-hidden flex flex-col my-auto"
             >
-               <div className="p-8 border-b border-white/5 flex items-center justify-between shrink-0">
+               <div className="p-8 border-b border-outline-variant/20 flex items-center justify-between shrink-0">
                  <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
                        <ShieldAlert className="w-6 h-6" />
@@ -448,17 +448,17 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Full Integrity Heatmap</p>
                     </div>
                  </div>
-                 <button onClick={() => setIsAuditModalOpen(false)} className="px-6 py-2 rounded-xl bg-white/5 text-slate-400 font-bold text-xs hover:bg-white/10 transition-all">Dismiss</button>
+                 <button onClick={() => setIsAuditModalOpen(false)} className="px-6 py-2 rounded-xl bg-surface-container-high text-on-surface-variant font-bold text-xs hover:bg-surface-container-highest transition-all">Dismiss</button>
                </div>
                
-               <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar bg-[#0a0a0a]">
+               <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar bg-surface-container-lowest">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
                      <div className="lg:col-span-4 space-y-4 md:space-y-6">
                         {/* AI Confidence */}
-                        <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4 shadow-xl">
-                           <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                        <div className="p-6 rounded-[2rem] bg-surface-container border border-outline-variant space-y-4 shadow-xl">
+                           <div className="flex justify-between items-center text-[9px] font-black text-on-surface-variant uppercase tracking-[0.2em]">
                               <span>AI Probability</span>
-                              <span className={cn("px-2 py-0.5 rounded-md", auditReport.ai_score > 50 ? "bg-orange-500 text-white" : "bg-emerald-500 text-white")}>
+                              <span className={cn("px-2 py-0.5 rounded-md", auditReport.ai_score > 50 ? "bg-primary-container text-on-primary-container" : "bg-green-500 text-white")}>
                                 {auditReport.ai_score}%
                               </span>
                            </div>
@@ -468,8 +468,8 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                         </div>
 
                         {/* Originality Score */}
-                        <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4 shadow-xl">
-                           <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                        <div className="p-6 rounded-[2rem] bg-surface-container border border-outline-variant space-y-4 shadow-xl">
+                           <div className="flex justify-between items-center text-[9px] font-black text-on-surface-variant uppercase tracking-[0.2em]">
                               <span>Originality</span>
                               <span className="text-violet-400">{auditReport.originality_score || 0}%</span>
                            </div>
@@ -478,18 +478,18 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                            </div>
                         </div>
 
-                        <div className="p-6 md:p-8 rounded-[2rem] bg-white/5 border border-white/10 space-y-4">
-                           <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Linguistic Verdict</h4>
-                           <p className="text-base md:text-lg font-black text-white leading-tight tracking-tight">{auditReport.verdict || 'Verification Success'}</p>
-                           <p className="text-xs text-slate-500 font-medium leading-relaxed">{auditReport.summary || 'Document follows standard academic patterns.'}</p>
+                        <div className="p-6 md:p-8 rounded-[2rem] bg-surface-container border border-outline-variant space-y-4">
+                           <h4 className="text-[9px] font-black text-on-surface-variant uppercase tracking-[0.2em]">Linguistic Verdict</h4>
+                           <p className="text-base md:text-lg font-black text-on-surface leading-tight tracking-tight">{auditReport.verdict || 'Verification Success'}</p>
+                           <p className="text-xs text-on-surface-variant font-medium leading-relaxed">{auditReport.summary || 'Document follows standard academic patterns.'}</p>
                         </div>
                      </div>
                      
-                     <div className="lg:col-span-8 p-6 md:p-12 rounded-[2rem] bg-white/5 border border-white/10 relative">
-                        <div className="absolute top-4 right-8 flex items-center gap-6 text-[8px] font-black uppercase tracking-widest text-slate-600">
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500/40" /> AI Marker</div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500/40" /> Plagiarism</div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-white/10" /> Human</div>
+                     <div className="lg:col-span-8 p-6 md:p-12 rounded-[2rem] bg-surface-container border border-outline-variant relative">
+                        <div className="absolute top-4 right-8 flex items-center gap-6 text-[8px] font-black uppercase tracking-widest text-on-surface-variant/40">
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-primary/40" /> AI Marker</div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-error/40" /> Plagiarism</div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-outline-variant/40" /> Human</div>
                         </div>
                         <div className="mt-8 lg:mt-4 lg:max-h-[65vh] overflow-y-auto pr-4 custom-scrollbar font-serif text-base md:text-xl leading-relaxed tracking-tight">
                            {auditReport.segments?.map((seg: any, idx: number) => {
@@ -500,9 +500,9 @@ export default function AssignmentDetailPage({ params }: { params: { id: string 
                                 <div key={idx} className={cn(
                                    "inline transition-all duration-300 rounded",
                                    isHeading || isListItem ? "block my-4" : "",
-                                   seg.type === 'ai' ? "bg-orange-500/10 text-orange-200/90 border-b-2 border-orange-500/40" : 
-                                   seg.type === 'plagiarism' ? "bg-rose-500/10 text-rose-200/90 border-b-2 border-rose-500/40" : 
-                                   "text-slate-300"
+                                   seg.type === 'ai' ? "bg-primary/10 text-primary/90 border-b-2 border-primary/40" : 
+                                   seg.type === 'plagiarism' ? "bg-error-container/10 text-error/90 border-b-2 border-error/40" : 
+                                   "text-on-surface"
                                 )} title={seg.reason}>
                                    <ReactMarkdown 
                                      remarkPlugins={[remarkMath, remarkGfm]} 

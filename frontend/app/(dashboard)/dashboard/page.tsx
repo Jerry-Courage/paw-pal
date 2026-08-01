@@ -4,12 +4,6 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { plannerApi, libraryApi, aiApi, authApi, workspaceApi, paymentsApi } from '@/lib/api'
-import {
-  Upload, Sparkles, Clock, Flame, ArrowRight, Play,
-  BookOpen, Brain, Target, BarChart2, Zap, Pencil,
-  Check, Headphones, LayoutGrid, FileText, TrendingUp,
-  Layers, Plus, Crown, X
-} from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
@@ -18,13 +12,20 @@ import { usePricing } from '@/hooks/usePricing'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
-function getMasteryTier(mastery: number) {
-  if (mastery >= 80) return { label: 'Mastered', level: 5, textColor: 'text-emerald-400', badgeClass: 'bg-emerald-500/10', barClass: 'from-emerald-500 to-emerald-400' }
-  if (mastery >= 60) return { label: 'Strong', level: 4, textColor: 'text-sky-400', badgeClass: 'bg-sky-500/10', barClass: 'from-sky-500 to-cyan-400' }
-  if (mastery >= 40) return { label: 'Building', level: 3, textColor: 'text-orange-400', badgeClass: 'bg-orange-500/10', barClass: 'from-orange-500 to-amber-400' }
-  if (mastery >= 20) return { label: 'Learning', level: 2, textColor: 'text-violet-400', badgeClass: 'bg-violet-500/10', barClass: 'from-violet-500 to-fuchsia-400' }
-  return { label: 'New', level: 1, textColor: 'text-slate-400', badgeClass: 'bg-white/5', barClass: 'from-slate-500 to-slate-400' }
+function getMasteryLabel(mastery: number) {
+  if (mastery >= 80) return { label: 'Mastered', color: 'text-green-400', barColor: 'bg-green-500' }
+  if (mastery >= 60) return { label: 'Strong', color: 'text-sky-400', barColor: 'bg-sky-500' }
+  if (mastery >= 40) return { label: 'Building', color: 'text-primary', barColor: 'bg-primary-container' }
+  if (mastery >= 20) return { label: 'Learning', color: 'text-tertiary', barColor: 'bg-tertiary' }
+  return { label: 'New', color: 'text-on-surface-variant', barColor: 'bg-outline' }
 }
+
+const QUICK_ACTIONS = [
+  { icon: 'upload_file', label: 'Upload', sub: 'PDF, Video, Slides', href: '/library', color: 'bg-primary-container text-on-primary-container' },
+  { icon: 'smart_toy', label: 'Ask AI', sub: 'Instant help', href: '/ai', color: 'bg-secondary-container text-on-secondary-container' },
+  { icon: 'school', label: 'Tutor', sub: 'Personalised', href: '/dashboard/personalised', color: 'bg-tertiary-container text-on-tertiary-container' },
+  { icon: 'shelves', label: 'Library', sub: 'Study materials', href: '/library', color: 'bg-surface-container-highest text-on-surface' },
+]
 
 export default function DashboardPage() {
   const { data: session } = useSession()
@@ -33,43 +34,13 @@ export default function DashboardPage() {
   const [nudgeDismissed, setNudgeDismissed] = useState(false)
   const { priceInfo } = usePricing()
 
-  const { data: profileData } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => authApi.me().then(r => r.data),
-    refetchInterval: 60000,
-  })
-
-  const { data: nudgeData } = useQuery({
-    queryKey: ['nudge'],
-    queryFn: () => aiApi.getNudge().then(r => r.data),
-  })
-
-  const { data: sessionsData } = useQuery({
-    queryKey: ['planner-sessions'],
-    queryFn: () => plannerApi.getSessions().then(r => r.data),
-  })
-
-  const { data: resourcesData } = useQuery({
-    queryKey: ['resources'],
-    queryFn: () => libraryApi.getResources().then(r => r.data),
-  })
-
-  const { data: analyticsData } = useQuery({
-    queryKey: ['analytics'],
-    queryFn: () => authApi.getAnalytics().then(r => r.data),
-  })
-
-  const { data: workspacesData } = useQuery({
-    queryKey: ['workspaces'],
-    queryFn: () => workspaceApi.getAll().then(r => r.data),
-    staleTime: 30000,
-  })
-
-  const { data: subStatus, refetch: refetchSub } = useQuery({
-    queryKey: ['subscription-status'],
-    queryFn: () => paymentsApi.getStatus().then(r => r.data),
-    staleTime: 60000,
-  })
+  const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: () => authApi.me().then(r => r.data), refetchInterval: 60000 })
+  const { data: nudgeData } = useQuery({ queryKey: ['nudge'], queryFn: () => aiApi.getNudge().then(r => r.data) })
+  const { data: sessionsData } = useQuery({ queryKey: ['planner-sessions'], queryFn: () => plannerApi.getSessions().then(r => r.data) })
+  const { data: resourcesData } = useQuery({ queryKey: ['resources'], queryFn: () => libraryApi.getResources().then(r => r.data) })
+  const { data: analyticsData } = useQuery({ queryKey: ['analytics'], queryFn: () => authApi.getAnalytics().then(r => r.data) })
+  const { data: workspacesData } = useQuery({ queryKey: ['workspaces'], queryFn: () => workspaceApi.getAll().then(r => r.data), staleTime: 30000 })
+  const { data: subStatus, refetch: refetchSub } = useQuery({ queryKey: ['subscription-status'], queryFn: () => paymentsApi.getStatus().then(r => r.data), staleTime: 60000 })
 
   const isPremium = subStatus?.is_premium ?? false
   const notesUsed = subStatus?.notes_used ?? 0
@@ -78,16 +49,19 @@ export default function DashboardPage() {
   const showUpgradeNudge = !isPremium && notesUsed >= Math.ceil(notesLimit * 0.4) && !nudgeDismissed
 
   const workspaces = Array.isArray(workspacesData) ? workspacesData : workspacesData?.results || []
-  const totalXp = profileData?.xp ?? 0
-  const userLevel = profileData?.level || { num: 1, name: 'Freshman', next_xp: 500, current_xp: totalXp }
   const totalUnread = workspaces.reduce((sum: number, ws: any) => sum + (ws.unread_count || 0), 0)
   const sessions = sessionsData?.results || []
   const resources = resourcesData?.results || []
   const activeSession = sessions.find((s: any) => s.status === 'active' || s.status === 'scheduled')
 
-  const studyStreak  = profileData?.study_streak ?? 0
-  // total_study_time is lifetime hours — use it for the Focus stat display
-  const studyTime    = profileData?.total_study_time ?? 0
+  const studyStreak = profileData?.study_streak ?? 0
+  const studyTime = profileData?.total_study_time ?? 0
+  const totalXp = profileData?.xp ?? 0
+  const weekHours = analyticsData?.week_hours ?? 0
+  const weeklyGoal = analyticsData?.goal_hours ?? profileData?.weekly_goal_hours ?? 10
+  const weeklyPct = Math.min(100, Math.round((weekHours / Math.max(weeklyGoal, 1)) * 100))
+  const userLevel = profileData?.level || { name: 'Freshman' }
+
   const progressQueries = useQueries({
     queries: resources.slice(0, 6).map((resource: any) => ({
       queryKey: ['progress', resource.id],
@@ -96,305 +70,269 @@ export default function DashboardPage() {
       enabled: !!resource.id,
     })),
   })
-  // Weekly progress comes from analytics (week_hours vs goal_hours), NOT lifetime total
-  const weekHours    = analyticsData?.week_hours ?? 0
-  const weeklyGoal   = analyticsData?.goal_hours ?? profileData?.weekly_goal_hours ?? 10
-  const weeklyPct    = Math.min(100, Math.round((weekHours / Math.max(weeklyGoal, 1)) * 100))
 
-  // Parse redirect callback URL parameters on mobile/redirect return
+  // Handle payment return
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const reference = params.get('reference')
     const payment = params.get('payment')
-    
     if (reference && payment === 'success') {
-      // Clear URL params immediately so it doesn't verify on every refresh
-      const newUrl = window.location.pathname
-      window.history.replaceState({}, document.title, newUrl)
-      
-      const verifyPayment = async () => {
-        try {
-          const res = await paymentsApi.verify(reference)
-          if (res.data.success) {
-            toast.success('Payment confirmed! You\'re now Premium 🎉')
-            refetchSub()
-          }
-        } catch (e) {
-          console.error('Failed to verify payment status on return', e)
-        }
-      }
-      verifyPayment()
+      window.history.replaceState({}, document.title, window.location.pathname)
+      paymentsApi.verify(reference).then(res => {
+        if (res.data.success) { toast.success('Payment confirmed! You\'re now Premium 🎉'); refetchSub() }
+      }).catch(() => {})
     }
   }, [refetchSub])
 
-  const quickActions = [
-    {
-      icon: Upload,
-      label: 'Upload',
-      sub: 'PDF, Video, Slides',
-      href: '/library',
-      color: 'text-orange-400',
-      bg: 'bg-orange-500/10',
-    },
-    {
-      icon: Sparkles,
-      label: 'Ask AI',
-      sub: 'Instant help',
-      href: '/ai',
-      color: 'text-violet-400',
-      bg: 'bg-violet-500/10',
-    },
-    {
-      icon: Headphones,
-      label: 'Personal Tutor',
-      sub: 'Personalized tutor',
-      href: '/dashboard/personalised',
-      color: 'text-rose-400',
-      bg: 'bg-rose-500/10',
-    },
-    {
-      icon: LayoutGrid,
-      label: 'Collab',
-      sub: 'Study together',
-      href: '/workspace',
-      color: 'text-emerald-400',
-      bg: 'bg-emerald-500/10',
-      badge: totalUnread,
-    },
-    {
-      icon: Layers,
-      label: 'Flashcards',
-      sub: 'Review & practice',
-      href: '/library/flashcards',
-      color: 'text-sky-400',
-      bg: 'bg-sky-500/10',
-    },
-  ]
-
   return (
-    <div className="max-w-5xl mx-auto px-0 space-y-6">
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto space-y-stack-md">
 
-      {/* ── Premium upgrade nudge ─────────────────────────── */}
+      {/* ── Upgrade nudge ─────────────────────────────────── */}
       {showUpgradeNudge && (
-        <div className="relative flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-orange-500/12 to-amber-500/8 border border-orange-500/20">
-          <div className="w-9 h-9 shrink-0 rounded-xl bg-orange-500/15 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-orange-400" />
-          </div>
+        <div className="relative flex items-center gap-stack-md px-stack-md py-stack-sm rounded-[1rem] bg-secondary-container/20 border border-secondary-container/30">
+          <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-white">
-              {notesRemaining === 0
-                ? "You've used all your free study kits"
-                : `${notesRemaining} free kit${notesRemaining !== 1 ? 's' : ''} remaining`}
+            <p className="text-[14px] font-bold text-on-surface">
+              {notesRemaining === 0 ? "You've used all your free kits" : `${notesRemaining} free kit${notesRemaining !== 1 ? 's' : ''} remaining`}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Unlock <span className="text-white font-bold">unlimited kits, podcasts, AI tutor & voice prep</span> for just {priceInfo.displayShort}
-            </p>
+            <p className="text-[12px] text-on-surface-variant">Unlock unlimited kits for just {priceInfo?.displayShort || '$0.99/mo'}</p>
           </div>
-          <button
-            onClick={() => setShowPaywall(true)}
-            className="shrink-0 flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 active:scale-95"
-          >
-            <Zap className="w-3.5 h-3.5" /> Upgrade
+          <button onClick={() => setShowPaywall(true)} className="shrink-0 bg-primary text-on-primary text-[13px] font-bold px-stack-sm py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
+            Upgrade
           </button>
-          <button
-            onClick={() => setNudgeDismissed(true)}
-            className="absolute top-2 right-2 p-1 text-slate-600 hover:text-slate-400 transition-colors"
-          >
-            <X className="w-3 h-3" />
+          <button onClick={() => setNudgeDismissed(true)} className="absolute top-2 right-2 text-on-surface-variant hover:text-on-surface">
+            <span className="material-symbols-outlined text-[16px]">close</span>
           </button>
-        </div>
-      )}
-
-      {/* ── Premium badge ─────────────────────────────────── */}
-      {isPremium && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500/8 border border-orange-500/15 w-fit">
-          <Crown className="w-3.5 h-3.5 text-orange-400" />
-          <span className="text-xs font-black text-orange-400">Premium Active — unlimited study kits & AI tools</span>
         </div>
       )}
 
       {/* ── Hero greeting ─────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#111] border border-white/[0.05] p-4 sm:p-6 md:p-8">
-        <div className="absolute -top-24 -right-24 w-72 h-72 bg-orange-500/[0.04] rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-violet-500/[0.04] rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-tight mb-2">
-              Hey, <span className="text-orange-400">{name}</span> 👋
-            </h1>
-            <p className="text-slate-500 text-sm leading-relaxed max-w-md">
+      <section className="bg-surface-container-low rounded-[2rem] p-stack-md border border-outline-variant/20 relative overflow-hidden">
+        <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-stack-md relative">
+          <div className="flex-1">
+            <h2 className="text-[28px] md:text-[36px] font-bold text-on-surface leading-tight mb-base">
+              Welcome back, <span className="text-primary">{name}!</span>
+            </h2>
+            <p className="text-on-surface-variant text-body-md max-w-md">
               {nudgeData?.nudge || 'Your AI tutor is ready. What are we studying today?'}
             </p>
-
-            {/* Weekly progress bar */}
             {weeklyGoal > 0 && (
-              <div className="mt-4 flex items-center gap-3">
-                <div className="w-28 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-orange-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${weeklyPct}%` }}
-                  />
+              <div className="mt-stack-sm flex items-center gap-stack-sm">
+                <div className="w-32 h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${weeklyPct}%` }} />
                 </div>
-                <span className="text-xs text-slate-600 font-medium">
-                  {weekHours}h / {weeklyGoal}h this week
-                </span>
+                <span className="text-[12px] text-on-surface-variant font-medium">{weekHours}h / {weeklyGoal}h this week</span>
               </div>
             )}
           </div>
-
           {/* Stats pills */}
-          <div className="flex flex-wrap gap-2 shrink-0 sm:gap-2.5">
-            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3 min-w-[76px] sm:px-5 sm:py-3.5 sm:min-w-[80px]">
-              <span className="text-xl font-black text-orange-400">
+          <div className="flex gap-base shrink-0 flex-wrap">
+            <div className="flex flex-col items-center justify-center bg-surface-container rounded-[1.5rem] px-stack-sm py-stack-sm min-w-[72px] border border-outline-variant/20">
+              <span className="text-[22px] font-bold text-primary-container">
                 {studyTime < 1 ? `${Math.round(studyTime * 60)}m` : `${studyTime.toFixed(1)}h`}
               </span>
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">Focus</span>
+              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">Focus</span>
             </div>
-            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3 min-w-[76px] sm:px-5 sm:py-3.5 sm:min-w-[80px]">
-              <span className="text-xl font-black text-orange-400 flex items-center gap-1">
-                {studyStreak}<Flame className="w-3.5 h-3.5" />
+            <div className="flex flex-col items-center justify-center bg-surface-container rounded-[1.5rem] px-stack-sm py-stack-sm min-w-[72px] border border-outline-variant/20">
+              <span className="text-[22px] font-bold text-primary-container flex items-center gap-1">
+                {studyStreak}
+                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
               </span>
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">Streak</span>
+              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">Streak</span>
             </div>
-            <div className="flex flex-col items-center justify-center bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3 min-w-[86px] sm:px-5 sm:py-3.5 sm:min-w-[92px]">
-              <span className="text-xl font-black text-orange-400">{totalXp.toLocaleString()}</span>
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">XP</span>
-              <span className="text-[9px] text-slate-500 mt-0.5">{userLevel?.name || 'Freshman'}</span>
+            <div className="flex flex-col items-center justify-center bg-surface-container rounded-[1.5rem] px-stack-sm py-stack-sm min-w-[80px] border border-outline-variant/20">
+              <span className="text-[22px] font-bold text-tertiary">{totalXp.toLocaleString()}</span>
+              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">XP</span>
+              <span className="text-[9px] text-on-surface-variant">{userLevel?.name || 'Freshman'}</span>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Quick actions ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {quickActions.map(a => (
-          <Link
-            key={a.label}
-            href={a.href}
-            className="group relative flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-[#111] border border-white/[0.05] hover:border-white/10 hover:-translate-y-0.5 transition-all duration-200"
-          >
-            {(a as any).badge > 0 && (
-              <div className="absolute top-2.5 right-2.5 w-4 h-4 bg-orange-500 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30">
-                {(a as any).badge > 9 ? '9+' : (a as any).badge}
+      {/* ── Quick actions ─────────────────────────────────── */}
+      <section>
+        <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-widest mb-stack-sm flex items-center gap-base">
+          <span className="material-symbols-outlined text-[16px] text-primary-container">bolt</span>
+          Quick Actions
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-gutter">
+          {QUICK_ACTIONS.map(a => (
+            <Link key={a.label} href={a.href} className="group flex flex-col items-center gap-base p-stack-md rounded-[1.5rem] bg-surface-container-low border border-outline-variant/20 hover:border-outline-variant transition-all hover:-translate-y-1">
+              <div className={cn('w-12 h-12 rounded-[1rem] flex items-center justify-center transition-transform group-hover:scale-110', a.color)}>
+                <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: "'FILL' 1" }}>{a.icon}</span>
               </div>
-            )}
-            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110', a.bg, a.color)}>
-              <a.icon className="w-5 h-5" />
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-bold text-white leading-none">{a.label}</p>
-              <p className="text-[10px] text-slate-600 mt-0.5 hidden sm:block">{a.sub}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
+              <div className="text-center">
+                <p className="text-[14px] font-bold text-on-surface">{a.label}</p>
+                <p className="text-[11px] text-on-surface-variant">{a.sub}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-      {/* ── Active session banner ──────────────────────────── */}
+      {/* ── Active session banner ─────────────────────────── */}
       {activeSession && (
-        <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-orange-500/[0.06] border border-orange-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse shrink-0" />
+        <div className="flex items-center justify-between gap-stack-md px-stack-md py-stack-sm rounded-[1rem] bg-primary-container/10 border border-primary-container/20">
+          <div className="flex items-center gap-base">
+            <div className="w-2 h-2 rounded-full bg-primary-container animate-pulse shrink-0" />
             <div>
-              <p className="text-sm font-bold text-white leading-none">{activeSession.title}</p>
-              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
+              <p className="text-[14px] font-bold text-on-surface">{activeSession.title}</p>
+              <p className="text-[12px] text-on-surface-variant">
                 {new Date(activeSession.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 {' – '}
                 {new Date(activeSession.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
-          <Link href="/planner" className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold rounded-xl transition-all shrink-0">
-            <Play className="w-3.5 h-3.5" /> Resume
+          <Link href="/planner" className="flex items-center gap-base bg-primary-container text-on-primary-container text-[13px] font-bold px-stack-sm py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
+            <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>play_circle</span>
+            Resume
           </Link>
         </div>
       )}
 
       {/* ── Main grid ─────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
-
-        {/* Left: Recent library */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <BookOpen className="w-3.5 h-3.5 text-orange-500" /> Recent Materials
-            </h2>
-            <Link href="/library" className="text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1">
-              Library <ArrowRight className="w-3.5 h-3.5" />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-gutter items-start">
+        {/* Recent Materials */}
+        <div className="xl:col-span-2">
+          <div className="flex items-center justify-between mb-stack-sm">
+            <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-base">
+              <span className="material-symbols-outlined text-[16px] text-primary-container">menu_book</span>
+              Recent Materials
+            </h3>
+            <Link href="/library" className="text-[13px] font-bold text-primary hover:text-primary-container transition-colors flex items-center gap-1">
+              View All
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
             </Link>
           </div>
 
           {resources.length === 0 ? (
-            <div className="border border-dashed border-white/[0.08] rounded-2xl p-10 text-center flex flex-col items-center gap-4">
-              <div className="w-12 h-12 bg-white/[0.04] rounded-2xl flex items-center justify-center">
-                <Upload className="w-5 h-5 text-slate-600" />
+            <div className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] p-stack-lg text-center flex flex-col items-center gap-stack-md">
+              <div className="w-16 h-16 bg-surface-container rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-[32px] text-on-surface-variant">upload_file</span>
               </div>
               <div>
-                <p className="font-bold text-white text-sm mb-1">Library is empty</p>
-                <p className="text-xs text-slate-600 mb-4">Upload your first material to unlock AI study tools.</p>
-                <Link href="/library" className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold rounded-xl transition-all">
-                  <Plus className="w-3.5 h-3.5" /> Upload Now
+                <p className="font-bold text-on-surface mb-base">Library is empty</p>
+                <p className="text-[13px] text-on-surface-variant mb-stack-md">Upload your first material to unlock AI study tools.</p>
+                <Link href="/library" className="inline-flex items-center gap-base bg-primary text-on-primary text-[13px] font-bold px-stack-md py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  Upload Now
                 </Link>
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-base">
               {resources.slice(0, 6).map((r: any, index: number) => {
                 const progress = progressQueries[index]?.data
                 const mastery = progress?.mastery ?? 0
-                const masteryTier = getMasteryTier(mastery)
-
+                const { label, color, barColor } = getMasteryLabel(mastery)
                 return (
-                <Link
-                  key={r.id}
-                  href={`/library/${r.id}`}
-                  className="group flex flex-col gap-3 rounded-xl bg-[#111] border border-white/[0.05] p-3.5 transition-all hover:border-white/10 sm:flex-row sm:items-center sm:gap-3.5"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
-                    <ResourceIcon type={r.resource_type} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate group-hover:text-orange-400 transition-colors leading-none mb-0.5">
-                      {r.title}
-                    </p>
-                    <p className="text-[11px] text-slate-600 truncate capitalize">
-                      {r.subject || r.resource_type}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 shrink-0">
-                    <div className="min-w-0 sm:min-w-[96px]">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className={cn('text-[9px] font-black uppercase tracking-wider', masteryTier.textColor)}>
-                          {masteryTier.label} • L{masteryTier.level}
-                        </span>
-                        <span className="text-[10px] text-slate-500">{mastery}%</span>
+                  <Link key={r.id} href={`/library/${r.id}`} className="group flex items-center gap-stack-md bg-surface-container-low rounded-[1.5rem] p-stack-sm border border-outline-variant/20 hover:border-outline-variant transition-all">
+                    <div className="w-12 h-12 rounded-[1rem] bg-surface-container-high flex items-center justify-center shrink-0">
+                      <span className={cn('material-symbols-outlined text-[22px]', color)}>
+                        {r.resource_type === 'video' ? 'play_circle' : r.resource_type === 'slides' ? 'slideshow' : r.resource_type === 'code' ? 'code' : 'description'}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-on-surface truncate group-hover:text-primary transition-colors">{r.title}</p>
+                      <p className="text-[11px] text-on-surface-variant capitalize">{r.subject || r.resource_type}</p>
+                    </div>
+                    <div className="shrink-0 text-right min-w-[80px]">
+                      <p className={cn('text-[11px] font-bold', color)}>{label}</p>
+                      <div className="h-1.5 w-16 bg-surface-container-highest rounded-full overflow-hidden mt-1">
+                        <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${Math.min(100, mastery)}%` }} />
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                        <div
-                          className={cn('h-full rounded-full bg-gradient-to-r transition-all', masteryTier.barClass)}
-                          style={{ width: `${Math.min(100, mastery)}%` }}
-                        />
-                      </div>
+                      <p className="text-[10px] text-on-surface-variant mt-0.5">{mastery}%</p>
                     </div>
                     {r.has_study_kit && (
-                      <span className="w-fit text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        Ready
-                      </span>
+                      <span className="shrink-0 text-[10px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Kit</span>
                     )}
-                    <ArrowRight className="hidden w-3.5 h-3.5 text-slate-700 transition-colors group-hover:text-orange-400 sm:block" />
-                  </div>
-                </Link>
+                  </Link>
                 )
               })}
             </div>
           )}
         </div>
 
-        {/* Right: Analytics sidebar */}
-        <div className="space-y-4">
-          <StudyInsights analytics={analyticsData} />
-          <AIMastery analytics={analyticsData} />
+        {/* Analytics sidebar */}
+        <div className="space-y-stack-md">
+          {/* 7-day bar chart */}
+          {analyticsData?.daily_study?.length > 0 && (
+            <div className="bg-surface-container-low rounded-[2rem] p-stack-md border border-outline-variant/20">
+              <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-widest mb-stack-md flex items-center gap-base">
+                <span className="material-symbols-outlined text-[16px] text-primary-container">bar_chart</span>
+                This Week
+              </h3>
+              <div className="flex items-end gap-base h-16">
+                {analyticsData.daily_study.map((d: any, i: number) => {
+                  const maxMins = Math.max(...analyticsData.daily_study.map((x: any) => x.minutes), 1)
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full flex justify-center items-end h-12">
+                        <div
+                          className={cn('w-full max-w-[14px] rounded-t transition-all', d.minutes > 0 ? 'bg-primary' : 'bg-surface-container-highest')}
+                          style={{ height: `${Math.max(6, (d.minutes / maxMins) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-on-surface-variant">{d.day}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* AI usage */}
+          {analyticsData?.ai_stats && (
+            <div className="bg-surface-container-low rounded-[2rem] p-stack-md border border-outline-variant/20">
+              <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-widest mb-stack-md flex items-center gap-base">
+                <span className="material-symbols-outlined text-[16px] text-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                AI Usage
+              </h3>
+              <div className="grid grid-cols-2 gap-base">
+                {[
+                  { label: 'Podcasts', value: analyticsData.ai_stats.podcasts, icon: 'podcasts', color: 'text-primary' },
+                  { label: 'AI Chats', value: analyticsData.ai_stats.chats, icon: 'smart_toy', color: 'text-secondary' },
+                  { label: 'Flashcards', value: analyticsData.ai_stats.mastered_flashcards, icon: 'style', color: 'text-tertiary' },
+                  { label: 'Analyses', value: analyticsData.ai_stats.vision, icon: 'visibility', color: 'text-primary' },
+                ].map((item, i) => (
+                  <div key={i} className="bg-surface-container p-3 rounded-[1rem]">
+                    <span className={cn('material-symbols-outlined text-[20px] mb-1 block', item.color)}>{item.icon}</span>
+                    <p className="text-[18px] font-bold text-on-surface">{item.value ?? 0}</p>
+                    <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Study Friends leaderboard */}
+          <div className="bg-surface-container-low rounded-[2rem] p-stack-md border border-outline-variant/20">
+            <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-widest mb-stack-md flex items-center gap-base">
+              <span className="material-symbols-outlined text-[16px] text-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>emoji_events</span>
+              Study Friends
+            </h3>
+            <div className="space-y-stack-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-base">
+                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-on-secondary text-[11px] font-bold">M</div>
+                  <p className="text-[13px] text-on-surface">Maya R.</p>
+                </div>
+                <span className="text-[13px] font-bold text-primary">3,120 XP</span>
+              </div>
+              <div className="flex items-center justify-between bg-surface-container rounded-[1rem] px-base py-2">
+                <div className="flex items-center gap-base">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-[11px] font-bold">You</div>
+                  <p className="text-[13px] text-on-surface font-bold">You</p>
+                </div>
+                <span className="text-[13px] font-bold text-on-surface-variant">{totalXp.toLocaleString()} XP</span>
+              </div>
+            </div>
+            <Link href="/groups" className="mt-stack-sm w-full flex items-center justify-center gap-base bg-surface-container-high text-on-surface font-bold text-[13px] py-2 rounded-[1rem] hover:bg-surface-container-highest transition-colors">
+              View Groups
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -407,181 +345,6 @@ export default function DashboardPage() {
           onSuccess={() => { refetchSub(); setShowPaywall(false); setNudgeDismissed(true) }}
         />
       )}
-    </div>
-  )
-}
-
-/* ── Resource type icon ─────────────────────────────── */
-function ResourceIcon({ type }: { type: string }) {
-  const map: Record<string, React.ReactNode> = {
-    pdf:    <FileText className="w-4 h-4 text-rose-400" />,
-    video:  <Play className="w-4 h-4 text-sky-400" />,
-    slides: <Layers className="w-4 h-4 text-orange-400" />,
-    code:   <Zap className="w-4 h-4 text-emerald-400" />,
-  }
-  return <>{map[type] || <BookOpen className="w-4 h-4 text-slate-500" />}</>
-}
-
-/* ── Study analytics card ───────────────────────────── */
-function StudyInsights({ analytics }: { analytics?: any }) {
-  const [editingGoal, setEditingGoal] = useState(false)
-  const [goalInput, setGoalInput]     = useState('')
-  const [saving, setSaving]           = useState(false)
-  const queryClient = useQueryClient()
-
-  if (!analytics) return (
-    <div className="rounded-2xl bg-[#111] border border-white/[0.05] p-5 space-y-3 animate-pulse">
-      <div className="h-3 bg-white/[0.06] rounded w-1/2" />
-      <div className="h-20 bg-white/[0.06] rounded-xl" />
-    </div>
-  )
-
-  const {
-    daily_study = [], flashcards = {},
-    goal_progress = 0, goal_hours = 10,
-    week_hours = 0,
-  } = analytics
-
-  const maxMins = Math.max(...daily_study.map((d: any) => d.minutes), 1)
-
-  const saveGoal = async () => {
-    const h = parseFloat(goalInput)
-    if (!h || h <= 0) return
-    setSaving(true)
-    try {
-      await authApi.setWeeklyGoal(h)
-      queryClient.invalidateQueries({ queryKey: ['analytics'] })
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
-      setEditingGoal(false)
-    } finally { setSaving(false) }
-  }
-
-  return (
-    <div className="rounded-2xl bg-[#111] border border-white/[0.05] p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <BarChart2 className="w-3.5 h-3.5 text-orange-400" /> Analytics
-        </h3>
-        <span className="text-[9px] text-slate-600 font-medium">7 days</span>
-      </div>
-
-      {/* Weekly goal */}
-      <div className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-3.5 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-            <Target className="w-3 h-3 text-orange-400" /> Weekly Goal
-          </span>
-          {editingGoal ? (
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number" min="1" max="168"
-                value={goalInput}
-                onChange={e => setGoalInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && saveGoal()}
-                className="w-12 text-xs font-bold bg-white/[0.06] border border-white/10 rounded-lg px-2 py-1 text-white outline-none focus:border-orange-500/50"
-                placeholder={String(goal_hours)}
-                autoFocus
-              />
-              <span className="text-slate-500 text-xs">h</span>
-              <button
-                onClick={saveGoal} disabled={saving}
-                className="w-6 h-6 bg-emerald-500 text-white rounded-lg flex items-center justify-center"
-              >
-                <Check className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => { setGoalInput(String(goal_hours)); setEditingGoal(true) }}
-              className="text-xs font-bold text-orange-400 flex items-center gap-1 hover:text-orange-300 transition-colors"
-            >
-              {week_hours}h / {goal_hours}h <Pencil className="w-2.5 h-2.5" />
-            </button>
-          )}
-        </div>
-        <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-          <div
-            className={cn('h-full rounded-full transition-all duration-1000', goal_progress >= 100 ? 'bg-emerald-500' : 'bg-orange-500')}
-            style={{ width: `${Math.min(100, goal_progress)}%` }}
-          />
-        </div>
-        <p className="text-[10px] text-slate-600 mt-1.5">
-          {goal_progress}% complete{goal_progress >= 100 ? ' 🎉' : ''}
-        </p>
-      </div>
-
-      {/* Bar chart */}
-      {daily_study.length > 0 && (
-        <div className="mb-4">
-          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2.5">Daily study</p>
-          <div className="flex items-end gap-1.5 h-14">
-            {daily_study.map((d: any, i: number) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full flex justify-center h-full items-end">
-                  <div
-                    className={cn('w-full max-w-[16px] rounded-t transition-all duration-500', d.minutes > 0 ? 'bg-orange-500' : 'bg-white/[0.05]')}
-                    style={{ height: `${Math.max(6, (d.minutes / maxMins) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-[9px] font-medium text-slate-600">{d.day}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Flashcard mastery */}
-      {flashcards.total > 0 && (
-        <div className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-3.5">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="font-semibold text-slate-400 flex items-center gap-1.5">
-              <Brain className="w-3 h-3 text-violet-400" /> Flashcard Mastery
-            </span>
-            <span className="font-bold text-violet-400">{flashcards.reviewed}/{flashcards.total}</span>
-          </div>
-          <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-violet-500 rounded-full transition-all duration-1000"
-              style={{ width: `${Math.round((flashcards.reviewed / flashcards.total) * 100)}%` }}
-            />
-          </div>
-          {flashcards.due > 0 && (
-            <p className="text-[10px] text-orange-400 mt-1.5">{flashcards.due} cards due</p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ── AI usage stats ─────────────────────────────────── */
-function AIMastery({ analytics }: { analytics?: any }) {
-  if (!analytics?.ai_stats) return null
-  const s = analytics.ai_stats
-
-  const items = [
-    { label: 'Podcasts',   value: s.podcasts,            icon: Headphones, color: 'text-pink-400 bg-pink-500/10'     },
-    { label: 'AI Chats',   value: s.chats,               icon: Sparkles,   color: 'text-violet-400 bg-violet-500/10' },
-    { label: 'Flashcards', value: s.mastered_flashcards, icon: Brain,      color: 'text-emerald-400 bg-emerald-500/10'},
-    { label: 'Analyses',   value: s.vision,              icon: Zap,        color: 'text-sky-400 bg-sky-500/10'       },
-  ]
-
-  return (
-    <div className="rounded-2xl bg-[#111] border border-white/[0.05] p-5">
-      <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 text-orange-400" /> AI Usage
-      </h3>
-      <div className="grid grid-cols-2 gap-2">
-        {items.map((item, i) => (
-          <div key={i} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-            <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center mb-2', item.color)}>
-              <item.icon className="w-3.5 h-3.5" />
-            </div>
-            <p className="text-base font-black text-white leading-none">{item.value ?? 0}</p>
-            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mt-0.5">{item.label}</p>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

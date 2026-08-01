@@ -54,10 +54,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Flow State" />
         <link rel="apple-touch-icon" href="/images/logo-pwa.png" />
+        {/* Material Symbols for the new design system */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        />
       </head>
       <body suppressHydrationWarning className={cn(outfit.className, outfit.variable)}>
         <NextTopLoader
-          color="#8b5cf6"
+          color="#ffb68d"
           initialPosition={0.08}
           crawlSpeed={200}
           height={3}
@@ -65,7 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           showSpinner={false}
           easing="ease"
           speed={200}
-          shadow="0 0 10px #8b5cf6,0 0 5px #8b5cf6"
+          shadow="0 0 10px #ffb68d,0 0 5px #ff8a3d"
         />
         <Providers>
           {children}

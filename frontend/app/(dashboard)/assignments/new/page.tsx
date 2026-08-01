@@ -1,309 +1,268 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { assignmentsApi, libraryApi } from '@/lib/api'
-import { ArrowLeft, Upload, CheckCircle2, X, Plus, FileText, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 export default function NewAssignmentPage() {
   const router = useRouter()
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
-  const imageRef = useRef<HTMLInputElement>(null)
-
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [instructions, setInstructions] = useState('')
   const [dueDate, setDueDate] = useState('')
-  const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [wordCount, setWordCount] = useState(500)
+  const [files, setFiles] = useState<File[]>([])
   const [selectedResources, setSelectedResources] = useState<number[]>([])
 
-  const { data: resData } = useQuery({ 
-    queryKey: ['resources'], 
-    queryFn: () => libraryApi.getResources().then(r => r.data) 
+  const { data: resourcesData } = useQuery({
+    queryKey: ['resources'],
+    queryFn: () => libraryApi.getResources().then(r => r.data),
   })
-  const resources = resData?.results || []
+  const resources = resourcesData?.results || []
 
   const createMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const fd = new FormData()
       fd.append('title', title)
-      if (subject) fd.append('subject', subject)
-      if (instructions) fd.append('instructions', instructions)
+      fd.append('subject', subject)
+      fd.append('instructions', instructions)
       if (dueDate) fd.append('due_date', dueDate)
-      if (pdfFile) fd.append('file', pdfFile)
-      
-      // We'll send images as 'image_sources'
-      imageFiles.forEach(file => {
-        fd.append('image_sources', file)
-      })
-      
-      selectedResources.forEach(id => fd.append('resources', String(id)))
-      return assignmentsApi.create(fd)
+      if (files[0]) fd.append('file', files[0])
+      const res = await assignmentsApi.create(fd)
+      // Link resources
+      for (const rid of selectedResources) {
+        try { await assignmentsApi.update(res.data.id, { resources: [...selectedResources] }) } catch {}
+      }
+      return res
     },
     onSuccess: (res) => {
-      toast.success('Assignment initialized successfully!')
-      qc.invalidateQueries({ queryKey: ['assignments'] })
+      toast.success('Assignment created! AI is generating your draft…')
+      queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      assignmentsApi.solve(res.data.id).catch(() => {})
       router.push(`/assignments/${res.data.id}`)
     },
-    onError: (e: any) => {
-      toast.error(e?.response?.data?.detail || 'Failed to initialize assignment.')
-    }
+    onError: () => toast.error('Failed to create assignment.'),
   })
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files)
-      setImageFiles(prev => [...prev, ...newFiles])
-    }
-  }
-
-  const removeImage = (index: number) => {
-    setImageFiles(prev => prev.filter((_, i) => i !== index))
-  }
+  const aiReadiness = Math.min(100, (title ? 30 : 0) + (subject ? 20 : 0) + (instructions.length > 50 ? 50 : instructions.length))
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
-      {/* Header */}
-      <div className="mb-10 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link href="/assignments" className="group flex items-center justify-center w-12 h-12 rounded-2xl bg-white/5 border border-white/10 hover:border-orange-500/50 transition-all">
-            <ArrowLeft className="w-5 h-5 text-slate-400 group-hover:text-orange-500 transition-colors" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 rounded-md bg-orange-500/10 flex items-center justify-center">
-                <Sparkles className="w-3 h-3 text-orange-500" />
-              </div>
-              <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Create</span>
-            </div>
-            <h1 className="text-3xl font-black text-white tracking-tight">New Assignment</h1>
-          </div>
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
+
+      <div className="flex items-center gap-base mb-stack-lg">
+        <Link href="/assignments" className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-all">
+          <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+        </Link>
+        <div>
+          <h1 className="text-[28px] font-bold text-primary flex items-center gap-base">
+            <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+            Plan Your Mission
+          </h1>
+          <p className="text-on-surface-variant text-[15px] mt-1">Tell me what we&apos;re working on, and I&apos;ll help you build an amazing outline!</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-[#111] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
-            <div className="p-8 sm:p-10 space-y-10">
-              
-              {/* Step 1: Identity */}
-              <section className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 font-black text-sm border border-orange-500/20">1</div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">Basic Information</h3>
-                </div>
-                
-                <div className="space-y-5 pl-11">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Assignment Title <span className="text-orange-500">*</span></label>
-                    <input 
-                      value={title} onChange={e => setTitle(e.target.value)} 
-                      placeholder="e.g. Advanced Thermodynamics Synthesis" 
-                      className="input h-14 text-base font-bold bg-white/5 border-white/10 focus:border-orange-500/50 rounded-2xl" 
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Subject Area</label>
-                      <input 
-                        value={subject} onChange={e => setSubject(e.target.value)} 
-                        placeholder="e.g. Physics" 
-                        className="input h-14 font-bold bg-white/5 border-white/10 focus:border-orange-500/50 rounded-2xl" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Submission Deadline</label>
-                      <input 
-                        type="datetime-local" value={dueDate} onChange={e => setDueDate(e.target.value)} 
-                        className="input h-14 font-bold bg-white/5 border-white/10 focus:border-orange-500/50 rounded-2xl text-slate-300" 
-                      />
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Step 2: Intelligence Context */}
-              <section className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 font-black text-sm border border-sky-500/20">2</div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">Details & Materials</h3>
-                </div>
-                
-                <div className="space-y-6 pl-11">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Detailed Instructions</label>
-                    <textarea 
-                      value={instructions} onChange={e=>setInstructions(e.target.value)} 
-                      placeholder="Paste your assignment prompt, specific requirements, or grading criteria here..." 
-                      className="input min-h-[160px] resize-none py-4 font-medium leading-relaxed bg-white/5 border-white/10 focus:border-sky-500/50 rounded-2xl" 
-                    />
-                  </div>
-
-                  {/* Multi-modal Uploads */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* PDF Upload */}
-                    <div 
-                      onClick={()=>fileRef.current?.click()} 
-                      className={cn(
-                        "relative p-6 rounded-[2rem] border-2 border-dashed transition-all cursor-pointer group flex flex-col items-center justify-center text-center",
-                        pdfFile ? "bg-emerald-500/5 border-emerald-500/30" : "bg-white/5 border-white/10 hover:border-sky-500/30"
-                      )}
-                    >
-                      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e=>setPdfFile(e.target.files?.[0]||null)} />
-                      <div className={cn(
-                        "w-12 h-12 rounded-2xl flex items-center justify-center mb-3 transition-all",
-                        pdfFile ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-slate-500 group-hover:scale-110"
-                      )}>
-                        <FileText className="w-6 h-6" />
-                      </div>
-                      <p className="text-xs font-bold text-white mb-1">{pdfFile ? pdfFile.name : 'Master PDF'}</p>
-                      <p className="text-[10px] font-medium text-slate-500">Core assignment document</p>
-                      {pdfFile && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setPdfFile(null) }} 
-                          className="absolute top-3 right-3 p-1.5 bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white transition-all"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Image Upload */}
-                    <div 
-                      onClick={()=>imageRef.current?.click()} 
-                      className={cn(
-                        "relative p-6 rounded-[2rem] border-2 border-dashed transition-all cursor-pointer group flex flex-col items-center justify-center text-center",
-                        imageFiles.length > 0 ? "bg-violet-500/5 border-violet-500/30" : "bg-white/5 border-white/10 hover:border-sky-500/30"
-                      )}
-                    >
-                      <input ref={imageRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
-                      <div className={cn(
-                        "w-12 h-12 rounded-2xl flex items-center justify-center mb-3 transition-all",
-                        imageFiles.length > 0 ? "bg-violet-500/20 text-violet-400" : "bg-white/5 text-slate-500 group-hover:scale-110"
-                      )}>
-                        <ImageIcon className="w-6 h-6" />
-                      </div>
-                      <p className="text-xs font-bold text-white mb-1">{imageFiles.length > 0 ? `${imageFiles.length} Images` : 'Visual Sources'}</p>
-                      <p className="text-[10px] font-medium text-slate-500">Charts, screenshots, or whiteboard</p>
-                    </div>
-                  </div>
-
-                  {/* Image Preview Strip */}
-                  {imageFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {imageFiles.map((file, i) => (
-                        <div key={i} className="relative group/img w-16 h-16 rounded-xl border border-white/10 overflow-hidden bg-white/5">
-                          <img src={URL.createObjectURL(file)} className="w-full h-full object-cover opacity-60" alt="" />
-                          <button 
-                            onClick={() => removeImage(i)}
-                            className="absolute inset-0 bg-rose-500/80 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                          >
-                            <X className="w-4 h-4 text-white" />
-                          </button>
-                        </div>
-                      ))}
-                      <button 
-                        onClick={()=>imageRef.current?.click()}
-                        className="w-16 h-16 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center hover:border-sky-500/30 text-slate-500 hover:text-sky-400 transition-all"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Step 3: Linked Knowledge */}
-              {resources.length > 0 && (
-                <section className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 font-black text-sm border border-emerald-500/20">3</div>
-                    <h3 className="text-lg font-bold text-white tracking-tight">Connected Resources</h3>
-                  </div>
-                  
-                  <div className="pl-11 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
-                    {resources.map((r:any) => (
-                      <label key={r.id} className={cn(
-                        'flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all', 
-                        selectedResources.includes(r.id) ? 'bg-orange-500/10 border-orange-500/30' : 'bg-white/5 border-white/5 hover:border-white/15'
-                      )}>
-                        <input type="checkbox" className="hidden" onChange={()=>setSelectedResources(s=>s.includes(r.id)?s.filter(x=>x!==r.id):[...s,r.id])} />
-                        <div className={cn("w-5 h-5 rounded-md border flex items-center justify-center transition-all", selectedResources.includes(r.id) ? "bg-orange-500 border-orange-500 text-white" : "border-white/20")}>
-                          {selectedResources.includes(r.id) && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-200 truncate">{r.title}</p>
-                          <p className="text-[10px] uppercase font-black text-slate-600 tracking-widest">{r.resource_type}</p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              )}
+      <div className="flex flex-col lg:flex-row gap-gutter">
+        {/* Form */}
+        <div className="flex-1 space-y-stack-md">
+          {/* Title + Subject */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+            <div className="space-y-base">
+              <label className="text-[13px] font-bold text-on-surface pl-2">Assignment Title *</label>
+              <div className="input-glow bg-surface-container rounded-[1rem] border-2 border-outline-variant p-1 transition-all">
+                <input
+                  className="w-full bg-transparent border-none focus:ring-0 text-[16px] p-stack-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none"
+                  placeholder="e.g. The Life of Honeybees"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                />
+              </div>
             </div>
-            
-            {/* Footer */}
-            <div className="px-8 sm:px-12 py-12 bg-white/2 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6">
-              <p className="hidden sm:block text-[10px] font-black text-slate-600 uppercase tracking-widest">Process takes ~20s</p>
-              <div className="flex gap-4 w-full sm:w-auto">
-                <Link href="/assignments" className="flex-1 sm:flex-none h-14 px-10 rounded-2xl border border-white/10 text-slate-400 font-bold hover:bg-white/5 transition-all flex items-center justify-center">Cancel</Link>
-                <button 
-                  onClick={()=>createMutation.mutate()} 
-                  disabled={createMutation.isPending || !title.trim() || (!instructions.trim() && !pdfFile && imageFiles.length === 0)} 
-                  className="flex-1 sm:flex-none h-14 px-10 rounded-2xl bg-orange-500 text-white font-black shadow-lg shadow-orange-500/20 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            <div className="space-y-base">
+              <label className="text-[13px] font-bold text-on-surface pl-2">Subject</label>
+              <div className="input-glow bg-surface-container rounded-[1rem] border-2 border-outline-variant p-1 transition-all">
+                <select
+                  className="w-full bg-transparent border-none focus:ring-0 text-[16px] p-stack-sm text-on-surface appearance-none outline-none"
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
                 >
-                  {createMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Initializing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5" />
-                      Create Assignment
-                    </>
-                  )}
-                </button>
+                  <option value="">Select subject…</option>
+                  <option>Science &amp; Nature</option>
+                  <option>Mathematics</option>
+                  <option>History</option>
+                  <option>English Literature</option>
+                  <option>Geography</option>
+                  <option>Computer Science</option>
+                  <option>Other</option>
+                </select>
               </div>
             </div>
           </div>
+
+          {/* Instructions */}
+          <div className="space-y-base">
+            <label className="text-[13px] font-bold text-on-surface pl-2">What is it about? *</label>
+            <div className="input-glow bg-surface-container rounded-[1rem] border-2 border-outline-variant p-1 transition-all">
+              <textarea
+                className="w-full bg-transparent border-none focus:ring-0 text-[16px] p-stack-sm text-on-surface placeholder:text-on-surface-variant/40 resize-none outline-none"
+                placeholder="Describe your topic here… the more details you give, the better your outline will be!"
+                rows={5}
+                value={instructions}
+                onChange={e => setInstructions(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Word Count + Due Date */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+            <div className="bg-surface-container rounded-[1rem] border-2 border-outline-variant p-stack-md space-y-stack-sm">
+              <div className="flex justify-between items-center">
+                <label className="text-[13px] font-bold text-on-surface">Target Word Count</label>
+                <span className="font-bold text-primary text-[14px]">{wordCount} words</span>
+              </div>
+              <input
+                type="range" min={100} max={2000} step={50} value={wordCount}
+                onChange={e => setWordCount(Number(e.target.value))}
+                className="w-full h-3 bg-surface-container-highest rounded-[1rem] appearance-none cursor-pointer accent-primary-container"
+              />
+              <div className="flex justify-between text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">
+                <span>Short</span><span>Detailed</span>
+              </div>
+            </div>
+            <div className="space-y-base">
+              <label className="text-[13px] font-bold text-on-surface pl-2">Due Date</label>
+              <div className="input-glow bg-surface-container rounded-[1rem] border-2 border-outline-variant p-1 transition-all h-[100px] flex items-center">
+                <input
+                  type="date"
+                  className="w-full bg-transparent border-none focus:ring-0 text-[16px] p-stack-sm text-on-surface outline-none"
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* File attachment */}
+          <div className="space-y-base">
+            <label className="text-[13px] font-bold text-on-surface pl-2">Add Sources (PDFs or Images)</label>
+            <div
+              className="border-2 border-dashed border-outline-variant rounded-[1.5rem] p-stack-lg bg-surface-container-low hover:bg-surface-container-high transition-colors flex flex-col items-center justify-center gap-base cursor-pointer group"
+              onClick={() => fileRef.current?.click()}
+            >
+              <div className="w-16 h-16 rounded-full bg-primary-container/10 flex items-center justify-center text-primary-container group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-[32px]">cloud_upload</span>
+              </div>
+              <p className="text-[15px] text-on-surface-variant text-center">Drag files here or <span className="text-primary font-bold">click to browse</span></p>
+              <p className="text-[12px] text-on-surface-variant/60">Maximum size: 25MB per file</p>
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-base mt-2">
+                  {files.map((f, i) => (
+                    <span key={i} className="bg-primary/10 text-primary text-[12px] px-3 py-1 rounded-full font-bold">{f.name}</span>
+                  ))}
+                </div>
+              )}
+              <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" multiple onChange={e => setFiles(Array.from(e.target.files || []))} />
+            </div>
+          </div>
+
+          {/* Library resources */}
+          {resources.length > 0 && (
+            <div className="space-y-base">
+              <label className="text-[13px] font-bold text-on-surface pl-2">Link Library Resources (optional)</label>
+              <div className="flex flex-wrap gap-base">
+                {resources.slice(0, 8).map((r: any) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedResources(prev => prev.includes(r.id) ? prev.filter(x => x !== r.id) : [...prev, r.id])}
+                    className={cn('text-[13px] px-3 py-1.5 rounded-full border transition-all font-medium', selectedResources.includes(r.id) ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface-variant hover:border-primary/40')}
+                  >
+                    {r.title.slice(0, 24)}{r.title.length > 24 ? '…' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CTA */}
+          <div className="pt-stack-md">
+            <button
+              onClick={() => { if (!title.trim()) { toast.error('Title required'); return } if (!instructions.trim()) { toast.error('Instructions required'); return } createMutation.mutate() }}
+              disabled={createMutation.isPending}
+              className="w-full py-stack-md bg-primary-container text-on-primary-container rounded-[1rem] text-[20px] font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-base btn-squishy hover:brightness-110 transition-all disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+              {createMutation.isPending ? 'Creating…' : 'Generate with AI'}
+            </button>
+            <p className="text-center text-on-surface-variant/60 mt-stack-sm text-[13px]">FlowState AI helps you organize thoughts, not write the whole thing!</p>
+          </div>
         </div>
 
-        {/* Info Sidebar */}
-        <div className="space-y-6">
-          <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-orange-500 to-orange-600 shadow-2xl shadow-orange-500/20">
-            <h4 className="text-white font-black text-xl tracking-tight mb-4 leading-tight">How it works</h4>
-            <ul className="space-y-4">
-              {[
-                'Upload PDFs and images for context',
-                'Get a well-structured academic draft',
-                'AI and Plagiarism removal built-in',
-                'Download ready-to-submit documents'
-              ].map((item, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <CheckCircle2 className="w-3 h-3 text-white" />
+        {/* Live Blueprint sidebar */}
+        <aside className="w-full lg:w-[380px] shrink-0">
+          <div className="glass-panel rounded-[1.5rem] border-2 border-outline-variant sticky top-8 overflow-hidden shadow-2xl">
+            <div className="h-16 bg-gradient-to-r from-primary-container/20 to-surface-container flex items-end p-stack-md">
+              <h3 className="text-[16px] font-bold text-primary flex items-center gap-base">
+                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>visibility</span>
+                Live Blueprint
+              </h3>
+            </div>
+            <div className="p-stack-md space-y-stack-md">
+              {/* Progress */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[13px] font-bold text-on-surface-variant">AI Readiness</span>
+                  <span className={cn('text-[13px] font-bold', aiReadiness >= 80 ? 'text-primary' : 'text-on-surface-variant')}>
+                    {aiReadiness >= 80 ? 'Ready to launch!' : 'Awaiting input…'}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${aiReadiness}%` }} />
+                </div>
+              </div>
+
+              {/* Preview items */}
+              <div className="space-y-stack-sm">
+                {title ? (
+                  <div className="bg-surface-container rounded-[1rem] p-stack-sm border border-outline-variant flex gap-stack-sm items-start">
+                    <span className="material-symbols-outlined text-primary-container text-[20px]">article</span>
+                    <div className="space-y-1 flex-1">
+                      <p className="text-[14px] font-bold text-on-surface">{title}</p>
+                      {subject && <p className="text-[12px] text-on-surface-variant">{subject}</p>}
+                    </div>
                   </div>
-                  <span className="text-sm font-bold text-white/90 leading-snug">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+                ) : (
+                  <div className="bg-surface-container/50 rounded-[1rem] p-stack-sm border border-outline-variant/30 flex gap-stack-sm items-start animate-pulse">
+                    <span className="material-symbols-outlined text-on-surface-variant/60">article</span>
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-outline-variant/30 rounded w-3/4"></div>
+                      <div className="h-3 bg-outline-variant/20 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                )}
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="bg-surface-container/50 rounded-[1rem] p-stack-sm border border-outline-variant/30 flex gap-stack-sm items-start opacity-50">
+                    <span className="material-symbols-outlined text-on-surface-variant/60">segment</span>
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-outline-variant/30 rounded" style={{ width: `${[83, 66, 50][i]}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-          <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/5">
-             <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Integrity Suite</h4>
-             <p className="text-xs font-semibold text-slate-400 leading-relaxed">
-               All synthesized assignments undergo a dual-audit for AI probability and originality. Removal protocols can be engaged post-initialization.
-             </p>
+              <div className="rounded-[1rem] bg-tertiary-container/10 p-stack-sm border border-tertiary/20">
+                <p className="text-[12px] text-tertiary leading-relaxed">
+                  <span className="font-bold">Tip:</span> Adding sources helps the AI provide more accurate citations for your work!
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   )
