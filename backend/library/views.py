@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from .models import Resource, Flashcard, Quiz, Deck, ResourceImage
 from .serializers import (
-    ResourceSerializer, ResourceUploadSerializer,
+    ResourceSerializer, ResourceListSerializer, ResourceUploadSerializer,
     FlashcardSerializer, QuizSerializer, DeckSerializer
 )
 from .youtube import process_youtube_url
@@ -78,10 +78,17 @@ class ResourceListCreateView(generics.ListCreateAPIView):
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return ResourceUploadSerializer
-        return ResourceSerializer
+        return ResourceListSerializer
 
     def get_queryset(self):
-        qs = Resource.objects.filter(owner=self.request.user).select_related('owner').prefetch_related('extracted_images')
+        # Defer the two heaviest columns — ai_notes_json and ai_summary are
+        # large blobs only needed on the detail page, not the library grid.
+        qs = (
+            Resource.objects
+            .filter(owner=self.request.user)
+            .select_related('owner')
+            .defer('ai_notes_json', 'ai_summary')
+        )
         resource_type = self.request.query_params.get('type')
         if resource_type:
             qs = qs.filter(resource_type=resource_type)

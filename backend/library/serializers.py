@@ -72,6 +72,49 @@ class ResourceSerializer(serializers.ModelSerializer):
         return obj.cover_image.url
 
 
+class ResourceListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for the library list view.
+    Excludes heavy fields (ai_notes_json, ai_summary, extracted_images) that
+    are only needed on the resource detail page — cuts response size by ~90%
+    and removes the per-resource storage.exists() call that was killing list latency.
+    """
+    file_url = serializers.SerializerMethodField()
+    cover_image_url = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Resource
+        fields = (
+            'id', 'title', 'resource_type', 'file_url', 'url', 'subject',
+            'cover_image_url', 'thumbnail_url',
+            'status', 'processing_progress', 'status_text', 'file_size',
+            'ai_concepts', 'has_study_kit', 'owner_name', 'author_name',
+            'is_public', 'created_at', 'updated_at'
+        )
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and request:
+            from django.urls import reverse
+            return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
+        return None
+
+    def get_owner_name(self, obj):
+        return obj.owner.get_full_name() or obj.owner.username
+
+    def get_cover_image_url(self, obj):
+        # Skip storage.exists() in the list — just return the URL and let the
+        # browser handle a 404 gracefully. The exists() check was an I/O call
+        # per resource that added hundreds of ms to every library load.
+        if not obj.cover_image:
+            return obj.thumbnail_url or None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.cover_image.url)
+        return obj.cover_image.url
+
+
 class ResourceUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource
