@@ -390,6 +390,9 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         output_transcript = server_content.get('outputTranscription', {})
         if output_transcript.get('text'):
             text = output_transcript['text'].strip()
+            # Strip leaked thinking/planning text (bold markdown = internal reasoning)
+            import re
+            text = re.sub(r'\*\*[^*]+\*\*', '', text).strip()
             if text:
                 self.transcript_log.append(('ai', text))
                 await self._send({'type': 'transcript_ai', 'text': text})
@@ -516,6 +519,13 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 "2. When explaining, always include one of the visual keywords ('stomach', 'liver', 'intestines', 'pancreas', 'salivary glands', 'teeth', 'tongue', 'esophagus') so the stage gets updated. "
                 "3. Never break character. Never state that you cannot show 3D models. You CAN show them by simply mentioning them by name in your speech!"
             )
+        elif self.technique == 'podcast_qa':
+            role_desc = (
+                "You are Aoede, a warm and knowledgeable podcast host. "
+                "The listener is asking you a question about the topic mid-episode. "
+                "Answer directly and conversationally in 2-3 sentences — like you're talking to a friend. "
+                "Be engaging, never robotic. No bullet points, no lists. Pure spoken audio only."
+            )
         else:
             role_desc = (
                 "You are a friendly study assistant. Engage the user on the study material."
@@ -529,7 +539,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             "1. This is a VOICE conversation — speak naturally, not like a textbook.\n"
             "2. Keep ALL responses under 3 sentences unless the technique requires more.\n"
             "3. ALWAYS wait for the student to finish speaking before responding.\n"
-            "4. Never break character or mention you are an AI language model."
+            "4. Never break character or mention you are an AI language model.\n"
+            "5. NEVER output your reasoning, planning, or thinking process. Speak only your final reply."
         )
 
     async def _send(self, data: dict):

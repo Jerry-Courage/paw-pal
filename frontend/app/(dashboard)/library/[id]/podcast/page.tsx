@@ -188,45 +188,42 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       if (micCtx.state === 'suspended') await micCtx.resume()
 
       const source = micCtx.createMediaStreamSource(stream)
-      const processor = micCtx.createScriptProcessor(512, 1, 1)
+      // 4096 samples at ~48kHz = ~85ms per callback, downsampled to ~27ms at 16kHz
+      // Large enough for Gemini VAD to reliably detect speech
+      const processor = micCtx.createScriptProcessor(4096, 1, 1)
       liveMicProcessorRef.current = processor
 
       const nativeRate = micCtx.sampleRate  // typically 44100 or 48000
+      const targetRate = 16000
 
-      const sendQueue: string[] = []
-      let sending = false
-      const drainQueue = () => {
-        if (sending || sendQueue.length === 0) return
-        if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) {
-          sendQueue.length = 0; return
-        }
-        sending = true
-        const chunk = sendQueue.shift()!
-        try { liveWsRef.current.send(JSON.stringify({ type: 'audio', data: chunk })) } catch {}
-        sending = false
-        if (sendQueue.length > 0) drainQueue()
-      }
+      // Accumulate ~100ms of 16kHz audio before sending — gives VAD enough signal
+      let accumPcm: number[] = []
+      const SEND_EVERY_SAMPLES = targetRate / 10  // 1600 samples = 100ms at 16kHz
 
       processor.onaudioprocess = (e) => {
         if (liveMicMutedRef.current) return
         if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
         const float32 = e.inputBuffer.getChannelData(0)
 
-        // Downsample from native rate to 16kHz for Gemini
-        const targetRate = 16000
+        // Downsample from native rate to 16kHz
         const ratio = nativeRate / targetRate
         const outLen = Math.floor(float32.length / ratio)
-        const out = new Int16Array(outLen)
         for (let i = 0; i < outLen; i++) {
           const idx = Math.min(Math.floor(i * ratio), float32.length - 1)
-          out[i] = Math.max(-32768, Math.min(32767, float32[idx] * 32768))
+          accumPcm.push(Math.max(-32768, Math.min(32767, float32[idx] * 32768)))
         }
-        const bytes = new Uint8Array(out.buffer)
-        let binary = ''
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-        sendQueue.push(btoa(binary))
-        if (sendQueue.length > 8) sendQueue.shift()
-        drainQueue()
+
+        // Send when we have enough accumulated
+        if (accumPcm.length >= SEND_EVERY_SAMPLES) {
+          const out = new Int16Array(accumPcm)
+          accumPcm = []
+          const bytes = new Uint8Array(out.buffer)
+          let binary = ''
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+          try {
+            liveWsRef.current.send(JSON.stringify({ type: 'audio', data: btoa(binary) }))
+          } catch {}
+        }
       }
 
       source.connect(processor)
