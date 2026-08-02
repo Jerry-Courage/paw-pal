@@ -66,6 +66,12 @@ export const authApi = {
     api.post('/auth/award-xp/', { amount, reason, resource_id: resourceId }),
 }
 
+// TTS — Gemini Live voices
+export const ttsApi = {
+  speak: (text: string, voice = 'Aoede') =>
+    api.post('/ai/tts/', { text, voice }, { responseType: 'blob' }),
+}
+
 export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BG8EkGI7soGE5KMcQs4lKSSGAW6qfwdjhre9WCJpPtidRi403ZfoNSfhh9aCVGH21PDLrXiuMtr8yXMjYNxSnxY'
 
 // Library

@@ -1093,3 +1093,104 @@ class AgentAudioView(APIView):
             'execution_result': execution_result,
             'audio_url': audio_url
         })
+
+
+class TextToSpeechView(APIView):
+    """
+    POST /api/ai/tts/
+    Body: { "text": "...", "voice": "Aoede" }
+    Returns: audio/wav binary (PCM16 at 24kHz, mono)
+
+    Uses Gemini 2.5 Flash TTS to generate high-quality speech with
+    the same voices available in the exam prep voice tutor.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    VOICE_OPTIONS = ['Puck', 'Aoede', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe']
+    DEFAULT_VOICE = 'Aoede'
+
+    def post(self, request):
+        import struct
+        import requests as req_lib
+
+        text = request.data.get('text', '').strip()
+        voice = request.data.get('voice', self.DEFAULT_VOICE)
+
+        if not text:
+            return Response({'error': 'text is required'}, status=400)
+        if len(text) > 1000:
+            text = text[:1000]
+        if voice not in self.VOICE_OPTIONS:
+            voice = self.DEFAULT_VOICE
+
+        api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
+        if not api_key:
+            return Response({'error': 'TTS not configured'}, status=503)
+
+        try:
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+            payload = {
+                'contents': [{'parts': [{'text': text}]}],
+                'generationConfig': {
+                    'responseModalities': ['AUDIO'],
+                    'speechConfig': {
+                        'voiceConfig': {
+                            'prebuiltVoiceConfig': {'voiceName': voice}
+                        }
+                    }
+                }
+            }
+            resp = req_lib.post(url, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Extract base64 audio from response
+            audio_b64 = (
+                data.get('candidates', [{}])[0]
+                .get('content', {})
+                .get('parts', [{}])[0]
+                .get('inlineData', {})
+                .get('data', '')
+            )
+            if not audio_b64:
+                return Response({'error': 'No audio in response'}, status=500)
+
+            import base64
+            pcm_bytes = base64.b64decode(audio_b64)
+
+            # Wrap raw PCM16 in a WAV container so the browser can play it directly
+            sample_rate = 24000
+            num_channels = 1
+            bits_per_sample = 16
+            num_samples = len(pcm_bytes) // (bits_per_sample // 8)
+            data_size = len(pcm_bytes)
+            byte_rate = sample_rate * num_channels * bits_per_sample // 8
+            block_align = num_channels * bits_per_sample // 8
+
+            wav_header = struct.pack(
+                '<4sI4s4sIHHIIHH4sI',
+                b'RIFF',
+                36 + data_size,
+                b'WAVE',
+                b'fmt ',
+                16,              # chunk size
+                1,               # PCM format
+                num_channels,
+                sample_rate,
+                byte_rate,
+                block_align,
+                bits_per_sample,
+                b'data',
+                data_size,
+            )
+            wav_data = wav_header + pcm_bytes
+
+            from django.http import HttpResponse
+            return HttpResponse(wav_data, content_type='audio/wav')
+
+        except req_lib.exceptions.Timeout:
+            return Response({'error': 'TTS request timed out'}, status=504)
+        except Exception as e:
+            logger.error(f'[TTS] Error: {e}')
+            return Response({'error': str(e)}, status=500)

@@ -8,6 +8,7 @@ from .views import (
     SaveContentView, GradeAnswerView,
     VisionMessageView, GenerateDiagramView, GenerateImageView,
     AgentView, AgentStreamView, AgentAudioView,
+    TextToSpeechView,
 )
 
 from .views_podcast import (
@@ -40,4 +41,6 @@ urlpatterns = [
     path('resources/<int:resource_id>/chapters/', ChapterSummariesView.as_view()),
     path('resources/<int:resource_id>/save/', SaveContentView.as_view()),
     path('resources/<int:resource_id>/grade/', GradeAnswerView.as_view()),
+    # Gemini TTS — used by mind map avatar and other features
+    path('tts/', TextToSpeechView.as_view(), name='tts'),
 ]
