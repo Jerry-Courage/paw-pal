@@ -7,7 +7,12 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
-import { normalizeReadableMath } from '@/lib/mathFormatting'
+import { normalizeReadableMath, normalizeForRendering } from '@/lib/mathFormatting'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 interface Flashcard {
   id: number
@@ -280,9 +285,11 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
 
               {/* Question text — centered vertically */}
               <div className="flex-1 flex items-center justify-center text-center py-4">
-                <p className="text-[22px] md:text-[26px] font-bold text-on-surface leading-snug">
-                  {normalizeReadableMath(card?.question || '')}
-                </p>
+                <div className="text-[22px] md:text-[26px] font-bold text-on-surface leading-snug prose prose-invert max-w-none [&>*]:text-[22px] [&>*]:md:text-[26px] [&>*]:font-bold [&>*]:text-center">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {normalizeForRendering(card?.question || '')}
+                  </ReactMarkdown>
+                </div>
               </div>
 
               {/* Hint + watermark row */}
@@ -310,9 +317,11 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
 
               {/* Answer text */}
               <div className="flex-1 flex items-center justify-center text-center py-4">
-                <p className="text-[20px] md:text-[24px] font-bold text-on-surface leading-relaxed">
-                  {normalizeReadableMath(card?.answer || '')}
-                </p>
+                <div className="text-[20px] md:text-[24px] font-bold text-on-surface leading-relaxed prose prose-invert max-w-none [&>*]:text-[20px] [&>*]:md:text-[24px] [&>*]:font-bold [&>*]:text-center">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {normalizeForRendering(card?.answer || '')}
+                  </ReactMarkdown>
+                </div>
               </div>
 
               {/* Difficulty badge */}
