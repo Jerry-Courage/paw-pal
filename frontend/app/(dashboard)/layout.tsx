@@ -57,9 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     (FULL_VIEWPORT_PREFIXES.some(prefix => pathname.startsWith(prefix)) &&
     pathname.split('/').length > 3) ||
     // workspace/[id] pages (exactly 3 segments: /workspace/id)
-    /^\/workspace\/[^/]+$/.test(pathname) ||
-    // library/[id] resource hub
-    /^\/library\/[^/]+$/.test(pathname)
+    /^\/workspace\/[^/]+$/.test(pathname)
 
   // Assignment detail (not /new) gets full viewport
   const isAssignmentDetail = pathname.includes('/assignments/') && !pathname.endsWith('/new')
