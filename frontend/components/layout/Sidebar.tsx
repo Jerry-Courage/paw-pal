@@ -1,10 +1,11 @@
 'use client'
 
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
-import { authApi, paymentsApi, workspaceApi } from '@/lib/api'
+import { paymentsApi, workspaceApi } from '@/lib/api'
 import { cn, getInitials } from '@/lib/utils'
 
 const NAV_ITEMS = [
@@ -20,8 +21,9 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const [expanded, setExpanded] = useState(false)
+  const leaveTimer = useRef<NodeJS.Timeout | null>(null)
   const name = session?.user?.name || session?.user?.email || 'Student'
-  const email = session?.user?.email || ''
 
   const { data: subStatus } = useQuery({
     queryKey: ['subscription-status'],
@@ -43,32 +45,45 @@ export default function Sidebar() {
   const notesLimit = subStatus?.notes_limit ?? 5
   const isPremium = subStatus?.is_premium ?? false
 
-  return (
-    <aside className="fixed left-0 top-0 h-screen w-64 flex flex-col bg-surface-container-low rounded-r-[1rem] shadow-lg z-40 hidden md:flex">
-      {/* Brand */}
-      <div className="p-stack-md pt-stack-lg mb-base">
-        <Link href="/dashboard">
-          <h1 className="text-[22px] font-bold text-primary leading-none">FlowState</h1>
-        </Link>
-      </div>
+  const handleMouseEnter = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current)
+    setExpanded(true)
+  }
 
-      {/* User info */}
-      <div className="flex items-center gap-base px-stack-md mb-stack-md">
+  const handleMouseLeave = () => {
+    leaveTimer.current = setTimeout(() => setExpanded(false), 300)
+  }
+
+  return (
+    <aside
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={cn(
+        'fixed left-0 top-0 h-screen flex flex-col bg-surface-container-low shadow-lg z-40 hidden md:flex',
+        'transition-[width] duration-300 ease-in-out overflow-hidden',
+        // Collapsed: icon-only (w-[68px]), Expanded: full width (w-64)
+        expanded ? 'w-64 rounded-r-[1rem]' : 'w-[68px] rounded-r-[1rem]'
+      )}
+    >
+      {/* ── Brand ───────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-[14px] pt-6 pb-4 shrink-0 overflow-hidden">
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-sm shrink-0 overflow-hidden">
           {(session?.user as any)?.avatar ? (
             <img src={(session?.user as any).avatar} alt={name} className="w-full h-full object-cover" />
           ) : (
-            <span>{getInitials(name)}</span>
+            <span className="text-[13px]">{getInitials(name)}</span>
           )}
         </div>
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold text-on-surface truncate">Welcome back!</p>
-          <p className="text-[11px] text-on-surface-variant truncate">{name}</p>
+        <div className={cn('min-w-0 transition-all duration-200', expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 pointer-events-none')}>
+          <Link href="/dashboard">
+            <h1 className="text-[18px] font-bold text-primary leading-none whitespace-nowrap">FlowState</h1>
+          </Link>
+          <p className="text-[11px] text-on-surface-variant truncate whitespace-nowrap">{name}</p>
         </div>
       </div>
 
-      {/* Nav links */}
-      <nav className="flex flex-col gap-base px-stack-sm flex-1 overflow-y-auto scrollbar-hide">
+      {/* ── Nav links ───────────────────────────────── */}
+      <nav className="flex flex-col gap-1 px-[10px] flex-1 overflow-y-auto scrollbar-hide">
         {NAV_ITEMS.map(item => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           const showBadge = item.href === '/workspace' && totalUnread > 0
@@ -77,37 +92,55 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={!expanded ? item.label : undefined}
               className={cn(
-                'flex items-center gap-base px-stack-sm py-[10px] rounded-[1rem] font-[600] text-[14px] transition-all relative',
+                'flex items-center gap-3 px-[10px] py-[10px] rounded-[1rem] font-semibold text-[14px] transition-all relative',
+                'whitespace-nowrap overflow-hidden',
                 active
                   ? 'bg-primary-container text-on-primary-container shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none'
                   : 'text-on-surface-variant hover:bg-surface-container-high'
               )}
             >
+              {/* Icon — always visible */}
               <span
-                className="material-symbols-outlined text-[22px]"
+                className="material-symbols-outlined text-[22px] shrink-0"
                 style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}
               >
                 {item.icon}
               </span>
-              <span>{item.label}</span>
-              {showBadge && (
-                <span className="ml-auto bg-primary text-on-primary text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">
+
+              {/* Label — only visible when expanded */}
+              <span className={cn(
+                'transition-all duration-200 flex-1',
+                expanded ? 'opacity-100' : 'opacity-0 w-0'
+              )}>
+                {item.label}
+              </span>
+
+              {/* Unread badge */}
+              {showBadge && expanded && (
+                <span className="ml-auto bg-primary text-on-primary text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center shrink-0">
                   {totalUnread > 9 ? '9+' : totalUnread}
                 </span>
+              )}
+
+              {/* Dot badge when collapsed */}
+              {showBadge && !expanded && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
               )}
             </Link>
           )
         })}
       </nav>
 
-      {/* Bottom section */}
-      <div className="p-stack-md mt-auto space-y-stack-sm">
-        {/* Free tier usage bar */}
-        {!isPremium && (
-          <div className="bg-surface-container rounded-[1rem] p-stack-sm">
+      {/* ── Bottom section ──────────────────────────── */}
+      <div className="px-[10px] pb-4 mt-auto space-y-2 shrink-0">
+
+        {/* Free tier usage — only when expanded */}
+        {!isPremium && expanded && (
+          <div className="bg-surface-container rounded-[1rem] p-3 overflow-hidden">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">Study Kits</span>
+              <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider whitespace-nowrap">Study Kits</span>
               <span className="text-[11px] font-bold text-primary">{notesUsed}/{notesLimit}</span>
             </div>
             <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
@@ -123,36 +156,52 @@ export default function Sidebar() {
         {!isPremium && (
           <Link
             href="/upgrade"
-            className="flex items-center gap-base px-stack-sm py-[10px] rounded-[1rem] bg-secondary-container text-on-secondary-container font-bold text-[13px] hover:brightness-110 transition-all"
+            title={!expanded ? 'Go Premium' : undefined}
+            className={cn(
+              'flex items-center gap-3 px-[10px] py-[10px] rounded-[1rem] bg-secondary-container text-on-secondary-container font-bold text-[13px] hover:brightness-110 transition-all overflow-hidden whitespace-nowrap',
+            )}
           >
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+            <span className="material-symbols-outlined text-[20px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
               workspace_premium
             </span>
-            Go Premium
+            <span className={cn('transition-all duration-200', expanded ? 'opacity-100' : 'opacity-0 w-0')}>
+              Go Premium
+            </span>
           </Link>
         )}
 
         {isPremium && (
-          <div className="flex items-center gap-base px-stack-sm py-[10px] rounded-[1rem] bg-primary/10 text-primary text-[13px] font-bold">
-            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <div
+            title={!expanded ? 'Premium Active' : undefined}
+            className="flex items-center gap-3 px-[10px] py-[10px] rounded-[1rem] bg-primary/10 text-primary text-[13px] font-bold overflow-hidden whitespace-nowrap"
+          >
+            <span className="material-symbols-outlined text-[18px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
               workspace_premium
             </span>
-            Premium Active
+            <span className={cn('transition-all duration-200', expanded ? 'opacity-100' : 'opacity-0 w-0')}>
+              Premium Active
+            </span>
           </div>
         )}
 
         {/* Settings + Logout */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-1">
           <Link
             href="/settings"
-            className="flex items-center gap-base px-stack-sm py-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all text-[13px] font-semibold"
+            title={!expanded ? 'Settings' : undefined}
+            className={cn(
+              'flex items-center gap-3 px-[10px] py-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all text-[13px] font-semibold overflow-hidden whitespace-nowrap',
+              expanded ? 'flex-1' : ''
+            )}
           >
-            <span className="material-symbols-outlined text-[18px]">settings</span>
-            Settings
+            <span className="material-symbols-outlined text-[18px] shrink-0">settings</span>
+            <span className={cn('transition-all duration-200', expanded ? 'opacity-100' : 'opacity-0 w-0')}>
+              Settings
+            </span>
           </Link>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high hover:text-error transition-all"
+            className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high hover:text-error transition-all shrink-0"
             title="Log out"
           >
             <span className="material-symbols-outlined text-[18px]">logout</span>
