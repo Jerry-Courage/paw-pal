@@ -174,7 +174,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                             }
                         },
                         'temperature': 0.8,
-                        'maxOutputTokens': 150,
+                        'maxOutputTokens': 800,  # enough for full conversational responses
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -182,7 +182,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 800,  # 800ms gives natural word pauses without false cutoffs
+                            'silenceDurationMs': 1200,  # more forgiving for conversational pauses
                         }
                     },
                 }

@@ -564,27 +564,32 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             )}
           </div>
 
-          {/* Ask the Hosts button */}
+          {/* Ask the Hosts — voice-first live Q&A */}
           <div className="px-5 py-4 border-t border-white/5 shrink-0">
             {liveMode === 'off' ? (
+              /* ── Idle: big CTA button ── */
               <button onClick={startLiveQA}
-                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-[14px] hover:bg-indigo-500/25 transition-all">
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-[14px] hover:bg-indigo-500/25 active:scale-[0.98] transition-all">
                 <MessageSquare className="w-4 h-4" />
                 Ask the Hosts a Question
               </button>
             ) : liveMode === 'connecting' ? (
+              /* ── Connecting ── */
               <div className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-[#1a1a1a] border border-white/8">
                 <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
                 <span className="text-slate-400 font-bold text-sm">Connecting to hosts…</span>
               </div>
             ) : (
+              /* ── Active: voice-first UI ── */
               <div className="space-y-3">
-                {/* Live Q&A transcript */}
+                {/* Recent exchange */}
                 {liveTranscript.length > 0 && (
-                  <div className="max-h-32 overflow-y-auto space-y-2 scrollbar-hide">
-                    {liveTranscript.slice(-4).map((entry, i) => (
-                      <div key={i} className={cn('rounded-xl px-3 py-2 text-sm',
-                        entry.role === 'ai' ? 'bg-indigo-500/8 border border-indigo-500/15 text-slate-300' : 'bg-orange-500/8 border border-orange-500/15 text-slate-300')}>
+                  <div className="max-h-28 overflow-y-auto space-y-2 scrollbar-hide">
+                    {liveTranscript.slice(-3).map((entry, i) => (
+                      <div key={i} className={cn('rounded-xl px-3 py-2 text-[13px]',
+                        entry.role === 'ai'
+                          ? 'bg-indigo-500/8 border border-indigo-500/15 text-slate-300'
+                          : 'bg-orange-500/8 border border-orange-500/15 text-slate-300')}>
                         <span className={cn('text-[10px] font-black uppercase tracking-wider mr-2',
                           entry.role === 'ai' ? 'text-indigo-400' : 'text-orange-400')}>
                           {entry.role === 'ai' ? 'Host' : 'You'}
@@ -594,18 +599,77 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
                     ))}
                   </div>
                 )}
-                {/* Text input */}
-                <div className="flex gap-2">
-                  <input type="text" value={liveTextInput} onChange={e => setLiveTextInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendLiveTextMessage() } }}
-                    placeholder="Ask the hosts anything…"
-                    className="flex-1 bg-[#1a1a1a] border border-white/8 text-white text-sm px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/40 placeholder:text-slate-600" />
-                  <button onClick={sendLiveTextMessage} disabled={!liveTextInput.trim() || liveSendingText}
-                    className="px-4 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-400 transition-all disabled:opacity-30">
-                    {liveSendingText ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+
+                {/* Voice controls row */}
+                <div className="flex items-center gap-3">
+                  {/* Big mic button — primary action */}
+                  <button
+                    onClick={() => {
+                      if (liveMicMutedRef.current) {
+                        liveMicMutedRef.current = false
+                        setIsRecording(true)
+                        toast('🎤 Mic on — speak your question', { duration: 2000 })
+                      } else {
+                        liveMicMutedRef.current = true
+                        setIsRecording(false)
+                        toast('🔇 Mic muted', { duration: 1500 })
+                      }
+                    }}
+                    className={cn(
+                      'relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center transition-all',
+                      isRecording
+                        ? 'bg-orange-500 shadow-lg shadow-orange-500/40 scale-105'
+                        : 'bg-white/8 border border-white/15 text-slate-400 hover:text-white hover:bg-white/15'
+                    )}>
+                    {/* Pulse ring when recording */}
+                    {isRecording && (
+                      <span className="absolute inset-0 rounded-full bg-orange-500/40 animate-ping" />
+                    )}
+                    {isRecording
+                      ? <Mic className="w-6 h-6 text-white relative z-10" />
+                      : <MicOff className="w-5 h-5 relative z-10" />
+                    }
                   </button>
+
+                  {/* Status + text fallback */}
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      {liveAiSpeaking ? (
+                        <>
+                          <div className="flex gap-0.5 items-end h-4">
+                            {[3,5,4,6,3,5,4].map((h, i) => (
+                              <div key={i} className="w-0.5 bg-indigo-400 rounded-full"
+                                style={{ height: h*2, animation: `scaleY ${0.4+i*0.05}s ease-in-out infinite alternate`, animationDelay: `${i*0.07}s` }} />
+                            ))}
+                          </div>
+                          <span className="text-[12px] text-indigo-400 font-bold">Host speaking…</span>
+                        </>
+                      ) : isRecording ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                          <span className="text-[12px] text-orange-400 font-bold">Listening…</span>
+                        </>
+                      ) : (
+                        <span className="text-[12px] text-slate-500">Mic muted — tap to speak</span>
+                      )}
+                    </div>
+                    {/* Text input as fallback */}
+                    <div className="flex gap-1.5">
+                      <input type="text" value={liveTextInput} onChange={e => setLiveTextInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendLiveTextMessage() } }}
+                        placeholder="Or type a question…"
+                        className="flex-1 bg-[#1a1a1a] border border-white/8 text-white text-[13px] px-3 py-2 rounded-xl focus:outline-none focus:border-indigo-500/40 placeholder:text-slate-600" />
+                      <button onClick={sendLiveTextMessage} disabled={!liveTextInput.trim() || liveSendingText}
+                        className="px-3 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-400 transition-all disabled:opacity-30">
+                        {liveSendingText ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* End session */}
                   <button onClick={endLiveQA}
-                    className="px-3 py-3 bg-white/5 border border-white/8 text-slate-400 rounded-xl hover:text-white transition-all">
+                    className="w-9 h-9 flex-shrink-0 rounded-xl bg-white/5 border border-white/8 text-slate-500 hover:text-red-400 hover:border-red-500/30 transition-all flex items-center justify-center"
+                    title="End Q&A">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
