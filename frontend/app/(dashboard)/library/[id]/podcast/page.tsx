@@ -27,7 +27,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
   })
 
-  const [status, setStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle')
+  const [status, setStatus] = useState<'checking' | 'idle' | 'generating' | 'ready' | 'error'>('checking')
   const [voiceA, setVoiceA] = useState('Ava')
   const [voiceB, setVoiceB] = useState('Andrew')
   const [visuals, setVisuals] = useState<any[]>([])
@@ -76,10 +76,11 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     }
     podcastApi.getExistingSession(resourceId).then(res => {
       const data = res.data
-      if (!data.exists) return  // no session at all — stay on setup screen
-
+      if (!data.exists) {
+        setStatus('idle')  // nothing found — show setup screen
+        return
+      }
       if (data.script?.length) {
-        // Session ready with script — restore it
         libraryApi.getResource(resourceId).then(r => {
           startPodcast(resourceId, r.data.title || '', data.session_id, data.script)
         }).catch(() => startPodcast(resourceId, '', data.session_id, data.script))
@@ -94,7 +95,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         }).catch(() => startPodcast(resourceId, '', data.session_id, []))
         setStatus('generating')
       }
-    }).catch(() => {})
+    }).catch(() => setStatus('idle'))  // on error drop to setup
   }, [resourceId])
 
   // Polling — works off local sessionId ref so it doesn't depend on AudioContext timing
@@ -314,6 +315,24 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       a.play().catch(() => { setIsAcknowledging(false); startRecording() })
     } else { startRecording() }
   }
+
+  // ── Checking for existing session ───────────────────────────────
+  if (status === 'checking') return (
+    <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
+          <ArrowLeft className="w-4 h-4 text-slate-400" />
+        </Link>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Radio className="w-8 h-8 text-orange-500 animate-pulse" />
+          <p className="text-slate-500 text-sm">Loading your podcast…</p>
+        </div>
+      </div>
+    </div>
+  )
 
   // ── Setup screen ─────────────────────────────────────────────────
   if (status === 'idle') return (
