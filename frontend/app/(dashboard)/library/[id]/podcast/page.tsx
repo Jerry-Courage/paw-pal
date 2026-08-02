@@ -51,7 +51,9 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const liveWsRef = useRef<WebSocket | null>(null)
   const liveMicProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const liveMicStreamRef = useRef<MediaStream | null>(null)
-  const liveAudioCtxRef = useRef<AudioContext | null>(null)
+  const livePlayCtxRef = useRef<AudioContext | null>(null)   // playback only
+  const liveAudioCtxRef = livePlayCtxRef                    // alias used by playLiveAudio
+  const liveMicCtxRef = useRef<AudioContext | null>(null)    // mic capture only
   const liveNextPlayRef = useRef(0)
   const liveSpeakTimeoutRef = useRef<any>(null)
   const liveMicMutedRef = useRef(false)
@@ -176,33 +178,31 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const startLiveMic = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       })
       liveMicStreamRef.current = stream
-      // Use the pre-warmed AudioContext if available, otherwise create one
-      const ctx = liveAudioCtxRef.current || new AudioContext({ sampleRate: 16000 })
-      liveAudioCtxRef.current = ctx
-      if (ctx.state === 'suspended') await ctx.resume()
 
-      const source = ctx.createMediaStreamSource(stream)
-      // 512 samples at 16kHz = 32ms chunks — much tighter than the default 2048 (~128ms)
-      const processor = ctx.createScriptProcessor(512, 1, 1)
+      // Mic gets its OWN AudioContext at the browser's native rate — never share with playback
+      const micCtx = new AudioContext()
+      liveMicCtxRef.current = micCtx
+      if (micCtx.state === 'suspended') await micCtx.resume()
+
+      const source = micCtx.createMediaStreamSource(stream)
+      const processor = micCtx.createScriptProcessor(512, 1, 1)
       liveMicProcessorRef.current = processor
 
-      // Use a sync queue to avoid async-in-onaudioprocess timing violations
+      const nativeRate = micCtx.sampleRate  // typically 44100 or 48000
+
       const sendQueue: string[] = []
       let sending = false
       const drainQueue = () => {
         if (sending || sendQueue.length === 0) return
         if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) {
-          sendQueue.length = 0
-          return
+          sendQueue.length = 0; return
         }
         sending = true
         const chunk = sendQueue.shift()!
-        try {
-          liveWsRef.current.send(JSON.stringify({ type: 'audio', data: chunk }))
-        } catch {}
+        try { liveWsRef.current.send(JSON.stringify({ type: 'audio', data: chunk })) } catch {}
         sending = false
         if (sendQueue.length > 0) drainQueue()
       }
@@ -211,20 +211,26 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         if (liveMicMutedRef.current) return
         if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
         const float32 = e.inputBuffer.getChannelData(0)
-        const out = new Int16Array(float32.length)
-        for (let i = 0; i < float32.length; i++)
-          out[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
+
+        // Downsample from native rate to 16kHz for Gemini
+        const targetRate = 16000
+        const ratio = nativeRate / targetRate
+        const outLen = Math.floor(float32.length / ratio)
+        const out = new Int16Array(outLen)
+        for (let i = 0; i < outLen; i++) {
+          const idx = Math.min(Math.floor(i * ratio), float32.length - 1)
+          out[i] = Math.max(-32768, Math.min(32767, float32[idx] * 32768))
+        }
         const bytes = new Uint8Array(out.buffer)
         let binary = ''
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
         sendQueue.push(btoa(binary))
-        // Keep queue shallow — if backing up drop oldest
         if (sendQueue.length > 8) sendQueue.shift()
         drainQueue()
       }
 
       source.connect(processor)
-      processor.connect(ctx.destination)
+      processor.connect(micCtx.destination)
       setLiveMicAvailable(true)
       liveMicMutedRef.current = false
       setIsRecording(true)
@@ -248,6 +254,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     liveMicProcessorRef.current = null
     liveMicStreamRef.current?.getTracks().forEach(t => t.stop())
     liveMicStreamRef.current = null
+    liveMicCtxRef.current?.close().catch(() => {})
+    liveMicCtxRef.current = null
     liveMicMutedRef.current = true
     setIsRecording(false)
   }
@@ -290,12 +298,15 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         else if (msg.type === 'interrupted') { flushAudioPlayout() }
         else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
+          // Strip any leaked markdown thinking text (e.g. **Initiating Learning Session**)
+          const clean = (msg.text || '').replace(/\*\*[^*]+\*\*/g, '').replace(/\n+/g, ' ').trim()
+          if (!clean) return
           setLiveTranscript(prev => {
-            if (!prev.length) return [{ role, text: msg.text, ts: Date.now() }]
+            if (!prev.length) return [{ role, text: clean, ts: Date.now() }]
             const last = prev[prev.length - 1]
             if (last.role === role && Date.now() - last.ts < 2000)
-              return [...prev.slice(0, -1), { ...last, text: last.text + msg.text, ts: Date.now() }]
-            return [...prev, { role, text: msg.text, ts: Date.now() }]
+              return [...prev.slice(0, -1), { ...last, text: last.text + ' ' + clean, ts: Date.now() }]
+            return [...prev, { role, text: clean, ts: Date.now() }]
           })
         } else if (msg.type === 'error') { toast.error(msg.message); endLiveQA() }
       }
