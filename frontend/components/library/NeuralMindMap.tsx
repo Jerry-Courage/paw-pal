@@ -11,6 +11,7 @@ interface MindMapData {
 interface NeuralMindMapProps {
   data: MindMapData
   resourceTitle?: string
+  resourceId?: number
 }
 
 const NODE_COLORS = [
@@ -161,7 +162,7 @@ function Avatar({ state, text, onDismiss }: { state: AvState; text: string; onDi
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProps) {
+export default function NeuralMindMap({ data, resourceTitle, resourceId }: NeuralMindMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [pan, setPan]     = useState({ x: 0, y: 0 })
   const [zoom, setZoom]   = useState(0.85)
@@ -229,25 +230,57 @@ export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProp
     return () => clearTimeout(t)
   }, [data?.center]) // eslint-disable-line
 
-  const onNodeClick = useCallback(async (name: string, context: string) => {
+  const onNodeClick = useCallback(async (name: string, context: string, nodeType: 'center' | 'branch' | 'sub' = 'branch') => {
     stopSpeaking()
     setAvDismissed(false)
     setShowGuide(false)
     setAvState('thinking')
     setAvText('')
+
+    // For branch and sub nodes we already have all the context — skip the AI call
+    // and go straight to TTS. This cuts latency from ~5-7s down to ~1-2s (single TTS call).
+    // Only the center node needs an AI-generated overview since it's the whole topic.
+    if (nodeType !== 'center') {
+      const lines = context.split('.').filter(Boolean)
+      const sentence = lines[0]?.trim() || context
+      // Build a natural spoken description from the map data we already have
+      let local = ''
+      if (nodeType === 'sub') {
+        // context = 'Subtopic "X" which is part of "Y" in the mind map about "Z"'
+        const parentMatch = context.match(/part of "([^"]+)"/)
+        const parent = parentMatch?.[1] || data.center
+        local = `${name} is part of ${parent}. It's one of the subtopics that breaks down this area of ${data.center}.`
+      } else {
+        // branch node
+        const subMatch = context.match(/Subtopics: (.+)$/)
+        const subs = subMatch?.[1] || ''
+        local = subs
+          ? `${name} is a main branch of ${data.center}. It covers: ${subs}.`
+          : `${name} is a key branch of ${data.center}.`
+      }
+      setAvText(local)
+      setAvState('speaking')
+      speak(local)
+      return
+    }
+
+    // Center node — use the AI with resourceId so it stays scoped to this resource
     try {
-      const prompt = `In 2-3 friendly sentences explain "${name}" and how it relates to "${data.center}". Context: ${context}. No bullet points. Be conversational.`
-      const res = await aiApi.quickAsk(prompt)
-      const raw = res.data?.answer || res.data?.reply || `${name} is a key concept in ${data.center}.`
+      const prompt = `You are explaining a mind map. The topic is "${data.center}". ` +
+        `Context: ${context}. ` +
+        `In exactly 2 sentences, give an overview of "${data.center}" as a subject. ` +
+        `Stay strictly on this topic. No bullet points. Be conversational.`
+      const res = await aiApi.quickAsk(prompt, resourceId)
+      const raw = res.data?.answer || res.data?.reply || `${data.center} is the central concept of this mind map.`
       const clean = raw.replace(/\*\*/g,'').replace(/\n+/g,' ').trim()
       setAvText(clean)
       setAvState('speaking')
       speak(clean)
     } catch {
-      const fb = `${name} is an important concept connected to ${data.center}. Keep exploring!`
+      const fb = `${data.center} is the central topic of this mind map. Tap any branch to explore it!`
       setAvText(fb); setAvState('speaking'); speak(fb)
     }
-  }, [data.center, speak, stopSpeaking])
+  }, [data.center, resourceId, speak, stopSpeaking])
 
   // Pan / zoom handlers
   const onMouseDown = (e: React.MouseEvent) => {
@@ -336,7 +369,7 @@ export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProp
         <div className="absolute nc nf" style={{ transform:'translate(-50%,-50%)', zIndex:20 }}>
           <div style={{ position:'relative', width:CX*2, height:CX*2 }}>
             <div style={{ position:'absolute', inset:-10, borderRadius:'50%', background:'radial-gradient(circle, rgba(255,138,61,0.3) 0%, transparent 70%)' }}/>
-            <div className="nc" onClick={() => { setActiveNode({type:'center'}); onNodeClick(data.center, `Central concept of the mind map about ${data.center}`) }}
+            <div className="nc" onClick={() => { setActiveNode({type:'center'}); onNodeClick(data.center, `Central concept of the mind map about ${data.center}`, 'center') }}
               style={{ width:CX*2, height:CX*2, borderRadius:'50%', background:'linear-gradient(135deg,#ff8a3d,#ffb68d)', boxShadow:'0 0 48px rgba(255,138,61,0.55), 0 10px 32px rgba(0,0,0,0.5)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', border: activeNode?.type==='center'?'3px solid white':'2px solid rgba(255,255,255,0.2)', cursor:'pointer', transition:'transform 0.2s' }}>
               <span className="material-symbols-outlined" style={{ fontSize:24, color:'#3d1200', fontVariationSettings:"'FILL' 1", marginBottom:2 }}>wb_sunny</span>
               <span style={{ fontSize:11, fontWeight:900, textAlign:'center', color:'#3d1200', lineHeight:1.2, padding:'0 12px', textTransform:'uppercase', letterSpacing:'0.05em' }}>{data.center}</span>
@@ -351,7 +384,7 @@ export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProp
             <div className="absolute nc nf" style={{ left:b.x, top:b.y, transform:'translate(-50%,-50%)', zIndex:15, animationDelay:`${i*0.4}s` }}>
               <div style={{ position:'relative', width:BX*2, height:BX*2 }}>
                 <div style={{ position:'absolute', inset:-8, borderRadius:'50%', background:`radial-gradient(circle, ${b.color.glow} 0%, transparent 70%)` }}/>
-                <div className="nc" onClick={() => { setActiveNode({type:'branch',bi:i}); onNodeClick(b.topic, `Branch topic "${b.topic}" under "${data.center}". Subtopics: ${b.subs.map(s=>s.text).join(', ')}`) }}
+                <div className="nc" onClick={() => { setActiveNode({type:'branch',bi:i}); onNodeClick(b.topic, `Branch topic "${b.topic}" under "${data.center}". Subtopics: ${b.subs.map(s=>s.text).join(', ')}`, 'branch') }}
                   style={{ width:BX*2, height:BX*2, borderRadius:'50%', background:b.color.bg, boxShadow:`0 0 28px ${b.color.glow}, 0 6px 20px rgba(0,0,0,0.45)`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', border: activeNode?.type==='branch'&&activeNode.bi===i?'3px solid white':'2px solid rgba(255,255,255,0.15)', cursor:'pointer', transition:'transform 0.15s' }}>
                   <span className="material-symbols-outlined" style={{ fontSize:18, color:b.color.text, fontVariationSettings:"'FILL' 1", marginBottom:2 }}>{b.icon}</span>
                   <span style={{ fontSize:10, fontWeight:800, textAlign:'center', color:b.color.text, lineHeight:1.2, padding:'0 6px' }}>{b.topic}</span>
@@ -362,7 +395,7 @@ export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProp
             {/* Subtopics */}
             {b.subs.map((s, j) => (
               <div key={j} className="absolute nc" style={{ left:s.x, top:s.y, transform:'translate(-50%,-50%)', zIndex:10 }}>
-                <div className="nc" onClick={() => { setActiveNode({type:'sub',bi:i,si:j}); onNodeClick(s.text, `Subtopic "${s.text}" which is part of "${b.topic}" in the mind map about "${data.center}"`) }}
+                <div className="nc" onClick={() => { setActiveNode({type:'sub',bi:i,si:j}); onNodeClick(s.text, `Subtopic "${s.text}" which is part of "${b.topic}" in the mind map about "${data.center}"`, 'sub') }}
                   style={{ width:SX*2, height:SX*2, borderRadius:'50%', background:'#1e2022', boxShadow:`0 0 14px ${b.color.glow}, 0 4px 12px rgba(0,0,0,0.5)`, display:'flex', alignItems:'center', justifyContent:'center', border: activeNode?.type==='sub'&&activeNode.bi===i&&activeNode.si===j?`2.5px solid ${b.color.bg}`:`1.5px solid ${b.color.bg}55`, cursor:'pointer', transition:'transform 0.15s' }}>
                   <span style={{ fontSize:9, fontWeight:700, textAlign:'center', color:'#e2e2e5', lineHeight:1.2, padding:'0 5px' }}>{s.text}</span>
                 </div>

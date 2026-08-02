@@ -119,7 +119,7 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
 
       {/* ── Map canvas ─────────────────────────────────────────────── */}
       <div className="flex-1 relative">
-        <NeuralMindMap data={mapData} resourceTitle={resource?.subject || resource?.title || ''} />
+        <NeuralMindMap data={mapData} resourceTitle={resource?.subject || resource?.title || ''} resourceId={resourceId} />
       </div>
     </div>
   )
