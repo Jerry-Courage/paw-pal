@@ -184,7 +184,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                             'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
                             'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
-                            'silenceDurationMs': 400,  # fast turn-taking — detects end-of-speech quickly
+                            'silenceDurationMs': 300,  # fast turn-taking
                         }
                     },
                 }
