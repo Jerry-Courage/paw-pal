@@ -249,7 +249,7 @@ export const podcastApi = {
     api.get(`/ai/podcast/${sessionId}/status/`),
   getChunk: (sessionId: number, currentIndex: number, text?: string) => {
     const params = text ? { h: text.substring(0, 32) } : {}
-    return api.get(`/ai/podcast/${sessionId}/chunk/${currentIndex}/`, { params, responseType: 'blob' })
+    return api.get(`/ai/podcast/${sessionId}/chunk/${currentIndex}/`, { params, responseType: 'blob', timeout: 90000 })
   },
   interrupt: (sessionId: number, blob: Blob, currentIndex: number) => {
     const fd = new FormData()

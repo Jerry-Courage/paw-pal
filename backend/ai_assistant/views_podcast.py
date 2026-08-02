@@ -122,10 +122,39 @@ def bg_generate_script(session_id, notes):
             
             cleaned_script.append(chunk)
 
-        # 5.8. DYNAMIC VISUAL GENERATION (HF Fallbacks):
-        # Instead of cycling, generate relevant images for segments that lack them OR
-        # if the AI provided a specific 'visual_prompt' (which overrides generic refs).
-        # 5.8. FAST READY SIGNAL: Save script and mark ready before long visual/audio generation
+        # 5.8. PRE-WARM first 3 chunks BEFORE marking ready so the player has instant audio
+        # Then mark ready and let the rest generate in background
+        def generate_segment_audio(text, voice, res_id, ses_id, h):
+            try:
+                out_dir = os.path.join(settings.MEDIA_ROOT, 'podcasts', str(res_id), str(ses_id))
+                os.makedirs(out_dir, exist_ok=True)
+                f_path = os.path.join(out_dir, f"{h}.mp3")
+                if not os.path.exists(f_path):
+                    from .podcast import generate_tts_file
+                    generate_tts_file(text, voice, f_path)
+            except Exception as e:
+                with open(os.path.join(settings.BASE_DIR, 'podcast_error.log'), 'a') as f:
+                    f.write(f"\nTTS Worker Error: {str(e)}")
+
+        def get_voice_for_chunk(chunk):
+            s_val = str(chunk.get('speaker', 'A')).upper()
+            return session.voice_b if ('B' in s_val or name_b.upper() in s_val) else session.voice_a
+
+        # Generate first 3 chunks in parallel — these must exist before we say ready
+        PREWARM_COUNT = 3
+        prewarm_chunks = cleaned_script[:PREWARM_COUNT]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=PREWARM_COUNT) as executor:
+            futures = [
+                executor.submit(
+                    generate_segment_audio,
+                    chunk['text'], get_voice_for_chunk(chunk),
+                    session.resource.id, session.id, chunk['audio_hash']
+                )
+                for chunk in prewarm_chunks
+            ]
+            concurrent.futures.wait(futures, timeout=60)  # wait up to 60s for first 3
+
+        # NOW mark ready — player will have instant audio for the first 3 segments
         session.script_chunks = cleaned_script
         session.status = 'ready'
         session.save()
@@ -191,31 +220,10 @@ def bg_generate_script(session_id, notes):
                 # We use list() to ensure they are all submitted before moving to TTS
                 list(executor.map(lambda x: task_gen_image(*x), targets))
 
-        # 7. ASYNC AUDIO GENERATION (TTS) - Sequential 
-        def generate_segment_audio(text, voice, res_id, ses_id, h):
-            try:
-                out_dir = os.path.join(settings.MEDIA_ROOT, 'podcasts', str(res_id), str(ses_id))
-                os.makedirs(out_dir, exist_ok=True)
-                f_path = os.path.join(out_dir, f"{h}.mp3")
-                if not os.path.exists(f_path):
-                    # We import here to ensure freshness in the background thread
-                    from .podcast import generate_tts_file
-                    generate_tts_file(text, voice, f_path)
-            except Exception as e:
-                with open(os.path.join(settings.BASE_DIR, 'podcast_error.log'), 'a') as f:
-                    f.write(f"\nTTS Worker Error: {str(e)}")
-
-        for chunk in cleaned_script:
-            # --- SPEAKER MAPPING SHIELD ---
-            # Ensures that names like "Jenny" or "Christopher" are correctly mapped back to B and A
-            s_val = str(chunk.get('speaker', 'A')).upper()
-            if 'B' in s_val or name_b.upper() in s_val:
-                v_id = session.voice_b
-            else:
-                v_id = session.voice_a
-            # --- END SHIELD ---
-            
-            generate_segment_audio(chunk['text'], v_id, session.resource.id, session.id, chunk['audio_hash'])
+        # 7. ASYNC AUDIO GENERATION (TTS) - generate remaining chunks after ready signal
+        # Skip first PREWARM_COUNT since they were pre-generated above
+        for chunk in cleaned_script[PREWARM_COUNT:]:
+            generate_segment_audio(chunk['text'], get_voice_for_chunk(chunk), session.resource.id, session.id, chunk['audio_hash'])
 
     except Exception as e:
         import traceback
