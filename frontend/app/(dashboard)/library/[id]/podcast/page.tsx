@@ -6,8 +6,9 @@ import { libraryApi, podcastApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useAudio } from '@/context/AudioContext'
 import {
   ArrowLeft, Play, Pause, Loader2,
-  Image as ImageIcon, Hand, Quote, Radio, XCircle, X,
-  SkipBack, SkipForward, Volume2, Mic, MicOff, ChevronRight, MessageSquare
+  Image as ImageIcon, Hand, Radio, XCircle, X,
+  SkipBack, SkipForward, Mic, MicOff, ChevronRight, MessageSquare,
+  Volume2
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -16,12 +17,6 @@ import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 const VOICES_A = ['Ava', 'Christopher', 'Brian', 'Guy']
 const VOICES_B = ['Andrew', 'Emma', 'Jenny', 'Aria']
-
-// Speaker avatar colors
-const SPEAKER_COLORS: Record<string, string> = {
-  A: 'bg-indigo-500',
-  B: 'bg-orange-500',
-}
 
 export default function PodcastPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
@@ -43,17 +38,16 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const [isAcknowledging, setIsAcknowledging] = useState(false)
   const [isAnswering, setIsAnswering] = useState(false)
   const transcriptRef = useRef<HTMLDivElement>(null)
-
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
 
-  // ── Live Q&A state ────────────────────────────────────────────────
+  // Live Q&A state
   const [liveMode, setLiveMode] = useState<'off' | 'connecting' | 'active'>('off')
   const [liveAiSpeaking, setLiveAiSpeaking] = useState(false)
   const [liveMicAvailable, setLiveMicAvailable] = useState(true)
   const [liveTextInput, setLiveTextInput] = useState('')
   const [liveSendingText, setLiveSendingText] = useState(false)
-  const [liveTranscript, setLiveTranscript] = useState<{role: 'user'|'ai', text: string, ts: number}[]>([])
+  const [liveTranscript, setLiveTranscript] = useState<{role:'user'|'ai',text:string,ts:number}[]>([])
   const liveWsRef = useRef<WebSocket | null>(null)
   const liveMicProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const liveMicStreamRef = useRef<MediaStream | null>(null)
@@ -62,15 +56,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const liveSpeakTimeoutRef = useRef<any>(null)
   const liveMicMutedRef = useRef(false)
 
-  const {
-    state: audio,
-    startPodcast,
-    pause: globalPause,
-    resume: globalResume,
-    updateScript,
-    setCurrentIndex,
-    stop: globalStop,
-  } = useAudio()
+  const { state: audio, startPodcast, pause: globalPause, resume: globalResume,
+    updateScript, setCurrentIndex, stop: globalStop } = useAudio()
 
   const hasLoadedSession = useRef(false)
 
@@ -78,12 +65,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     libraryApi.getResource(resourceId).then(res => {
       setVisuals(res.data.extracted_images || [])
     })
-
-    // Only run session detection once
     if (hasLoadedSession.current) return
     hasLoadedSession.current = true
-
-    // If already active in AudioContext, restore that session
     if (audio.activeResourceId === resourceId && audio.sessionId) {
       setStatus(audio.script?.length ? 'ready' : 'generating')
       podcastApi.getStatus(audio.sessionId).then(res => {
@@ -91,17 +74,12 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       })
       return
     }
-
-    // Check backend for a pre-generated session (auto-generated during upload)
     podcastApi.getExistingSession(resourceId).then(res => {
       const data = res.data
       if (data.exists && data.script?.length) {
-        // Get resource title for the mini player
         libraryApi.getResource(resourceId).then(r => {
           startPodcast(resourceId, r.data.title || '', data.session_id, data.script)
-        }).catch(() => {
-          startPodcast(resourceId, '', data.session_id, data.script)
-        })
+        }).catch(() => startPodcast(resourceId, '', data.session_id, data.script))
         setStatus('ready')
         podcastApi.getStatus(data.session_id).then(r => {
           if (r.data.interjection_urls) setInterjectionUrls(r.data.interjection_urls)
@@ -136,37 +114,10 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     }
   }, [audio.currentIndex])
 
-  useEffect(() => {
-    if (liveMode !== 'active') return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-        e.preventDefault()
-        if (!liveMicStreamRef.current || !liveMicProcessorRef.current || !liveAudioCtxRef.current) {
-          return
-        }
-
-        if (!liveMicMutedRef.current) {
-          liveMicMutedRef.current = true
-          setIsRecording(false)
-          toast('🔇 Mic muted', { duration: 1000 })
-        } else {
-          liveMicMutedRef.current = false
-          setIsRecording(true)
-          toast('🎤 Mic on', { duration: 1000 })
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [liveMode])
-
   const currentChunk = audio.script?.[audio.currentIndex] ?? null
   const activeVisual = visuals.find(v => v.id && currentChunk?.visual_ref && String(v.id) === String(currentChunk.visual_ref))
   const currentImage = activeVisual?.image || currentChunk?.visual_url || null
-
-  // ── Live Q&A helpers ─────────────────────────────────────────────
+  const speakerName = currentChunk?.speaker === 'A' ? voiceA : voiceB
 
   const playLiveAudio = useCallback((b64: string) => {
     const binary = atob(b64)
@@ -175,7 +126,6 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     const int16 = new Int16Array(bytes.buffer)
     const float32 = new Float32Array(int16.length)
     for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768
-
     const ctx = liveAudioCtxRef.current || new AudioContext()
     liveAudioCtxRef.current = ctx
     const buf = ctx.createBuffer(1, float32.length, 24000)
@@ -203,12 +153,10 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       const processor = ctx.createScriptProcessor(2048, 1, 1)
       liveMicProcessorRef.current = processor
       setLiveMicAvailable(true)
-
       processor.onaudioprocess = async (e) => {
         if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
         if (liveMicMutedRef.current) return
         const float32 = e.inputBuffer.getChannelData(0).slice()
-        // Simple downsample to 16kHz
         const ratio = ctx.sampleRate / 16000
         const outLen = Math.round(float32.length / ratio)
         const out = new Int16Array(outLen)
@@ -219,18 +167,15 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         const bytes = new Uint8Array(out.buffer)
         let binary = ''
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-        const b64 = btoa(binary)
-        liveWsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+        liveWsRef.current.send(JSON.stringify({ type: 'audio', data: btoa(binary) }))
       }
       source.connect(processor)
       processor.connect(ctx.destination)
       liveMicMutedRef.current = false
       setIsRecording(true)
-      return true
-    } catch (e) {
+    } catch {
       setLiveMicAvailable(false)
       toast.error('Mic unavailable — text-only mode is active.', { duration: 4000 })
-      return false
     }
   }
 
@@ -245,32 +190,20 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   const sendLiveTextMessage = async () => {
     const text = liveTextInput.trim()
-    if (!text) {
-      toast.error('Type something first.')
-      return
-    }
-    if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) {
-      toast.error('Not connected. Please start live Q&A first.')
-      return
-    }
-
+    if (!text || !liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
     setLiveSendingText(true)
     try {
       setLiveTranscript(prev => [...prev, { role: 'user', text, ts: Date.now() }])
       liveWsRef.current.send(JSON.stringify({ type: 'text_message', text }))
       setLiveTextInput('')
-    } catch (error) {
-      toast.error('Could not send your message. Please try again.')
-    } finally {
-      setLiveSendingText(false)
-    }
+    } catch { toast.error('Could not send message.') }
+    finally { setLiveSendingText(false) }
   }
 
   const startLiveQA = async () => {
     if (!resource) return
     setLiveMode('connecting')
     globalPause()
-
     try {
       const token = await getAuthToken()
       const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
@@ -278,72 +211,42 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       const wsUrl = `${protocol}//${backendHost}/ws/examprep/${resourceId}/?token=${token}`
       const ws = new WebSocket(wsUrl)
       liveWsRef.current = ws
-
       ws.onopen = () => {
         const kit = resource.ai_notes_json || {}
-        const sections = (kit.sections || []).slice(0, 8)
-        const context = sections.map((s: any) => `${s.title}: ${s.content?.slice(0, 200)}`).join('\n\n')
-        // Send with podcast-specific technique
-        ws.send(JSON.stringify({
-          type: 'start',
-          technique: 'podcast_qa',
-          resource_title: resource.title,
-          resource_context: context,
-        }))
+        const context = (kit.sections || []).slice(0, 8)
+          .map((s: any) => `${s.title}: ${s.content?.slice(0, 200)}`).join('\n\n')
+        ws.send(JSON.stringify({ type: 'start', technique: 'podcast_qa',
+          resource_title: resource.title, resource_context: context }))
       }
-
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data)
-        if (msg.type === 'ready') {
-          setLiveMode('active')
-          setLiveMicAvailable(true)
-          void startLiveMic()
-        } else if (msg.type === 'status') {
-          toast.info(msg.message, { duration: 4000 })
-        } else if (msg.type === 'audio') {
-          playLiveAudio(msg.data)
-        } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
+        if (msg.type === 'ready') { setLiveMode('active'); void startLiveMic() }
+        else if (msg.type === 'status') { toast.info(msg.message, { duration: 4000 }) }
+        else if (msg.type === 'audio') { playLiveAudio(msg.data) }
+        else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
           setLiveTranscript(prev => {
-            if (prev.length === 0) return [{ role, text: msg.text, ts: Date.now() }]
+            if (!prev.length) return [{ role, text: msg.text, ts: Date.now() }]
             const last = prev[prev.length - 1]
-            if (last.role === role && (Date.now() - last.ts < 2000)) {
-              return [
-                ...prev.slice(0, -1),
-                { ...last, text: last.text + msg.text, ts: Date.now() }
-              ]
-            }
+            if (last.role === role && Date.now() - last.ts < 2000)
+              return [...prev.slice(0, -1), { ...last, text: last.text + msg.text, ts: Date.now() }]
             return [...prev, { role, text: msg.text, ts: Date.now() }]
           })
-        } else if (msg.type === 'error') {
-          toast.error(msg.message)
-          endLiveQA()
-        }
+        } else if (msg.type === 'error') { toast.error(msg.message); endLiveQA() }
       }
-
       ws.onerror = () => { toast.error('Live connection failed'); endLiveQA() }
-      ws.onclose = () => { stopLiveMic() }
-    } catch {
-      toast.error('Failed to start live Q&A')
-      setLiveMode('off')
-      globalResume()
-    }
+      ws.onclose  = () => { stopLiveMic() }
+    } catch { toast.error('Failed to start live Q&A'); setLiveMode('off'); globalResume() }
   }
 
   const endLiveQA = () => {
-    if (liveWsRef.current?.readyState === WebSocket.OPEN) {
+    if (liveWsRef.current?.readyState === WebSocket.OPEN)
       liveWsRef.current.send(JSON.stringify({ type: 'end_session' }))
-    }
     liveWsRef.current?.close()
     stopLiveMic()
-    setLiveMode('off')
-    setLiveMicAvailable(true)
-    setLiveTranscript([])
-    setLiveTextInput('')
-    liveNextPlayRef.current = 0
-    liveMicMutedRef.current = false
+    setLiveMode('off'); setLiveMicAvailable(true); setLiveTranscript([])
+    setLiveTextInput(''); liveNextPlayRef.current = 0; liveMicMutedRef.current = false
     clearTimeout(liveSpeakTimeoutRef.current)
-    // Resume podcast after a short delay
     setTimeout(() => globalResume(), 800)
   }
 
@@ -353,26 +256,12 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       const res = await podcastApi.createSession(resourceId, voiceA, voiceB, 15)
       const resObj = await libraryApi.getResource(resourceId)
       startPodcast(resourceId, resObj.data.title, res.data.session_id, res.data.script)
-      if (res.data.status === 'ready') {
-        setStatus('ready')
-        // Trigger play immediately within the user gesture context
-        setTimeout(() => globalResume(), 300)
-      } else {
-        setStatus('ready')
-      }
-    } catch {
-      toast.error('Failed to start podcast')
-      setStatus('error')
-    }
+      setStatus('ready')
+      if (res.data.status === 'ready') setTimeout(() => globalResume(), 300)
+    } catch { toast.error('Failed to start podcast'); setStatus('error') }
   }
 
-  const togglePlay = () => {
-    if (audio.isPlaying) {
-      globalPause()
-    } else {
-      globalResume()
-    }
-  }
+  const togglePlay = () => audio.isPlaying ? globalPause() : globalResume()
 
   const handleInterrupt = async () => {
     if (!audio.sessionId) return
@@ -380,13 +269,11 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     setIsHandRaised(true)
     setTimeout(() => setIsHandRaised(false), 3000)
     globalPause()
-
     const startRecording = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-        mediaRecorderRef.current = mr
-        audioChunksRef.current = []
+        mediaRecorderRef.current = mr; audioChunksRef.current = []
         mr.ondataavailable = e => audioChunksRef.current.push(e.data)
         mr.onstop = async () => {
           const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
@@ -397,65 +284,52 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             setIsAnswering(true)
             const res = await podcastApi.interrupt(audio.sessionId!, blob, audio.currentIndex)
             updateScript(res.data.script, res.data.new_total)
-            toast.dismiss('answering')
-            setIsAnswering(false)
+            toast.dismiss('answering'); setIsAnswering(false)
             setCurrentIndex(audio.currentIndex + 1)
-          } catch {
-            toast.dismiss('answering')
-            setIsAnswering(false)
-            globalResume()
-          }
+          } catch { toast.dismiss('answering'); setIsAnswering(false); globalResume() }
         }
-        mr.start()
-        setIsRecording(true)
+        mr.start(); setIsRecording(true)
       } catch {}
     }
-
     const introUrl = interjectionUrls[currentChunk?.speaker || 'A']
     if (introUrl) {
-      const a = new Audio(introUrl)
-      setIsAcknowledging(true)
+      const a = new Audio(introUrl); setIsAcknowledging(true)
       a.onended = () => { setIsAcknowledging(false); startRecording() }
       a.play().catch(() => { setIsAcknowledging(false); startRecording() })
-    } else {
-      startRecording()
-    }
+    } else { startRecording() }
   }
 
-  // ── Setup ────────────────────────────────────────────────────────
+  // ── Setup screen ─────────────────────────────────────────────────
   if (status === 'idle') return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
-        <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
+    <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
         </Link>
-        <div>
-          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">FlowCast AI</p>
-          <h1 className="text-sm font-black text-white truncate">{resource?.title}</h1>
-        </div>
       </div>
-
       <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <div className="w-full max-w-sm space-y-6">
-          <div className="flex flex-col items-center text-center gap-3">
-            <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-              <Radio className="w-8 h-8 text-orange-500" />
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-20 h-20 bg-orange-500/10 border border-orange-500/20 rounded-[1.75rem] flex items-center justify-center">
+              <Radio className="w-9 h-9 text-orange-500" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white tracking-tight">FlowCast AI</h2>
-              <p className="text-slate-500 mt-1.5 text-sm leading-relaxed">
-                Two AI hosts deep-dive your material in a podcast format. Raise your hand to ask questions live.
+              <p className="text-[11px] font-black text-orange-500 uppercase tracking-widest mb-1">FlowCast AI</p>
+              <h2 className="text-2xl font-black text-white tracking-tight">{resource?.title || 'Your Material'}</h2>
+              <p className="text-slate-500 mt-2 text-sm leading-relaxed">
+                Two AI hosts deep-dive your material in a podcast. Raise your hand to ask questions live.
               </p>
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Host A', value: voiceA, set: setVoiceA, options: VOICES_A },
-              { label: 'Host B', value: voiceB, set: setVoiceB, options: VOICES_B },
-            ].map(({ label, value, set, options }) => (
+              { label: 'Host A', value: voiceA, set: setVoiceA, options: VOICES_A, color: 'text-indigo-400' },
+              { label: 'Host B', value: voiceB, set: setVoiceB, options: VOICES_B, color: 'text-orange-400' },
+            ].map(({ label, value, set, options, color }) => (
               <div key={label}>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">{label}</label>
+                <label className={cn('text-[10px] font-black uppercase tracking-widest mb-2 block', color)}>{label}</label>
                 <select value={value} onChange={e => set(e.target.value)}
                   className="w-full bg-[#1a1a1a] border border-white/8 text-white p-3 rounded-xl text-sm appearance-none cursor-pointer focus:outline-none focus:border-orange-500/40">
                   {options.map(v => <option key={v} value={v} className="bg-[#1a1a1a]">{v}</option>)}
@@ -463,7 +337,6 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
               </div>
             ))}
           </div>
-
           <button onClick={handleStart}
             className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2.5">
             <Radio className="w-4 h-4" /> Start Podcast
@@ -475,19 +348,27 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   // ── Generating ───────────────────────────────────────────────────
   if (status === 'generating') return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
-        <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
-        </div>
-        <div>
-          <h2 className="text-xl font-black text-white tracking-tight">Scripting Session</h2>
-          <p className="text-slate-500 mt-1.5 text-sm">The AI hosts are writing the script...</p>
-        </div>
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-          ))}
+    <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
+          <ArrowLeft className="w-4 h-4 text-slate-400" />
+        </Link>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-6 text-center max-w-xs px-6">
+          <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-white tracking-tight">Scripting Session</h2>
+            <p className="text-slate-500 mt-1.5 text-sm">The AI hosts are writing the script…</p>
+          </div>
+          <div className="flex gap-1.5">
+            {[0,1,2].map(i => (
+              <div key={i} className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -495,211 +376,81 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
 
   // ── Error ────────────────────────────────────────────────────────
   if (status === 'error') return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-5 text-center">
-        <XCircle className="w-12 h-12 text-red-500" />
-        <h2 className="text-xl font-black text-white">Connection Failed</h2>
-        <button onClick={handleStart}
-          className="px-6 py-3 bg-orange-500 text-white font-black text-sm rounded-2xl hover:bg-orange-400 transition-all">
-          Retry
-        </button>
+    <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
+          <ArrowLeft className="w-4 h-4 text-slate-400" />
+        </Link>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-5 text-center">
+          <XCircle className="w-12 h-12 text-red-500" />
+          <h2 className="text-xl font-black text-white">Connection Failed</h2>
+          <button onClick={handleStart}
+            className="px-6 py-3 bg-orange-500 text-white font-black text-sm rounded-2xl hover:bg-orange-400 transition-all">
+            Retry
+          </button>
+        </div>
       </div>
     </div>
   )
 
   // ── Player ───────────────────────────────────────────────────────
-  const speakerName = currentChunk?.speaker === 'A' ? voiceA : voiceB
-
   return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0 z-10">
-        <div className="flex items-center gap-3">
-          <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
-            <ArrowLeft className="w-4 h-4 text-slate-400" />
+      {/* ── TOP HEADER — back button only ─────────────────────────── */}
+      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-5 py-4 pointer-events-none">
+        <div className="pointer-events-auto flex items-center gap-3">
+          <Link href={`/library/${resourceId}`}
+            className="p-2 rounded-[1rem] bg-[#1a1a1a]/90 backdrop-blur-sm border border-white/8 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+            <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div>
-            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">FlowCast AI · Live</p>
-            <h1 className="text-xs font-black text-slate-400 truncate max-w-[180px] sm:max-w-xs">{resource?.title}</h1>
+          <div className="bg-[#1a1a1a]/90 backdrop-blur-sm border border-white/8 rounded-[1rem] px-4 py-2">
+            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-none mb-0.5">FlowCast AI</p>
+            <p className="text-[13px] font-bold text-white leading-tight truncate max-w-[200px] sm:max-w-sm">{resource?.title || '…'}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full">
+        {/* On Air badge */}
+        <div className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full backdrop-blur-sm">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
           <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">On Air</span>
         </div>
-      </div>
+      </header>
 
-      {/* Main content — split layout on desktop, stacked on mobile */}
-      {liveMode !== 'off' ? (
-        <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d0d]">
-          <style dangerouslySetInnerHTML={{__html: `
-            @keyframes orbPulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
-            @keyframes orbWave { 0% { transform: scale(1); opacity: 0.5; border-width: 2px; } 100% { transform: scale(2.2); opacity: 0; border-width: 0px; } }
-            @keyframes orbRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            .orb-ai { background: radial-gradient(circle at 30% 30%, #c084fc, #8b5cf6, #4338ca, #1e1b4b); box-shadow: 0 0 80px 20px rgba(139, 92, 246, 0.5), inset 0 0 50px rgba(255, 255, 255, 0.6); animation: orbPulse 1.5s ease-in-out infinite, orbRotate 8s linear infinite; }
-            .orb-user { background: radial-gradient(circle at 30% 30%, #fb923c, #ea580c, #991b1b, #450a0a); box-shadow: 0 0 50px 10px rgba(234, 88, 12, 0.3), inset 0 0 30px rgba(255, 255, 255, 0.3); animation: orbPulse 3s ease-in-out infinite, orbRotate 15s linear infinite reverse; }
-            .orb-ring { position: absolute; inset: 0; border-radius: 50%; animation: orbWave 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite; }
-            .orb-ring.ai { border: 2px solid rgba(167, 139, 250, 0.8); }
-            .orb-ring.user { border: 2px solid rgba(251, 146, 60, 0.4); animation-duration: 2.5s; }
-            .orb-ring:nth-child(2) { animation-delay: 0.6s; }
-            .orb-ring:nth-child(3) { animation-delay: 1.2s; }
-          `}} />
+      {/* ── MAIN BODY ─────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden pt-[68px] pb-[140px]">
 
-          <div className="flex-1 flex flex-col justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-white/[0.04] px-4 py-3 backdrop-blur">
-                <div className="flex items-center gap-3">
-                  <div className={cn('h-2.5 w-2.5 rounded-full', liveMode === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse')} />
-                  <div>
-                    <p className="text-sm font-semibold text-white">Live Q&A studio</p>
-                    <p className="text-xs text-slate-400">
-                      {liveMode === 'connecting' ? 'Connecting your host…' : liveMicAvailable ? 'Voice + text are ready' : 'Text-only mode is on'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full border border-white/8 bg-black/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Ctrl/Cmd + M to mute
-                  </span>
-                  <span className="rounded-full border border-orange-500/20 bg-orange-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-orange-400">
-                    {liveMicAvailable ? 'Mic ready' : 'Text only'}
-                  </span>
-                </div>
-              </div>
+        {/* LEFT COLUMN — album art card */}
+        <div className="w-full lg:w-[42%] shrink-0 flex flex-col items-center justify-center p-6 lg:p-8 gap-5">
 
-              <div className="grid flex-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="relative flex min-h-[300px] flex-col items-center justify-center overflow-hidden rounded-[1.8rem] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] p-6 sm:p-8">
-                  <div className={cn('absolute inset-0 opacity-20 transition-all duration-1000', liveAiSpeaking ? 'bg-[radial-gradient(circle_at_center,#6d28d9,transparent_60%)]' : 'bg-[radial-gradient(circle_at_center,#9a3412,transparent_50%)]')} />
-                  <div className="relative z-10 mb-6 flex w-full items-center justify-center">
-                    <div className="relative h-40 w-40 sm:h-48 sm:w-48">
-                      <div className="absolute inset-0">
-                        <div className={cn('orb-ring', liveAiSpeaking ? 'ai' : 'user')} />
-                        <div className={cn('orb-ring', liveAiSpeaking ? 'ai' : 'user')} />
-                        <div className={cn('orb-ring', liveAiSpeaking ? 'ai' : 'user')} />
-                      </div>
-                      <div className={cn('relative z-10 h-full w-full rounded-full transition-all duration-700 ease-in-out', liveAiSpeaking ? 'orb-ai scale-110' : 'orb-user scale-100')}>
-                        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_60%_20%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="relative z-10 text-center">
-                    <p className="text-sm font-semibold text-white">{liveAiSpeaking ? 'Host is speaking…' : 'Ask away whenever you’re ready'}</p>
-                    <p className="mt-1 text-sm text-slate-400">
-                      {liveMicAvailable ? 'Use your voice or type a question below.' : 'Your message will go straight to the host.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex min-h-[300px] flex-col rounded-[1.6rem] border border-white/8 bg-[#111]/90 p-4 sm:p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Recent replies</p>
-                      <p className="text-xs text-slate-500">Your latest exchange stays right here.</p>
-                    </div>
-                    <div className="rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                      Live
-                    </div>
-                  </div>
-                  <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-                    {liveMode === 'connecting' ? (
-                      <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/8 bg-white/[0.03] p-4 text-center text-sm text-slate-500">
-                        Connecting to host...
-                      </div>
-                    ) : liveTranscript.length === 0 ? (
-                      <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/8 bg-white/[0.03] p-4 text-center text-sm text-slate-500">
-                        Your host will respond here as soon as the session starts.
-                      </div>
-                    ) : (
-                      liveTranscript.slice(-6).map((entry, i) => (
-                        <div key={`${entry.role}-${i}`} className={cn('rounded-2xl border px-3 py-3', entry.role === 'ai' ? 'border-violet-500/20 bg-violet-500/8' : 'border-orange-500/20 bg-orange-500/8')}>
-                          <p className={cn('mb-1 text-[10px] font-black uppercase tracking-[0.2em]', entry.role === 'ai' ? 'text-violet-400' : 'text-orange-400')}>
-                            {entry.role === 'ai' ? 'Host' : 'You'}
-                          </p>
-                          <p className="text-sm leading-relaxed text-slate-200">{entry.text}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mx-auto w-full max-w-3xl">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  void sendLiveTextMessage()
-                }}
-                className="rounded-[1.25rem] border border-white/8 bg-[#111]/95 p-3 shadow-2xl shadow-black/30 backdrop-blur"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/12 text-orange-400">
-                    <MessageSquare className="h-4.5 w-4.5" />
-                  </div>
-                  <input
-                    type="text"
-                    value={liveTextInput}
-                    onChange={(e) => setLiveTextInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        void sendLiveTextMessage()
-                      }
-                    }}
-                    placeholder={liveMicAvailable ? 'Type a question… (Enter to send)' : 'Text-only mode — ask the host anything'}
-                    className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none"
-                    disabled={liveSendingText}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!liveTextInput.trim() || liveSendingText}
-                    className="rounded-xl bg-orange-500 px-3 py-2 text-white transition-all hover:bg-orange-400 disabled:pointer-events-none disabled:opacity-30"
-                  >
-                    {liveSendingText ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-500">
-                  <span>Ask the host anything • Press Enter to send</span>
-                  <span>Mic stays live until you leave the session</span>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-
-        {/* ── LEFT: Image + speaker avatars ── */}
-        <div className="w-full lg:w-[48%] shrink-0 flex flex-col p-4 lg:p-6 gap-3 lg:border-r lg:border-white/5">
-
-          {/* Image panel */}
+          {/* Album art */}
           <div
-            className="relative flex-1 min-h-[180px] lg:min-h-0 rounded-2xl overflow-hidden bg-[#111] border border-white/6 cursor-pointer group"
+            className="relative w-full max-w-[320px] aspect-square rounded-[2rem] overflow-hidden bg-[#111] border border-white/8 shadow-2xl cursor-pointer group"
             onClick={() => currentImage && setEnlargedImage(currentImage)}
           >
             {currentImage ? (
               <>
-                <img
-                  src={currentImage}
-                  key={audio.currentIndex}
-                  className="w-full h-full object-cover transition-opacity duration-700"
-                  alt="Visual"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d]/80 via-transparent to-transparent" />
-                <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="px-2.5 py-1 bg-black/60 backdrop-blur-sm rounded-lg text-[10px] font-black text-white uppercase tracking-wider">
-                    Tap to expand
-                  </div>
-                </div>
+                <img src={currentImage} key={audio.currentIndex}
+                  className="w-full h-full object-cover transition-opacity duration-700" alt="Visual" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
               </>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 opacity-20">
-                <ImageIcon className="w-10 h-10 text-slate-500" />
+                <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center">
+                  <Radio className="w-8 h-8 text-orange-400" />
+                </div>
                 <p className="text-xs text-slate-500 font-bold">Visual will appear here</p>
               </div>
             )}
-
+            {/* Now playing badge */}
+            <div className="absolute bottom-4 left-4">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-full border border-white/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">Now Playing</span>
+              </div>
+            </div>
             {/* Hand raised overlay */}
             {isHandRaised && (
               <div className="absolute inset-0 flex items-center justify-center bg-orange-500/20 backdrop-blur-sm">
@@ -708,180 +459,142 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             )}
           </div>
 
-          {/* Speaker avatars */}
-          <div className="flex items-center gap-3 shrink-0">
-            {[
-              { key: 'A', name: voiceA, color: 'bg-indigo-500', active: currentChunk?.speaker === 'A' },
-              { key: 'B', name: voiceB, color: 'bg-orange-500', active: currentChunk?.speaker === 'B' },
-            ].map(s => (
-              <div key={s.key} className={cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all duration-300',
-                s.active
-                  ? 'bg-white/8 border-white/10 scale-105'
-                  : 'bg-white/3 border-white/5 opacity-50'
-              )}>
-                <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm text-white shrink-0', s.color)}>
-                  {s.name[0]}
-                </div>
-                <div>
-                  <p className="text-xs font-black text-white">{s.name}</p>
-                  {s.active && (
-                    <div className="flex gap-0.5 mt-0.5">
-                      {[0,1,2].map(i => (
-                        <div key={i} className="w-1 h-1 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
-                      ))}
-                    </div>
-                  )}
-                </div>
+          {/* Title + hosts */}
+          <div className="text-center max-w-[320px] w-full">
+            <h2 className="text-[20px] font-black text-white leading-tight truncate">{resource?.title || 'FlowCast Session'}</h2>
+            <p className="text-[13px] text-slate-500 mt-1">
+              With Hosts: {voiceA} &amp; {voiceB}
+            </p>
+          </div>
+
+          {/* Seek bar */}
+          <div className="w-full max-w-[320px] space-y-1">
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-bold text-slate-600 w-6 text-right">{audio.currentIndex + 1}</span>
+              <div className="flex-1 h-1.5 bg-white/8 rounded-full overflow-hidden">
+                <div className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                  style={{ width: `${audio.totalChunks > 0 ? ((audio.currentIndex + 1) / audio.totalChunks) * 100 : 0}%` }} />
               </div>
-            ))}
-            <div className="flex-1" />
-            <span className="text-xs font-black text-slate-600">
-              {audio.currentIndex + 1} / {audio.totalChunks || '...'}
-            </span>
+              <span className="text-[11px] font-bold text-slate-600 w-6">{audio.totalChunks || '?'}</span>
+            </div>
+          </div>
+
+          {/* Playback controls */}
+          <div className="flex items-center gap-5 max-w-[320px] w-full justify-center">
+            <button
+              onClick={() => audio.currentIndex > 0 && setCurrentIndex(audio.currentIndex - 1)}
+              disabled={audio.currentIndex === 0}
+              className="p-2 rounded-full text-slate-500 hover:text-white transition-all disabled:opacity-20">
+              <SkipBack className="w-5 h-5" />
+            </button>
+            <button onClick={togglePlay}
+              className="w-16 h-16 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-2xl shadow-orange-500/30 hover:bg-orange-400 hover:scale-105 transition-all">
+              {!audio.isChunkLoaded && !audio.isPlaying
+                ? <Loader2 className="w-6 h-6 animate-spin" />
+                : audio.isPlaying
+                ? <Pause className="w-6 h-6 fill-current" />
+                : <Play className="w-6 h-6 fill-current ml-0.5" />}
+            </button>
+            <button
+              onClick={() => audio.currentIndex < (audio.totalChunks - 1) && setCurrentIndex(audio.currentIndex + 1)}
+              disabled={audio.currentIndex >= audio.totalChunks - 1}
+              className="p-2 rounded-full text-slate-500 hover:text-white transition-all disabled:opacity-20">
+              <SkipForward className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        {/* ── RIGHT: Current line + transcript ── */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-
-          {/* Current spoken line — hero text */}
-          <div className="px-5 lg:px-8 py-4 lg:py-6 border-b border-white/5 shrink-0">
-            <div className="flex gap-3">
-              <Quote className="w-6 h-6 text-orange-500/30 shrink-0 mt-1" />
-              <p className="text-base lg:text-xl font-bold text-white leading-relaxed line-clamp-4" key={audio.currentIndex}>
-                {currentChunk?.text || 'Initializing...'}
-              </p>
+        {/* RIGHT COLUMN — live transcript */}
+        <div className="flex-1 flex flex-col min-h-0 lg:border-l border-white/5 overflow-hidden">
+          {/* Transcript header */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/5 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="material-symbols-outlined text-orange-500 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>subject</span>
+              <span className="text-[14px] font-black text-white">Live Transcript</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">AI Syncing</span>
             </div>
           </div>
 
           {/* Transcript scroll */}
-          <div ref={transcriptRef} className="flex-1 overflow-y-auto px-4 lg:px-6 py-4 space-y-3 scrollbar-hide">
+          <div ref={transcriptRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-hide">
             {(audio.script || []).map((chunk: any, i: number) => {
               const isA = chunk.speaker === 'A'
               const isCurrent = i === audio.currentIndex
               const isPast = i < audio.currentIndex
               return (
-                <div
-                  key={i}
-                  data-active={isCurrent}
-                  className={cn(
-                    'flex gap-2.5 transition-all duration-300',
-                    isA ? 'flex-row' : 'flex-row-reverse',
-                    isCurrent ? 'opacity-100' : isPast ? 'opacity-40' : 'opacity-20'
-                  )}
-                >
-                  {/* Avatar */}
-                  <div className={cn(
-                    'w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs text-white shrink-0 mt-0.5',
-                    isA ? 'bg-indigo-500' : 'bg-orange-500'
-                  )}>
-                    {isA ? voiceA[0] : voiceB[0]}
-                  </div>
-
-                  {/* Bubble */}
-                  <div className={cn(
-                    'max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
-                    isA
-                      ? 'bg-[#1a1a1a] border border-white/6 text-slate-300 rounded-tl-none'
-                      : 'bg-[#1a1a1a] border border-white/6 text-slate-300 rounded-tr-none',
-                    isCurrent && 'border-orange-500/20 bg-orange-500/5 text-white'
-                  )}>
-                    <p className="text-[10px] font-black uppercase tracking-wider mb-1 opacity-50">
-                      {isA ? voiceA : voiceB}
-                    </p>
+                <div key={i} data-active={isCurrent}
+                  className={cn('transition-all duration-300', isCurrent ? 'opacity-100' : isPast ? 'opacity-45' : 'opacity-20')}>
+                  <p className={cn('text-[11px] font-black uppercase tracking-widest mb-1',
+                    isA ? 'text-indigo-400' : 'text-orange-400')}>
+                    {isA ? voiceA : voiceB}:
+                  </p>
+                  <div className={cn('rounded-[1rem] px-4 py-3 text-[14px] leading-relaxed',
+                    isCurrent
+                      ? isA ? 'bg-indigo-500/10 border border-indigo-500/20 text-white'
+                             : 'bg-orange-500/10 border border-orange-500/20 text-white'
+                      : 'text-slate-400')}>
                     {chunk.text}
                   </div>
                 </div>
               )
             })}
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* ── Player bar ── */}
-      <div className="border-t border-white/5 bg-[#111] px-4 lg:px-8 py-4 shrink-0 z-10">
-        <div className="max-w-4xl mx-auto space-y-3">
-
-          {/* Progress bar */}
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-black text-slate-600 w-8 text-right">
-              {audio.currentIndex + 1}
-            </span>
-            <div className="flex-1 h-1 bg-white/8 rounded-full overflow-hidden cursor-pointer">
-              <div className="h-full bg-orange-500 transition-all duration-500 rounded-full"
-                style={{ width: `${audio.playbackProgress || 0}%` }} />
-            </div>
-            <span className="text-[10px] font-black text-slate-600 w-8">
-              {audio.totalChunks || '?'}
-            </span>
+            {!audio.script?.length && (
+              <div className="flex items-center justify-center h-full text-slate-600 text-sm">
+                Transcript will appear here as the podcast plays…
+              </div>
+            )}
           </div>
 
-          {/* Controls row */}
-          <div className="flex items-center justify-between gap-4">
-
-            {/* Left: title */}
-            <div className="hidden sm:block min-w-0">
-              <p className="text-xs font-black text-white truncate max-w-[160px] lg:max-w-xs">
-                {resource?.title || 'FlowCast Session'}
-              </p>
-              <p className="text-[10px] text-slate-500 font-bold mt-0.5">
-                {audio.isPlaying
-                  ? `Segment ${audio.currentIndex + 1} of ${audio.totalChunks}`
-                  : audio.isChunkLoaded ? 'Paused' : 'Connecting...'}
-              </p>
-            </div>
-
-            {/* Center: play controls */}
-            <div className="flex items-center gap-3 mx-auto sm:mx-0">
-              <button
-                onClick={() => audio.currentIndex > 0 && setCurrentIndex(audio.currentIndex - 1)}
-                className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all disabled:opacity-20"
-                disabled={audio.currentIndex === 0}
-              >
-                <SkipBack className="w-4 h-4" />
+          {/* Ask the Hosts button */}
+          <div className="px-5 py-4 border-t border-white/5 shrink-0">
+            {liveMode === 'off' ? (
+              <button onClick={startLiveQA}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-[14px] hover:bg-indigo-500/25 transition-all">
+                <MessageSquare className="w-4 h-4" />
+                Ask the Hosts a Question
               </button>
-
-              <button onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 hover:bg-orange-400 hover:scale-105 transition-all">
-                {!audio.isChunkLoaded && !audio.isPlaying ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : audio.isPlaying ? (
-                  <Pause className="w-5 h-5 fill-current" />
-                ) : (
-                  <Play className="w-5 h-5 fill-current ml-0.5" />
+            ) : liveMode === 'connecting' ? (
+              <div className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-[#1a1a1a] border border-white/8">
+                <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                <span className="text-slate-400 font-bold text-sm">Connecting to hosts…</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Live Q&A transcript */}
+                {liveTranscript.length > 0 && (
+                  <div className="max-h-32 overflow-y-auto space-y-2 scrollbar-hide">
+                    {liveTranscript.slice(-4).map((entry, i) => (
+                      <div key={i} className={cn('rounded-xl px-3 py-2 text-sm',
+                        entry.role === 'ai' ? 'bg-indigo-500/8 border border-indigo-500/15 text-slate-300' : 'bg-orange-500/8 border border-orange-500/15 text-slate-300')}>
+                        <span className={cn('text-[10px] font-black uppercase tracking-wider mr-2',
+                          entry.role === 'ai' ? 'text-indigo-400' : 'text-orange-400')}>
+                          {entry.role === 'ai' ? 'Host' : 'You'}
+                        </span>
+                        {entry.text}
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </button>
-
-              <button
-                onClick={() => audio.currentIndex < (audio.totalChunks - 1) && setCurrentIndex(audio.currentIndex + 1)}
-                className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all disabled:opacity-20"
-                disabled={audio.currentIndex >= audio.totalChunks - 1}
-              >
-                <SkipForward className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Right: raise hand / drop hand — no overlay, everything in background */}
-            <button onClick={() => {
-              if (liveMode === 'active' || liveMode === 'connecting') {
-                endLiveQA()
-              } else {
-                startLiveQA()
-              }
-            }}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all',
-                liveMode !== 'off'
-                  ? 'bg-orange-500/20 border border-orange-500/40 text-orange-400'
-                  : 'bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8'
-              )}>
-              <Hand className={cn('w-3.5 h-3.5', liveMode !== 'off' && 'animate-pulse')} />
-              <span className="hidden sm:inline">
-                {liveMode !== 'off' ? 'Drop Hand' : 'Raise Hand'}
-              </span>
-            </button>
+                {/* Text input */}
+                <div className="flex gap-2">
+                  <input type="text" value={liveTextInput} onChange={e => setLiveTextInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendLiveTextMessage() } }}
+                    placeholder="Ask the hosts anything…"
+                    className="flex-1 bg-[#1a1a1a] border border-white/8 text-white text-sm px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/40 placeholder:text-slate-600" />
+                  <button onClick={sendLiveTextMessage} disabled={!liveTextInput.trim() || liveSendingText}
+                    className="px-4 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-400 transition-all disabled:opacity-30">
+                    {liveSendingText ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                  </button>
+                  <button onClick={endLiveQA}
+                    className="px-3 py-3 bg-white/5 border border-white/8 text-slate-400 rounded-xl hover:text-white transition-all">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
