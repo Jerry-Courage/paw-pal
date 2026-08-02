@@ -116,12 +116,18 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
   const handleSubmit = () => {
     if (Object.keys(selected).length < questions.length) { toast.error('Answer all questions first.'); return }
+    // Calculate pass before setting state
+    const correct = questions.filter((q, i) => selected[i] === q.correct).length
+    const didPass = questions.length > 0 && correct >= Math.ceil(questions.length * 0.6)
     setSubmitted(true); setPhase('result')
-    if (passed) {
-      setTotalXP(p => p + XP_PER_SECTION)
-      setCompleted(p => { const n = new Set(p); n.add(sectionIndex); return n })
+    if (didPass && !completed.has(sectionIndex)) {
+      const newXP = totalXP + XP_PER_SECTION
+      const newCompleted = new Set(completed)
+      newCompleted.add(sectionIndex)
+      setTotalXP(newXP)
+      setCompleted(newCompleted)
       toast.success(`+${XP_PER_SECTION} XP! 🎉`, { duration: 2000 })
-      libraryApi.completeStep(resourceId, 'notes', Math.round((completed.size + 1) / total * 100)).catch(() => {})
+      libraryApi.completeStep(resourceId, 'notes', Math.round(newCompleted.size / total * 100)).catch(() => {})
       qc.invalidateQueries({ queryKey: ['progress', resourceId] })
     }
   }
