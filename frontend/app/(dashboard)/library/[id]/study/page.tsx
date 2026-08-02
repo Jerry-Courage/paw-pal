@@ -45,7 +45,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const qc = useQueryClient()
 
-  const [sectionIndex, setSectionIndex] = useState(0)
+  const [sectionIndex, setSectionIndex] = useState(() => {
+    if (typeof window === 'undefined') return 0
+    try { return parseInt(localStorage.getItem(`study_${resourceId}_section`) || '0') || 0 } catch { return 0 }
+  })
   const [phase, setPhase] = useState<Phase>('reading')
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [writtenQ, setWrittenQ] = useState<WrittenQuestion | null>(null)
@@ -56,8 +59,18 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const [selected, setSelected] = useState<Record<number, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [loadingQuiz, setLoadingQuiz] = useState(false)
-  const [totalXP, setTotalXP] = useState(0)
-  const [completed, setCompleted] = useState<Set<number>>(new Set())
+  const [totalXP, setTotalXP] = useState(() => {
+    if (typeof window === 'undefined') return 0
+    try { return parseInt(localStorage.getItem(`study_${resourceId}_xp`) || '0') || 0 } catch { return 0 }
+  })
+  const [completed, setCompleted] = useState<Set<number>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(`study_${resourceId}_completed`)
+      if (raw) return new Set(JSON.parse(raw) as number[])
+    } catch {}
+    return new Set()
+  })
   const [isReading, setIsReading] = useState(false)
   const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
   const [timerSeconds, setTimerSeconds] = useState(25 * 60)
@@ -90,6 +103,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   }, [timerRunning])
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+
+  // ── Persist progress to localStorage ────────────────────────────────────
+  useEffect(() => {
+    try {
+      localStorage.setItem(`study_${resourceId}_section`, String(sectionIndex))
+      localStorage.setItem(`study_${resourceId}_xp`, String(totalXP))
+      localStorage.setItem(`study_${resourceId}_completed`, JSON.stringify([...completed]))
+    } catch {}
+  }, [sectionIndex, totalXP, completed, resourceId])
 
   const { data: resource, isLoading } = useQuery({
     queryKey: ['resource', resourceId],
@@ -150,6 +172,28 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     setSectionIndex(i); setPhase('reading'); setQuestions([]); setSelected({}); setSubmitted(false)
     setWrittenQ(null); setWrittenAnswer(''); setWrittenGrade(null); setWrittenFeedback('')
   }
+
+  const resetProgress = () => {
+    try {
+      localStorage.removeItem(`study_${resourceId}_section`)
+      localStorage.removeItem(`study_${resourceId}_xp`)
+      localStorage.removeItem(`study_${resourceId}_completed`)
+    } catch {}
+    setSectionIndex(0); setPhase('reading'); setQuestions([]); setSelected({}); setSubmitted(false)
+    setWrittenQ(null); setWrittenAnswer(''); setWrittenGrade(null); setWrittenFeedback('')
+    setTotalXP(0); setCompleted(new Set())
+    toast.success('Progress reset. Starting fresh!')
+  }
+
+  // Show resume toast on first load if there is saved progress
+  const didShowResumeRef = useRef(false)
+  useEffect(() => {
+    if (didShowResumeRef.current) return
+    didShowResumeRef.current = true
+    if (sectionIndex > 0 || completed.size > 0) {
+      toast.info(`Resuming from section ${sectionIndex + 1} — ${completed.size} done, ${totalXP} XP`, { duration: 3000 })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNextSection = () => {
     if (sectionIndex < total - 1) { goToSection(sectionIndex + 1) }
@@ -249,6 +293,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               toast.success(`🏆 Mastery complete! +${XP_MASTERY} XP!`, { duration: 3000 })
               libraryApi.completeStep(resourceId, 'examprep', msg.score || 75).catch(() => {})
               qc.invalidateQueries({ queryKey: ['progress', resourceId] })
+              // Clear localStorage so next visit starts fresh after mastery
+              try { localStorage.removeItem(`study_${resourceId}_section`); localStorage.removeItem(`study_${resourceId}_xp`); localStorage.removeItem(`study_${resourceId}_completed`) } catch {}
             }
           } catch {}
         } else if (event.data instanceof Blob) {
@@ -346,6 +392,16 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
             <span className="text-[13px] font-black text-primary">{totalXP} XP</span>
           </div>
+          {/* Reset progress */}
+          {(sectionIndex > 0 || completed.size > 0) && (
+            <button
+              onClick={() => { if (window.confirm('Reset all study progress for this resource?')) resetProgress() }}
+              className="p-2 rounded-xl text-on-surface-variant/50 hover:text-error hover:bg-error-container/10 transition-all"
+              title="Reset progress"
+            >
+              <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+            </button>
+          )}
         </div>
       </header>
 
