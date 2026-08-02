@@ -67,11 +67,11 @@ type Message = {
 }
 
 const SUGGESTIONS = [
-  { icon: 'ðŸ§ ', text: 'Explain backpropagation in simple terms' },
-  { icon: 'ðŸ“Š', text: 'Draw a roadmap for learning machine learning' },
-  { icon: 'ðŸ”¢', text: 'What are the key concepts in linear algebra?' },
-  { icon: 'ðŸŒ¿', text: 'Help me understand the Krebs cycle' },
-  { icon: 'ðŸ’»', text: 'Explain Big O notation with examples' },
+  { icon: 'psychology', text: 'Explain backpropagation in simple terms' },
+  { icon: 'hub', text: 'Draw a roadmap for learning machine learning' },
+  { icon: 'functions', text: 'What are the key concepts in linear algebra?' },
+  { icon: 'eco', text: 'Help me understand the Krebs cycle' },
+  { icon: 'code', text: 'Explain Big O notation with examples' },
 ]
 
 // â”€â”€â”€ MERMAID RENDERER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1042,7 +1042,9 @@ function AIChat() {
                     className={cn('flex items-start gap-2.5 p-3.5 bg-surface-container/30 border border-outline-variant/30 rounded-2xl text-left transition-all hover:border-primary/20 hover:bg-surface-container/40 hover:shadow-lg hover:shadow-orange-500/5 group cursor-pointer',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
                     )}>
-                    <div className="text-base shrink-0 bg-surface-container-high p-1.5 rounded-lg group-hover:scale-110 transition-transform">{s.icon}</div>
+                    <div className="w-9 h-9 shrink-0 bg-surface-container-high rounded-[1rem] flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <span className="material-symbols-outlined text-primary text-[18px]">{s.icon}</span>
+                    </div>
                     <span className="text-xs font-bold text-on-surface-variant group-hover:text-primary transition-colors leading-relaxed">{s.text}</span>
                   </button>
                 ))}

@@ -62,6 +62,7 @@ export default function WorkspaceCollaborationStudio() {
   const [workspace, setWorkspace] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [inputText, setInputText] = useState('')
+  const [sidekickInput, setSidekickInput] = useState('')
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({})
   const [replyingTo, setReplyingTo] = useState<any>(null)
   const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState(false)
@@ -95,6 +96,7 @@ export default function WorkspaceCollaborationStudio() {
     onConfirm: () => {}
   })
   const scrollRef = useRef<HTMLDivElement>(null)
+  const sidekickScrollRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const timerRef = useRef<any>(null)
@@ -112,6 +114,9 @@ export default function WorkspaceCollaborationStudio() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
+    if (sidekickScrollRef.current) {
+      sidekickScrollRef.current.scrollTop = sidekickScrollRef.current.scrollHeight
+    }
   }, [messages])
 
   const fetchWorkspace = async () => {
@@ -120,7 +125,6 @@ export default function WorkspaceCollaborationStudio() {
       setWorkspace(res.data)
       setMessages(res.data.messages || [])
       setIsLoading(false)
-      // Instantly clear the unread badge on the workspace list
       qc.invalidateQueries({ queryKey: ['workspaces'] })
     } catch (err) {
       console.error(err)
@@ -130,7 +134,6 @@ export default function WorkspaceCollaborationStudio() {
   const fetchLibrary = async () => {
     try {
       const res = await libraryApi.getResources()
-      // Fix: Handle paginated results
       const resources = Array.isArray(res.data) ? res.data : res.data.results || []
       setLibraryResources(resources)
     } catch (err) {
@@ -141,20 +144,15 @@ export default function WorkspaceCollaborationStudio() {
   const connectingPromiseRef = useRef<Promise<void> | null>(null)
   
   const connectWebSocket = async () => {
-    // --- 0. Prevent race conditions with a lock ---
     if (connectingPromiseRef.current) {
       return await connectingPromiseRef.current
     }
-
-    // --- 1. Guard against already active connection ---
     if (socketRef.current?.readyState === WebSocket.CONNECTING || 
         socketRef.current?.readyState === WebSocket.OPEN) {
       return
     }
 
-    // Create a new connection promise
     connectingPromiseRef.current = (async () => {
-      // --- 2. Cleanly terminate existing socket ---
       if (socketRef.current) {
         socketRef.current.onclose = null
         socketRef.current.close()
@@ -162,7 +160,6 @@ export default function WorkspaceCollaborationStudio() {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      // Always connect WS to the backend, not the frontend host
       const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
       const host = backendHost || (window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host)
       
@@ -181,8 +178,6 @@ export default function WorkspaceCollaborationStudio() {
         socket.onmessage = (event) => {
           const data = JSON.parse(event.data)
           if (data.type === 'broadcast_chat_message') {
-            // consumers.py flattens the message fields into the top-level payload
-            // so all fields (id, content, author_name, etc.) are on `data` directly
             const msg = data
             setMessages(prev => {
               if (prev.find(m => String(m.id) === String(msg.id))) return prev
@@ -201,8 +196,6 @@ export default function WorkspaceCollaborationStudio() {
               if (optimisticIndex !== -1) {
                 const next = [...prev]
                 const optimistic = prev[optimisticIndex]
-                // Preserve the blob: URL from the optimistic message so audio keeps playing
-                // The server message may have a relative URL that fails to resolve
                 const mergedMsg = { ...msg }
                 if (optimistic.audio_file?.startsWith('blob:') && !msg.audio_file?.startsWith('http')) {
                   mergedMsg.audio_file = optimistic.audio_file
@@ -284,7 +277,7 @@ export default function WorkspaceCollaborationStudio() {
         return type
       }
     }
-    return '' // Let the browser pick its default — never force audio/mpeg
+    return ''
   }
 
   const handleSendMessage = async (e?: React.FormEvent, audioBlob?: Blob) => {
@@ -294,7 +287,6 @@ export default function WorkspaceCollaborationStudio() {
     const tempText = inputText.trim()
     setInputText('')
 
-    // --- Optimistic Update ---
     const optimisticId = `opt-${Date.now()}`
     const tempMsg = {
       id: optimisticId,
@@ -318,7 +310,6 @@ export default function WorkspaceCollaborationStudio() {
         data = new FormData()
         data.append('content', tempText || (audioBlob ? "Voice Note" : "Attachment"))
         if (audioBlob) {
-          // Use proper extension based on blob type
           const extension = audioBlob.type.includes('mp4') ? 'm4a' : 'webm'
           data.append('audio', audioBlob, `voice_note.${extension}`)
         }
@@ -329,7 +320,32 @@ export default function WorkspaceCollaborationStudio() {
       }
       
       const response = await workspaceApi.sendMessage(Number(id), data, replyingTo?.id)
-      setReplyingTo(null) // Clear reply context after sending
+      setReplyingTo(null)
+    } catch (err) {
+      console.error(err)
+      setMessages(prev => prev.filter(m => m.id !== optimisticId))
+    }
+  }
+
+  const handleSendSidekick = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!sidekickInput.trim()) return
+    const text = `@Flow ${sidekickInput.trim()}`
+    setSidekickInput('')
+    const optimisticId = `opt-sk-${Date.now()}`
+    const tempMsg = {
+      id: optimisticId,
+      content: text,
+      author: session?.user,
+      created_at: new Date().toISOString(),
+      is_ai: false,
+      is_optimistic: true,
+      audio_file: null,
+      attachment: null,
+    }
+    setMessages(prev => [...prev, tempMsg])
+    try {
+      await workspaceApi.sendMessage(Number(id), text, undefined)
     } catch (err) {
       console.error(err)
       setMessages(prev => prev.filter(m => m.id !== optimisticId))
@@ -338,41 +354,30 @@ export default function WorkspaceCollaborationStudio() {
 
   const startRecording = async () => {
     try {
-      // Check if browser supports getUserMedia at all
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast.error('Microphone not supported in this browser. Try Chrome or Firefox.')
         return
       }
-
-      // Check if we're on HTTPS (required for mic access in production)
       if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
         toast.error('Microphone requires a secure connection (HTTPS). Please use the app over HTTPS.')
         return
       }
-
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = getSupportedMimeType()
-
       let recorder: MediaRecorder
       try {
-        // Only pass mimeType if we actually detected one — empty string causes errors on some browsers
         recorder = mimeType
           ? new MediaRecorder(stream, { mimeType })
           : new MediaRecorder(stream)
       } catch {
-        // mimeType still not supported despite isTypeSupported saying yes — use browser default
         recorder = new MediaRecorder(stream)
       }
-
       recorderRef.current = recorder
       chunksRef.current = []
-
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
       }
       recorder.onstop = () => {
-        // Use setTimeout to yield to the event loop so the final
-        // ondataavailable chunk fires before we build the Blob
         setTimeout(() => {
           const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
           chunksRef.current = []
@@ -380,8 +385,7 @@ export default function WorkspaceCollaborationStudio() {
           stream.getTracks().forEach(t => t.stop())
         }, 0)
       }
-
-      recorder.start(250) // collect data every 250ms so ondataavailable fires reliably
+      recorder.start(250)
       setIsRecording(true)
       setRecordingDuration(0)
       timerRef.current = setInterval(() => {
@@ -389,7 +393,6 @@ export default function WorkspaceCollaborationStudio() {
       }, 1000)
     } catch (err: any) {
       console.error('Recording failed', err)
-      // Give the user a clear, actionable error message
       if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
         toast.error('Microphone access denied. Please allow microphone permission in your browser settings and try again.')
       } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
@@ -405,7 +408,7 @@ export default function WorkspaceCollaborationStudio() {
   const stopRecording = () => {
     if (recorderRef.current && isRecording) {
       recorderRef.current.stop()
-      recorderRef.current = null  // clear ref so stale chunks don't bleed into next recording
+      recorderRef.current = null
       setIsRecording(false)
       clearInterval(timerRef.current)
     }
@@ -414,7 +417,6 @@ export default function WorkspaceCollaborationStudio() {
   const handleShareResource = async (resourceId: number) => {
     try {
       await workspaceApi.shareResource(Number(id), resourceId)
-      // Refresh workspace to show new resource
       fetchWorkspace()
       setHubView('shared')
       toast.success('Resource pinned to workspace intelligence!')
@@ -505,332 +507,446 @@ export default function WorkspaceCollaborationStudio() {
   )
 
   return (
-    <div className="flex h-full bg-background text-on-surface overflow-hidden relative md:left-64">
-      
-      {/* --- Main Chat Stage --- */}
-      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
-        
-        {/* Header */}
-        <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-outline-variant/25 bg-background z-20 flex-shrink-0">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors flex-shrink-0">
-              <ChevronLeft className="w-4 h-4 text-on-surface-variant" />
-            </button>
-            <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-               <LayoutGrid className="w-3.5 h-3.5 text-primary-container" />
-            </div>
-            <div className="overflow-hidden">
-              <h1 className="text-sm font-semibold text-on-surface truncate leading-tight">{workspace?.name || 'Collab Space'}</h1>
-              <span className="text-[10px] text-on-surface-variant/60 hidden sm:block truncate">{workspace?.subject || 'Collaboration'}</span>
-            </div>
+    <div className="flex flex-col h-full bg-background text-on-surface overflow-hidden relative md:left-64">
+
+      {/* ═══════════════ HEADER ═══════════════ */}
+      <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-outline-variant/20 bg-background z-20 flex-shrink-0">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors flex-shrink-0">
+            <ChevronLeft className="w-4 h-4 text-on-surface-variant" />
+          </button>
+          <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+            <LayoutGrid className="w-3.5 h-3.5 text-primary-container" />
+          </div>
+          <div className="overflow-hidden">
+            <h1 className="text-sm font-semibold text-on-surface truncate leading-tight">{workspace?.name || 'Collab Space'}</h1>
+            <span className="text-[10px] text-on-surface-variant/60 hidden sm:block truncate">{workspace?.subject || 'Collaboration'}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Member avatars */}
+          <div className="hidden md:flex items-center -space-x-1.5 mr-2">
+            {workspace?.members?.slice(0, 4).map((m: any, i: number) => (
+              <div key={i} className="relative w-6 h-6 rounded-full border-2 border-background bg-slate-700 flex items-center justify-center text-[9px] font-bold uppercase text-on-surface">
+                {m.user?.username?.[0] || '?'}
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-background" />
+              </div>
+            ))}
+            {(workspace?.members?.length || 0) > 4 && (
+              <div className="w-6 h-6 rounded-full border-2 border-background bg-surface-container flex items-center justify-center text-[9px] font-bold text-on-surface-variant">
+                +{workspace.members.length - 4}
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Member avatars */}
-            <div className="hidden md:flex items-center -space-x-1.5 mr-2">
-              {workspace?.members?.slice(0, 4).map((m: any, i: number) => (
-                <div key={i} className="relative w-6 h-6 rounded-full border-2 border-background bg-slate-700 flex items-center justify-center text-[9px] font-bold uppercase text-on-surface">
-                  {m.user?.username?.[0] || '?'}
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-background" />
-                </div>
-              ))}
-              {(workspace?.members?.length || 0) > 4 && (
-                <div className="w-6 h-6 rounded-full border-2 border-background bg-surface-container flex items-center justify-center text-[9px] font-bold text-on-surface-variant">
-                  +{workspace.members.length - 4}
-                </div>
+          {/* Invite code */}
+          <button 
+            onClick={copyInviteCode}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
+          >
+            <span className="text-[10px] font-bold text-on-surface-variant font-mono tracking-tight">{workspace?.invite_code}</span>
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60" />}
+          </button>
+
+          {/* Knowledge bank button */}
+          <button 
+            onClick={() => setIsKnowledgeDrawerOpen(true)}
+            className="p-2 bg-primary-container rounded-lg hover:bg-primary-container/80 transition-all shadow-lg shadow-primary/20 active:scale-90"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-on-surface" />
+          </button>
+
+          {/* Settings dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="p-2 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
+            >
+              <Settings className="w-3.5 h-3.5 text-on-surface-variant" />
+            </button>
+            
+            <AnimatePresence>
+              {isSettingsOpen && (
+                <>
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="fixed inset-0 z-30"
+                  />
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                    className="absolute right-0 mt-2 w-48 bg-surface-container-high border border-outline-variant/40 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
+                  >
+                    <div className="px-3 py-2.5 border-b border-outline-variant/25 mb-1.5 bg-surface-container/40">
+                      <p className="text-[9px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-2">Workspace Code</p>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); copyInviteCode(); }}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-outline-variant/40 rounded-lg hover:border-primary/30 transition-all group active:scale-[0.98]"
+                      >
+                        <span className="text-xs font-mono text-primary-container font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
+                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60 group-hover:text-on-surface/80 transition-colors" />}
+                      </button>
+                    </div>
+                    {workspace?.is_owner ? (
+                      <button 
+                        onClick={handleDeleteWorkspace}
+                        disabled={isDeleting}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-medium disabled:opacity-50"
+                      >
+                        {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        Delete workspace
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={handleLeaveWorkspace}
+                        disabled={isLeaving}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all text-xs font-medium disabled:opacity-50"
+                      >
+                        {isLeaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                        Leave space
+                      </button>
+                    )}
+                  </motion.div>
+                </>
               )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </header>
+
+      {/* ═══════════════ 3-COLUMN BODY ═══════════════ */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ── LEFT PANEL: Resources (w-64) ── */}
+        <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col bg-surface-container border-r border-outline-variant/20 overflow-hidden">
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <span className="text-xs font-bold tracking-widest uppercase text-primary">Resources</span>
+            <button
+              onClick={() => setIsKnowledgeDrawerOpen(true)}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
+              title="Add resource"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
+            </button>
+          </div>
+
+          {/* Resource cards */}
+          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2 custom-scrollbar">
+            {(workspace?.resources || []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
+                <span className="material-symbols-outlined text-on-surface-variant/30" style={{ fontSize: 32 }}>folder_open</span>
+                <p className="text-[11px] text-on-surface-variant/50 leading-relaxed">No resources yet. Add from your library.</p>
+              </div>
+            ) : (workspace?.resources || []).map((res: any) => (
+              <button
+                key={res.id}
+                onClick={() => { setViewingResource(res); setHubTab('insights'); setIsKnowledgeDrawerOpen(true) }}
+                className="w-full flex items-center gap-3 p-3 bg-surface-container-low border border-outline-variant/30 rounded-[1rem] hover:bg-surface-container-high transition-colors text-left group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 16 }}>
+                    {res.resource_type === 'pdf' ? 'picture_as_pdf' : res.resource_type === 'video' ? 'smart_display' : 'description'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-on-surface truncate leading-tight">{res.title}</p>
+                  <p className="text-[10px] text-on-surface-variant/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
+                </div>
+                <span className="material-symbols-outlined text-on-surface-variant/30 group-hover:text-on-surface-variant transition-colors" style={{ fontSize: 14 }}>chevron_right</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Add from Library button */}
+          <div className="p-3 border-t border-outline-variant/20">
+            <button
+              onClick={() => { setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[1rem] bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-[11px] font-semibold text-on-surface-variant"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add_circle</span>
+              Add from Library
+            </button>
+          </div>
+        </aside>
+
+        {/* ── CENTER PANEL: Collaborative Chat ── */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+          {/* Message stream */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-6 space-y-1 scroll-smooth custom-scrollbar">
+            {/* Doc title */}
+            <div className="mb-6">
+              <h2 className="text-[28px] font-bold text-on-surface leading-tight">{workspace?.name || 'Collab Space'}</h2>
+              {workspace?.subject && <p className="text-sm text-on-surface-variant/60 mt-1">{workspace.subject}</p>}
             </div>
 
-            {/* Invite code */}
-            <button 
-              onClick={copyInviteCode}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
-            >
-              <span className="text-[10px] font-bold text-on-surface-variant font-mono tracking-tight">{workspace?.invite_code}</span>
-              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60" />}
-            </button>
-
-            {/* Knowledge drawer button */}
-            <button 
-              onClick={() => setIsKnowledgeDrawerOpen(true)}
-              className="p-2 bg-primary-container rounded-lg hover:bg-primary-container/80 transition-all shadow-lg shadow-primary/20 active:scale-90"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-on-surface" />
-            </button>
-
-            {/* Settings dropdown */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className="p-2 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
-              >
-                <Settings className="w-3.5 h-3.5 text-on-surface-variant" />
-              </button>
-              
-              <AnimatePresence>
-                {isSettingsOpen && (
-                  <>
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      onClick={() => setIsSettingsOpen(false)}
-                      className="fixed inset-0 z-30"
-                    />
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                      className="absolute right-0 mt-2 w-48 bg-surface-container-high border border-outline-variant/40 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
-                    >
-                      {/* Mobile Invite Section */}
-                      <div className="px-3 py-2.5 border-b border-outline-variant/25 mb-1.5 bg-surface-container/40">
-                        <p className="text-[9px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-2">Workspace Code</p>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyInviteCode();
-                          }}
-                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-outline-variant/40 rounded-lg hover:border-primary/30 transition-all group active:scale-[0.98]"
-                        >
-                          <span className="text-xs font-mono text-primary-container font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
-                          {copied ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3 h-3 text-on-surface-variant/60 group-hover:text-on-surface/80 transition-colors" />
-                          )}
-                        </button>
-                      </div>
-
-                      {workspace?.is_owner ? (
-                        <button 
-                          onClick={handleDeleteWorkspace}
-                          disabled={isDeleting}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-medium disabled:opacity-50"
-                        >
-                          {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                          Delete workspace
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={handleLeaveWorkspace}
-                          disabled={isLeaving}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all text-xs font-medium disabled:opacity-50"
-                        >
-                          {isLeaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
-                          Leave space
-                        </button>
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-surface-container-high border border-outline-variant/25 flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-on-surface-variant/40" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-on-surface-variant">Start the conversation</p>
+                  <p className="text-xs text-on-surface-variant/40 mt-1">Send a message or mention @Flow for AI assistance</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.map((ms, i) => {
+                  const isMe = ms.author?.id === session?.user?.id
+                  const showAvatar = i === 0 || messages[i-1]?.author?.id !== ms.author?.id || messages[i-1]?.is_ai !== ms.is_ai
+                  const prevDate = i > 0 ? new Date(messages[i-1].created_at).toDateString() : null
+                  const currDate = new Date(ms.created_at).toDateString()
+                  const showDateSep = prevDate !== currDate
+                  const today = new Date().toDateString()
+                  const yesterday = new Date(Date.now() - 86400000).toDateString()
+                  const dateLabel = currDate === today ? 'Today' : currDate === yesterday ? 'Yesterday' : new Date(ms.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                  return (
+                    <React.Fragment key={ms.id || i}>
+                      {showDateSep && (
+                        <div className="flex items-center gap-3 py-3">
+                          <div className="flex-1 h-px bg-outline-variant/25" />
+                          <span className="text-[10px] text-on-surface-variant/40 font-medium px-2">{dateLabel}</span>
+                          <div className="flex-1 h-px bg-outline-variant/25" />
+                        </div>
                       )}
-                    </motion.div>
-                  </>
+                      <MessageBubble 
+                        message={ms} 
+                        isMe={isMe} 
+                        showAvatar={showAvatar}
+                        workspaceId={Number(id)}
+                        onReply={() => setReplyingTo({
+                          id: ms.id,
+                          author_name: ms.author?.username || 'User',
+                          content: ms.content.substring(0, 60) + (ms.content.length > 60 ? '...' : '')
+                        })}
+                        onViewResource={(res: any) => {
+                          setViewingResource(res)
+                          setIsKnowledgeDrawerOpen(true)
+                        }}
+                      />
+                    </React.Fragment>
+                  )
+                })}
+              </>
+            )}
+            <div className="h-2" />
+          </div>
+
+          {/* ── Input Area ── */}
+          <div className="relative">
+            <div className="absolute bottom-[calc(100%+4px)] left-0 right-0 px-4 sm:px-8 space-y-1.5 pointer-events-none">
+              <AnimatePresence mode="wait">
+                {replyingTo && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    className="pointer-events-auto bg-surface-container-high border-l-2 border-l-primary border border-outline-variant/40 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xl"
+                  >
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <Reply className="w-3.5 h-3.5 text-primary-container flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold text-primary-container mb-0.5">Replying to {replyingTo.author_name}</p>
+                        <p className="text-xs text-on-surface-variant truncate italic">"{replyingTo.content}"</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-surface-container-high rounded-md transition-colors flex-shrink-0">
+                      <X className="w-3.5 h-3.5 text-on-surface-variant/60 hover:text-on-surface transition-colors" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <AnimatePresence>
+                {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high border border-outline-variant/25 rounded-full w-fit shadow-lg"
+                  >
+                    <div className="flex gap-0.5">
+                      <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce" />
+                      <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.15s]" />
+                      <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.3s]" />
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant/60">
+                      {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).map(([user]) => user).join(", ")} {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).length > 1 ? 'are' : 'is'} typing
+                    </span>
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
-          </div>
-        </header>
 
-        {/* --- Message Stream --- */}
-        <div 
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 space-y-1 scroll-smooth custom-scrollbar"
-        >
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
-              <div className="w-14 h-14 rounded-2xl bg-surface-container-high border border-outline-variant/25 flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-on-surface-variant/40" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-on-surface-variant">Start the conversation</p>
-                <p className="text-xs text-on-surface-variant/40 mt-1">Send a message or mention Flow for AI assistance</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {messages.map((ms, i) => {
-                const isMe = ms.author?.id === session?.user?.id
-                const showAvatar = i === 0 || messages[i-1]?.author?.id !== ms.author?.id || messages[i-1]?.is_ai !== ms.is_ai
-                const prevDate = i > 0 ? new Date(messages[i-1].created_at).toDateString() : null
-                const currDate = new Date(ms.created_at).toDateString()
-                const showDateSep = prevDate !== currDate
-                const today = new Date().toDateString()
-                const yesterday = new Date(Date.now() - 86400000).toDateString()
-                const dateLabel = currDate === today ? 'Today' : currDate === yesterday ? 'Yesterday' : new Date(ms.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                return (
-                  <React.Fragment key={ms.id || i}>
-                    {showDateSep && (
-                      <div className="flex items-center gap-3 py-3">
-                        <div className="flex-1 h-px bg-outline-variant/25" />
-                        <span className="text-[10px] text-on-surface-variant/40 font-medium px-2">{dateLabel}</span>
-                        <div className="flex-1 h-px bg-outline-variant/25" />
+            <div className="bg-surface-container-low border-t border-outline-variant/20 px-4 sm:px-8 py-3">
+              {attachmentFile && (
+                <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
+                  <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
+                    {attachmentFile.type.startsWith('video/') ? (
+                      <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center border border-outline-variant/50 shadow-lg">
+                        <Video className="w-6 h-6 text-on-surface-variant" />
                       </div>
+                    ) : (
+                      <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-outline-variant/50 shadow-lg" />
                     )}
-                    <MessageBubble 
-                      message={ms} 
-                      isMe={isMe} 
-                      showAvatar={showAvatar}
-                      workspaceId={Number(id)}
-                      onReply={() => setReplyingTo({
-                        id: ms.id,
-                        author_name: ms.author?.username || 'User',
-                        content: ms.content.substring(0, 60) + (ms.content.length > 60 ? '...' : '')
-                      })}
-                      onViewResource={(res: any) => {
-                        setViewingResource(res)
-                        setIsKnowledgeDrawerOpen(true)
-                      }}
-                    />
-                  </React.Fragment>
-                )
-              })}
-            </>
-          )}
-          <div className="h-2" />
-        </div>
-
-        {/* --- Input Area --- */}
-        <div className="relative">
-          <div className="absolute bottom-[calc(100%+4px)] left-0 right-0 px-4 sm:px-6 space-y-1.5 pointer-events-none">
-            {/* Reply Context */}
-            <AnimatePresence mode="wait">
-              {replyingTo && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  className="pointer-events-auto bg-surface-container-high border-l-2 border-l-primary border border-outline-variant/40 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xl"
-                >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <Reply className="w-3.5 h-3.5 text-primary-container flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-semibold text-primary-container mb-0.5">Replying to {replyingTo.author_name}</p>
-                      <p className="text-xs text-on-surface-variant truncate italic">"{replyingTo.content}"</p>
-                    </div>
+                    <button onClick={() => setAttachmentFile(null)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 shadow-md text-white transition-all">
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => setReplyingTo(null)}
-                    className="p-1 hover:bg-surface-container-high rounded-md transition-colors flex-shrink-0"
-                  >
-                    <X className="w-3.5 h-3.5 text-on-surface-variant/60 hover:text-on-surface transition-colors" />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Typing Indicator */}
-            <AnimatePresence>
-              {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).length > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high border border-outline-variant/25 rounded-full w-fit shadow-lg"
-                >
-                  <div className="flex gap-0.5">
-                    <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce" />
-                    <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.15s]" />
-                    <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.3s]" />
-                  </div>
-                  <span className="text-[10px] text-on-surface-variant/60">
-                    {Object.entries(typingUsers)
-                      .filter(([_, isTyping]) => isTyping)
-                      .map(([user]) => user)
-                      .join(", ")} {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).length > 1 ? 'are' : 'is'} typing
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="bg-background border-t border-outline-variant/25 px-4 sm:px-6 py-3">
-            {attachmentFile && (
-              <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
-                <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
-                  {attachmentFile.type.startsWith('video/') ? (
-                    <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center border border-outline-variant/50 shadow-lg">
-                      <Video className="w-6 h-6 text-on-surface-variant" />
-                    </div>
-                  ) : (
-                    <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-outline-variant/50 shadow-lg" />
-                  )}
-                  <button
-                    onClick={() => setAttachmentFile(null)}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 shadow-md text-white transition-all"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
                 </div>
-              </div>
-            )}
-            <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2.5">
-              {/* Attachment button */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*,video/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    if (file.size > 50 * 1024 * 1024) {
-                      toast.error("File size must be under 50MB")
-                      return
-                    }
-                    setAttachmentFile(file)
-                  }
-                }}
-              />
-
-              {/* Mic button */}
-              <button 
-                type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                className={cn(
-                  "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
-                  isRecording 
-                    ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" 
-                    : "bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
-                )}
-              >
-                {isRecording ? <Square className="w-3.5 h-3.5 fill-white text-white" /> : <Mic className="w-4 h-4" />}
-              </button>
-
-              {/* Input pill */}
-              <div className="flex-1 relative flex items-center bg-surface-container/40 hover:bg-surface-container/50 rounded-2xl transition-all group/input">
-                <input 
-                  value={inputText}
+              )}
+              <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*"
                   onChange={(e) => {
-                    setInputText(e.target.value)
-                    handleUserTyping()
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      if (file.size > 50 * 1024 * 1024) { toast.error("File size must be under 50MB"); return }
+                      setAttachmentFile(file)
+                    }
                   }}
-                  placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message or ask Flow..."}
-                  disabled={isRecording}
-                  className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-on-surface-variant/40 disabled:opacity-50 min-w-0"
                 />
                 <button 
-                  type="submit"
-                  className="mr-1.5 w-7 h-7 bg-primary-container rounded-xl flex items-center justify-center hover:bg-primary transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                  disabled={isRecording || !inputText.trim()}
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={cn(
+                    "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
+                    isRecording ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" : "bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
+                  )}
                 >
-                  <Send className="w-3.5 h-3.5 text-on-surface" />
+                  {isRecording ? <Square className="w-3.5 h-3.5 fill-white text-white" /> : <Mic className="w-4 h-4" />}
                 </button>
-              </div>
-            </form>
-            <p className="text-center text-[10px] text-on-surface-variant/40 mt-2 max-w-4xl mx-auto">
-              {isRecording ? "Tap mic to stop & send" : "Mention Flow for AI · Swipe message to reply"}
-            </p>
+                <div className="flex-1 relative flex items-center bg-surface-container-highest border-2 border-transparent focus-within:border-tertiary-container rounded-full transition-all">
+                  <input 
+                    value={inputText}
+                    onChange={(e) => { setInputText(e.target.value); handleUserTyping() }}
+                    placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message or ask @Flow..."}
+                    disabled={isRecording}
+                    className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-on-surface-variant/40 disabled:opacity-50 min-w-0"
+                  />
+                  <button 
+                    type="submit"
+                    className="mr-1.5 w-8 h-8 bg-tertiary rounded-full flex items-center justify-center hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 text-on-tertiary-container"
+                    disabled={isRecording || !inputText.trim()}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </form>
+              <p className="text-center text-[10px] text-on-surface-variant/40 mt-2 max-w-4xl mx-auto">
+                {isRecording ? "Tap mic to stop & send" : "Mention @Flow for AI · Swipe message to reply"}
+              </p>
+            </div>
           </div>
-        </div>
+        </main>
 
-      </div>
+        {/* ── RIGHT PANEL: Sidekick AI (w-80) ── */}
+        <aside className="hidden xl:flex w-80 flex-shrink-0 flex-col bg-surface-container border-l border-outline-variant/20 overflow-hidden">
+          {/* Panel header */}
+          <div className="bg-surface-container-low border-b border-outline-variant/10 flex items-center justify-between p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-tertiary/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-tertiary" style={{ fontSize: 20 }}>smart_toy</span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-on-surface leading-tight">Sidekick AI</p>
+                <p className="text-[11px] font-medium" style={{ color: 'var(--color-tertiary)' }}>Ready to help!</p>
+              </div>
+            </div>
+            <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant/60 hover:text-on-surface">
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>settings</span>
+            </button>
+          </div>
 
-      {/* --- Knowledge Drawer --- */}
+          {/* AI message feed */}
+          <div ref={sidekickScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
+            {/* Starter message */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-white" style={{ fontSize: 13 }}>smart_toy</span>
+              </div>
+              <div className="bg-tertiary-container/10 border border-tertiary-container/20 rounded-2xl rounded-tl-sm text-on-surface px-4 py-3 text-sm max-w-[85%]">
+                <p className="text-[13px] leading-relaxed">
+                  Hey <span className="font-semibold text-primary-container">{workspace?.name}</span>! I'm here to help. Mention me with <span className="font-mono font-bold text-tertiary">@Flow</span> in the chat!
+                </p>
+              </div>
+            </div>
+
+            {/* AI messages from the main feed */}
+            {messages.filter(m => m.is_ai).map((ms, i) => (
+              <div key={ms.id || `ai-${i}`} className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div className="bg-tertiary-container/10 border border-tertiary-container/20 rounded-2xl rounded-tl-sm text-on-surface px-4 py-3 text-sm max-w-[85%]">
+                  <p className="text-[10px] font-semibold text-on-surface-variant mb-1">
+                    {new Date(ms.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <div className="prose prose-invert prose-xs max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {ms.content?.split(/\bACTION\b/i)[0].trim() || ''}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {messages.filter(m => m.is_ai).length === 0 && (
+              <div className="text-center py-6">
+                <span className="material-symbols-outlined text-on-surface-variant/20" style={{ fontSize: 36 }}>forum</span>
+                <p className="text-[11px] text-on-surface-variant/40 mt-2">AI responses will appear here</p>
+              </div>
+            )}
+          </div>
+
+          {/* Quick action chips */}
+          <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+            {['Summarize Chat', 'Find Resources', 'Create Quiz'].map((chip) => (
+              <button
+                key={chip}
+                onClick={() => setSidekickInput(chip + ' ')}
+                className="px-3 py-1 bg-surface-container rounded-full text-[11px] font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container-high transition-colors"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+
+          {/* Sidekick input */}
+          <div className="bg-surface-container-low border-t border-outline-variant/10 p-4">
+            <form onSubmit={handleSendSidekick} className="flex items-center gap-2">
+              <input
+                value={sidekickInput}
+                onChange={e => setSidekickInput(e.target.value)}
+                placeholder="Ask Sidekick something..."
+                className="flex-1 bg-surface-container-highest border-2 border-transparent focus:border-tertiary-container rounded-full px-4 py-2 text-[13px] focus:outline-none placeholder:text-on-surface-variant/40 transition-all min-w-0"
+              />
+              <button
+                type="submit"
+                disabled={!sidekickInput.trim()}
+                className="w-9 h-9 bg-tertiary rounded-full flex items-center justify-center text-on-tertiary-container hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          </div>
+        </aside>
+
+      </div>{/* end 3-col body */}
+
+      {/* ═══════════════ KNOWLEDGE DRAWER ═══════════════ */}
       <AnimatePresence>
         {isKnowledgeDrawerOpen && (
           <>
@@ -877,72 +993,35 @@ export default function WorkspaceCollaborationStudio() {
                 </div>
               </div>
 
-              {/* Hub Tab Switcher (Only when viewing) */}
+              {/* Hub Tab Switcher */}
               {viewingResource && (
                 <div className="px-5 py-3 flex items-center gap-1.5 border-b border-outline-variant/25">
                   <button 
                     onClick={() => setHubTab('insights')}
-                    className={cn(
-                      "flex-1 py-2 text-xs font-medium rounded-lg transition-all",
-                      hubTab === 'insights' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high"
-                    )}
-                  >
-                    AI Insights
-                  </button>
+                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all", hubTab === 'insights' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
+                  >AI Insights</button>
                   <button 
                     onClick={() => setHubTab('source')}
-                    className={cn(
-                      "flex-1 py-2 text-xs font-medium rounded-lg transition-all",
-                      hubTab === 'source' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high"
-                    )}
-                  >
-                    Source PDF
-                  </button>
+                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all", hubTab === 'source' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
+                  >Source PDF</button>
                 </div>
               )}
 
               <div className="flex-1 overflow-hidden flex flex-col">
                 <AnimatePresence mode="wait">
                   {!viewingResource ? (
-                    <motion.div 
-                      key="list"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="flex-1 flex flex-col p-5 space-y-4 overflow-hidden"
-                    >
+                    <motion.div key="list" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col p-5 space-y-4 overflow-hidden">
                       <div className="flex items-center justify-between">
                         <div className="flex gap-1 p-1 bg-surface-container-high rounded-lg border border-outline-variant/25">
-                          <button 
-                            onClick={() => setHubView('shared')}
-                            className={cn(
-                              "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                              hubView === 'shared' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80"
-                            )}
-                          >
-                            Shared
-                          </button>
-                          <button 
-                            onClick={() => setHubView('library')}
-                            className={cn(
-                              "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                              hubView === 'library' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80"
-                            )}
-                          >
-                            Library
-                          </button>
+                          <button onClick={() => setHubView('shared')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all", hubView === 'shared' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Shared</button>
+                          <button onClick={() => setHubView('library')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all", hubView === 'library' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Library</button>
                         </div>
                         {hubView === 'shared' && (
-                          <button 
-                            onClick={() => setHubView('library')}
-                            className="p-1.5 bg-primary/10 text-primary-container rounded-lg hover:bg-primary-container hover:text-on-surface transition-all"
-                            title="Add from Library"
-                          >
+                          <button onClick={() => setHubView('library')} className="p-1.5 bg-primary/10 text-primary-container rounded-lg hover:bg-primary-container hover:text-on-surface transition-all" title="Add from Library">
                             <Plus className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
-
                       <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
                         {hubView === 'shared' ? (
                           <>
@@ -950,25 +1029,12 @@ export default function WorkspaceCollaborationStudio() {
                               <div className="text-center py-12">
                                 <BookOpen className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
                                 <p className="text-xs text-on-surface-variant/60 font-medium">No shared resources yet</p>
-                                <button 
-                                  onClick={() => setHubView('library')}
-                                  className="mt-3 text-xs text-primary-container font-medium hover:text-primary transition-colors"
-                                >
-                                  + Add from library
-                                </button>
+                                <button onClick={() => setHubView('library')} className="mt-3 text-xs text-primary-container font-medium hover:text-primary transition-colors">+ Add from library</button>
                               </div>
                             ) : (workspace.resources.map((res: any) => (
                               <div key={res.id} className="group relative">
-                                <button 
-                                  onClick={() => {
-                                    setViewingResource(res)
-                                    setHubTab('insights')
-                                  }}
-                                  className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl transition-all text-left flex items-start gap-3 hover:border-primary/20 active:scale-[0.98]"
-                                >
-                                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <BookOpen className="w-3.5 h-3.5 text-primary-container" />
-                                  </div>
+                                <button onClick={() => { setViewingResource(res); setHubTab('insights') }} className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl transition-all text-left flex items-start gap-3 hover:border-primary/20 active:scale-[0.98]">
+                                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-primary-container" /></div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-on-surface truncate">{res.title}</p>
                                     <p className="text-[10px] text-on-surface-variant/60 mt-0.5 capitalize">{res.resource_type || 'Note'}</p>
@@ -988,19 +1054,13 @@ export default function WorkspaceCollaborationStudio() {
                             ) : libraryResources.filter(res => !workspace?.resources?.some((r: any) => r.id === res.id)).map((res) => (
                               <div key={res.id} className="group relative">
                                 <div className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl flex items-start gap-3">
-                                  <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <BookOpen className="w-3.5 h-3.5 text-on-surface-variant/60" />
-                                  </div>
+                                  <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-on-surface-variant/60" /></div>
                                   <div className="flex-1 min-w-0 pr-8">
                                     <p className="text-sm font-medium text-on-surface-variant truncate">{res.title}</p>
                                     <p className="text-[10px] text-on-surface-variant/40 mt-0.5">In your library</p>
                                   </div>
                                 </div>
-                                <button 
-                                  onClick={() => handleShareResource(res.id)}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary-container rounded-lg group-hover:bg-primary-container group-hover:text-on-surface transition-all"
-                                  title="Add to Workspace"
-                                >
+                                <button onClick={() => handleShareResource(res.id)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary-container rounded-lg group-hover:bg-primary-container group-hover:text-on-surface transition-all" title="Add to Workspace">
                                   <Plus className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -1010,27 +1070,16 @@ export default function WorkspaceCollaborationStudio() {
                       </div>
                     </motion.div>
                   ) : (
-                    <motion.div 
-                      key="viewer"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="flex-1 flex flex-col overflow-hidden"
-                    >
+                    <motion.div key="viewer" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="flex-1 flex flex-col overflow-hidden">
                       <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
                         {hubTab === 'insights' ? (
                           <div>
-                            {/* Resource header */}
                             <div className="mb-6">
                               <h3 className="text-base font-semibold text-on-surface leading-tight mb-2">{viewingResource.title}</h3>
                               <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-primary/10 text-primary-container text-[10px] font-medium rounded-md border border-primary/20 capitalize">
-                                  {viewingResource.resource_type || 'Note'}
-                                </span>
+                                <span className="px-2 py-0.5 bg-primary/10 text-primary-container text-[10px] font-medium rounded-md border border-primary/20 capitalize">{viewingResource.resource_type || 'Note'}</span>
                               </div>
                             </div>
-
-                            {/* AI Summary */}
                             {viewingResource.ai_summary && (
                               <div className="mb-6 p-4 bg-surface-container-high border border-violet-500/15 rounded-xl">
                                 <div className="flex items-center gap-2 mb-3">
@@ -1042,8 +1091,6 @@ export default function WorkspaceCollaborationStudio() {
                                 </div>
                               </div>
                             )}
-
-                            {/* Rich notes */}
                             {viewingResource.ai_notes_json && (
                               <RichNotesViewer 
                                 resourceId={viewingResource.id}
@@ -1070,44 +1117,20 @@ export default function WorkspaceCollaborationStudio() {
                           </div>
                         )}
                       </div>
-
-                      {/* Action bar */}
                       <div className="p-5 border-t border-outline-variant/25 space-y-2.5">
                         <div className="grid grid-cols-2 gap-2">
-                          <button 
-                             onClick={() => {
-                               const link = document.createElement('a')
-                               link.href = viewingResource.file_url
-                               link.download = viewingResource.title
-                               link.click()
-                             }}
-                             className="py-2.5 bg-surface-container-high border border-outline-variant/40 text-on-surface/80 rounded-xl text-xs font-medium hover:border-outline-variant/70 transition-all flex items-center justify-center gap-2"
-                          >
-                            <Download className="w-3.5 h-3.5 text-on-surface-variant/60" />
-                            Download
+                          <button onClick={() => { const link = document.createElement('a'); link.href = viewingResource.file_url; link.download = viewingResource.title; link.click() }} className="py-2.5 bg-surface-container-high border border-outline-variant/40 text-on-surface/80 rounded-xl text-xs font-medium hover:border-outline-variant/70 transition-all flex items-center justify-center gap-2">
+                            <Download className="w-3.5 h-3.5 text-on-surface-variant/60" /> Download
                           </button>
-                          
                           {viewingResource.owner?.id !== session?.user?.id && (
-                            <button 
-                              onClick={handleCloneResource}
-                              disabled={isCloning}
-                              className={cn(
-                                "py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2",
-                                isCloning ? "bg-slate-800 text-on-surface-variant/60 cursor-not-allowed" : "bg-primary-container text-on-surface hover:bg-primary shadow-lg shadow-primary/20 active:scale-95"
-                              )}
-                            >
+                            <button onClick={handleCloneResource} disabled={isCloning} className={cn("py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2", isCloning ? "bg-slate-800 text-on-surface-variant/60 cursor-not-allowed" : "bg-primary-container text-on-surface hover:bg-primary shadow-lg shadow-primary/20 active:scale-95")}>
                               {isCloning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
                               {isCloning ? 'Saving...' : 'Save to Library'}
                             </button>
                           )}
                         </div>
-                        
-                        <button 
-                          onClick={() => handleShareResource(viewingResource.id)}
-                          className="w-full py-3 bg-surface-container-high border border-primary/20 text-primary-container rounded-xl text-xs font-medium hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
-                        >
-                          <Pin className="w-3.5 h-3.5" />
-                          Share to chat
+                        <button onClick={() => handleShareResource(viewingResource.id)} className="w-full py-3 bg-surface-container-high border border-primary/20 text-primary-container rounded-xl text-xs font-medium hover:bg-primary/10 transition-all flex items-center justify-center gap-2">
+                          <Pin className="w-3.5 h-3.5" /> Share to chat
                         </button>
                       </div>
                     </motion.div>
@@ -1135,7 +1158,6 @@ export default function WorkspaceCollaborationStudio() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(249, 115, 22, 0.3); }
-        
         @media (max-width: 640px) {
           .custom-scrollbar::-webkit-scrollbar { width: 0px; }
         }
@@ -1164,15 +1186,9 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
     }
   }
 
-  // Resolve URL:
-  // - blob: URLs → use as-is (optimistic user VN)
-  // - data: URIs → use as-is (AI base64 voice note)
-  // - http/https → use as-is (already absolute)
-  // - relative /media/... → prepend backend origin
   const audioUrl = (() => {
     if (!url) return ''
     if (url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('http')) return url
-    // Derive backend base from NEXT_PUBLIC_API_URL (strip /api suffix)
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
     const backendBase = apiBase.replace(/\/api\/?$/, '')
     return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`
@@ -1211,7 +1227,6 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
         {error ? <span className="text-[8px] font-bold">ERR</span> :
          isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
       </button>
-
       <div className="flex-1 min-w-0">
         <div className="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden cursor-pointer"
           onClick={e => {
@@ -1224,9 +1239,7 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
             style={{ width: `${progress}%` }} />
         </div>
         <div className="mt-1 flex justify-between items-center">
-          <span className="text-[9px] text-on-surface-variant/60">
-            {error ? 'Failed to load' : 'Voice note'}
-          </span>
+          <span className="text-[9px] text-on-surface-variant/60">{error ? 'Failed to load' : 'Voice note'}</span>
           {duration > 0 && <span className="text-[9px] text-on-surface-variant/40 font-mono">{formatTime(duration)}</span>}
         </div>
       </div>
@@ -1258,7 +1271,6 @@ function MessageBubble({
   const menuRef = useRef<HTMLDivElement>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
 
-  // Handle outside click to close menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -1275,10 +1287,7 @@ function MessageBubble({
   }
 
   const handleEdit = async () => {
-    if (!editText.trim() || editText === message.content) {
-      setIsEditing(false)
-      return
-    }
+    if (!editText.trim() || editText === message.content) { setIsEditing(false); return }
     try {
       await workspaceApi.editMessage(workspaceId, message.id, editText)
       setIsEditing(false)
@@ -1311,18 +1320,10 @@ function MessageBubble({
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0, right: 0.4 }}
-      onDragEnd={(_, info) => {
-        if (info.offset.x > 70) onReply()
-      }}
-      onPointerDown={() => {
-        longPressTimer.current = setTimeout(handleLongPress, 500)
-      }}
-      onPointerUp={() => {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current)
-      }}
-      onPointerLeave={() => {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current)
-      }}
+      onDragEnd={(_, info) => { if (info.offset.x > 70) onReply() }}
+      onPointerDown={() => { longPressTimer.current = setTimeout(handleLongPress, 500) }}
+      onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
+      onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current) }}
       className={cn(
         "flex items-end gap-2 max-w-full group relative",
         isMe ? 'flex-row-reverse' : '',
@@ -1341,11 +1342,7 @@ function MessageBubble({
         <div className="w-7 flex-shrink-0" />
       )}
 
-      <div className={cn(
-        "flex flex-col max-w-[85%] sm:max-w-[70%]",
-        isMe ? 'items-end' : 'items-start'
-      )}>
-        {/* Sender name + time */}
+      <div className={cn("flex flex-col max-w-[85%] sm:max-w-[70%]", isMe ? 'items-end' : 'items-start')}>
         {showAvatar && (
           <div className={cn("flex items-center gap-1.5 mb-1 px-1", isMe ? 'flex-row-reverse' : '')}>
             <span className="text-[11px] font-medium text-on-surface-variant">
@@ -1358,33 +1355,22 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Reply preview */}
         {message.parent_data && (
-          <div className={cn(
-            "mb-1.5 px-3 py-2 rounded-xl bg-surface-container-high border-l-2 border-primary/50 max-w-xs",
-            isMe ? "mr-2" : "ml-2"
-          )}>
-            <p className="text-[10px] font-medium text-primary-container mb-0.5">
-              {message.parent_data.author_name}
-            </p>
-            <p className="text-[11px] text-on-surface-variant/60 italic truncate">
-               "{message.parent_data.content}"
-            </p>
+          <div className={cn("mb-1.5 px-3 py-2 rounded-xl bg-surface-container-high border-l-2 border-primary/50 max-w-xs", isMe ? "mr-2" : "ml-2")}>
+            <p className="text-[10px] font-medium text-primary-container mb-0.5">{message.parent_data.author_name}</p>
+            <p className="text-[11px] text-on-surface-variant/60 italic truncate">"{message.parent_data.content}"</p>
           </div>
         )}
 
-        {/* Bubble */}
         <div className={cn(
           "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg transition-all duration-200",
           isAI 
-            ? 'bg-surface-container-high border-l-2 border-violet-500/40 text-on-surface rounded-2xl rounded-tl-sm' 
+            ? 'bg-tertiary-container/10 border border-tertiary-container/20 text-on-surface rounded-2xl rounded-tl-sm' 
             : isMe 
-              ? 'bg-primary/20 border-r-2 border-primary/40 text-on-surface rounded-2xl rounded-tr-sm font-medium' 
-              : 'bg-surface-container/40 text-on-surface rounded-2xl rounded-tl-sm',
+              ? 'bg-primary-container text-on-primary-container rounded-2xl rounded-tr-sm' 
+              : 'bg-surface-container-high text-on-surface rounded-2xl rounded-tl-sm',
           isDeleting && "opacity-40 grayscale pointer-events-none"
         )}>
-          
-          {/* Action Menu Trigger (Desktop 3-dots) */}
           {!isAI && !isEditing && (
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -1397,7 +1383,6 @@ function MessageBubble({
             </button>
           )}
 
-          {/* Context Menu Dropdown */}
           <AnimatePresence>
             {isMenuOpen && (
               <motion.div 
@@ -1410,31 +1395,19 @@ function MessageBubble({
                   isMe ? "right-0" : "left-0"
                 )}
               >
-                <button 
-                  onClick={copyToClipboard}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all"
-                >
+                <button onClick={copyToClipboard} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all">
                   <CopyIcon className="w-3 h-3" /> Copy text
                 </button>
                 {isMe && !message.audio_file && (
-                  <button 
-                    onClick={() => { setIsEditing(true); setIsMenuOpen(false); }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all"
-                  >
+                  <button onClick={() => { setIsEditing(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all">
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
                 )}
-                <button 
-                  onClick={onReply}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all"
-                >
+                <button onClick={onReply} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all">
                   <Reply className="w-3 h-3" /> Reply
                 </button>
                 {(isMe || message.is_owner) && (
-                  <button 
-                    onClick={() => { handleDelete(); setIsMenuOpen(false); }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                  >
+                  <button onClick={() => { handleDelete(); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
                     <Trash2 className="w-3 h-3" /> Delete
                   </button>
                 )}
@@ -1449,7 +1422,7 @@ function MessageBubble({
                 value={editText}
                 onChange={e => setEditText(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit(); }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit() }
                   if (e.key === 'Escape') setIsEditing(false)
                 }}
                 className="w-full bg-black/40 border border-primary/30 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none min-h-[60px]"
@@ -1506,7 +1479,6 @@ function MessageBubble({
             </>
           )}
           
-          {/* Pinned resource card */}
           {message.pinned_resource_data && (
             <div 
               onClick={() => onViewResource(message.pinned_resource_data)}
@@ -1523,7 +1495,6 @@ function MessageBubble({
             </div>
           )}
 
-          {/* Shared assignment card */}
           {message.shared_assignment_data && (
             <div className="mt-3 p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl flex flex-col gap-3">
               <div className="flex items-center gap-3">
@@ -1535,7 +1506,6 @@ function MessageBubble({
                   <p className="text-[10px] text-violet-400 mt-0.5">{message.shared_assignment_data.subject || 'Assignment'}</p>
                 </div>
               </div>
-              
               <div className="grid grid-cols-2 gap-1.5">
                 <button 
                   onClick={async () => {
@@ -1576,7 +1546,6 @@ function MessageBubble({
             </div>
           )}
 
-          {/* Optimistic sending indicator */}
           {message.is_optimistic && (
             <div className="absolute -bottom-4 right-0 flex items-center gap-1">
               <span className="text-[9px] text-on-surface-variant/40">Sending</span>
@@ -1590,7 +1559,6 @@ function MessageBubble({
         </div>
       </div>
 
-      {/* ── Image Lightbox ── */}
       <AnimatePresence>
         {lightboxUrl && (
           <motion.div
@@ -1600,14 +1568,9 @@ function MessageBubble({
             className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-4"
             onClick={() => setLightboxUrl(null)}
           >
-            {/* Close button */}
-            <button
-              className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all z-10"
-              onClick={() => setLightboxUrl(null)}
-            >
+            <button className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all z-10" onClick={() => setLightboxUrl(null)}>
               <X className="w-5 h-5 text-white" />
             </button>
-            {/* Image */}
             <motion.img
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}

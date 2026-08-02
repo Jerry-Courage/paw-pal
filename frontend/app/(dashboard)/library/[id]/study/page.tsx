@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -11,23 +11,17 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import {
-  ArrowLeft, ArrowRight, CheckCircle2, XCircle,
-  Zap, Trophy, Volume2, Loader2, BookOpen,
-  ChevronRight, Star
-} from 'lucide-react'
 
-type QuizQuestion = {
-  question: string
-  options: string[]
-  correct: string
-  explanation: string
-}
+type QuizQuestion = { question: string; options: string[]; correct: string; explanation: string }
+type Phase = 'reading' | 'quiz' | 'result'
 
-type PhaseType = 'reading' | 'quiz' | 'result'
-
-const XP_PER_SECTION = 15
-const PASS_THRESHOLD = 2 // correct out of 3
+const XP_PER_SECTION = 50
+const TIPS = [
+  '"Gravity is what keeps your feet on the ground. It\'s like the universe\'s glue!"',
+  '"Try to explain what you just read in your own words — that\'s the Feynman technique!"',
+  '"Take a 5 min break after every 25 min of studying. Your brain will thank you!"',
+  '"Making connections between ideas helps you remember them much longer."',
+]
 
 export default function StudyModePage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
@@ -35,15 +29,35 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const qc = useQueryClient()
 
   const [sectionIndex, setSectionIndex] = useState(0)
-  const [phase, setPhase] = useState<PhaseType>('reading')
+  const [phase, setPhase] = useState<Phase>('reading')
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
-  const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [selected, setSelected] = useState<Record<number, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [loadingQuiz, setLoadingQuiz] = useState(false)
   const [totalXP, setTotalXP] = useState(0)
-  const [sectionsCompleted, setSectionsCompleted] = useState<Set<number>>(new Set())
+  const [completed, setCompleted] = useState<Set<number>>(new Set())
   const [isReading, setIsReading] = useState(false)
-  const synthRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
+
+  // Focus timer
+  const [timerSeconds, setTimerSeconds] = useState(25 * 60)
+  const [timerRunning, setTimerRunning] = useState(true)
+  const [focusStreak, setFocusStreak] = useState(0)
+  const timerRef = useRef<NodeJS.Timeout>()
+
+  useEffect(() => {
+    if (!timerRunning) return
+    timerRef.current = setInterval(() => {
+      setTimerSeconds(s => {
+        if (s <= 0) { clearInterval(timerRef.current); setTimerRunning(false); return 0 }
+        return s - 1
+      })
+      setFocusStreak(s => s + 1)
+    }, 1000)
+    return () => clearInterval(timerRef.current)
+  }, [timerRunning])
+
+  const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
   const { data: resource, isLoading } = useQuery({
     queryKey: ['resource', resourceId],
@@ -51,330 +65,395 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   })
 
   const sections = resource?.ai_notes_json?.sections || []
-  const currentSection = sections[sectionIndex]
-  const totalSections = sections.length
+  const current = sections[sectionIndex]
+  const total = sections.length
+  const progress = total > 0 ? Math.round(((sectionIndex) / total) * 100) : 0
 
-  const correctCount = submitted
-    ? questions.filter((q, i) => answers[i] === q.correct).length
-    : 0
-  const passed = correctCount >= PASS_THRESHOLD
+  const correctCount = submitted ? questions.filter((q, i) => selected[i] === q.correct).length : 0
+  const passed = correctCount >= Math.ceil(questions.length * 0.6)
 
-  // Text-to-speech for optional AI reading
   const readAloud = () => {
-    if (isReading) {
-      window.speechSynthesis.cancel()
-      setIsReading(false)
-      return
-    }
-    if (!currentSection?.content) return
-    const text = currentSection.content
-      .replace(/\*\*/g, '').replace(/\*/g, '').replace(/#{1,6} /g, '').replace(/\n/g, ' ')
-      .slice(0, 1000)
+    if (isReading) { window.speechSynthesis.cancel(); setIsReading(false); return }
+    if (!current?.content) return
+    const text = current.content.replace(/\*\*/g, '').replace(/#{1,6} /g, '').slice(0, 1500)
     const utt = new SpeechSynthesisUtterance(text)
     utt.rate = 0.95
     utt.onend = () => setIsReading(false)
-    synthRef.current = utt
     window.speechSynthesis.speak(utt)
     setIsReading(true)
   }
-
-  useEffect(() => {
-    return () => { window.speechSynthesis.cancel() }
-  }, [])
-
-  useEffect(() => {
-    // Stop reading when section changes
-    window.speechSynthesis.cancel()
-    setIsReading(false)
-  }, [sectionIndex])
+  useEffect(() => { return () => window.speechSynthesis.cancel() }, [])
+  useEffect(() => { window.speechSynthesis.cancel(); setIsReading(false) }, [sectionIndex])
 
   const handleNext = async () => {
-    if (phase === 'reading') {
-      // Fetch quiz for this section
-      setLoadingQuiz(true)
-      try {
-        const res = await libraryApi.getSectionQuiz(
-          resourceId,
-          currentSection.title,
-          currentSection.content?.slice(0, 1500) || ''
-        )
-        setQuestions(res.data.questions || [])
-        setAnswers({})
-        setSubmitted(false)
-        setPhase('quiz')
-      } catch {
-        toast.error('Could not generate quiz. Try again.')
-      } finally {
-        setLoadingQuiz(false)
-      }
-    }
+    setLoadingQuiz(true)
+    try {
+      const res = await libraryApi.getSectionQuiz(resourceId, current.title, current.content?.slice(0, 1500) || '')
+      setQuestions(res.data.questions || [])
+      setSelected({}); setSubmitted(false); setPhase('quiz')
+    } catch { toast.error('Could not generate quiz. Try again.') }
+    finally { setLoadingQuiz(false) }
   }
 
-  const handleSubmitQuiz = () => {
-    if (Object.keys(answers).length < questions.length) {
-      toast.error('Answer all questions before submitting.')
-      return
-    }
-    setSubmitted(true)
-    setPhase('result')
+  const handleSubmit = () => {
+    if (Object.keys(selected).length < questions.length) { toast.error('Answer all questions first.'); return }
+    setSubmitted(true); setPhase('result')
     if (passed) {
-      const xp = XP_PER_SECTION
-      setTotalXP(prev => prev + xp)
-      setSectionsCompleted(prev => {
-        const next = new Set(prev)
-        next.add(sectionIndex)
-        return next
-      })
-      toast.success(`+${xp} XP! Well done 🎉`, { duration: 2000 })
-      // Award XP to progress
-      libraryApi.completeStep(resourceId, 'notes', Math.round((sectionsCompleted.size + 1) / totalSections * 100))
-        .catch(() => {})
+      setTotalXP(p => p + XP_PER_SECTION)
+      setCompleted(p => { const n = new Set(p); n.add(sectionIndex); return n })
+      toast.success(`+${XP_PER_SECTION} XP! Keep going! 🎉`, { duration: 2000 })
+      libraryApi.completeStep(resourceId, 'notes', Math.round((completed.size + 1) / total * 100)).catch(() => {})
       qc.invalidateQueries({ queryKey: ['progress', resourceId] })
     }
   }
 
   const handleNextSection = () => {
-    if (sectionIndex < totalSections - 1) {
-      setSectionIndex(i => i + 1)
-      setPhase('reading')
-      setQuestions([])
-      setAnswers({})
-      setSubmitted(false)
+    if (sectionIndex < total - 1) {
+      setSectionIndex(i => i + 1); setPhase('reading'); setQuestions([]); setSelected({}); setSubmitted(false)
     } else {
-      // All sections done
-      toast.success('🎓 You\'ve completed all sections! Understand step done.')
-      router.push(`/library/${resourceId}`)
+      toast.success('🎓 All sections complete!'); router.push(`/library/${resourceId}`)
     }
-  }
-
-  const handleRetry = () => {
-    setAnswers({})
-    setSubmitted(false)
-    setPhase('quiz')
   }
 
   if (isLoading) return (
     <div className="fixed inset-0 bg-background flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 rounded-full border-2 border-primary-container border-t-transparent animate-spin" />
+        <p className="text-on-surface-variant text-sm">Loading study mode…</p>
+      </div>
     </div>
   )
 
-  const progress = totalSections > 0 ? Math.round((sectionIndex / totalSections) * 100) : 0
+  if (!current && total === 0) return (
+    <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-6">
+      <span className="material-symbols-outlined text-[64px] text-on-surface-variant/30">auto_stories</span>
+      <p className="text-on-surface font-bold text-lg">No study notes generated yet.</p>
+      <p className="text-on-surface-variant text-sm">Go back to the resource hub and generate a study kit first.</p>
+      <Link href={`/library/${resourceId}`} className="flex items-center gap-2 bg-primary-container text-on-primary-container font-bold px-6 py-3 rounded-full">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Resource
+      </Link>
+    </div>
+  )
 
   return (
-    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+    <div className="fixed inset-0 md:left-64 bg-background flex flex-col overflow-hidden text-on-surface">
 
-      {/* ── Top bar ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-outline-variant/25 shrink-0 bg-background">
-        <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-sm">
-          <ArrowLeft className="w-4 h-4" /> Exit Study Mode
+      {/* ── Top bar ─────────────────────────────────────────────── */}
+      <header className="h-14 flex items-center gap-6 px-6 border-b border-outline-variant/25 bg-surface-container-low shrink-0 z-20">
+        <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          <span className="text-sm font-medium hidden sm:block">Exit Study Mode</span>
         </Link>
 
-        {/* Progress */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-on-surface-variant/60 font-medium">
-            Section {sectionIndex + 1} of {totalSections}
-          </span>
-          <div className="w-32 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-primary-container to-amber-400 rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }} />
+        {/* Progress bar */}
+        <div className="flex-1 hidden md:flex items-center gap-3">
+          <span className="text-xs text-on-surface-variant font-medium whitespace-nowrap">{progress}% Complete</span>
+          <div className="flex-1 h-3 bg-surface-container-high rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary-container rounded-full transition-all duration-700"
+              style={{ width: `${progress}%`, boxShadow: '0 0 15px rgba(255,138,61,0.4)' }}
+            />
+          </div>
+          <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl">
+            <span className="material-symbols-outlined text-primary text-[16px]">bolt</span>
+            <span className="text-xs font-black text-primary">{totalXP} XP</span>
           </div>
         </div>
+      </header>
 
-        {/* XP counter */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl">
-          <Zap className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-black text-primary">{totalXP} XP</span>
-        </div>
-      </div>
+      {/* ── 3-column body ─────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
 
-      {/* ── Main content ──────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
+        {/* LEFT: Section nav */}
+        <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-surface-container-low border-r border-outline-variant/20 overflow-y-auto">
+          <div className="p-5 border-b border-outline-variant/20">
+            <h3 className="font-bold text-primary text-[16px]">Today's Topic</h3>
+            <p className="text-on-surface-variant text-[13px] mt-0.5">{resource?.title || 'Study Session'}</p>
+          </div>
 
-        {/* READING phase */}
-        {phase === 'reading' && currentSection && (
-          <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-
-            {/* Section header */}
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-black text-primary-container uppercase tracking-widest">
-                    Part {sectionIndex + 1}
+          <nav className="flex flex-col gap-2 p-4 flex-1">
+            {sections.map((sec: any, i: number) => {
+              const isDone = completed.has(i)
+              const isActive = i === sectionIndex
+              const isLocked = i > sectionIndex && !completed.has(i)
+              return (
+                <button
+                  key={i}
+                  onClick={() => { if (!isLocked) { setSectionIndex(i); setPhase('reading'); setQuestions([]); setSelected({}); setSubmitted(false) } }}
+                  className={cn(
+                    'flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[14px] font-semibold transition-all',
+                    isDone ? 'bg-primary-container text-on-primary-container shadow-[0_4px_0_0_#763300]' :
+                    isActive ? 'border-2 border-primary text-on-surface bg-surface-container-high' :
+                    isLocked ? 'text-on-surface-variant/40 cursor-not-allowed' :
+                    'text-on-surface-variant hover:bg-surface-container-high'
+                  )}
+                >
+                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: isDone ? "'FILL' 1" : "'FILL' 0" }}>
+                    {isDone ? 'check_circle' : isActive ? 'radio_button_checked' : 'lock'}
                   </span>
-                  {sectionsCompleted.has(sectionIndex) && (
-                    <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
-                      <CheckCircle2 className="w-3 h-3" /> Done
-                    </span>
-                  )}
-                </div>
-                <h1 className="text-2xl font-black text-on-surface tracking-tight">{currentSection.title}</h1>
+                  <span className="truncate">{sec.title || `Section ${i + 1}`}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* Focus streak */}
+          <div className="m-4 p-4 bg-surface-container-highest rounded-[1rem] border border-outline-variant/20">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-on-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
               </div>
-              <button
-                onClick={readAloud}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all shrink-0',
-                  isReading
-                    ? 'bg-primary/20 border-primary/40 text-primary'
-                    : 'bg-surface-container-high border-outline-variant/50 text-on-surface-variant hover:text-on-surface hover:border-outline-variant/20'
-                )}
-              >
-                <Volume2 className="w-3.5 h-3.5" />
-                {isReading ? 'Stop' : 'Listen'}
-              </button>
+              <span className="text-[13px] font-bold text-on-surface">Focus Streak: {Math.floor(focusStreak / 60)}m</span>
             </div>
-
-            {/* Section content */}
-            <div className="prose prose-invert prose-sm max-w-none bg-surface-container-low border border-outline-variant/25 rounded-2xl p-6">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-              >
-                {currentSection.content || ''}
-              </ReactMarkdown>
-            </div>
-
-            {/* Next button */}
-            <div className="flex items-center justify-between pt-2">
-              <button
-                onClick={() => sectionIndex > 0 && (setSectionIndex(i => i - 1), setPhase('reading'))}
-                disabled={sectionIndex === 0}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/40 text-on-surface-variant text-sm font-bold hover:text-on-surface hover:border-outline-variant/20 disabled:opacity-30 disabled:pointer-events-none transition-all"
-              >
-                <ArrowLeft className="w-4 h-4" /> Previous
-              </button>
-
-              <button
-                onClick={handleNext}
-                disabled={loadingQuiz}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-container text-on-surface text-sm font-black hover:bg-primary-container active:scale-95 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
-              >
-                {loadingQuiz
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating quiz…</>
-                  : <>Next: Quick Test <ArrowRight className="w-4 h-4" /></>}
-              </button>
+            <div className="h-1.5 bg-surface-container-low rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.min(100, (focusStreak % 1500) / 15)}%` }} />
             </div>
           </div>
-        )}
+        </aside>
 
-        {/* QUIZ phase */}
-        {(phase === 'quiz' || phase === 'result') && questions.length > 0 && (
-          <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+        {/* CENTER: Content + Quiz */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-6 py-8 pb-24 space-y-6">
 
-            {/* Quiz header */}
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-center mx-auto">
-                <BookOpen className="w-6 h-6 text-primary" />
-              </div>
-              <h2 className="text-xl font-black text-on-surface">Quick Check</h2>
-              <p className="text-on-surface-variant/60 text-sm">
-                {currentSection?.title} — Answer all 3 to continue
-              </p>
-            </div>
-
-            {/* Questions */}
-            <div className="space-y-5">
-              {questions.map((q, qi) => (
-                <div key={qi} className="bg-surface-container-low border border-outline-variant/25 rounded-2xl p-5 space-y-3">
-                  <p className="text-sm font-bold text-on-surface leading-relaxed">
-                    <span className="text-primary mr-2">{qi + 1}.</span>{q.question}
-                  </p>
-                  <div className="space-y-2">
-                    {q.options.map((opt, oi) => {
-                      const isSelected = answers[qi] === opt
-                      const isCorrect = submitted && opt === q.correct
-                      const isWrong = submitted && isSelected && opt !== q.correct
-                      return (
-                        <button
-                          key={oi}
-                          onClick={() => !submitted && setAnswers(prev => ({ ...prev, [qi]: opt }))}
-                          disabled={submitted}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left text-sm transition-all',
-                            isCorrect ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' :
-                            isWrong ? 'border-red-500/40 bg-red-500/10 text-red-200' :
-                            isSelected ? 'border-primary/40 bg-primary/10 text-orange-200' :
-                            'border-outline-variant/40 bg-surface-container/40 text-on-surface/80 hover:border-outline-variant/20 hover:bg-surface-container-highest'
-                          )}
-                        >
-                          {isCorrect && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
-                          {isWrong && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
-                          {!isCorrect && !isWrong && (
-                            <span className={cn('w-5 h-5 rounded-full border text-[10px] font-black flex items-center justify-center shrink-0',
-                              isSelected ? 'border-primary text-primary' : 'border-outline-variant/20 text-on-surface-variant/60'
-                            )}>
-                              {String.fromCharCode(65 + oi)}
-                            </span>
-                          )}
-                          <span>{opt}</span>
-                        </button>
-                      )
-                    })}
+            {/* Section content card */}
+            {phase === 'reading' && current && (
+              <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/25 shadow-lg overflow-hidden">
+                <div className="p-8">
+                  <div className="mb-6">
+                    <span className="text-xs font-black text-primary-container uppercase tracking-widest mb-2 block">
+                      Section {sectionIndex + 1} of {total}
+                    </span>
+                    <h2 className="text-[28px] font-bold text-primary leading-tight">{current.title}</h2>
                   </div>
-                  {submitted && (
-                    <p className="text-xs text-on-surface-variant italic pl-2 border-l-2 border-outline-variant/50">
-                      {q.explanation}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
 
-            {/* Result banner */}
-            {submitted && (
-              <div className={cn(
-                'flex items-center gap-4 p-4 rounded-2xl border',
-                passed
-                  ? 'bg-emerald-500/10 border-emerald-500/30'
-                  : 'bg-red-500/10 border-red-500/30'
-              )}>
-                {passed
-                  ? <Trophy className="w-8 h-8 text-green-400 shrink-0" />
-                  : <XCircle className="w-8 h-8 text-red-400 shrink-0" />}
-                <div>
-                  <p className="font-black text-on-surface">
-                    {passed ? `${correctCount}/3 correct — Well done! +${XP_PER_SECTION} XP` : `${correctCount}/3 correct — Review and try again`}
-                  </p>
-                  <p className="text-xs text-on-surface-variant mt-0.5">
-                    {passed ? 'You can move to the next section.' : 'Read through the section again then retry.'}
-                  </p>
+                  <div className="prose prose-invert max-w-none mb-6">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {current.content || ''}
+                    </ReactMarkdown>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-between pt-4 border-t border-outline-variant/20">
+                    <button
+                      onClick={() => sectionIndex > 0 && (setSectionIndex(i => i - 1), setPhase('reading'))}
+                      disabled={sectionIndex === 0}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-[1rem] border border-outline-variant/40 text-on-surface-variant text-sm font-bold hover:border-outline-variant/70 hover:text-on-surface disabled:opacity-30 disabled:pointer-events-none transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">arrow_back</span> Previous
+                    </button>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={readAloud}
+                        className={cn(
+                          'flex items-center gap-2 px-3 py-2 rounded-[1rem] border text-sm font-bold transition-all',
+                          isReading ? 'bg-primary/20 border-primary/40 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant/70'
+                        )}
+                      >
+                        <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
+                        {isReading ? 'Stop' : 'Listen'}
+                      </button>
+
+                      <button
+                        onClick={handleNext}
+                        disabled={loadingQuiz}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary text-on-primary font-bold text-sm shadow-[0_4px_0_0_#9a4600] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-50"
+                      >
+                        {loadingQuiz
+                          ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Generating…</>
+                          : <>Next: Quick Test <span className="material-symbols-outlined text-[18px]">arrow_forward</span></>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )}
+
+            {/* Quiz + Result */}
+            {(phase === 'quiz' || phase === 'result') && questions.length > 0 && (
+              <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/25 shadow-lg overflow-hidden">
+                <div className="p-8">
+                  {/* Quiz header */}
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>quiz</span>
+                    <h4 className="text-[20px] font-bold text-on-surface">Quick Check: {current?.title}</h4>
+                  </div>
+
+                  {/* Questions */}
+                  <div className="space-y-6">
+                    {questions.map((q, qi) => (
+                      <div key={qi}>
+                        <p className="text-[15px] text-on-surface font-semibold mb-3">
+                          <span className="text-primary mr-2">{qi + 1}.</span>{q.question}
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {q.options.map((opt, oi) => {
+                            const isSelected = selected[qi] === opt
+                            const isCorrect = submitted && opt === q.correct
+                            const isWrong = submitted && isSelected && !isCorrect
+                            return (
+                              <button
+                                key={oi}
+                                onClick={() => !submitted && setSelected(p => ({ ...p, [qi]: opt }))}
+                                disabled={submitted}
+                                className={cn(
+                                  'p-4 rounded-[1rem] border-2 border-b-4 font-bold text-left text-[14px] transition-all flex items-center justify-between',
+                                  isCorrect ? 'bg-primary-container text-on-primary-container border-primary-container border-b-[#763300]' :
+                                  isWrong ? 'bg-error-container/20 text-error border-error border-b-error/60' :
+                                  isSelected ? 'bg-primary/10 text-primary border-primary border-b-[#9a4600] translate-y-1 border-b-0' :
+                                  'bg-surface-container-high border-outline-variant hover:bg-surface-container-highest'
+                                )}
+                              >
+                                <span>{opt}</span>
+                                <span className="material-symbols-outlined text-[18px]">
+                                  {isCorrect ? 'check_circle' : isWrong ? 'cancel' : 'circle'}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {submitted && (
+                          <p className="text-[13px] text-on-surface-variant italic mt-3 pl-3 border-l-2 border-outline-variant/40">
+                            {q.explanation}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Result banner */}
+                  {submitted && (
+                    <div className={cn(
+                      'flex items-center gap-4 p-4 rounded-[1rem] border mt-6',
+                      passed ? 'bg-green-500/10 border-green-500/30' : 'bg-error-container/20 border-error/30'
+                    )}>
+                      <span className={cn('material-symbols-outlined text-[32px]', passed ? 'text-green-400' : 'text-error')} style={{ fontVariationSettings: "'FILL' 1" }}>
+                        {passed ? 'emoji_events' : 'cancel'}
+                      </span>
+                      <div>
+                        <p className="font-bold text-on-surface">
+                          {passed ? `${correctCount}/${questions.length} correct — Well done! +${XP_PER_SECTION} XP` : `${correctCount}/${questions.length} correct — Review and try again`}
+                        </p>
+                        <p className="text-[12px] text-on-surface-variant mt-0.5">
+                          {passed ? 'Ready for the next section.' : 'Read through again then retry.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CTA */}
+                  <div className="mt-6">
+                    {!submitted ? (
+                      <button onClick={handleSubmit} className="w-full py-3 rounded-full bg-primary text-on-primary font-black text-[15px] shadow-[0_4px_0_0_#9a4600] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
+                        Submit Answers
+                      </button>
+                    ) : passed ? (
+                      <button onClick={handleNextSection} className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-primary-container text-on-primary-container font-black text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
+                        <span>{sectionIndex < total - 1 ? 'Next Section' : '🎓 Complete!'}</span>
+                        {sectionIndex < total - 1 && <span className="material-symbols-outlined text-[18px]">arrow_forward</span>}
+                      </button>
+                    ) : (
+                      <div className="flex gap-3">
+                        <button onClick={() => { setPhase('reading'); setSelected({}); setSubmitted(false) }} className="flex-1 py-3 rounded-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-bold text-[14px] hover:bg-surface-container-highest transition-all">
+                          Re-read Section
+                        </button>
+                        <button onClick={() => { setSelected({}); setSubmitted(false); setPhase('quiz') }} className="flex-1 py-3 rounded-full bg-primary/20 border border-primary/30 text-primary font-bold text-[14px] hover:bg-primary/30 transition-all">
+                          Retry Quiz
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+            )}
+
+            {/* XP encouragement banner */}
+            {completed.size > 0 && (
+              <div className="bg-secondary-container/10 border-2 border-dashed border-secondary-container rounded-[1.5rem] p-6 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-secondary-container rounded-full flex items-center justify-center">
+                    <span className="material-symbols-outlined text-on-secondary-container text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>rocket_launch</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-on-surface text-[16px]">Keep it up, Explorer!</p>
+                    <p className="text-on-surface-variant text-[13px]">{completed.size} section{completed.size > 1 ? 's' : ''} completed</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[32px] font-bold text-primary leading-none">+{totalXP}</p>
+                  <p className="text-on-surface-variant text-[13px]">EXP</p>
                 </div>
               </div>
             )}
+          </div>
+        </main>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between">
-              {!submitted ? (
-                <button
-                  onClick={handleSubmitQuiz}
-                  className="w-full py-3 rounded-xl bg-primary-container text-on-surface font-black text-sm hover:bg-primary-container active:scale-95 transition-all shadow-lg shadow-primary/20"
-                >
-                  Submit Answers
-                </button>
-              ) : passed ? (
-                <button
-                  onClick={handleNextSection}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500 text-on-surface font-black text-sm hover:bg-green-400 active:scale-95 transition-all shadow-lg shadow-green-500/20"
-                >
-                  {sectionIndex < totalSections - 1
-                    ? <><ChevronRight className="w-4 h-4" /> Next Section</>
-                    : <><Trophy className="w-4 h-4" /> Complete!</>}
-                </button>
-              ) : (
-                <div className="flex gap-3 w-full">
-                  <button onClick={() => { setPhase('reading'); setAnswers({}); setSubmitted(false) }}
-                    className="flex-1 py-3 rounded-xl bg-surface-container-high border border-outline-variant/50 text-on-surface font-bold text-sm hover:bg-surface-container-highest transition-all">
-                    Re-read Section
-                  </button>
-                  <button onClick={handleRetry}
-                    className="flex-1 py-3 rounded-xl bg-primary/20 border border-primary/30 text-primary font-bold text-sm hover:bg-primary/30 transition-all">
-                    Retry Quiz
-                  </button>
+        {/* RIGHT: AI Tutor + Focus Timer */}
+        <aside className="hidden xl:flex flex-col w-64 shrink-0 bg-surface-container-low border-l border-outline-variant/20 overflow-y-auto">
+          <div className="flex flex-col gap-5 p-5">
+
+            {/* AI Tutor card */}
+            <div className="relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full border-4 border-primary overflow-hidden shadow-xl bg-surface-container z-10">
+                <div className="w-full h-full bg-gradient-to-br from-primary-container/30 to-tertiary-container/30 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-primary text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                 </div>
-              )}
+              </div>
+              <div className="mt-10 bg-surface-container rounded-[1.5rem] border border-outline-variant/20 pt-12 p-5">
+                <h4 className="text-center font-bold text-primary mb-3 text-[15px]">FlowAI's Tip</h4>
+                <p className="text-on-surface-variant text-[13px] italic leading-relaxed text-center">
+                  {TIPS[tipIdx]}
+                </p>
+                <button className="mt-4 w-full flex items-center justify-center gap-2 text-primary text-[13px] font-semibold hover:underline">
+                  <span className="material-symbols-outlined text-[16px]">lightbulb</span>
+                  Tell me more!
+                </button>
+              </div>
+            </div>
+
+            {/* Focus Timer */}
+            <div className="bg-surface-container-high rounded-[1.5rem] border border-outline-variant/20 p-5">
+              <h4 className="font-bold text-on-surface text-[14px] mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[18px]">timer</span>
+                Focus Timer
+              </h4>
+              <div className="text-[36px] font-bold text-center py-3 bg-surface-container-lowest rounded-[1rem] text-primary mb-4 font-mono">
+                {formatTime(timerSeconds)}
+              </div>
+              <button
+                onClick={() => setTimerRunning(r => !r)}
+                className="w-full py-3 rounded-[1rem] font-bold text-[14px] bg-surface-container-highest hover:bg-primary hover:text-on-primary transition-all"
+              >
+                {timerRunning ? 'Pause Session' : 'Resume Session'}
+              </button>
+            </div>
+
+            {/* Section progress */}
+            <div className="bg-surface-container rounded-[1.5rem] border border-outline-variant/20 p-5">
+              <h4 className="font-bold text-on-surface text-[14px] mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[18px]">menu_book</span>
+                Progress
+              </h4>
+              <div className="space-y-2">
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-on-surface-variant">Sections done</span>
+                  <span className="text-primary font-bold">{completed.size}/{total}</span>
+                </div>
+                <div className="h-2 bg-surface-container-low rounded-full overflow-hidden">
+                  <div className="h-full bg-primary-container rounded-full transition-all" style={{ width: `${total > 0 ? (completed.size / total) * 100 : 0}%` }} />
+                </div>
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-on-surface-variant">Total XP</span>
+                  <span className="text-primary font-bold">{totalXP}</span>
+                </div>
+              </div>
             </div>
           </div>
-        )}
+        </aside>
       </div>
     </div>
   )
