@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { aiApi, ttsApi } from '@/lib/api'
+import { aiApi } from '@/lib/api'
 
 interface MindMapData {
   center: string
@@ -177,35 +177,8 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
   const [avDismissed, setAvDismissed] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const speak = useCallback(async (text: string) => {
-    // Stop any currently playing audio first
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ''
-      audioRef.current = null
-    }
-    try {
-      // Use Gemini TTS — Puck voice: playful, energetic, matches the avatar personality
-      const res = await ttsApi.speak(text, 'Puck')
-      const blob = new Blob([res.data], { type: 'audio/wav' })
-      const url  = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      audioRef.current = audio
-      audio.onended = () => {
-        URL.revokeObjectURL(url)
-        audioRef.current = null
-        setAvState('idle')
-      }
-      audio.onerror = () => {
-        URL.revokeObjectURL(url)
-        audioRef.current = null
-        setAvState('idle')
-      }
-      await audio.play()
-    } catch {
-      // If TTS fails (network, quota, etc.), just show the text without audio
-      setAvState('idle')
-    }
+  const speak = useCallback((_text: string) => {
+    // Voice removed — text-only for instant response
   }, [])
 
   const stopSpeaking = useCallback(() => {
@@ -214,7 +187,6 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
       audioRef.current.src = ''
       audioRef.current = null
     }
-    setAvState('idle')
   }, [])
 
   useEffect(() => () => stopSpeaking(), [stopSpeaking])
@@ -225,9 +197,6 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
     const msg = `Hi! I'm FlowAI. This mind map is about "${data.center}". Tap any node and I'll explain it!`
     setAvText(msg)
     setAvState('speaking')
-    // slight delay so voices load
-    const t = setTimeout(() => speak(msg), 600)
-    return () => clearTimeout(t)
   }, [data?.center]) // eslint-disable-line
 
   const onNodeClick = useCallback(async (name: string, context: string, nodeType: 'center' | 'branch' | 'sub' = 'branch') => {
