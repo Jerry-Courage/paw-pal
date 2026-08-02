@@ -27,8 +27,8 @@ const NODE_COLORS = [
 const BRANCH_ICONS = ['public','science','hub','calculate','biotech','history_edu','language','psychology']
 
 const CX = 90   // center radius
-const BX = 60   // branch radius
-const SX = 42   // sub radius
+const BX = 62   // branch radius
+const SX = 44   // sub radius
 
 // ─── Global CSS injected once ─────────────────────────────────────────────────
 const STYLES = `
@@ -165,7 +165,7 @@ function Avatar({ state, text, onDismiss }: { state: AvState; text: string; onDi
 export default function NeuralMindMap({ data, resourceTitle, resourceId }: NeuralMindMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [pan, setPan]     = useState({ x: 0, y: 0 })
-  const [zoom, setZoom]   = useState(0.85)
+  const [zoom, setZoom]   = useState(0.62)
   const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [activeNode, setActiveNode] = useState<{ type: 'center'|'branch'|'sub'; bi?: number; si?: number } | null>(null)
@@ -237,47 +237,40 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
     setAvState('thinking')
     setAvText('')
 
-    // For branch and sub nodes we already have all the context — skip the AI call
-    // and go straight to TTS. This cuts latency from ~5-7s down to ~1-2s (single TTS call).
-    // Only the center node needs an AI-generated overview since it's the whole topic.
-    if (nodeType !== 'center') {
-      const lines = context.split('.').filter(Boolean)
-      const sentence = lines[0]?.trim() || context
-      // Build a natural spoken description from the map data we already have
-      let local = ''
-      if (nodeType === 'sub') {
-        // context = 'Subtopic "X" which is part of "Y" in the mind map about "Z"'
-        const parentMatch = context.match(/part of "([^"]+)"/)
-        const parent = parentMatch?.[1] || data.center
-        local = `${name} is part of ${parent}. It's one of the subtopics that breaks down this area of ${data.center}.`
-      } else {
-        // branch node
+    try {
+      // Build a prompt that forces a real explanation of the concept itself,
+      // not a meta-description of its place in the map structure.
+      // resourceId scopes the AI to this specific material so it doesn't wander.
+      let prompt = ''
+      if (nodeType === 'center') {
+        prompt = `The mind map topic is "${data.center}". ` +
+          `In 2 sentences, explain what "${data.center}" is as a subject and why it matters. ` +
+          `Be conversational, no bullet points, no markdown.`
+      } else if (nodeType === 'branch') {
         const subMatch = context.match(/Subtopics: (.+)$/)
         const subs = subMatch?.[1] || ''
-        local = subs
-          ? `${name} is a main branch of ${data.center}. It covers: ${subs}.`
-          : `${name} is a key branch of ${data.center}.`
+        prompt = `We are studying "${data.center}". One of its main topics is "${name}". ` +
+          (subs ? `It covers: ${subs}. ` : '') +
+          `In 2 sentences, explain what "${name}" actually is and how it connects to "${data.center}". ` +
+          `Talk about the concept itself, not the map. Be conversational, no bullet points.`
+      } else {
+        // sub node
+        const parentMatch = context.match(/part of "([^"]+)"/)
+        const parent = parentMatch?.[1] || data.center
+        prompt = `We are studying "${data.center}", specifically the topic "${parent}". ` +
+          `A concept within it is "${name}". ` +
+          `In 2 sentences, explain what "${name}" actually is and how it relates to "${parent}". ` +
+          `Talk about the concept itself. Be conversational, no bullet points.`
       }
-      setAvText(local)
-      setAvState('speaking')
-      speak(local)
-      return
-    }
 
-    // Center node — use the AI with resourceId so it stays scoped to this resource
-    try {
-      const prompt = `You are explaining a mind map. The topic is "${data.center}". ` +
-        `Context: ${context}. ` +
-        `In exactly 2 sentences, give an overview of "${data.center}" as a subject. ` +
-        `Stay strictly on this topic. No bullet points. Be conversational.`
       const res = await aiApi.quickAsk(prompt, resourceId)
-      const raw = res.data?.answer || res.data?.reply || `${data.center} is the central concept of this mind map.`
-      const clean = raw.replace(/\*\*/g,'').replace(/\n+/g,' ').trim()
+      const raw = res.data?.answer || res.data?.reply || `${name} is an important concept in ${data.center}.`
+      const clean = raw.replace(/\*\*/g, '').replace(/\n+/g, ' ').trim()
       setAvText(clean)
       setAvState('speaking')
       speak(clean)
     } catch {
-      const fb = `${data.center} is the central topic of this mind map. Tap any branch to explore it!`
+      const fb = `${name} is an important concept in ${data.center}. Keep exploring!`
       setAvText(fb); setAvState('speaking'); speak(fb)
     }
   }, [data.center, resourceId, speak, stopSpeaking])
@@ -298,26 +291,29 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
   const onTouchMove  = (e: React.TouchEvent) => { if (dragging) setPan({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y }) }
   const onTouchEnd   = () => setDragging(false)
   const onWheel      = (e: React.WheelEvent) => { e.preventDefault(); setZoom(z => e.deltaY < 0 ? Math.min(z*1.08,3) : Math.max(z/1.08,0.25)) }
-  const resetView    = () => { setPan({x:0,y:0}); setZoom(0.85) }
+  const resetView    = () => { setPan({x:0,y:0}); setZoom(0.62) }
 
   // Layout
   const branches = useMemo(() => {
     if (!data?.branches) return []
     const n = data.branches.length
     const step = (2 * Math.PI) / n
-    const R = 280
+    const R = 380   // branch orbit — was 280, pushed out for breathing room
     return data.branches.map((b, i) => {
       const a = i * step - Math.PI / 2
       const bx = Math.cos(a) * R
       const by = Math.sin(a) * R
       const subCount = b.subtopics?.length || 0
       const subs = (b.subtopics || []).map((s, j) => {
-        const spread = subCount > 1 ? ((j / (subCount-1)) - 0.5) * 1.1 : 0
+        // Fan sub-nodes around the branch direction with tighter spread
+        // so they don't crash into neighbouring branches
+        const maxSpread = Math.min(0.75, 0.55 + subCount * 0.04)
+        const spread = subCount > 1 ? ((j / (subCount - 1)) - 0.5) * maxSpread : 0
         const sa = a + spread
-        const sr = R + 195
-        return { text: s, x: Math.cos(sa)*sr, y: Math.sin(sa)*sr }
+        const sr = R + 240  // sub orbit — was R+195
+        return { text: s, x: Math.cos(sa) * sr, y: Math.sin(sa) * sr }
       })
-      return { topic: b.topic, x: bx, y: by, subs, color: NODE_COLORS[i%NODE_COLORS.length], icon: BRANCH_ICONS[i%BRANCH_ICONS.length] }
+      return { topic: b.topic, x: bx, y: by, subs, color: NODE_COLORS[i % NODE_COLORS.length], icon: BRANCH_ICONS[i % BRANCH_ICONS.length] }
     })
   }, [data])
 
