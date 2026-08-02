@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { libraryApi, aiApi, getAuthToken, API_BASE } from '@/lib/api'
+import { libraryApi, aiApi, authApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -163,8 +163,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       setTotalXP(newXP)
       setCompleted(newCompleted)
       toast.success(`+${XP_PER_SECTION} XP! 🎉`, { duration: 2000 })
+      // Award XP on backend so it aggregates to dashboard total
+      authApi.awardXp(XP_PER_SECTION, `Study Mode: Section ${sectionIndex + 1} of ${resource?.title}`, resourceId).catch(() => {})
       libraryApi.completeStep(resourceId, 'notes', Math.round(newCompleted.size / total * 100)).catch(() => {})
       qc.invalidateQueries({ queryKey: ['progress', resourceId] })
+      qc.invalidateQueries({ queryKey: ['profile'] })
     }
   }
 
@@ -240,9 +243,12 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       setWrittenFeedback(data.feedback || '')
       setWrittenGrade(data.correct ? 'got_it' : 'needs_work')
       if (data.correct && !completed.has(sectionIndex)) {
-        const newXP = totalXP + Math.round(XP_PER_SECTION * 0.5)
+        const bonus = Math.round(XP_PER_SECTION * 0.5)
+        const newXP = totalXP + bonus
         setTotalXP(newXP)
-        toast.success(`+${Math.round(XP_PER_SECTION * 0.5)} XP for written test! 📝`, { duration: 2000 })
+        toast.success(`+${bonus} XP for written test! 📝`, { duration: 2000 })
+        authApi.awardXp(bonus, `Study Mode: Written test Section ${sectionIndex + 1}`, resourceId).catch(() => {})
+        qc.invalidateQueries({ queryKey: ['profile'] })
       }
     } catch { setWrittenGrade('got_it'); setWrittenFeedback('Great effort! Move on to the next section.') }
     finally { setGradingWritten(false) }
@@ -296,8 +302,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               const masteryXP = totalXP + XP_MASTERY
               setTotalXP(masteryXP)
               toast.success(`🏆 Mastery complete! +${XP_MASTERY} XP!`, { duration: 3000 })
+              authApi.awardXp(XP_MASTERY, `Study Mode: Mastery Challenge — ${resource?.title}`, resourceId).catch(() => {})
               libraryApi.completeStep(resourceId, 'examprep', msg.score || 75).catch(() => {})
               qc.invalidateQueries({ queryKey: ['progress', resourceId] })
+              qc.invalidateQueries({ queryKey: ['profile'] })
               // Clear localStorage so next visit starts fresh after mastery
               try { localStorage.removeItem(`study_${resourceId}_section`); localStorage.removeItem(`study_${resourceId}_xp`); localStorage.removeItem(`study_${resourceId}_completed`) } catch {}
             }

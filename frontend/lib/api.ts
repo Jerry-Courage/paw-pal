@@ -62,6 +62,8 @@ export const authApi = {
   registerPushSubscription: (sub: any) => api.post('/auth/push-notifications/', sub),
   updateOnboarding: (tourId: string) => api.post('/auth/onboarding/update/', { tour_id: tourId }),
   getConfig: () => api.get('/auth/config/'),
+  awardXp: (amount: number, reason: string, resourceId?: number) =>
+    api.post('/auth/award-xp/', { amount, reason, resource_id: resourceId }),
 }
 
 export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BG8EkGI7soGE5KMcQs4lKSSGAW6qfwdjhre9WCJpPtidRi403ZfoNSfhh9aCVGH21PDLrXiuMtr8yXMjYNxSnxY'
