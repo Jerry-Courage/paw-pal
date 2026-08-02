@@ -495,7 +495,7 @@ export default function WorkspaceCollaborationStudio() {
   }
 
   if (isLoading) return (
-    <div className="flex items-center justify-center h-[100dvh] bg-background">
+    <div className="fixed inset-0 bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-10 h-10">
           <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
@@ -507,7 +507,7 @@ export default function WorkspaceCollaborationStudio() {
   )
 
   return (
-    <div className="flex flex-col h-full bg-background text-on-surface overflow-hidden relative md:left-64">
+    <div className="fixed inset-0 flex flex-col bg-background text-on-surface overflow-hidden">
 
       {/* ═══════════════ HEADER ═══════════════ */}
       <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-outline-variant/20 bg-background z-20 flex-shrink-0">
