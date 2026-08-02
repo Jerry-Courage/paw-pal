@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { libraryApi } from '@/lib/api'
+import { libraryApi, aiApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -13,19 +13,16 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
 type QuizQuestion = { question: string; options: string[]; correct: string; explanation: string }
-type Phase = 'reading' | 'quiz' | 'result'
+type WrittenQuestion = { question: string; hint?: string; model_answer: string }
+type Phase = 'reading' | 'quiz' | 'written' | 'result' | 'mastery' | 'mastery_complete'
 type Section = {
-  icon?: string
-  title: string
-  key_question?: string
-  plain_english?: string
-  deep_dive?: string
-  memory_trick?: string
-  quick_summary?: string
-  content?: string
+  icon?: string; title: string; key_question?: string; plain_english?: string
+  deep_dive?: string; memory_trick?: string; quick_summary?: string; content?: string
 }
+type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
 const XP_PER_SECTION = 50
+const XP_MASTERY = 200
 const TIPS = [
   '"Try explaining what you just read in your own words — the Feynman technique!"',
   '"Take a 5-min break every 25 min. Your brain will thank you!"',
@@ -51,6 +48,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const [sectionIndex, setSectionIndex] = useState(0)
   const [phase, setPhase] = useState<Phase>('reading')
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
+  const [writtenQ, setWrittenQ] = useState<WrittenQuestion | null>(null)
+  const [writtenAnswer, setWrittenAnswer] = useState('')
+  const [writtenGrade, setWrittenGrade] = useState<'got_it' | 'needs_work' | null>(null)
+  const [writtenFeedback, setWrittenFeedback] = useState('')
+  const [gradingWritten, setGradingWritten] = useState(false)
   const [selected, setSelected] = useState<Record<number, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [loadingQuiz, setLoadingQuiz] = useState(false)
@@ -63,6 +65,19 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const [focusMinutes, setFocusMinutes] = useState(0)
   const timerRef = useRef<NodeJS.Timeout>()
   const tickRef = useRef(0)
+
+  // Mastery / voice session state
+  const [masteryTranscript, setMasteryTranscript] = useState<TranscriptEntry[]>([])
+  const [masteryConnecting, setMasteryConnecting] = useState(false)
+  const [masteryActive, setMasteryActive] = useState(false)
+  const [masteryMuted, setMasteryMuted] = useState(false)
+  const [masteryScore, setMasteryScore] = useState(0)
+  const [masteryFeedback, setMasteryFeedback] = useState('')
+  const masteryWsRef = useRef<WebSocket | null>(null)
+  const masteryAudioCtxRef = useRef<AudioContext | null>(null)
+  const masteryPcRef = useRef<RTCPeerConnection | null>(null)
+  const masteryStreamRef = useRef<MediaStream | null>(null)
+  const masteryScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!timerRunning) return
@@ -116,7 +131,6 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
   const handleSubmit = () => {
     if (Object.keys(selected).length < questions.length) { toast.error('Answer all questions first.'); return }
-    // Calculate pass before setting state
     const correct = questions.filter((q, i) => selected[i] === q.correct).length
     const didPass = questions.length > 0 && correct >= Math.ceil(questions.length * 0.6)
     setSubmitted(true); setPhase('result')
@@ -134,11 +148,159 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
   const goToSection = (i: number) => {
     setSectionIndex(i); setPhase('reading'); setQuestions([]); setSelected({}); setSubmitted(false)
+    setWrittenQ(null); setWrittenAnswer(''); setWrittenGrade(null); setWrittenFeedback('')
   }
 
   const handleNextSection = () => {
     if (sectionIndex < total - 1) { goToSection(sectionIndex + 1) }
-    else { toast.success('🎓 All sections complete!'); router.push(`/library/${resourceId}`) }
+    else {
+      // All sections done — trigger Mastery
+      setPhase('mastery')
+      toast.success('🎓 All sections complete! Time for your Mastery session!', { duration: 3000 })
+    }
+  }
+
+  // Written test: load a written question after MCQ passed
+  const handleLoadWritten = async () => {
+    if (!current) return
+    const content = getSectionContent(current)
+    setGradingWritten(true)
+    try {
+      const res = await aiApi.quickAsk(
+        `Generate ONE short-answer question to test deep understanding of this content. Return JSON only: {"question": "...", "hint": "brief hint...", "model_answer": "..."}\n\nContent: ${content.slice(0, 1000)}`,
+        resourceId
+      )
+      const text = res.data?.answer || res.data?.reply || ''
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        setWrittenQ(parsed); setWrittenAnswer(''); setWrittenGrade(null); setWrittenFeedback('')
+        setPhase('written')
+      } else { throw new Error('No question') }
+    } catch { toast.error('Could not generate written question.'); handleNextSection() }
+    finally { setGradingWritten(false) }
+  }
+
+  // Grade written answer with AI
+  const handleGradeWritten = async () => {
+    if (!writtenAnswer.trim() || !writtenQ) return
+    setGradingWritten(true)
+    try {
+      const res = await aiApi.gradeAnswer(resourceId, writtenQ.question, writtenAnswer, writtenQ.model_answer)
+      const data = res.data
+      setWrittenFeedback(data.feedback || '')
+      setWrittenGrade(data.correct ? 'got_it' : 'needs_work')
+      if (data.correct && !completed.has(sectionIndex)) {
+        const newXP = totalXP + Math.round(XP_PER_SECTION * 0.5)
+        setTotalXP(newXP)
+        toast.success(`+${Math.round(XP_PER_SECTION * 0.5)} XP for written test! 📝`, { duration: 2000 })
+      }
+    } catch { setWrittenGrade('got_it'); setWrittenFeedback('Great effort! Move on to the next section.') }
+    finally { setGradingWritten(false) }
+  }
+
+  // ─── MASTERY VOICE SESSION ────────────────────────────────────────────────
+  const startMasterySession = async () => {
+    setMasteryConnecting(true)
+    setMasteryTranscript([])
+    try {
+      const token = await getAuthToken()
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
+      const host = backendHost || 'localhost:8000'
+      // Build topic summary from all sections
+      const topicSummary = sections.slice(0, 10).map((s, i) => `${i + 1}. ${s.title}: ${s.quick_summary || s.plain_english || ''}`.slice(0, 120)).join('\n')
+      const context = `resource_id:${resourceId}|technique:feynman|topic:${resource?.title}|sections:${topicSummary}`
+      const wsUrl = `${protocol}//${host}/ws/ai/examprep/?token=${token}&context=${encodeURIComponent(context)}`
+      const ws = new WebSocket(wsUrl)
+      masteryWsRef.current = ws
+      const audioCtx = new AudioContext({ sampleRate: 24000 })
+      masteryAudioCtxRef.current = audioCtx
+      let playbackQueue: AudioBuffer[] = []
+      let isPlaying = false
+
+      const playNext = async () => {
+        if (isPlaying || playbackQueue.length === 0) return
+        isPlaying = true
+        const buf = playbackQueue.shift()!
+        const src = audioCtx.createBufferSource()
+        src.buffer = buf
+        src.connect(audioCtx.destination)
+        src.onended = () => { isPlaying = false; playNext() }
+        src.start()
+      }
+
+      ws.onmessage = async (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data)
+            if (msg.type === 'ai_text') {
+              setMasteryTranscript(p => [...p, { role: 'ai', text: msg.text, ts: Date.now() }])
+              setTimeout(() => { masteryScrollRef.current?.scrollTo({ top: 9999, behavior: 'smooth' }) }, 50)
+            } else if (msg.type === 'user_text') {
+              setMasteryTranscript(p => [...p, { role: 'user', text: msg.text, ts: Date.now() }])
+            } else if (msg.type === 'session_report') {
+              setMasteryScore(msg.score || 75)
+              setMasteryFeedback(msg.summary || 'Great session! You demonstrated solid understanding.')
+              setMasteryActive(false)
+              setPhase('mastery_complete')
+              const masteryXP = totalXP + XP_MASTERY
+              setTotalXP(masteryXP)
+              toast.success(`🏆 Mastery complete! +${XP_MASTERY} XP!`, { duration: 3000 })
+              libraryApi.completeStep(resourceId, 'examprep', msg.score || 75).catch(() => {})
+              qc.invalidateQueries({ queryKey: ['progress', resourceId] })
+            }
+          } catch {}
+        } else if (event.data instanceof Blob) {
+          const arrBuf = await event.data.arrayBuffer()
+          const pcmData = new Int16Array(arrBuf)
+          const floatData = new Float32Array(pcmData.length)
+          for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 32768
+          const audioBuf = audioCtx.createBuffer(1, floatData.length, 24000)
+          audioBuf.getChannelData(0).set(floatData)
+          playbackQueue.push(audioBuf)
+          playNext()
+        }
+      }
+
+      ws.onopen = async () => {
+        setMasteryConnecting(false)
+        setMasteryActive(true)
+        // Start mic
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 24000, channelCount: 1 } })
+        masteryStreamRef.current = stream
+        const micCtx = new AudioContext({ sampleRate: 24000 })
+        const source = micCtx.createMediaStreamSource(stream)
+        const processor = micCtx.createScriptProcessor(4096, 1, 1)
+        processor.onaudioprocess = (e) => {
+          if (masteryMuted || !masteryWsRef.current || masteryWsRef.current.readyState !== WebSocket.OPEN) return
+          const float32 = e.inputBuffer.getChannelData(0)
+          const int16 = new Int16Array(float32.length)
+          for (let i = 0; i < float32.length; i++) int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
+          masteryWsRef.current.send(int16.buffer)
+        }
+        source.connect(processor)
+        processor.connect(micCtx.destination)
+      }
+
+      ws.onerror = () => { setMasteryConnecting(false); setMasteryActive(false); toast.error('Could not connect to voice session.') }
+      ws.onclose = () => { setMasteryConnecting(false); setMasteryActive(false) }
+    } catch (err: any) {
+      setMasteryConnecting(false)
+      toast.error(err.message || 'Could not start voice session. Check microphone permissions.')
+    }
+  }
+
+  const endMasterySession = () => {
+    masteryWsRef.current?.close()
+    masteryStreamRef.current?.getTracks().forEach(t => t.stop())
+    masteryAudioCtxRef.current?.close()
+    setMasteryActive(false)
+    if (phase === 'mastery') {
+      setMasteryScore(65)
+      setMasteryFeedback('Session ended early. Try completing the full mastery session for best results.')
+      setPhase('mastery_complete')
+    }
   }
 
   if (isLoading) return (
@@ -199,7 +361,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
           <nav className="flex flex-col gap-1.5 p-4 flex-1">
             {sections.map((sec, i) => {
               const isDone = completed.has(i)
-              const isActive = i === sectionIndex
+              const isActive = i === sectionIndex && phase !== 'mastery' && phase !== 'mastery_complete'
               const isNext = i === sectionIndex + 1 && !isDone
               const isLocked = i > sectionIndex + 1 && !isDone && !completed.has(i)
               const canClick = !isLocked || isDone
@@ -219,6 +381,18 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 </button>
               )
             })}
+            {/* Mastery item — unlocks when all sections done */}
+            <div className={cn('flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[13px] font-semibold mt-2 border-t border-outline-variant/20 pt-4',
+              phase === 'mastery' || phase === 'mastery_complete' ? 'bg-tertiary-container/20 border border-tertiary/30 text-tertiary' :
+              completed.size === total && total > 0 ? 'text-tertiary hover:bg-tertiary/10 cursor-pointer' :
+              'text-on-surface-variant/30'
+            )} onClick={() => completed.size === total && total > 0 && setPhase('mastery')}>
+              <span className="text-[16px]">{phase === 'mastery_complete' ? '🏆' : '🎓'}</span>
+              <div className="min-w-0">
+                <p className="truncate">Mastery Challenge</p>
+                <p className="text-[10px] opacity-70 truncate">{completed.size === total && total > 0 ? 'Unlocked — Feynman voice' : `${total - completed.size} sections left`}</p>
+              </div>
+            </div>
           </nav>
           <div className="m-4 p-4 bg-surface-container rounded-[1rem] border border-outline-variant/20 shrink-0">
             <div className="flex items-center gap-2 mb-2">
@@ -409,8 +583,9 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                         Submit Answers
                       </button>
                     ) : passed ? (
-                      <button onClick={handleNextSection} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full bg-primary-container text-on-primary-container font-black text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
-                        {sectionIndex < total - 1 ? <>Next Section <span className="material-symbols-outlined text-[18px]">arrow_forward</span></> : '🎓 Complete!'}
+                      <button onClick={handleLoadWritten} disabled={gradingWritten}
+                        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full bg-primary-container text-on-primary-container font-black text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-60">
+                        {gradingWritten ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Loading…</> : <>Written Test <span className="material-symbols-outlined text-[18px]">edit_note</span></>}
                       </button>
                     ) : (
                       <div className="flex gap-3">
@@ -424,7 +599,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             )}
 
             {/* XP Banner */}
-            {completed.size > 0 && (
+            {completed.size > 0 && phase !== 'mastery' && phase !== 'mastery_complete' && (
               <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-secondary-container rounded-full flex items-center justify-center">
@@ -441,6 +616,207 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 </div>
               </div>
             )}
+            {/* WRITTEN TEST phase */}
+            {phase === 'written' && writtenQ && (
+              <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
+                <div className="p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="material-symbols-outlined text-secondary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
+                    <div>
+                      <h4 className="text-[18px] font-bold text-on-surface">Written Test</h4>
+                      <p className="text-[12px] text-on-surface-variant">Demonstrate your understanding in your own words</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-secondary/10 border border-secondary/20 rounded-[1rem] mb-6">
+                    <p className="text-[16px] font-semibold text-on-surface">{writtenQ.question}</p>
+                    {writtenQ.hint && <p className="text-[13px] text-on-surface-variant mt-2 italic">Hint: {writtenQ.hint}</p>}
+                  </div>
+
+                  <textarea
+                    className="w-full h-36 bg-surface-container-high border-2 border-outline-variant/40 focus:border-secondary rounded-[1rem] px-5 py-4 text-[15px] text-on-surface resize-none focus:outline-none transition-all placeholder:text-on-surface-variant/40"
+                    placeholder="Write your answer here in your own words…"
+                    value={writtenAnswer}
+                    onChange={e => setWrittenAnswer(e.target.value)}
+                    disabled={!!writtenGrade}
+                  />
+
+                  {writtenGrade && (
+                    <div className={cn('p-5 rounded-[1rem] border mt-4', writtenGrade === 'got_it' ? 'bg-green-500/10 border-green-500/30' : 'bg-primary/10 border-primary/20')}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          {writtenGrade === 'got_it' ? 'check_circle' : 'lightbulb'}
+                        </span>
+                        <p className="font-bold text-on-surface">{writtenGrade === 'got_it' ? 'Great explanation!' : 'Good effort — keep studying!'}</p>
+                      </div>
+                      {writtenFeedback && <p className="text-[13px] text-on-surface-variant leading-relaxed">{writtenFeedback}</p>}
+                      <details className="mt-3">
+                        <summary className="text-[12px] text-on-surface-variant cursor-pointer hover:text-on-surface">View model answer</summary>
+                        <p className="text-[13px] text-on-surface-variant mt-2 pl-3 border-l-2 border-outline-variant/40 italic">{writtenQ.model_answer}</p>
+                      </details>
+                    </div>
+                  )}
+
+                  <div className="mt-6 flex gap-3">
+                    {!writtenGrade ? (
+                      <>
+                        <button onClick={handleNextSection} className="flex-1 py-3 rounded-full bg-surface-container-high border border-outline-variant/50 text-on-surface-variant font-bold text-[14px] hover:bg-surface-container-highest transition-all">
+                          Skip
+                        </button>
+                        <button onClick={handleGradeWritten} disabled={!writtenAnswer.trim() || gradingWritten}
+                          className="flex-1 py-3 rounded-full bg-secondary text-on-secondary font-bold text-[14px] shadow-[0_4px_0_0_#12139b] active:translate-y-1 active:shadow-none hover:brightness-110 disabled:opacity-50 transition-all">
+                          {gradingWritten ? 'Grading…' : 'Submit Answer'}
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={handleNextSection}
+                        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full bg-primary-container text-on-primary-container font-black text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
+                        {sectionIndex < total - 1 ? <>Next Section <span className="material-symbols-outlined text-[18px]">arrow_forward</span></> : <>Start Mastery 🎓</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </article>
+            )}
+
+            {/* MASTERY CHALLENGE phase */}
+            {phase === 'mastery' && (
+              <article className="bg-surface-container rounded-[1.5rem] border border-tertiary/30 overflow-hidden shadow-lg">
+                <div className="p-8">
+                  {/* Header */}
+                  <div className="text-center mb-8">
+                    <div className="w-20 h-20 rounded-full bg-tertiary/15 border-2 border-tertiary/30 flex items-center justify-center mx-auto mb-4">
+                      <span className="material-symbols-outlined text-tertiary text-[40px]" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
+                    </div>
+                    <h2 className="text-[24px] font-bold text-on-surface mb-2">Mastery Challenge</h2>
+                    <p className="text-[14px] text-on-surface-variant max-w-md mx-auto">
+                      Prove you've truly mastered <strong className="text-on-surface">{resource?.title}</strong> using the Feynman technique. Explain concepts aloud to FlowAI — it'll challenge you with follow-up questions.
+                    </p>
+                  </div>
+
+                  {/* How it works */}
+                  {!masteryActive && !masteryConnecting && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                      {[
+                        { icon: 'mic', color: 'text-tertiary', title: 'Speak Freely', desc: 'Explain concepts in your own words like you\'re teaching a friend' },
+                        { icon: 'smart_toy', color: 'text-primary', title: 'AI Challenges', desc: 'FlowAI asks follow-up questions when it needs clarification' },
+                        { icon: 'emoji_events', color: 'text-secondary', title: 'Get Scored', desc: `Earn up to ${XP_MASTERY} XP based on your depth of understanding` },
+                      ].map(s => (
+                        <div key={s.title} className="p-4 bg-surface-container-high rounded-[1rem] text-center">
+                          <span className={cn('material-symbols-outlined text-[28px] mb-2 block', s.color)} style={{ fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
+                          <p className="font-bold text-on-surface text-[14px] mb-1">{s.title}</p>
+                          <p className="text-[12px] text-on-surface-variant">{s.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Active session UI */}
+                  {(masteryActive || masteryConnecting) && (
+                    <div className="mb-6">
+                      {/* Waveform indicator */}
+                      <div className="flex items-center justify-center gap-1 h-16 mb-4">
+                        {masteryConnecting ? (
+                          <span className="material-symbols-outlined text-tertiary text-[36px] animate-spin">autorenew</span>
+                        ) : (
+                          [...Array(12)].map((_, i) => (
+                            <div key={i} className="w-1.5 bg-tertiary rounded-full animate-pulse"
+                              style={{ height: `${20 + Math.random() * 40}px`, animationDelay: `${i * 0.1}s`, animationDuration: `${0.6 + Math.random() * 0.4}s` }} />
+                          ))
+                        )}
+                      </div>
+                      <p className="text-center text-[13px] text-on-surface-variant mb-4">
+                        {masteryConnecting ? 'Connecting to FlowAI…' : masteryMuted ? '🔇 Microphone muted' : '🎙️ Listening — speak freely'}
+                      </p>
+
+                      {/* Transcript */}
+                      <div ref={masteryScrollRef} className="h-48 overflow-y-auto bg-surface-container-low rounded-[1rem] p-4 space-y-3 scrollbar-hide border border-outline-variant/20">
+                        {masteryTranscript.length === 0 && (
+                          <p className="text-center text-on-surface-variant/40 text-[13px] italic mt-8">Conversation will appear here…</p>
+                        )}
+                        {masteryTranscript.map((entry, i) => (
+                          <div key={i} className={cn('flex gap-2.5', entry.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
+                            <div className={cn('max-w-[80%] rounded-[1rem] px-3 py-2 text-[13px]', entry.role === 'user' ? 'bg-primary-container text-on-primary-container rounded-tr-sm' : 'bg-tertiary/10 border border-tertiary/20 text-on-surface rounded-tl-sm')}>
+                              {entry.text}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Controls */}
+                  {masteryActive ? (
+                    <div className="flex gap-3">
+                      <button onClick={() => setMasteryMuted(m => !m)}
+                        className={cn('flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-bold text-[14px] transition-all border', masteryMuted ? 'bg-error-container/20 border-error/30 text-error' : 'bg-surface-container-high border-outline-variant/40 text-on-surface hover:bg-surface-container-highest')}>
+                        <span className="material-symbols-outlined text-[18px]">{masteryMuted ? 'mic_off' : 'mic'}</span>
+                        {masteryMuted ? 'Unmute' : 'Mute'}
+                      </button>
+                      <button onClick={endMasterySession}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-error text-on-error font-bold text-[14px] transition-all">
+                        <span className="material-symbols-outlined text-[18px]">stop_circle</span>
+                        End Session
+                      </button>
+                    </div>
+                  ) : masteryConnecting ? (
+                    <button disabled className="w-full py-3.5 rounded-full bg-tertiary/30 text-tertiary font-bold text-[15px] opacity-70 flex items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] animate-spin">autorenew</span> Connecting…
+                    </button>
+                  ) : (
+                    <button onClick={startMasterySession}
+                      className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full bg-tertiary text-on-tertiary-container font-black text-[15px] shadow-[0_4px_0_0_#400688] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
+                      <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>mic</span>
+                      Start Mastery Session
+                    </button>
+                  )}
+                </div>
+              </article>
+            )}
+
+            {/* MASTERY COMPLETE */}
+            {phase === 'mastery_complete' && (
+              <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
+                <div className="p-8 text-center">
+                  <div className="w-24 h-24 rounded-full bg-tertiary/15 border-4 border-tertiary flex items-center justify-center mx-auto mb-6 relative">
+                    <span className="material-symbols-outlined text-tertiary text-[48px]" style={{ fontVariationSettings: "'FILL' 1" }}>emoji_events</span>
+                    <div className="absolute -bottom-1 -right-1 bg-primary-container text-on-primary-container text-[13px] font-black px-2 py-0.5 rounded-full shadow-lg">
+                      +{XP_MASTERY} XP
+                    </div>
+                  </div>
+                  <h2 className="text-[26px] font-bold text-on-surface mb-2">Mastery Achieved! 🎓</h2>
+                  <p className="text-[14px] text-on-surface-variant mb-6 max-w-md mx-auto">{masteryFeedback}</p>
+
+                  {/* Score circle */}
+                  <div className="flex items-center justify-center gap-8 mb-8">
+                    <div className="text-center">
+                      <p className="text-[48px] font-bold text-tertiary leading-none">{masteryScore}</p>
+                      <p className="text-[12px] text-on-surface-variant uppercase tracking-widest mt-1">Score</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[48px] font-bold text-primary leading-none">{totalXP}</p>
+                      <p className="text-[12px] text-on-surface-variant uppercase tracking-widest mt-1">Total XP</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[48px] font-bold text-secondary leading-none">{completed.size}</p>
+                      <p className="text-[12px] text-on-surface-variant uppercase tracking-widest mt-1">Sections</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button onClick={() => { setPhase('mastery'); setMasteryTranscript([]) }}
+                      className="flex-1 py-3 rounded-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-bold text-[14px] hover:bg-surface-container-highest transition-all">
+                      Retry Mastery
+                    </button>
+                    <button onClick={() => router.push(`/library/${resourceId}`)}
+                      className="flex-1 py-3.5 rounded-full bg-primary-container text-on-primary-container font-black text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
+                      Back to Resource
+                    </button>
+                  </div>
+                </div>
+              </article>
+            )}
+
           </div>
         </main>
 
