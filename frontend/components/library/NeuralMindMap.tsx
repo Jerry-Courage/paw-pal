@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { aiApi } from '@/lib/api'
+import { aiApi, ttsApi } from '@/lib/api'
 
 interface MindMapData {
   center: string
@@ -174,24 +174,45 @@ export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProp
   const [avState, setAvState]   = useState<AvState>('idle')
   const [avText, setAvText]     = useState('')
   const [avDismissed, setAvDismissed] = useState(false)
-  const synthRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const speak = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-    window.speechSynthesis.cancel()
-    const utt = new SpeechSynthesisUtterance(text)
-    utt.rate = 1.05; utt.pitch = 1.1; utt.volume = 0.9
-    const vs = window.speechSynthesis.getVoices()
-    const pref = vs.find(v => v.name.includes('Samantha') || v.name.includes('Google US') || (v.lang === 'en-US' && v.localService))
-    if (pref) utt.voice = pref
-    utt.onend  = () => setAvState('idle')
-    utt.onerror= () => setAvState('idle')
-    synthRef.current = utt
-    window.speechSynthesis.speak(utt)
+  const speak = useCallback(async (text: string) => {
+    // Stop any currently playing audio first
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
+    }
+    try {
+      // Use Gemini TTS — Puck voice: playful, energetic, matches the avatar personality
+      const res = await ttsApi.speak(text, 'Puck')
+      const blob = new Blob([res.data], { type: 'audio/wav' })
+      const url  = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => {
+        URL.revokeObjectURL(url)
+        audioRef.current = null
+        setAvState('idle')
+      }
+      audio.onerror = () => {
+        URL.revokeObjectURL(url)
+        audioRef.current = null
+        setAvState('idle')
+      }
+      await audio.play()
+    } catch {
+      // If TTS fails (network, quota, etc.), just show the text without audio
+      setAvState('idle')
+    }
   }, [])
 
   const stopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
+    }
     setAvState('idle')
   }, [])
 
