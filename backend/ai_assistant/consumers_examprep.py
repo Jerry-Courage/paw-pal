@@ -182,7 +182,9 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 1200,  # more forgiving for conversational pauses
+                            'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
+                            'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
+                            'silenceDurationMs': 400,  # fast turn-taking — detects end-of-speech quickly
                         }
                     },
                 }
