@@ -1,214 +1,308 @@
 'use client'
 
-import React, { useState, useMemo, useRef } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { aiApi } from '@/lib/api'
 
 interface MindMapData {
   center: string
   branches: { topic: string; subtopics: string[] }[]
 }
-
 interface NeuralMindMapProps {
   data: MindMapData
   resourceTitle?: string
 }
 
-// Node color palette — matches reference (oranges, purples, blues, greys)
 const NODE_COLORS = [
-  { bg: '#c084fc', text: '#1a0033', glow: 'rgba(192,132,252,0.4)' }, // purple
-  { bg: '#fb923c', text: '#3d1200', glow: 'rgba(251,146,60,0.4)' },  // orange
-  { bg: '#6366f1', text: '#ffffff', glow: 'rgba(99,102,241,0.4)' },  // indigo
-  { bg: '#4ade80', text: '#052e16', glow: 'rgba(74,222,128,0.4)' },  // green
-  { bg: '#f472b6', text: '#3d0022', glow: 'rgba(244,114,182,0.4)' }, // pink
-  { bg: '#38bdf8', text: '#0c1a3d', glow: 'rgba(56,189,248,0.4)' },  // sky
-  { bg: '#fbbf24', text: '#3d1f00', glow: 'rgba(251,191,36,0.4)' },  // amber
-  { bg: '#64748b', text: '#f1f5f9', glow: 'rgba(100,116,139,0.35)' }, // slate
+  { bg: '#c084fc', text: '#1a0033', glow: 'rgba(192,132,252,0.4)' },
+  { bg: '#fb923c', text: '#3d1200', glow: 'rgba(251,146,60,0.4)'  },
+  { bg: '#6366f1', text: '#ffffff', glow: 'rgba(99,102,241,0.4)'  },
+  { bg: '#4ade80', text: '#052e16', glow: 'rgba(74,222,128,0.4)'  },
+  { bg: '#f472b6', text: '#3d0022', glow: 'rgba(244,114,182,0.4)' },
+  { bg: '#38bdf8', text: '#0c1a3d', glow: 'rgba(56,189,248,0.4)'  },
+  { bg: '#fbbf24', text: '#3d1f00', glow: 'rgba(251,191,36,0.4)'  },
+  { bg: '#64748b', text: '#f1f5f9', glow: 'rgba(100,116,139,0.35)'},
 ]
+const BRANCH_ICONS = ['public','science','hub','calculate','biotech','history_edu','language','psychology']
 
-const BRANCH_ICONS = [
-  'public', 'science', 'hub', 'calculate',
-  'biotech', 'history_edu', 'language', 'psychology',
-]
+const CX = 90   // center radius
+const BX = 60   // branch radius
+const SX = 42   // sub radius
 
+// ─── Global CSS injected once ─────────────────────────────────────────────────
+const STYLES = `
+  @keyframes waveBar    { from{transform:scaleY(0.4)} to{transform:scaleY(1)} }
+  @keyframes edgePulse  { to{stroke-dashoffset:-40} }
+  @keyframes nodeFloat  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+  .ep { stroke-dasharray:6 14; animation:edgePulse 1.8s linear infinite; }
+  .nf { animation:nodeFloat 4s ease-in-out infinite; }
+`
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+type AvState = 'idle' | 'thinking' | 'speaking'
+
+function Avatar({ state, text, onDismiss }: { state: AvState; text: string; onDismiss: () => void }) {
+  const [typed, setTyped] = useState('')
+  const [dots, setDots] = useState(1)
+
+  useEffect(() => {
+    if (state === 'thinking' || !text) { setTyped(''); return }
+    setTyped('')
+    let i = 0
+    const iv = setInterval(() => {
+      i++
+      setTyped(text.slice(0, i))
+      if (i >= text.length) clearInterval(iv)
+    }, 16)
+    return () => clearInterval(iv)
+  }, [text, state])
+
+  useEffect(() => {
+    if (state !== 'thinking') return
+    const t = setInterval(() => setDots(d => d % 3 + 1), 400)
+    return () => clearInterval(t)
+  }, [state])
+
+  const bars = [3,5,8,5,9,6,4,8,5,3]
+
+  return (
+    <div className="flex items-end gap-3 pointer-events-auto">
+      {/* ── Robot face ── */}
+      <div className="relative shrink-0">
+        <div
+          className="w-14 h-14 rounded-full border-2 overflow-hidden shadow-2xl transition-all duration-300 relative"
+          style={{
+            background: 'linear-gradient(135deg,#1e2022,#282a2c)',
+            borderColor: state === 'speaking' ? '#ffb68d' : state === 'thinking' ? '#bfc2ff' : '#564338',
+            boxShadow: state === 'speaking' ? '0 0 24px rgba(255,182,141,0.5)' : state === 'thinking' ? '0 0 16px rgba(191,194,255,0.4)' : 'none',
+          }}
+        >
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+            {/* Head */}
+            <rect x="10" y="12" width="36" height="30" rx="6" fill="#ff8a3d" opacity="0.92"/>
+            {/* Eyes */}
+            <circle cx="20" cy="22" r="5" fill="#1a0033"/>
+            <circle cx="36" cy="22" r="5" fill="#1a0033"/>
+            <circle cx="21.5" cy="20.5" r="1.8" fill="white" opacity="0.85"/>
+            <circle cx="37.5" cy="20.5" r="1.8" fill="white" opacity="0.85"/>
+            {/* Mouth */}
+            {state === 'speaking'
+              ? <ellipse cx="28" cy="35" rx="7" ry="4" fill="#1a0033" opacity="0.8"/>
+              : state === 'thinking'
+              ? <path d="M21 34 Q28 31 35 34" stroke="#1a0033" strokeWidth="2.5" fill="none" opacity="0.8"/>
+              : <path d="M21 33 Q28 37 35 33" stroke="#1a0033" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8"/>
+            }
+            {/* Antenna */}
+            <line x1="28" y1="12" x2="28" y2="6" stroke="#ffb68d" strokeWidth="2.5"/>
+            <circle cx="28" cy="4" r="3" fill="#ffb68d"/>
+            {/* Ears */}
+            <rect x="4" y="20" width="6" height="10" rx="3" fill="#ff8a3d" opacity="0.7"/>
+            <rect x="46" y="20" width="6" height="10" rx="3" fill="#ff8a3d" opacity="0.7"/>
+          </svg>
+
+          {/* Waveform overlay when speaking */}
+          {state === 'speaking' && (
+            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-0.5 h-5 px-1 pb-0.5"
+              style={{ background: 'linear-gradient(to top, rgba(30,32,34,0.85), transparent)' }}>
+              {bars.map((h, i) => (
+                <div key={i} style={{
+                  width: 2, height: h, background: '#ffb68d', borderRadius: 2,
+                  animation: `waveBar ${0.35 + i * 0.05}s ease-in-out infinite alternate`,
+                  animationDelay: `${i * 0.06}s`,
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Status dot */}
+        <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background"
+          style={{ background: state === 'speaking' ? '#ffb68d' : state === 'thinking' ? '#bfc2ff' : '#4ade80' }} />
+      </div>
+
+      {/* ── Speech bubble ── */}
+      <div
+        className="relative rounded-[1.25rem] rounded-bl-sm p-4 shadow-2xl border max-w-[260px] transition-all duration-300"
+        style={{
+          background: '#1e2022',
+          borderColor: state === 'speaking' ? 'rgba(255,182,141,0.3)' : state === 'thinking' ? 'rgba(191,194,255,0.25)' : 'rgba(86,67,56,0.4)',
+        }}
+      >
+        {state === 'thinking' ? (
+          <div className="flex items-center gap-2 py-0.5">
+            {[0,1,2].slice(0, dots).map(i => (
+              <div key={i} className="w-2 h-2 rounded-full animate-bounce"
+                style={{ background: '#bfc2ff', animationDelay: `${i * 0.15}s` }} />
+            ))}
+            <span className="text-[12px] text-on-surface-variant ml-1">Thinking…</span>
+          </div>
+        ) : (
+          <div>
+            <p className="text-[13px] text-on-surface leading-relaxed min-h-[18px]">{typed || '\u00A0'}</p>
+            {typed.length > 30 && (
+              <button onClick={onDismiss}
+                className="mt-2 text-[11px] text-on-surface-variant/50 hover:text-primary transition-colors">
+                ✕ Dismiss
+              </button>
+            )}
+          </div>
+        )}
+        {/* Tail */}
+        <div className="absolute -left-2 bottom-3 w-0 h-0"
+          style={{
+            borderTop: '8px solid transparent',
+            borderBottom: '0 solid transparent',
+            borderRight: `8px solid #1e2022`,
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const [zoom, setZoom] = useState(0.85)
-  const [isDragging, setIsDragging] = useState(false)
+  const [pan, setPan]     = useState({ x: 0, y: 0 })
+  const [zoom, setZoom]   = useState(0.85)
+  const [dragging, setDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
-  const [selectedNode, setSelectedNode] = useState<{ type: 'center' | 'branch' | 'sub'; idx?: number; sidx?: number } | null>(null)
+  const [activeNode, setActiveNode] = useState<{ type: 'center'|'branch'|'sub'; bi?: number; si?: number } | null>(null)
   const [showGuide, setShowGuide] = useState(true)
 
-  const handleResetView = () => { setPan({ x: 0, y: 0 }); setZoom(0.85) }
-  const handleZoomIn = () => setZoom(p => Math.min(p * 1.2, 3))
-  const handleZoomOut = () => setZoom(p => Math.max(p / 1.2, 0.25))
+  // Avatar
+  const [avState, setAvState]   = useState<AvState>('idle')
+  const [avText, setAvText]     = useState('')
+  const [avDismissed, setAvDismissed] = useState(false)
+  const synthRef = useRef<SpeechSynthesisUtterance | null>(null)
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.node-click')) return
-    setIsDragging(true)
+  const speak = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const utt = new SpeechSynthesisUtterance(text)
+    utt.rate = 1.05; utt.pitch = 1.1; utt.volume = 0.9
+    const vs = window.speechSynthesis.getVoices()
+    const pref = vs.find(v => v.name.includes('Samantha') || v.name.includes('Google US') || (v.lang === 'en-US' && v.localService))
+    if (pref) utt.voice = pref
+    utt.onend  = () => setAvState('idle')
+    utt.onerror= () => setAvState('idle')
+    synthRef.current = utt
+    window.speechSynthesis.speak(utt)
+  }, [])
+
+  const stopSpeaking = useCallback(() => {
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+    setAvState('idle')
+  }, [])
+
+  useEffect(() => () => stopSpeaking(), [stopSpeaking])
+
+  // Greeting on mount
+  useEffect(() => {
+    if (!data?.center) return
+    const msg = `Hi! I'm FlowAI. This mind map is about "${data.center}". Tap any node and I'll explain it!`
+    setAvText(msg)
+    setAvState('speaking')
+    // slight delay so voices load
+    const t = setTimeout(() => speak(msg), 600)
+    return () => clearTimeout(t)
+  }, [data?.center]) // eslint-disable-line
+
+  const onNodeClick = useCallback(async (name: string, context: string) => {
+    stopSpeaking()
+    setAvDismissed(false)
+    setShowGuide(false)
+    setAvState('thinking')
+    setAvText('')
+    try {
+      const prompt = `In 2-3 friendly sentences explain "${name}" and how it relates to "${data.center}". Context: ${context}. No bullet points. Be conversational.`
+      const res = await aiApi.quickAsk(prompt)
+      const raw = res.data?.answer || res.data?.reply || `${name} is a key concept in ${data.center}.`
+      const clean = raw.replace(/\*\*/g,'').replace(/\n+/g,' ').trim()
+      setAvText(clean)
+      setAvState('speaking')
+      speak(clean)
+    } catch {
+      const fb = `${name} is an important concept connected to ${data.center}. Keep exploring!`
+      setAvText(fb); setAvState('speaking'); speak(fb)
+    }
+  }, [data.center, speak, stopSpeaking])
+
+  // Pan / zoom handlers
+  const onMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.nc')) return
+    setDragging(true)
     setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
   }
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return
-    setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
-  }
-  const handleMouseUp = () => setIsDragging(false)
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if ((e.target as HTMLElement).closest('.node-click')) return
-    setIsDragging(true)
+  const onMouseMove = (e: React.MouseEvent) => { if (dragging) setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }) }
+  const onMouseUp   = () => setDragging(false)
+  const onTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.nc')) return
+    setDragging(true)
     setDragStart({ x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y })
   }
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return
-    setPan({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y })
-  }
-  const handleTouchEnd = () => setIsDragging(false)
+  const onTouchMove  = (e: React.TouchEvent) => { if (dragging) setPan({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y }) }
+  const onTouchEnd   = () => setDragging(false)
+  const onWheel      = (e: React.WheelEvent) => { e.preventDefault(); setZoom(z => e.deltaY < 0 ? Math.min(z*1.08,3) : Math.max(z/1.08,0.25)) }
+  const resetView    = () => { setPan({x:0,y:0}); setZoom(0.85) }
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const f = 1.08
-    setZoom(p => e.deltaY < 0 ? Math.min(p * f, 3) : Math.max(p / f, 0.25))
-  }
-
-  // Compute layout — radial with circular nodes
+  // Layout
   const branches = useMemo(() => {
     if (!data?.branches) return []
-    const count = data.branches.length
-    const angleStep = (2 * Math.PI) / count
-    const R = 280 // center-to-branch radius
-
+    const n = data.branches.length
+    const step = (2 * Math.PI) / n
+    const R = 280
     return data.branches.map((b, i) => {
-      const angle = i * angleStep - Math.PI / 2 // start from top
-      const bx = Math.cos(angle) * R
-      const by = Math.sin(angle) * R
-
-      const side = bx >= 0 ? 1 : -1
-      const subtopicSpacing = 70
+      const a = i * step - Math.PI / 2
+      const bx = Math.cos(a) * R
+      const by = Math.sin(a) * R
       const subCount = b.subtopics?.length || 0
-      const totalH = (subCount - 1) * subtopicSpacing
-
-      const subtopics = (b.subtopics || []).map((sub, j) => {
-        const subR = R + 190
-        const spread = (subCount > 1 ? (j / (subCount - 1) - 0.5) : 0) * 1.2
-        const subAngle = angle + spread
-        return {
-          text: sub,
-          x: Math.cos(subAngle) * subR,
-          y: Math.sin(subAngle) * subR,
-        }
+      const subs = (b.subtopics || []).map((s, j) => {
+        const spread = subCount > 1 ? ((j / (subCount-1)) - 0.5) * 1.1 : 0
+        const sa = a + spread
+        const sr = R + 195
+        return { text: s, x: Math.cos(sa)*sr, y: Math.sin(sa)*sr }
       })
-
-      return {
-        topic: b.topic,
-        x: bx, y: by,
-        side,
-        subtopics,
-        color: NODE_COLORS[i % NODE_COLORS.length],
-        icon: BRANCH_ICONS[i % BRANCH_ICONS.length],
-      }
+      return { topic: b.topic, x: bx, y: by, subs, color: NODE_COLORS[i%NODE_COLORS.length], icon: BRANCH_ICONS[i%BRANCH_ICONS.length] }
     })
   }, [data])
 
-  // Selected node label for detail panel
-  const selectedLabel = useMemo(() => {
-    if (!selectedNode) return null
-    if (selectedNode.type === 'center') return { title: data.center, detail: `Central concept of this mind map` }
-    if (selectedNode.type === 'branch' && selectedNode.idx !== undefined) {
-      const b = data.branches[selectedNode.idx]
-      return { title: b.topic, detail: b.subtopics?.join(' · ') || '' }
-    }
-    if (selectedNode.type === 'sub' && selectedNode.idx !== undefined && selectedNode.sidx !== undefined) {
-      return { title: data.branches[selectedNode.idx]?.subtopics?.[selectedNode.sidx] || '', detail: `Part of ${data.branches[selectedNode.idx]?.topic}` }
-    }
-    return null
-  }, [selectedNode, data])
-
-  const centerNodeRadius = 90
-  const branchNodeRadius = 60
-  const subNodeRadius = 42
-
   return (
-    <div
-      ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
-      className={cn(
-        'relative w-full h-full overflow-hidden select-none touch-none',
-        isDragging ? 'cursor-grabbing' : 'cursor-grab'
-      )}
+    <div ref={containerRef}
+      onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+      onWheel={onWheel}
+      className={cn('relative w-full h-full overflow-hidden select-none touch-none', dragging ? 'cursor-grabbing' : 'cursor-grab')}
       style={{ background: '#0e0e10' }}
     >
-      {/* Dot-grid background — matches reference */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
-          transform: `translate(${pan.x % 28}px, ${pan.y % 28}px)`,
-        }}
-      />
+      <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
-      {/* Animated pulse keyframes */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes edgePulse { to { stroke-dashoffset: -40; } }
-        .edge-pulse { stroke-dasharray: 6 14; animation: edgePulse 1.8s linear infinite; }
-        @keyframes nodeFloat { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-4px); } }
-        .node-float { animation: nodeFloat 4s ease-in-out infinite; }
-      `}} />
+      {/* Dot grid */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)',
+        backgroundSize: '28px 28px',
+        transform: `translate(${pan.x%28}px,${pan.y%28}px)`,
+      }} />
 
-      {/* Canvas transform layer */}
-      <div
-        className="absolute w-0 h-0"
-        style={{
-          transform: `translate(calc(50vw + ${pan.x}px), calc(50vh + ${pan.y}px)) scale(${zoom})`,
-          transformOrigin: '0 0',
-        }}
-      >
-        {/* SVG connections */}
+      {/* Canvas */}
+      <div className="absolute w-0 h-0" style={{ transform: `translate(calc(50vw + ${pan.x}px), calc(50vh + ${pan.y}px)) scale(${zoom})`, transformOrigin: '0 0' }}>
+
+        {/* SVG edges */}
         <svg className="absolute overflow-visible pointer-events-none" style={{ zIndex: 1 }}>
-          {branches.map((branch, i) => {
-            const angle = Math.atan2(branch.y, branch.x)
-
-            // Center node edge → branch
-            const cx0 = Math.cos(angle) * (centerNodeRadius - 5)
-            const cy0 = Math.sin(angle) * (centerNodeRadius - 5)
-            const cx1 = branch.x - Math.cos(angle) * (branchNodeRadius - 5)
-            const cy1 = branch.y - Math.sin(angle) * (branchNodeRadius - 5)
-
-            const midX = (cx0 + cx1) / 2
-            const midY = (cy0 + cy1) / 2
-
+          {branches.map((b, i) => {
+            const a = Math.atan2(b.y, b.x)
+            const x0 = Math.cos(a)*(CX-4), y0 = Math.sin(a)*(CX-4)
+            const x1 = b.x - Math.cos(a)*(BX-4), y1 = b.y - Math.sin(a)*(BX-4)
             return (
               <g key={i}>
-                {/* Center → branch glow line */}
-                <line x1={cx0} y1={cy0} x2={cx1} y2={cy1}
-                  stroke={branch.color.bg} strokeWidth="3" opacity="0.18" />
-                {/* Animated pulse */}
-                <line x1={cx0} y1={cy0} x2={cx1} y2={cy1}
-                  stroke={branch.color.bg} strokeWidth="2" opacity="0.7"
-                  className="edge-pulse" />
-
-                {/* Branch → subtopics */}
-                {branch.subtopics.map((sub, j) => {
-                  const subAngle = Math.atan2(sub.y - branch.y, sub.x - branch.x)
-                  const sx0 = branch.x + Math.cos(subAngle) * (branchNodeRadius - 5)
-                  const sy0 = branch.y + Math.sin(subAngle) * (branchNodeRadius - 5)
-                  const sx1 = sub.x - Math.cos(subAngle) * (subNodeRadius - 4)
-                  const sy1 = sub.y - Math.sin(subAngle) * (subNodeRadius - 4)
+                <line x1={x0} y1={y0} x2={x1} y2={y1} stroke={b.color.bg} strokeWidth="3" opacity="0.2"/>
+                <line x1={x0} y1={y0} x2={x1} y2={y1} stroke={b.color.bg} strokeWidth="2" opacity="0.7" className="ep"/>
+                {b.subs.map((s, j) => {
+                  const sa = Math.atan2(s.y - b.y, s.x - b.x)
                   return (
                     <g key={j}>
-                      <line x1={sx0} y1={sy0} x2={sx1} y2={sy1}
-                        stroke={branch.color.bg} strokeWidth="2" opacity="0.15" />
-                      <line x1={sx0} y1={sy0} x2={sx1} y2={sy1}
-                        stroke={branch.color.bg} strokeWidth="1.5" opacity="0.5"
-                        className="edge-pulse" style={{ animationDelay: `${j * 0.2}s` }} />
+                      <line x1={b.x+Math.cos(sa)*(BX-4)} y1={b.y+Math.sin(sa)*(BX-4)} x2={s.x-Math.cos(sa)*(SX-3)} y2={s.y-Math.sin(sa)*(SX-3)} stroke={b.color.bg} strokeWidth="2" opacity="0.15"/>
+                      <line x1={b.x+Math.cos(sa)*(BX-4)} y1={b.y+Math.sin(sa)*(BX-4)} x2={s.x-Math.cos(sa)*(SX-3)} y2={s.y-Math.sin(sa)*(SX-3)} stroke={b.color.bg} strokeWidth="1.5" opacity="0.55" className="ep" style={{ animationDelay:`${j*0.2}s` }}/>
                     </g>
                   )
                 })}
@@ -218,178 +312,94 @@ export default function NeuralMindMap({ data, resourceTitle }: NeuralMindMapProp
         </svg>
 
         {/* Center node */}
-        <div
-          className="absolute node-click node-float"
-          style={{ transform: 'translate(-50%, -50%)', zIndex: 20 }}
-          onClick={() => setSelectedNode({ type: 'center' })}
-        >
-          <div style={{ position: 'relative', width: centerNodeRadius * 2, height: centerNodeRadius * 2 }}>
-            {/* Glow ring */}
-            <div style={{
-              position: 'absolute', inset: -8,
-              borderRadius: '50%',
-              background: `radial-gradient(circle, rgba(255,138,61,0.3) 0%, transparent 70%)`,
-              animation: 'nodeFloat 3s ease-in-out infinite',
-            }} />
-            {/* Circle */}
-            <div
-              className="cursor-pointer"
-              style={{
-                width: centerNodeRadius * 2, height: centerNodeRadius * 2,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #ff8a3d 0%, #ffb68d 100%)',
-                boxShadow: '0 0 40px rgba(255,138,61,0.5), 0 8px 32px rgba(0,0,0,0.4)',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                border: selectedNode?.type === 'center' ? '3px solid white' : '2px solid rgba(255,255,255,0.2)',
-                transition: 'transform 0.2s',
-              }}
-            >
-              <span className="material-symbols-outlined text-[22px] mb-1 text-on-primary"
-                style={{ fontVariationSettings: "'FILL' 1" }}>wb_sunny</span>
-              <span style={{
-                fontSize: '11px', fontWeight: 900, textAlign: 'center',
-                color: '#3d1200', lineHeight: 1.2, padding: '0 10px',
-                textTransform: 'uppercase', letterSpacing: '0.05em',
-              }}>
-                {data.center}
-              </span>
+        <div className="absolute nc nf" style={{ transform:'translate(-50%,-50%)', zIndex:20 }}>
+          <div style={{ position:'relative', width:CX*2, height:CX*2 }}>
+            <div style={{ position:'absolute', inset:-10, borderRadius:'50%', background:'radial-gradient(circle, rgba(255,138,61,0.3) 0%, transparent 70%)' }}/>
+            <div className="nc" onClick={() => { setActiveNode({type:'center'}); onNodeClick(data.center, `Central concept of the mind map about ${data.center}`) }}
+              style={{ width:CX*2, height:CX*2, borderRadius:'50%', background:'linear-gradient(135deg,#ff8a3d,#ffb68d)', boxShadow:'0 0 48px rgba(255,138,61,0.55), 0 10px 32px rgba(0,0,0,0.5)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', border: activeNode?.type==='center'?'3px solid white':'2px solid rgba(255,255,255,0.2)', cursor:'pointer', transition:'transform 0.2s' }}>
+              <span className="material-symbols-outlined" style={{ fontSize:24, color:'#3d1200', fontVariationSettings:"'FILL' 1", marginBottom:2 }}>wb_sunny</span>
+              <span style={{ fontSize:11, fontWeight:900, textAlign:'center', color:'#3d1200', lineHeight:1.2, padding:'0 12px', textTransform:'uppercase', letterSpacing:'0.05em' }}>{data.center}</span>
             </div>
           </div>
         </div>
 
-        {/* Branch nodes + subtopics */}
-        {branches.map((branch, i) => (
-          <g key={i}>
-            {/* Branch circle node */}
-            <div
-              className="absolute node-click node-float"
-              style={{ left: branch.x, top: branch.y, transform: 'translate(-50%,-50%)', zIndex: 15, animationDelay: `${i * 0.4}s` }}
-              onClick={() => setSelectedNode({ type: 'branch', idx: i })}
-            >
-              <div style={{ position: 'relative', width: branchNodeRadius * 2, height: branchNodeRadius * 2 }}>
-                {/* Glow */}
-                <div style={{
-                  position: 'absolute', inset: -6, borderRadius: '50%',
-                  background: `radial-gradient(circle, ${branch.color.glow} 0%, transparent 70%)`,
-                }} />
-                {/* Circle */}
-                <div
-                  className="cursor-pointer"
-                  style={{
-                    width: branchNodeRadius * 2, height: branchNodeRadius * 2, borderRadius: '50%',
-                    background: branch.color.bg,
-                    boxShadow: `0 0 24px ${branch.color.glow}, 0 6px 20px rgba(0,0,0,0.4)`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    border: selectedNode?.type === 'branch' && selectedNode.idx === i
-                      ? '3px solid white' : '2px solid rgba(255,255,255,0.15)',
-                    transition: 'transform 0.15s',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span className="material-symbols-outlined text-[18px] mb-0.5" style={{ color: branch.color.text, fontVariationSettings: "'FILL' 1" }}>
-                    {branch.icon}
-                  </span>
-                  <span style={{
-                    fontSize: '10px', fontWeight: 800, textAlign: 'center',
-                    color: branch.color.text, lineHeight: 1.2, padding: '0 6px',
-                  }}>
-                    {branch.topic}
-                  </span>
+        {/* Branch + sub nodes */}
+        {branches.map((b, i) => (
+          <React.Fragment key={i}>
+            {/* Branch */}
+            <div className="absolute nc nf" style={{ left:b.x, top:b.y, transform:'translate(-50%,-50%)', zIndex:15, animationDelay:`${i*0.4}s` }}>
+              <div style={{ position:'relative', width:BX*2, height:BX*2 }}>
+                <div style={{ position:'absolute', inset:-8, borderRadius:'50%', background:`radial-gradient(circle, ${b.color.glow} 0%, transparent 70%)` }}/>
+                <div className="nc" onClick={() => { setActiveNode({type:'branch',bi:i}); onNodeClick(b.topic, `Branch topic "${b.topic}" under "${data.center}". Subtopics: ${b.subs.map(s=>s.text).join(', ')}`) }}
+                  style={{ width:BX*2, height:BX*2, borderRadius:'50%', background:b.color.bg, boxShadow:`0 0 28px ${b.color.glow}, 0 6px 20px rgba(0,0,0,0.45)`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', border: activeNode?.type==='branch'&&activeNode.bi===i?'3px solid white':'2px solid rgba(255,255,255,0.15)', cursor:'pointer', transition:'transform 0.15s' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:18, color:b.color.text, fontVariationSettings:"'FILL' 1", marginBottom:2 }}>{b.icon}</span>
+                  <span style={{ fontSize:10, fontWeight:800, textAlign:'center', color:b.color.text, lineHeight:1.2, padding:'0 6px' }}>{b.topic}</span>
                 </div>
               </div>
             </div>
 
-            {/* Subtopic nodes */}
-            {branch.subtopics.map((sub, j) => (
-              <div
-                key={j}
-                className="absolute node-click"
-                style={{ left: sub.x, top: sub.y, transform: 'translate(-50%,-50%)', zIndex: 10 }}
-                onClick={() => setSelectedNode({ type: 'sub', idx: i, sidx: j })}
-              >
-                <div style={{ position: 'relative', width: subNodeRadius * 2, height: subNodeRadius * 2 }}>
-                  <div
-                    className="cursor-pointer"
-                    style={{
-                      width: subNodeRadius * 2, height: subNodeRadius * 2, borderRadius: '50%',
-                      background: '#1e2022',
-                      boxShadow: `0 0 12px ${branch.color.glow}, 0 4px 12px rgba(0,0,0,0.5)`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      border: selectedNode?.type === 'sub' && selectedNode.idx === i && selectedNode.sidx === j
-                        ? `2px solid ${branch.color.bg}` : `1.5px solid ${branch.color.bg}50`,
-                      transition: 'transform 0.15s',
-                    }}
-                  >
-                    <span style={{
-                      fontSize: '9px', fontWeight: 700, textAlign: 'center',
-                      color: '#e2e2e5', lineHeight: 1.2, padding: '0 6px',
-                    }}>
-                      {sub.text}
-                    </span>
-                  </div>
+            {/* Subtopics */}
+            {b.subs.map((s, j) => (
+              <div key={j} className="absolute nc" style={{ left:s.x, top:s.y, transform:'translate(-50%,-50%)', zIndex:10 }}>
+                <div className="nc" onClick={() => { setActiveNode({type:'sub',bi:i,si:j}); onNodeClick(s.text, `Subtopic "${s.text}" which is part of "${b.topic}" in the mind map about "${data.center}"`) }}
+                  style={{ width:SX*2, height:SX*2, borderRadius:'50%', background:'#1e2022', boxShadow:`0 0 14px ${b.color.glow}, 0 4px 12px rgba(0,0,0,0.5)`, display:'flex', alignItems:'center', justifyContent:'center', border: activeNode?.type==='sub'&&activeNode.bi===i&&activeNode.si===j?`2.5px solid ${b.color.bg}`:`1.5px solid ${b.color.bg}55`, cursor:'pointer', transition:'transform 0.15s' }}>
+                  <span style={{ fontSize:9, fontWeight:700, textAlign:'center', color:'#e2e2e5', lineHeight:1.2, padding:'0 5px' }}>{s.text}</span>
                 </div>
               </div>
             ))}
-          </g>
+          </React.Fragment>
         ))}
       </div>
 
       {/* ── Zoom controls — bottom left ─────────────────────────────── */}
-      <div className="absolute bottom-6 left-6 z-50 flex items-center gap-1 p-1 bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 rounded-full shadow-xl">
-        <button onClick={handleZoomOut}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
+      <div className="absolute bottom-6 left-6 z-50 flex items-center gap-1 p-1 rounded-full shadow-xl pointer-events-auto"
+        style={{ background:'rgba(30,32,34,0.92)', backdropFilter:'blur(8px)', border:'1px solid rgba(86,67,56,0.4)' }}>
+        <button onClick={() => setZoom(z=>Math.max(z/1.2,0.25))} className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
           <span className="material-symbols-outlined text-[18px]">remove</span>
         </button>
-        <span className="text-[12px] font-bold text-on-surface-variant w-12 text-center">
-          {Math.round(zoom * 100)}%
-        </span>
-        <button onClick={handleZoomIn}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
+        <span className="text-[12px] font-bold text-on-surface-variant w-12 text-center">{Math.round(zoom*100)}%</span>
+        <button onClick={() => setZoom(z=>Math.min(z*1.2,3))} className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
           <span className="material-symbols-outlined text-[18px]">add</span>
         </button>
-        <div className="w-px h-5 bg-outline-variant/40 mx-1" />
-        <button onClick={handleResetView}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
+        <div className="w-px h-5 mx-1" style={{ background:'rgba(86,67,56,0.4)' }}/>
+        <button onClick={resetView} className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
           <span className="material-symbols-outlined text-[18px]">fit_screen</span>
         </button>
       </div>
 
-      {/* ── Node detail popup ─────────────────────────────────────────── */}
-      {selectedNode && selectedLabel && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4">
-          <div className="bg-surface-container-low/95 backdrop-blur-sm border border-outline-variant/40 rounded-[1.5rem] p-4 shadow-2xl">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-bold text-on-surface text-[15px] leading-tight">{selectedLabel.title}</p>
-                {selectedLabel.detail && (
-                  <p className="text-on-surface-variant text-[12px] mt-1 line-clamp-2">{selectedLabel.detail}</p>
-                )}
-              </div>
-              <button onClick={() => setSelectedNode(null)}
-                className="p-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all shrink-0">
-                <span className="material-symbols-outlined text-[16px]">close</span>
-              </button>
-            </div>
-          </div>
+      {/* ── Avatar — bottom left above zoom ─────────────────────────── */}
+      {!avDismissed && (
+        <div className="absolute left-6 z-50 pointer-events-none" style={{ bottom: '88px' }}>
+          <Avatar state={avState} text={avText} onDismiss={() => { stopSpeaking(); setAvDismissed(true); setAvState('idle') }} />
         </div>
       )}
 
-      {/* ── Study Guide panel — bottom right ─────────────────────────── */}
-      {showGuide && !selectedNode && (
-        <div className="absolute bottom-6 right-6 z-50 w-72">
-          <div className="bg-surface-container-low/95 backdrop-blur-sm border border-outline-variant/40 rounded-[1.5rem] p-4 shadow-2xl">
+      {/* Re-show avatar button if dismissed */}
+      {avDismissed && (
+        <div className="absolute left-6 z-50" style={{ bottom: '88px' }}>
+          <button onClick={() => { setAvDismissed(false); setAvState('idle'); setAvText('Tap any node and I\'ll explain it!') }}
+            className="w-14 h-14 rounded-full shadow-xl flex items-center justify-center border-2 border-outline-variant/40 hover:border-primary/40 transition-all"
+            style={{ background:'linear-gradient(135deg,#1e2022,#282a2c)' }}
+            title="Show FlowAI">
+            <span className="material-symbols-outlined text-primary text-[24px]" style={{ fontVariationSettings:"'FILL' 1" }}>smart_toy</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Study Guide — bottom right ───────────────────────────────── */}
+      {showGuide && (
+        <div className="absolute bottom-6 right-6 z-50 w-68 pointer-events-auto" style={{ maxWidth: 280 }}>
+          <div className="rounded-[1.5rem] p-4 shadow-2xl border" style={{ background:'rgba(30,32,34,0.95)', backdropFilter:'blur(8px)', borderColor:'rgba(86,67,56,0.4)' }}>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-[0.75rem] bg-primary/15 flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>menu_book</span>
+              <div className="w-8 h-8 rounded-[0.75rem] flex items-center justify-center" style={{ background:'rgba(255,182,141,0.12)' }}>
+                <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings:"'FILL' 1" }}>menu_book</span>
               </div>
               <p className="font-bold text-on-surface text-[14px]">Study Guide</p>
             </div>
-            <p className="text-on-surface-variant text-[13px] leading-relaxed">
-              This mind map was generated from your material. Tap any node to see more details. Drag to pan · Scroll to zoom.
-            </p>
+            <p className="text-on-surface-variant text-[13px] leading-relaxed">Mind map generated from your material. Tap any node — FlowAI will explain it out loud!</p>
             <button onClick={() => setShowGuide(false)}
-              className="mt-3 w-full py-2 rounded-[1rem] bg-surface-container-high text-on-surface-variant text-[12px] font-bold hover:bg-surface-container-highest transition-all">
+              className="mt-3 w-full py-2 rounded-[1rem] text-on-surface-variant text-[12px] font-bold hover:bg-surface-container-highest transition-all"
+              style={{ background:'rgba(40,42,44,0.8)' }}>
               Hide Help
             </button>
           </div>
