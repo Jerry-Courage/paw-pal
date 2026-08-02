@@ -76,7 +76,10 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     }
     podcastApi.getExistingSession(resourceId).then(res => {
       const data = res.data
-      if (data.exists && data.script?.length) {
+      if (!data.exists) return  // no session at all — stay on setup screen
+
+      if (data.script?.length) {
+        // Session ready with script — restore it
         libraryApi.getResource(resourceId).then(r => {
           startPodcast(resourceId, r.data.title || '', data.session_id, data.script)
         }).catch(() => startPodcast(resourceId, '', data.session_id, data.script))
@@ -84,29 +87,42 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         podcastApi.getStatus(data.session_id).then(r => {
           if (r.data.interjection_urls) setInterjectionUrls(r.data.interjection_urls)
         }).catch(() => {})
+      } else {
+        // Session exists but still generating — attach to it and poll
+        libraryApi.getResource(resourceId).then(r => {
+          startPodcast(resourceId, r.data.title || '', data.session_id, [])
+        }).catch(() => startPodcast(resourceId, '', data.session_id, []))
+        setStatus('generating')
       }
     }).catch(() => {})
   }, [resourceId])
 
-  // Polling
+  // Polling — works off local sessionId ref so it doesn't depend on AudioContext timing
+  const pollingSessionId = audio.sessionId
+
   useEffect(() => {
-    const shouldPoll = status === 'generating' || (status === 'ready' && audio.sessionId && audio.totalChunks === 0)
-    if (!shouldPoll || !audio.sessionId) return
+    const shouldPoll = status === 'generating' || (status === 'ready' && pollingSessionId && audio.totalChunks === 0)
+    if (!shouldPoll || !pollingSessionId) return
     const interval = setInterval(async () => {
       try {
-        const res = await podcastApi.getStatus(audio.sessionId!)
+        const res = await podcastApi.getStatus(pollingSessionId)
         if (res.data.script?.length) {
           updateScript(res.data.script, res.data.chunks_total)
-          if (status !== 'ready') setStatus('ready')
+          setStatus('ready')
         }
         if (res.data.status === 'ready' && res.data.script?.length) clearInterval(interval)
         else if (res.data.status === 'error') { setStatus('error'); clearInterval(interval) }
       } catch {}
     }, 3000)
     return () => clearInterval(interval)
-  }, [status, audio.sessionId, updateScript, audio.totalChunks])
+  }, [status, pollingSessionId, updateScript, audio.totalChunks])
 
-  // Auto-scroll transcript
+  // Timeout — if generating for more than 3 min with no result, show error
+  useEffect(() => {
+    if (status !== 'generating') return
+    const t = setTimeout(() => setStatus('error'), 3 * 60 * 1000)
+    return () => clearTimeout(t)
+  }, [status])
   useEffect(() => {
     if (transcriptRef.current) {
       const active = transcriptRef.current.querySelector('[data-active="true"]')
