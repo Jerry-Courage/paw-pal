@@ -55,6 +55,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const liveNextPlayRef = useRef(0)
   const liveSpeakTimeoutRef = useRef<any>(null)
   const liveMicMutedRef = useRef(false)
+  const liveActiveSourcesRef = useRef<AudioBufferSourceNode[]>([])
 
   const { state: audio, startPodcast, pause: globalPause, resume: globalResume,
     updateScript, setCurrentIndex, stop: globalStop } = useAudio()
@@ -136,6 +137,15 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const currentImage = activeVisual?.image || currentChunk?.visual_url || null
   const speakerName = currentChunk?.speaker === 'A' ? voiceA : voiceB
 
+  // Pre-warm AudioContext on mount so first AI audio plays with zero delay
+  useEffect(() => {
+    const ctx = new AudioContext()
+    liveAudioCtxRef.current = ctx
+    // Resume immediately — browsers suspend AudioContext until a user gesture,
+    // but we're already inside one (the button click that started the session)
+    return () => { ctx.close() }
+  }, [])
+
   const playLiveAudio = useCallback((b64: string) => {
     const binary = atob(b64)
     const bytes = new Uint8Array(binary.length)
@@ -143,8 +153,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     const int16 = new Int16Array(bytes.buffer)
     const float32 = new Float32Array(int16.length)
     for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768
-    const ctx = liveAudioCtxRef.current || new AudioContext()
-    liveAudioCtxRef.current = ctx
+    const ctx = liveAudioCtxRef.current!
+    if (ctx.state === 'suspended') ctx.resume()
     const buf = ctx.createBuffer(1, float32.length, 24000)
     buf.copyToChannel(float32, 0)
     const src = ctx.createBufferSource()
@@ -153,41 +163,69 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     const startAt = Math.max(ctx.currentTime, liveNextPlayRef.current)
     src.start(startAt)
     liveNextPlayRef.current = startAt + buf.duration
+    liveActiveSourcesRef.current.push(src)
+    src.onended = () => {
+      liveActiveSourcesRef.current = liveActiveSourcesRef.current.filter(s => s !== src)
+    }
     setLiveAiSpeaking(true)
     clearTimeout(liveSpeakTimeoutRef.current)
     liveSpeakTimeoutRef.current = setTimeout(() => setLiveAiSpeaking(false),
-      (liveNextPlayRef.current - ctx.currentTime) * 1000 + 600)
+      (liveNextPlayRef.current - ctx.currentTime) * 1000 + 300)
   }, [])
 
   const startLiveMic = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       })
       liveMicStreamRef.current = stream
-      const ctx = new AudioContext()
+      // Use the pre-warmed AudioContext if available, otherwise create one
+      const ctx = liveAudioCtxRef.current || new AudioContext({ sampleRate: 16000 })
+      liveAudioCtxRef.current = ctx
+      if (ctx.state === 'suspended') await ctx.resume()
+
       const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(2048, 1, 1)
+      // 512 samples at 16kHz = 32ms chunks — much tighter than the default 2048 (~128ms)
+      const processor = ctx.createScriptProcessor(512, 1, 1)
       liveMicProcessorRef.current = processor
-      setLiveMicAvailable(true)
-      processor.onaudioprocess = async (e) => {
-        if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
-        if (liveMicMutedRef.current) return
-        const float32 = e.inputBuffer.getChannelData(0).slice()
-        const ratio = ctx.sampleRate / 16000
-        const outLen = Math.round(float32.length / ratio)
-        const out = new Int16Array(outLen)
-        for (let i = 0; i < outLen; i++) {
-          const idx = Math.min(Math.round(i * ratio), float32.length - 1)
-          out[i] = Math.max(-32768, Math.min(32767, float32[idx] * 32768))
+
+      // Use a sync queue to avoid async-in-onaudioprocess timing violations
+      const sendQueue: string[] = []
+      let sending = false
+      const drainQueue = () => {
+        if (sending || sendQueue.length === 0) return
+        if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) {
+          sendQueue.length = 0
+          return
         }
+        sending = true
+        const chunk = sendQueue.shift()!
+        try {
+          liveWsRef.current.send(JSON.stringify({ type: 'audio', data: chunk }))
+        } catch {}
+        sending = false
+        if (sendQueue.length > 0) drainQueue()
+      }
+
+      processor.onaudioprocess = (e) => {
+        if (liveMicMutedRef.current) return
+        if (!liveWsRef.current || liveWsRef.current.readyState !== WebSocket.OPEN) return
+        const float32 = e.inputBuffer.getChannelData(0)
+        const out = new Int16Array(float32.length)
+        for (let i = 0; i < float32.length; i++)
+          out[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
         const bytes = new Uint8Array(out.buffer)
         let binary = ''
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-        liveWsRef.current.send(JSON.stringify({ type: 'audio', data: btoa(binary) }))
+        sendQueue.push(btoa(binary))
+        // Keep queue shallow — if backing up drop oldest
+        if (sendQueue.length > 8) sendQueue.shift()
+        drainQueue()
       }
+
       source.connect(processor)
       processor.connect(ctx.destination)
+      setLiveMicAvailable(true)
       liveMicMutedRef.current = false
       setIsRecording(true)
     } catch {
@@ -195,6 +233,15 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       toast.error('Mic unavailable — text-only mode is active.', { duration: 4000 })
     }
   }
+
+  const flushAudioPlayout = useCallback(() => {
+    // Immediately stop all queued AI audio — used when AI is interrupted
+    liveActiveSourcesRef.current.forEach(src => { try { src.stop() } catch {} })
+    liveActiveSourcesRef.current = []
+    if (liveAudioCtxRef.current) liveNextPlayRef.current = liveAudioCtxRef.current.currentTime
+    clearTimeout(liveSpeakTimeoutRef.current)
+    setLiveAiSpeaking(false)
+  }, [])
 
   const stopLiveMic = () => {
     liveMicProcessorRef.current?.disconnect()
@@ -240,6 +287,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         if (msg.type === 'ready') { setLiveMode('active'); void startLiveMic() }
         else if (msg.type === 'status') { toast.info(msg.message, { duration: 4000 }) }
         else if (msg.type === 'audio') { playLiveAudio(msg.data) }
+        else if (msg.type === 'interrupted') { flushAudioPlayout() }
         else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
           setLiveTranscript(prev => {
@@ -261,6 +309,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       liveWsRef.current.send(JSON.stringify({ type: 'end_session' }))
     liveWsRef.current?.close()
     stopLiveMic()
+    flushAudioPlayout()
     setLiveMode('off'); setLiveMicAvailable(true); setLiveTranscript([])
     setLiveTextInput(''); liveNextPlayRef.current = 0; liveMicMutedRef.current = false
     clearTimeout(liveSpeakTimeoutRef.current)

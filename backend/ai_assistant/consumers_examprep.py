@@ -44,8 +44,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self.gemini_ws = None
         self.gemini_task = None
+        self.audio_send_task = None      # dedicated task for draining the audio queue
+        self.audio_queue = None          # asyncio.Queue — decouples mic capture from send
         self.session_active = False
-        self.transcript_log = []   # [(role, text), ...]
+        self.transcript_log = []
         self.technique = 'feynman'
         self.resource_title = ''
         self.voice_override = None
@@ -65,6 +67,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         self.session_active = False
+        if self.audio_send_task:
+            self.audio_send_task.cancel()
+            try: await self.audio_send_task
+            except (asyncio.CancelledError, Exception): pass
         if self.gemini_task:
             self.gemini_task.cancel()
             try:
@@ -97,10 +103,12 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             await self._start_gemini_session(resource_context)
 
         elif msg_type == 'audio':
-            if self.gemini_ws and self.session_active:
+            if self.audio_queue and self.session_active:
                 audio_b64 = msg.get('data', '')
                 if audio_b64:
-                    await self._send_audio_to_gemini(audio_b64)
+                    # Non-blocking put — drop if queue is backing up (>50 chunks = ~1s lag)
+                    if self.audio_queue.qsize() < 50:
+                        self.audio_queue.put_nowait(audio_b64)
 
         elif msg_type == 'text_message':
             # User typed a message instead of speaking.
@@ -184,12 +192,17 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                             'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
                             'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
-                            'silenceDurationMs': 300,  # fast turn-taking
+                            'silenceDurationMs': 300,
                         }
                     },
                 }
             }
             await self.gemini_ws.send(json.dumps(config))
+
+            # Initialise the audio queue and start the drain task immediately
+            # so audio chunks can be sent as fast as they arrive without blocking receive()
+            self.audio_queue = asyncio.Queue()
+            self.audio_send_task = asyncio.create_task(self._drain_audio_queue())
 
             # Wait briefly for setupComplete; if it takes too long, fall back to fast text replies.
             setup_ready = False
@@ -281,6 +294,25 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             await self.gemini_ws.send(json.dumps(msg))
         except Exception as e:
             logger.warning(f'[ExamPrep] Failed to send audio: {e}')
+
+    async def _drain_audio_queue(self):
+        """
+        Dedicated coroutine that drains the audio queue and forwards chunks to Gemini.
+        Running this separately from receive() means audio sends never block message handling,
+        giving much lower perceived latency.
+        """
+        try:
+            while self.session_active:
+                try:
+                    audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=1.0)
+                    await self._send_audio_to_gemini(audio_b64)
+                    self.audio_queue.task_done()
+                except asyncio.TimeoutError:
+                    continue  # no audio — keep looping
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f'[ExamPrep] Audio drain task error: {e}')
 
     async def _send_text_to_gemini(self, text: str):
         """Send a text turn to trigger an AI response."""
