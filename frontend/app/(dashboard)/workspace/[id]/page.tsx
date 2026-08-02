@@ -493,35 +493,35 @@ export default function WorkspaceCollaborationStudio() {
   }
 
   if (isLoading) return (
-    <div className="flex items-center justify-center h-[100dvh] bg-[#0d0d0d]">
+    <div className="flex items-center justify-center h-[100dvh] bg-background">
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-10 h-10">
-          <div className="absolute inset-0 rounded-full border-2 border-orange-500/20" />
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-orange-500 animate-spin" />
+          <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
         </div>
-        <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-slate-500">Loading workspace...</p>
+        <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-on-surface-variant/60">Loading workspace...</p>
       </div>
     </div>
   )
 
   return (
-    <div className="flex h-full bg-[#0d0d0d] text-white overflow-hidden relative">
+    <div className="flex h-full bg-background text-on-surface overflow-hidden relative md:left-64">
       
       {/* --- Main Chat Stage --- */}
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
         
         {/* Header */}
-        <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-white/5 bg-[#0d0d0d] z-20 flex-shrink-0">
+        <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-outline-variant/25 bg-background z-20 flex-shrink-0">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors flex-shrink-0">
-              <ChevronLeft className="w-4 h-4 text-slate-400" />
+            <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors flex-shrink-0">
+              <ChevronLeft className="w-4 h-4 text-on-surface-variant" />
             </button>
-            <div className="w-7 h-7 bg-orange-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-               <LayoutGrid className="w-3.5 h-3.5 text-orange-500" />
+            <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+               <LayoutGrid className="w-3.5 h-3.5 text-primary-container" />
             </div>
             <div className="overflow-hidden">
-              <h1 className="text-sm font-semibold text-white truncate leading-tight">{workspace?.name || 'Collab Space'}</h1>
-              <span className="text-[10px] text-slate-500 hidden sm:block truncate">{workspace?.subject || 'Collaboration'}</span>
+              <h1 className="text-sm font-semibold text-on-surface truncate leading-tight">{workspace?.name || 'Collab Space'}</h1>
+              <span className="text-[10px] text-on-surface-variant/60 hidden sm:block truncate">{workspace?.subject || 'Collaboration'}</span>
             </div>
           </div>
 
@@ -529,13 +529,13 @@ export default function WorkspaceCollaborationStudio() {
             {/* Member avatars */}
             <div className="hidden md:flex items-center -space-x-1.5 mr-2">
               {workspace?.members?.slice(0, 4).map((m: any, i: number) => (
-                <div key={i} className="relative w-6 h-6 rounded-full border-2 border-[#0d0d0d] bg-slate-700 flex items-center justify-center text-[9px] font-bold uppercase text-white">
+                <div key={i} className="relative w-6 h-6 rounded-full border-2 border-background bg-slate-700 flex items-center justify-center text-[9px] font-bold uppercase text-on-surface">
                   {m.user?.username?.[0] || '?'}
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-[#0d0d0d]" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-background" />
                 </div>
               ))}
               {(workspace?.members?.length || 0) > 4 && (
-                <div className="w-6 h-6 rounded-full border-2 border-[#0d0d0d] bg-slate-800 flex items-center justify-center text-[9px] font-bold text-slate-400">
+                <div className="w-6 h-6 rounded-full border-2 border-background bg-surface-container flex items-center justify-center text-[9px] font-bold text-on-surface-variant">
                   +{workspace.members.length - 4}
                 </div>
               )}
@@ -544,27 +544,27 @@ export default function WorkspaceCollaborationStudio() {
             {/* Invite code */}
             <button 
               onClick={copyInviteCode}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl transition-all"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
             >
-              <span className="text-[10px] font-bold text-slate-400 font-mono tracking-tight">{workspace?.invite_code}</span>
-              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-500" />}
+              <span className="text-[10px] font-bold text-on-surface-variant font-mono tracking-tight">{workspace?.invite_code}</span>
+              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60" />}
             </button>
 
             {/* Knowledge drawer button */}
             <button 
               onClick={() => setIsKnowledgeDrawerOpen(true)}
-              className="p-2 bg-orange-500 rounded-lg hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 active:scale-90"
+              className="p-2 bg-primary-container rounded-lg hover:bg-primary-container/80 transition-all shadow-lg shadow-primary/20 active:scale-90"
             >
-              <BookOpen className="w-3.5 h-3.5 text-white" />
+              <BookOpen className="w-3.5 h-3.5 text-on-surface" />
             </button>
 
             {/* Settings dropdown */}
             <div className="relative">
               <button 
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className="p-2 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl transition-all"
+                className="p-2 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
               >
-                <Settings className="w-3.5 h-3.5 text-slate-400" />
+                <Settings className="w-3.5 h-3.5 text-on-surface-variant" />
               </button>
               
               <AnimatePresence>
@@ -581,23 +581,23 @@ export default function WorkspaceCollaborationStudio() {
                       initial={{ opacity: 0, scale: 0.95, y: 8 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                      className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/8 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
+                      className="absolute right-0 mt-2 w-48 bg-surface-container-high border border-outline-variant/40 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
                     >
                       {/* Mobile Invite Section */}
-                      <div className="px-3 py-2.5 border-b border-white/5 mb-1.5 bg-white/[0.02]">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Workspace Code</p>
+                      <div className="px-3 py-2.5 border-b border-outline-variant/25 mb-1.5 bg-surface-container/40">
+                        <p className="text-[9px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-2">Workspace Code</p>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             copyInviteCode();
                           }}
-                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-white/8 rounded-lg hover:border-orange-500/30 transition-all group active:scale-[0.98]"
+                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-outline-variant/40 rounded-lg hover:border-primary/30 transition-all group active:scale-[0.98]"
                         >
-                          <span className="text-xs font-mono text-orange-500 font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
+                          <span className="text-xs font-mono text-primary-container font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
                           {copied ? (
                             <Check className="w-3 h-3 text-emerald-400" />
                           ) : (
-                            <Copy className="w-3 h-3 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                            <Copy className="w-3 h-3 text-on-surface-variant/60 group-hover:text-on-surface/80 transition-colors" />
                           )}
                         </button>
                       </div>
@@ -615,7 +615,7 @@ export default function WorkspaceCollaborationStudio() {
                         <button 
                           onClick={handleLeaveWorkspace}
                           disabled={isLeaving}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-400 hover:bg-white/5 rounded-lg transition-all text-xs font-medium disabled:opacity-50"
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all text-xs font-medium disabled:opacity-50"
                         >
                           {isLeaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
                           Leave space
@@ -636,12 +636,12 @@ export default function WorkspaceCollaborationStudio() {
         >
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
-              <div className="w-14 h-14 rounded-2xl bg-[#1a1a1a] border border-white/5 flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-slate-600" />
+              <div className="w-14 h-14 rounded-2xl bg-surface-container-high border border-outline-variant/25 flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-on-surface-variant/40" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium text-slate-400">Start the conversation</p>
-                <p className="text-xs text-slate-600 mt-1">Send a message or mention Flow for AI assistance</p>
+                <p className="text-sm font-medium text-on-surface-variant">Start the conversation</p>
+                <p className="text-xs text-on-surface-variant/40 mt-1">Send a message or mention Flow for AI assistance</p>
               </div>
             </div>
           ) : (
@@ -659,9 +659,9 @@ export default function WorkspaceCollaborationStudio() {
                   <React.Fragment key={ms.id || i}>
                     {showDateSep && (
                       <div className="flex items-center gap-3 py-3">
-                        <div className="flex-1 h-px bg-white/5" />
-                        <span className="text-[10px] text-slate-600 font-medium px-2">{dateLabel}</span>
-                        <div className="flex-1 h-px bg-white/5" />
+                        <div className="flex-1 h-px bg-outline-variant/25" />
+                        <span className="text-[10px] text-on-surface-variant/40 font-medium px-2">{dateLabel}</span>
+                        <div className="flex-1 h-px bg-outline-variant/25" />
                       </div>
                     )}
                     <MessageBubble 
@@ -697,20 +697,20 @@ export default function WorkspaceCollaborationStudio() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  className="pointer-events-auto bg-[#1a1a1a] border-l-2 border-l-orange-500 border border-white/8 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xl"
+                  className="pointer-events-auto bg-surface-container-high border-l-2 border-l-primary border border-outline-variant/40 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xl"
                 >
                   <div className="flex items-center gap-2.5 overflow-hidden">
-                    <Reply className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
+                    <Reply className="w-3.5 h-3.5 text-primary-container flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-[10px] font-semibold text-orange-500 mb-0.5">Replying to {replyingTo.author_name}</p>
-                      <p className="text-xs text-slate-400 truncate italic">"{replyingTo.content}"</p>
+                      <p className="text-[10px] font-semibold text-primary-container mb-0.5">Replying to {replyingTo.author_name}</p>
+                      <p className="text-xs text-on-surface-variant truncate italic">"{replyingTo.content}"</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => setReplyingTo(null)}
-                    className="p-1 hover:bg-white/5 rounded-md transition-colors flex-shrink-0"
+                    className="p-1 hover:bg-surface-container-high rounded-md transition-colors flex-shrink-0"
                   >
-                    <X className="w-3.5 h-3.5 text-slate-500 hover:text-white transition-colors" />
+                    <X className="w-3.5 h-3.5 text-on-surface-variant/60 hover:text-on-surface transition-colors" />
                   </button>
                 </motion.div>
               )}
@@ -723,14 +723,14 @@ export default function WorkspaceCollaborationStudio() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1a1a] border border-white/5 rounded-full w-fit shadow-lg"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high border border-outline-variant/25 rounded-full w-fit shadow-lg"
                 >
                   <div className="flex gap-0.5">
-                    <span className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" />
-                    <span className="w-1 h-1 bg-orange-500 rounded-full animate-bounce [animation-delay:0.15s]" />
-                    <span className="w-1 h-1 bg-orange-500 rounded-full animate-bounce [animation-delay:0.3s]" />
+                    <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce" />
+                    <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.15s]" />
+                    <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.3s]" />
                   </div>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="text-[10px] text-on-surface-variant/60">
                     {Object.entries(typingUsers)
                       .filter(([_, isTyping]) => isTyping)
                       .map(([user]) => user)
@@ -741,16 +741,16 @@ export default function WorkspaceCollaborationStudio() {
             </AnimatePresence>
           </div>
 
-          <div className="bg-[#0d0d0d] border-t border-white/5 px-4 sm:px-6 py-3">
+          <div className="bg-background border-t border-outline-variant/25 px-4 sm:px-6 py-3">
             {attachmentFile && (
               <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
                 <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
                   {attachmentFile.type.startsWith('video/') ? (
-                    <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center border border-white/10 shadow-lg">
-                      <Video className="w-6 h-6 text-slate-400" />
+                    <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center border border-outline-variant/50 shadow-lg">
+                      <Video className="w-6 h-6 text-on-surface-variant" />
                     </div>
                   ) : (
-                    <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-white/10 shadow-lg" />
+                    <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-outline-variant/50 shadow-lg" />
                   )}
                   <button
                     onClick={() => setAttachmentFile(null)}
@@ -766,7 +766,7 @@ export default function WorkspaceCollaborationStudio() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-white/[0.03] text-slate-500 hover:text-orange-500 hover:bg-white/[0.06]"
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
@@ -795,14 +795,14 @@ export default function WorkspaceCollaborationStudio() {
                   "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
                   isRecording 
                     ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" 
-                    : "bg-white/[0.03] text-slate-500 hover:text-orange-500 hover:bg-white/[0.06]"
+                    : "bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
                 )}
               >
                 {isRecording ? <Square className="w-3.5 h-3.5 fill-white text-white" /> : <Mic className="w-4 h-4" />}
               </button>
 
               {/* Input pill */}
-              <div className="flex-1 relative flex items-center bg-white/[0.03] hover:bg-white/[0.05] rounded-2xl transition-all group/input">
+              <div className="flex-1 relative flex items-center bg-surface-container/40 hover:bg-surface-container/50 rounded-2xl transition-all group/input">
                 <input 
                   value={inputText}
                   onChange={(e) => {
@@ -811,18 +811,18 @@ export default function WorkspaceCollaborationStudio() {
                   }}
                   placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message or ask Flow..."}
                   disabled={isRecording}
-                  className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-slate-600 disabled:opacity-50 min-w-0"
+                  className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-on-surface-variant/40 disabled:opacity-50 min-w-0"
                 />
                 <button 
                   type="submit"
-                  className="mr-1.5 w-7 h-7 bg-orange-500 rounded-xl flex items-center justify-center hover:bg-orange-400 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                  className="mr-1.5 w-7 h-7 bg-primary-container rounded-xl flex items-center justify-center hover:bg-primary transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
                   disabled={isRecording || !inputText.trim()}
                 >
-                  <Send className="w-3.5 h-3.5 text-white" />
+                  <Send className="w-3.5 h-3.5 text-on-surface" />
                 </button>
               </div>
             </form>
-            <p className="text-center text-[10px] text-slate-600 mt-2 max-w-4xl mx-auto">
+            <p className="text-center text-[10px] text-on-surface-variant/40 mt-2 max-w-4xl mx-auto">
               {isRecording ? "Tap mic to stop & send" : "Mention Flow for AI · Swipe message to reply"}
             </p>
           </div>
@@ -846,17 +846,17 @@ export default function WorkspaceCollaborationStudio() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-[#0d0d0d] border-l border-white/5 z-[70] flex flex-col"
+              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-background border-l border-outline-variant/25 z-[70] flex flex-col"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5"
+              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/25"
                 style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-3.5 h-3.5 text-orange-500" />
+                  <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-3.5 h-3.5 text-primary-container" />
                   </div>
-                  <h2 className="text-sm font-semibold text-white">
+                  <h2 className="text-sm font-semibold text-on-surface">
                     {viewingResource ? viewingResource.title : 'Knowledge Bank'}
                   </h2>
                 </div>
@@ -869,7 +869,7 @@ export default function WorkspaceCollaborationStudio() {
                         setIsKnowledgeDrawerOpen(false)
                       }
                     }} 
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest rounded-xl transition-all text-on-surface/80 hover:text-on-surface"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span className="text-xs font-semibold">Back</span>
@@ -879,12 +879,12 @@ export default function WorkspaceCollaborationStudio() {
 
               {/* Hub Tab Switcher (Only when viewing) */}
               {viewingResource && (
-                <div className="px-5 py-3 flex items-center gap-1.5 border-b border-white/5">
+                <div className="px-5 py-3 flex items-center gap-1.5 border-b border-outline-variant/25">
                   <button 
                     onClick={() => setHubTab('insights')}
                     className={cn(
                       "flex-1 py-2 text-xs font-medium rounded-lg transition-all",
-                      hubTab === 'insights' ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                      hubTab === 'insights' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high"
                     )}
                   >
                     AI Insights
@@ -893,7 +893,7 @@ export default function WorkspaceCollaborationStudio() {
                     onClick={() => setHubTab('source')}
                     className={cn(
                       "flex-1 py-2 text-xs font-medium rounded-lg transition-all",
-                      hubTab === 'source' ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                      hubTab === 'source' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high"
                     )}
                   >
                     Source PDF
@@ -912,12 +912,12 @@ export default function WorkspaceCollaborationStudio() {
                       className="flex-1 flex flex-col p-5 space-y-4 overflow-hidden"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex gap-1 p-1 bg-[#1a1a1a] rounded-lg border border-white/5">
+                        <div className="flex gap-1 p-1 bg-surface-container-high rounded-lg border border-outline-variant/25">
                           <button 
                             onClick={() => setHubView('shared')}
                             className={cn(
                               "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                              hubView === 'shared' ? "bg-[#0d0d0d] text-white shadow-sm" : "text-slate-500 hover:text-slate-300"
+                              hubView === 'shared' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80"
                             )}
                           >
                             Shared
@@ -926,7 +926,7 @@ export default function WorkspaceCollaborationStudio() {
                             onClick={() => setHubView('library')}
                             className={cn(
                               "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                              hubView === 'library' ? "bg-[#0d0d0d] text-white shadow-sm" : "text-slate-500 hover:text-slate-300"
+                              hubView === 'library' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80"
                             )}
                           >
                             Library
@@ -935,7 +935,7 @@ export default function WorkspaceCollaborationStudio() {
                         {hubView === 'shared' && (
                           <button 
                             onClick={() => setHubView('library')}
-                            className="p-1.5 bg-orange-500/10 text-orange-500 rounded-lg hover:bg-orange-500 hover:text-white transition-all"
+                            className="p-1.5 bg-primary/10 text-primary-container rounded-lg hover:bg-primary-container hover:text-on-surface transition-all"
                             title="Add from Library"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -948,11 +948,11 @@ export default function WorkspaceCollaborationStudio() {
                           <>
                             {(workspace?.resources || []).length === 0 ? (
                               <div className="text-center py-12">
-                                <BookOpen className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-                                <p className="text-xs text-slate-500 font-medium">No shared resources yet</p>
+                                <BookOpen className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
+                                <p className="text-xs text-on-surface-variant/60 font-medium">No shared resources yet</p>
                                 <button 
                                   onClick={() => setHubView('library')}
-                                  className="mt-3 text-xs text-orange-500 font-medium hover:text-orange-400 transition-colors"
+                                  className="mt-3 text-xs text-primary-container font-medium hover:text-primary transition-colors"
                                 >
                                   + Add from library
                                 </button>
@@ -964,16 +964,16 @@ export default function WorkspaceCollaborationStudio() {
                                     setViewingResource(res)
                                     setHubTab('insights')
                                   }}
-                                  className="w-full p-3.5 bg-[#1a1a1a] border border-white/5 rounded-xl transition-all text-left flex items-start gap-3 hover:border-orange-500/20 active:scale-[0.98]"
+                                  className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl transition-all text-left flex items-start gap-3 hover:border-primary/20 active:scale-[0.98]"
                                 >
-                                  <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <BookOpen className="w-3.5 h-3.5 text-orange-500" />
+                                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <BookOpen className="w-3.5 h-3.5 text-primary-container" />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-200 truncate">{res.title}</p>
-                                    <p className="text-[10px] text-slate-500 mt-0.5 capitalize">{res.resource_type || 'Note'}</p>
+                                    <p className="text-sm font-medium text-on-surface truncate">{res.title}</p>
+                                    <p className="text-[10px] text-on-surface-variant/60 mt-0.5 capitalize">{res.resource_type || 'Note'}</p>
                                   </div>
-                                  <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 flex-shrink-0 mt-0.5" />
+                                  <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/40 group-hover:text-on-surface-variant flex-shrink-0 mt-0.5" />
                                 </button>
                               </div>
                             )))}
@@ -982,23 +982,23 @@ export default function WorkspaceCollaborationStudio() {
                           <>
                             {libraryResources.filter(res => !workspace?.resources?.some((r: any) => r.id === res.id)).length === 0 ? (
                               <div className="text-center py-12">
-                                <Check className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-                                <p className="text-xs text-slate-500 font-medium px-6 leading-relaxed">All your library resources are already linked</p>
+                                <Check className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
+                                <p className="text-xs text-on-surface-variant/60 font-medium px-6 leading-relaxed">All your library resources are already linked</p>
                               </div>
                             ) : libraryResources.filter(res => !workspace?.resources?.some((r: any) => r.id === res.id)).map((res) => (
                               <div key={res.id} className="group relative">
-                                <div className="w-full p-3.5 bg-[#1a1a1a] border border-white/5 rounded-xl flex items-start gap-3">
+                                <div className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl flex items-start gap-3">
                                   <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <BookOpen className="w-3.5 h-3.5 text-slate-500" />
+                                    <BookOpen className="w-3.5 h-3.5 text-on-surface-variant/60" />
                                   </div>
                                   <div className="flex-1 min-w-0 pr-8">
-                                    <p className="text-sm font-medium text-slate-400 truncate">{res.title}</p>
-                                    <p className="text-[10px] text-slate-600 mt-0.5">In your library</p>
+                                    <p className="text-sm font-medium text-on-surface-variant truncate">{res.title}</p>
+                                    <p className="text-[10px] text-on-surface-variant/40 mt-0.5">In your library</p>
                                   </div>
                                 </div>
                                 <button 
                                   onClick={() => handleShareResource(res.id)}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-orange-500/10 text-orange-500 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-all"
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary-container rounded-lg group-hover:bg-primary-container group-hover:text-on-surface transition-all"
                                   title="Add to Workspace"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
@@ -1022,9 +1022,9 @@ export default function WorkspaceCollaborationStudio() {
                           <div>
                             {/* Resource header */}
                             <div className="mb-6">
-                              <h3 className="text-base font-semibold text-white leading-tight mb-2">{viewingResource.title}</h3>
+                              <h3 className="text-base font-semibold text-on-surface leading-tight mb-2">{viewingResource.title}</h3>
                               <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-orange-500/10 text-orange-500 text-[10px] font-medium rounded-md border border-orange-500/20 capitalize">
+                                <span className="px-2 py-0.5 bg-primary/10 text-primary-container text-[10px] font-medium rounded-md border border-primary/20 capitalize">
                                   {viewingResource.resource_type || 'Note'}
                                 </span>
                               </div>
@@ -1032,12 +1032,12 @@ export default function WorkspaceCollaborationStudio() {
 
                             {/* AI Summary */}
                             {viewingResource.ai_summary && (
-                              <div className="mb-6 p-4 bg-[#1a1a1a] border border-violet-500/15 rounded-xl">
+                              <div className="mb-6 p-4 bg-surface-container-high border border-violet-500/15 rounded-xl">
                                 <div className="flex items-center gap-2 mb-3">
                                   <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                                  <span className="text-xs font-medium text-slate-400">AI Summary</span>
+                                  <span className="text-xs font-medium text-on-surface-variant">AI Summary</span>
                                 </div>
-                                <div className="prose prose-invert prose-sm leading-relaxed text-slate-300 text-sm">
+                                <div className="prose prose-invert prose-sm leading-relaxed text-on-surface/80 text-sm">
                                   <ReactMarkdown>{viewingResource.ai_summary}</ReactMarkdown>
                                 </div>
                               </div>
@@ -1055,16 +1055,16 @@ export default function WorkspaceCollaborationStudio() {
                             )}
                           </div>
                         ) : (
-                          <div className="h-[600px] w-full rounded-xl overflow-hidden border border-white/5 bg-[#1a1a1a]">
+                          <div className="h-[600px] w-full rounded-xl overflow-hidden border border-outline-variant/25 bg-surface-container-high">
                             {viewingResource.file_url ? (
                               <PDFViewer fileUrl={viewingResource.file_url} title={viewingResource.title} />
                             ) : (
                               <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                                <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center mb-3">
-                                  <ExternalLink className="w-5 h-5 text-slate-600" />
+                                <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center mb-3">
+                                  <ExternalLink className="w-5 h-5 text-on-surface-variant/40" />
                                 </div>
-                                <h4 className="text-sm font-medium text-white mb-1">Source unavailable</h4>
-                                <p className="text-xs text-slate-500 max-w-[180px]">No PDF linked to this resource.</p>
+                                <h4 className="text-sm font-medium text-on-surface mb-1">Source unavailable</h4>
+                                <p className="text-xs text-on-surface-variant/60 max-w-[180px]">No PDF linked to this resource.</p>
                               </div>
                             )}
                           </div>
@@ -1072,7 +1072,7 @@ export default function WorkspaceCollaborationStudio() {
                       </div>
 
                       {/* Action bar */}
-                      <div className="p-5 border-t border-white/5 space-y-2.5">
+                      <div className="p-5 border-t border-outline-variant/25 space-y-2.5">
                         <div className="grid grid-cols-2 gap-2">
                           <button 
                              onClick={() => {
@@ -1081,9 +1081,9 @@ export default function WorkspaceCollaborationStudio() {
                                link.download = viewingResource.title
                                link.click()
                              }}
-                             className="py-2.5 bg-[#1a1a1a] border border-white/8 text-slate-300 rounded-xl text-xs font-medium hover:border-white/15 transition-all flex items-center justify-center gap-2"
+                             className="py-2.5 bg-surface-container-high border border-outline-variant/40 text-on-surface/80 rounded-xl text-xs font-medium hover:border-outline-variant/70 transition-all flex items-center justify-center gap-2"
                           >
-                            <Download className="w-3.5 h-3.5 text-slate-500" />
+                            <Download className="w-3.5 h-3.5 text-on-surface-variant/60" />
                             Download
                           </button>
                           
@@ -1093,7 +1093,7 @@ export default function WorkspaceCollaborationStudio() {
                               disabled={isCloning}
                               className={cn(
                                 "py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2",
-                                isCloning ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-orange-500 text-white hover:bg-orange-400 shadow-lg shadow-orange-500/20 active:scale-95"
+                                isCloning ? "bg-slate-800 text-on-surface-variant/60 cursor-not-allowed" : "bg-primary-container text-on-surface hover:bg-primary shadow-lg shadow-primary/20 active:scale-95"
                               )}
                             >
                               {isCloning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
@@ -1104,7 +1104,7 @@ export default function WorkspaceCollaborationStudio() {
                         
                         <button 
                           onClick={() => handleShareResource(viewingResource.id)}
-                          className="w-full py-3 bg-[#1a1a1a] border border-orange-500/20 text-orange-500 rounded-xl text-xs font-medium hover:bg-orange-500/10 transition-all flex items-center justify-center gap-2"
+                          className="w-full py-3 bg-surface-container-high border border-primary/20 text-primary-container rounded-xl text-xs font-medium hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
                         >
                           <Pin className="w-3.5 h-3.5" />
                           Share to chat
@@ -1184,7 +1184,7 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
     <div className={cn(
       "mt-2 flex items-center gap-2.5 p-2.5 rounded-2xl min-w-[180px] sm:min-w-[220px]",
       error ? "bg-red-500/10 border border-red-500/20" :
-      isMe ? "bg-black/20" : "bg-[#0d0d0d] border border-white/5"
+      isMe ? "bg-black/20" : "bg-background border border-outline-variant/25"
     )}>
       <audio
         ref={audioRef}
@@ -1205,7 +1205,7 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
         className={cn(
           "w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0",
           error ? "bg-red-500/20 text-red-400 cursor-not-allowed" :
-          isMe ? "bg-white/20 text-white hover:bg-white/30" : "bg-orange-500 text-white hover:bg-orange-400 shadow-sm shadow-orange-500/30"
+          isMe ? "bg-white/20 text-on-surface hover:bg-white/30" : "bg-primary-container text-on-surface hover:bg-primary shadow-sm shadow-primary/30"
         )}
       >
         {error ? <span className="text-[8px] font-bold">ERR</span> :
@@ -1213,21 +1213,21 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
       </button>
 
       <div className="flex-1 min-w-0">
-        <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden cursor-pointer"
+        <div className="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden cursor-pointer"
           onClick={e => {
             if (!audioRef.current || error) return
             const rect = e.currentTarget.getBoundingClientRect()
             const pct = (e.clientX - rect.left) / rect.width
             audioRef.current.currentTime = pct * audioRef.current.duration
           }}>
-          <div className={cn("h-full rounded-full transition-all", isMe ? "bg-white/70" : "bg-orange-500")}
+          <div className={cn("h-full rounded-full transition-all", isMe ? "bg-white/70" : "bg-primary-container")}
             style={{ width: `${progress}%` }} />
         </div>
         <div className="mt-1 flex justify-between items-center">
-          <span className="text-[9px] text-slate-500">
+          <span className="text-[9px] text-on-surface-variant/60">
             {error ? 'Failed to load' : 'Voice note'}
           </span>
-          {duration > 0 && <span className="text-[9px] text-slate-600 font-mono">{formatTime(duration)}</span>}
+          {duration > 0 && <span className="text-[9px] text-on-surface-variant/40 font-mono">{formatTime(duration)}</span>}
         </div>
       </div>
     </div>
@@ -1333,9 +1333,9 @@ function MessageBubble({
       {showAvatar ? (
         <div className={cn(
           "w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-semibold uppercase mb-0.5",
-          isAI ? 'bg-gradient-to-br from-violet-600 to-indigo-600' : isMe ? 'bg-orange-500' : 'bg-slate-700'
+          isAI ? 'bg-gradient-to-br from-violet-600 to-indigo-600' : isMe ? 'bg-primary-container' : 'bg-slate-700'
         )}>
-          {isAI ? <Sparkles className="w-3.5 h-3.5 text-white" /> : (message.author?.username?.[0] || 'U')}
+          {isAI ? <Sparkles className="w-3.5 h-3.5 text-on-surface" /> : (message.author?.username?.[0] || 'U')}
         </div>
       ) : (
         <div className="w-7 flex-shrink-0" />
@@ -1348,10 +1348,10 @@ function MessageBubble({
         {/* Sender name + time */}
         {showAvatar && (
           <div className={cn("flex items-center gap-1.5 mb-1 px-1", isMe ? 'flex-row-reverse' : '')}>
-            <span className="text-[11px] font-medium text-slate-400">
+            <span className="text-[11px] font-medium text-on-surface-variant">
               {isAI ? 'Flow AI' : message.author?.username || 'Member'}
             </span>
-            <span className="text-[10px] text-slate-600">
+            <span className="text-[10px] text-on-surface-variant/40">
               {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               {message.is_edited && <span className="ml-1 text-[9px] opacity-50">(edited)</span>}
             </span>
@@ -1361,13 +1361,13 @@ function MessageBubble({
         {/* Reply preview */}
         {message.parent_data && (
           <div className={cn(
-            "mb-1.5 px-3 py-2 rounded-xl bg-white/5 border-l-2 border-orange-500/50 max-w-xs",
+            "mb-1.5 px-3 py-2 rounded-xl bg-surface-container-high border-l-2 border-primary/50 max-w-xs",
             isMe ? "mr-2" : "ml-2"
           )}>
-            <p className="text-[10px] font-medium text-orange-500 mb-0.5">
+            <p className="text-[10px] font-medium text-primary-container mb-0.5">
               {message.parent_data.author_name}
             </p>
-            <p className="text-[11px] text-slate-500 italic truncate">
+            <p className="text-[11px] text-on-surface-variant/60 italic truncate">
                "{message.parent_data.content}"
             </p>
           </div>
@@ -1377,10 +1377,10 @@ function MessageBubble({
         <div className={cn(
           "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg transition-all duration-200",
           isAI 
-            ? 'bg-[#1a1a1a] border-l-2 border-violet-500/40 text-slate-200 rounded-2xl rounded-tl-sm' 
+            ? 'bg-surface-container-high border-l-2 border-violet-500/40 text-on-surface rounded-2xl rounded-tl-sm' 
             : isMe 
-              ? 'bg-orange-500/10 border-r-2 border-orange-500/40 text-white rounded-2xl rounded-tr-sm font-medium' 
-              : 'bg-white/[0.03] text-slate-200 rounded-2xl rounded-tl-sm',
+              ? 'bg-primary/20 border-r-2 border-primary/40 text-on-surface rounded-2xl rounded-tr-sm font-medium' 
+              : 'bg-surface-container/40 text-on-surface rounded-2xl rounded-tl-sm',
           isDeleting && "opacity-40 grayscale pointer-events-none"
         )}>
           
@@ -1389,7 +1389,7 @@ function MessageBubble({
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className={cn(
-                "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-[#1a1a1a] border border-white/5 text-slate-400 hover:text-white transition-all opacity-0 group-hover:opacity-100 hidden sm:block shadow-xl z-20",
+                "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-surface-container-high border border-outline-variant/25 text-on-surface-variant hover:text-on-surface transition-all opacity-0 group-hover:opacity-100 hidden sm:block shadow-xl z-20",
                 isMe ? "-left-10" : "-right-10"
               )}
             >
@@ -1406,27 +1406,27 @@ function MessageBubble({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 className={cn(
-                  "absolute bottom-full mb-2 w-36 bg-[#1a1a1a] border border-white/8 rounded-xl shadow-2xl z-[100] p-1 overflow-hidden",
+                  "absolute bottom-full mb-2 w-36 bg-surface-container-high border border-outline-variant/40 rounded-xl shadow-2xl z-[100] p-1 overflow-hidden",
                   isMe ? "right-0" : "left-0"
                 )}
               >
                 <button 
                   onClick={copyToClipboard}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/5 rounded-lg transition-all"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all"
                 >
                   <CopyIcon className="w-3 h-3" /> Copy text
                 </button>
                 {isMe && !message.audio_file && (
                   <button 
                     onClick={() => { setIsEditing(true); setIsMenuOpen(false); }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/5 rounded-lg transition-all"
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all"
                   >
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
                 )}
                 <button 
                   onClick={onReply}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-300 hover:bg-white/5 rounded-lg transition-all"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all"
                 >
                   <Reply className="w-3 h-3" /> Reply
                 </button>
@@ -1452,11 +1452,11 @@ function MessageBubble({
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit(); }
                   if (e.key === 'Escape') setIsEditing(false)
                 }}
-                className="w-full bg-black/40 border border-orange-500/30 rounded-xl px-3 py-2 text-sm text-white focus:outline-none min-h-[60px]"
+                className="w-full bg-black/40 border border-primary/30 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none min-h-[60px]"
               />
               <div className="flex justify-end gap-1.5">
-                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-slate-500 hover:text-slate-300">Cancel</button>
-                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-orange-500 text-white rounded-lg hover:bg-orange-400">Save</button>
+                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-on-surface-variant/60 hover:text-on-surface/80">Cancel</button>
+                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-primary-container text-on-surface rounded-lg hover:bg-primary">Save</button>
               </div>
             </div>
           ) : (message.audio_file || message.audio_data) ? (
@@ -1464,7 +1464,7 @@ function MessageBubble({
           ) : (
             <>
               {message.attachment && (
-                <div className="mb-2 max-w-sm overflow-hidden rounded-xl border border-white/10">
+                <div className="mb-2 max-w-sm overflow-hidden rounded-xl border border-outline-variant/50">
                   {message.attachment_type === 'video' ? (
                     <video src={message.attachment} controls className="w-full h-auto max-h-[300px] object-contain bg-black/40" />
                   ) : (
@@ -1482,21 +1482,21 @@ function MessageBubble({
                   <ReactMarkdown 
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      h1: ({children}) => <h1 className="text-base font-bold text-white mt-4 mb-2">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-sm font-bold text-white mt-4 mb-2">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-[13px] font-bold text-slate-200 mt-3 mb-1">{children}</h3>,
+                      h1: ({children}) => <h1 className="text-base font-bold text-on-surface mt-4 mb-2">{children}</h1>,
+                      h2: ({children}) => <h2 className="text-sm font-bold text-on-surface mt-4 mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="text-[13px] font-bold text-on-surface mt-3 mb-1">{children}</h3>,
                       ul: ({children}) => <ul className="list-disc pl-4 space-y-1 mb-3">{children}</ul>,
                       ol: ({children}) => <ol className="list-decimal pl-4 space-y-1 mb-3">{children}</ol>,
-                      li: ({children}) => <li className="text-[13px] text-slate-300 leading-normal">{children}</li>,
+                      li: ({children}) => <li className="text-[13px] text-on-surface/80 leading-normal">{children}</li>,
                       table: ({children}) => (
-                        <div className="my-4 overflow-x-auto rounded-xl border border-white/5 bg-black/20">
+                        <div className="my-4 overflow-x-auto rounded-xl border border-outline-variant/25 bg-black/20">
                           <table className="w-full text-left border-collapse text-[12px]">{children}</table>
                         </div>
                       ),
-                      thead: ({children}) => <thead className="bg-white/5 text-slate-400 font-semibold">{children}</thead>,
-                      th: ({children}) => <th className="px-3 py-2 border-b border-white/5">{children}</th>,
-                      td: ({children}) => <td className="px-3 py-2 border-b border-white/5 text-slate-300">{children}</td>,
-                      p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-slate-300 leading-relaxed">{children}</p>,
+                      thead: ({children}) => <thead className="bg-surface-container-high text-on-surface-variant font-semibold">{children}</thead>,
+                      th: ({children}) => <th className="px-3 py-2 border-b border-outline-variant/25">{children}</th>,
+                      td: ({children}) => <td className="px-3 py-2 border-b border-outline-variant/25 text-on-surface/80">{children}</td>,
+                      p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-on-surface/80 leading-relaxed">{children}</p>,
                     }}
                   >
                     {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
@@ -1510,16 +1510,16 @@ function MessageBubble({
           {message.pinned_resource_data && (
             <div 
               onClick={() => onViewResource(message.pinned_resource_data)}
-              className="mt-3 p-3 bg-black/30 border border-white/5 rounded-xl flex items-center gap-3 hover:border-orange-500/20 transition-all cursor-pointer group/res"
+              className="mt-3 p-3 bg-black/30 border border-outline-variant/25 rounded-xl flex items-center gap-3 hover:border-primary/20 transition-all cursor-pointer group/res"
             >
-              <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                <BookOpen className="w-3.5 h-3.5 text-orange-500" />
+              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-3.5 h-3.5 text-primary-container" />
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-xs font-medium text-white truncate">{message.pinned_resource_data.title}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 capitalize">{message.pinned_resource_data.resource_type || 'Resource'}</p>
+                <p className="text-xs font-medium text-on-surface truncate">{message.pinned_resource_data.title}</p>
+                <p className="text-[10px] text-on-surface-variant/60 mt-0.5 capitalize">{message.pinned_resource_data.resource_type || 'Resource'}</p>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover/res:text-orange-500 transition-colors flex-shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/40 group-hover/res:text-primary-container transition-colors flex-shrink-0" />
             </div>
           )}
 
@@ -1531,7 +1531,7 @@ function MessageBubble({
                   <FileText className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-xs font-medium text-white truncate">{message.shared_assignment_data.title}</p>
+                  <p className="text-xs font-medium text-on-surface truncate">{message.shared_assignment_data.title}</p>
                   <p className="text-[10px] text-violet-400 mt-0.5">{message.shared_assignment_data.subject || 'Assignment'}</p>
                 </div>
               </div>
@@ -1551,7 +1551,7 @@ function MessageBubble({
                       toast.error('Failed to export PDF.', { id: 'export-toast' })
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-white/10 border border-white/8 rounded-lg text-[10px] font-medium text-slate-400 hover:text-white transition-all"
+                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all"
                 >
                   <Download className="w-3 h-3" /> PDF
                 </button>
@@ -1568,7 +1568,7 @@ function MessageBubble({
                       toast.error('Failed to export Word.', { id: 'export-toast' })
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-white/10 border border-white/8 rounded-lg text-[10px] font-medium text-slate-400 hover:text-white transition-all"
+                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all"
                 >
                   <CloudDownload className="w-3 h-3" /> Word
                 </button>
@@ -1579,11 +1579,11 @@ function MessageBubble({
           {/* Optimistic sending indicator */}
           {message.is_optimistic && (
             <div className="absolute -bottom-4 right-0 flex items-center gap-1">
-              <span className="text-[9px] text-slate-600">Sending</span>
+              <span className="text-[9px] text-on-surface-variant/40">Sending</span>
               <div className="flex gap-0.5">
-                <span className="w-0.5 h-0.5 bg-slate-600 rounded-full animate-bounce" />
-                <span className="w-0.5 h-0.5 bg-slate-600 rounded-full animate-bounce [animation-delay:0.15s]" />
-                <span className="w-0.5 h-0.5 bg-slate-600 rounded-full animate-bounce [animation-delay:0.3s]" />
+                <span className="w-0.5 h-0.5 bg-on-surface-variant/40 rounded-full animate-bounce" />
+                <span className="w-0.5 h-0.5 bg-on-surface-variant/40 rounded-full animate-bounce [animation-delay:0.15s]" />
+                <span className="w-0.5 h-0.5 bg-on-surface-variant/40 rounded-full animate-bounce [animation-delay:0.3s]" />
               </div>
             </div>
           )}

@@ -154,37 +154,37 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   }
 
   if (isLoading) return (
-    <div className="fixed inset-0 bg-[#0d0d0d] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+    <div className="fixed inset-0 bg-background flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-primary animate-spin" />
     </div>
   )
 
   const progress = totalSections > 0 ? Math.round((sectionIndex / totalSections) * 100) : 0
 
   return (
-    <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
 
       {/* ── Top bar ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0 bg-[#0d0d0d]">
-        <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-outline-variant/25 shrink-0 bg-background">
+        <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-sm">
           <ArrowLeft className="w-4 h-4" /> Exit Study Mode
         </Link>
 
         {/* Progress */}
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-500 font-medium">
+          <span className="text-xs text-on-surface-variant/60 font-medium">
             Section {sectionIndex + 1} of {totalSections}
           </span>
-          <div className="w-32 h-1.5 bg-white/5 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-500"
+          <div className="w-32 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-primary-container to-amber-400 rounded-full transition-all duration-500"
               style={{ width: `${progress}%` }} />
           </div>
         </div>
 
         {/* XP counter */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-xl">
-          <Zap className="w-3.5 h-3.5 text-orange-400" />
-          <span className="text-xs font-black text-orange-400">{totalXP} XP</span>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl">
+          <Zap className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-black text-primary">{totalXP} XP</span>
         </div>
       </div>
 
@@ -199,24 +199,24 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
+                  <span className="text-[10px] font-black text-primary-container uppercase tracking-widest">
                     Part {sectionIndex + 1}
                   </span>
                   {sectionsCompleted.has(sectionIndex) && (
-                    <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
+                    <span className="flex items-center gap-1 text-[10px] text-green-400 font-bold">
                       <CheckCircle2 className="w-3 h-3" /> Done
                     </span>
                   )}
                 </div>
-                <h1 className="text-2xl font-black text-white tracking-tight">{currentSection.title}</h1>
+                <h1 className="text-2xl font-black text-on-surface tracking-tight">{currentSection.title}</h1>
               </div>
               <button
                 onClick={readAloud}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all shrink-0',
                   isReading
-                    ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+                    ? 'bg-primary/20 border-primary/40 text-primary'
+                    : 'bg-surface-container-high border-outline-variant/50 text-on-surface-variant hover:text-on-surface hover:border-outline-variant/20'
                 )}
               >
                 <Volume2 className="w-3.5 h-3.5" />
@@ -225,7 +225,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Section content */}
-            <div className="prose prose-invert prose-sm max-w-none bg-[#111] border border-white/5 rounded-2xl p-6">
+            <div className="prose prose-invert prose-sm max-w-none bg-surface-container-low border border-outline-variant/25 rounded-2xl p-6">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
@@ -239,7 +239,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               <button
                 onClick={() => sectionIndex > 0 && (setSectionIndex(i => i - 1), setPhase('reading'))}
                 disabled={sectionIndex === 0}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/8 text-slate-400 text-sm font-bold hover:text-white hover:border-white/20 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/40 text-on-surface-variant text-sm font-bold hover:text-on-surface hover:border-outline-variant/20 disabled:opacity-30 disabled:pointer-events-none transition-all"
               >
                 <ArrowLeft className="w-4 h-4" /> Previous
               </button>
@@ -247,7 +247,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               <button
                 onClick={handleNext}
                 disabled={loadingQuiz}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-black hover:bg-orange-400 active:scale-95 disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-container text-on-surface text-sm font-black hover:bg-primary-container active:scale-95 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
               >
                 {loadingQuiz
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating quiz…</>
@@ -263,11 +263,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
             {/* Quiz header */}
             <div className="text-center space-y-2">
-              <div className="w-12 h-12 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-center justify-center mx-auto">
-                <BookOpen className="w-6 h-6 text-orange-400" />
+              <div className="w-12 h-12 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-center mx-auto">
+                <BookOpen className="w-6 h-6 text-primary" />
               </div>
-              <h2 className="text-xl font-black text-white">Quick Check</h2>
-              <p className="text-slate-500 text-sm">
+              <h2 className="text-xl font-black text-on-surface">Quick Check</h2>
+              <p className="text-on-surface-variant/60 text-sm">
                 {currentSection?.title} — Answer all 3 to continue
               </p>
             </div>
@@ -275,9 +275,9 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             {/* Questions */}
             <div className="space-y-5">
               {questions.map((q, qi) => (
-                <div key={qi} className="bg-[#111] border border-white/5 rounded-2xl p-5 space-y-3">
-                  <p className="text-sm font-bold text-white leading-relaxed">
-                    <span className="text-orange-400 mr-2">{qi + 1}.</span>{q.question}
+                <div key={qi} className="bg-surface-container-low border border-outline-variant/25 rounded-2xl p-5 space-y-3">
+                  <p className="text-sm font-bold text-on-surface leading-relaxed">
+                    <span className="text-primary mr-2">{qi + 1}.</span>{q.question}
                   </p>
                   <div className="space-y-2">
                     {q.options.map((opt, oi) => {
@@ -293,15 +293,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                             'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left text-sm transition-all',
                             isCorrect ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' :
                             isWrong ? 'border-red-500/40 bg-red-500/10 text-red-200' :
-                            isSelected ? 'border-orange-500/40 bg-orange-500/10 text-orange-200' :
-                            'border-white/8 bg-white/[0.02] text-slate-300 hover:border-white/20 hover:bg-white/5'
+                            isSelected ? 'border-primary/40 bg-primary/10 text-orange-200' :
+                            'border-outline-variant/40 bg-surface-container/40 text-on-surface/80 hover:border-outline-variant/20 hover:bg-surface-container-highest'
                           )}
                         >
-                          {isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                          {isCorrect && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
                           {isWrong && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
                           {!isCorrect && !isWrong && (
                             <span className={cn('w-5 h-5 rounded-full border text-[10px] font-black flex items-center justify-center shrink-0',
-                              isSelected ? 'border-orange-400 text-orange-400' : 'border-white/20 text-slate-500'
+                              isSelected ? 'border-primary text-primary' : 'border-outline-variant/20 text-on-surface-variant/60'
                             )}>
                               {String.fromCharCode(65 + oi)}
                             </span>
@@ -312,7 +312,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                     })}
                   </div>
                   {submitted && (
-                    <p className="text-xs text-slate-400 italic pl-2 border-l-2 border-white/10">
+                    <p className="text-xs text-on-surface-variant italic pl-2 border-l-2 border-outline-variant/50">
                       {q.explanation}
                     </p>
                   )}
@@ -329,13 +329,13 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   : 'bg-red-500/10 border-red-500/30'
               )}>
                 {passed
-                  ? <Trophy className="w-8 h-8 text-emerald-400 shrink-0" />
+                  ? <Trophy className="w-8 h-8 text-green-400 shrink-0" />
                   : <XCircle className="w-8 h-8 text-red-400 shrink-0" />}
                 <div>
-                  <p className="font-black text-white">
+                  <p className="font-black text-on-surface">
                     {passed ? `${correctCount}/3 correct — Well done! +${XP_PER_SECTION} XP` : `${correctCount}/3 correct — Review and try again`}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-on-surface-variant mt-0.5">
                     {passed ? 'You can move to the next section.' : 'Read through the section again then retry.'}
                   </p>
                 </div>
@@ -347,14 +347,14 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               {!submitted ? (
                 <button
                   onClick={handleSubmitQuiz}
-                  className="w-full py-3 rounded-xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-95 transition-all shadow-lg shadow-orange-500/20"
+                  className="w-full py-3 rounded-xl bg-primary-container text-on-surface font-black text-sm hover:bg-primary-container active:scale-95 transition-all shadow-lg shadow-primary/20"
                 >
                   Submit Answers
                 </button>
               ) : passed ? (
                 <button
                   onClick={handleNextSection}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 text-white font-black text-sm hover:bg-emerald-400 active:scale-95 transition-all shadow-lg shadow-emerald-500/20"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500 text-on-surface font-black text-sm hover:bg-green-400 active:scale-95 transition-all shadow-lg shadow-green-500/20"
                 >
                   {sectionIndex < totalSections - 1
                     ? <><ChevronRight className="w-4 h-4" /> Next Section</>
@@ -363,11 +363,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               ) : (
                 <div className="flex gap-3 w-full">
                   <button onClick={() => { setPhase('reading'); setAnswers({}); setSubmitted(false) }}
-                    className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-sm hover:bg-white/10 transition-all">
+                    className="flex-1 py-3 rounded-xl bg-surface-container-high border border-outline-variant/50 text-on-surface font-bold text-sm hover:bg-surface-container-highest transition-all">
                     Re-read Section
                   </button>
                   <button onClick={handleRetry}
-                    className="flex-1 py-3 rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-400 font-bold text-sm hover:bg-orange-500/30 transition-all">
+                    className="flex-1 py-3 rounded-xl bg-primary/20 border border-primary/30 text-primary font-bold text-sm hover:bg-primary/30 transition-all">
                     Retry Quiz
                   </button>
                 </div>
