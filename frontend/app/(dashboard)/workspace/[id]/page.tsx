@@ -623,7 +623,7 @@ export default function WorkspaceCollaborationStudio() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── LEFT PANEL: Resources (w-64) ── */}
-        <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col bg-surface-container border-r border-outline-variant/20 overflow-hidden">
+        <aside className="hidden md:flex w-56 flex-shrink-0 flex-col bg-surface-container border-r border-outline-variant/20 overflow-hidden">
           {/* Panel header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <span className="text-xs font-bold tracking-widest uppercase text-primary">Resources</span>
@@ -853,7 +853,7 @@ export default function WorkspaceCollaborationStudio() {
         </main>
 
         {/* ── RIGHT PANEL: Sidekick AI (w-80) ── */}
-        <aside className="hidden xl:flex w-80 flex-shrink-0 flex-col bg-surface-container border-l border-outline-variant/20 overflow-hidden">
+        <aside className="hidden lg:flex w-72 flex-shrink-0 flex-col bg-surface-container border-l border-outline-variant/20 overflow-hidden">
           {/* Panel header */}
           <div className="bg-surface-container-low border-b border-outline-variant/10 flex items-center justify-between p-5">
             <div className="flex items-center gap-3">
@@ -862,7 +862,7 @@ export default function WorkspaceCollaborationStudio() {
               </div>
               <div>
                 <p className="text-sm font-bold text-on-surface leading-tight">Sidekick AI</p>
-                <p className="text-[11px] font-medium" style={{ color: 'var(--color-tertiary)' }}>Ready to help!</p>
+                <p className="text-[11px] font-medium text-tertiary">Ready to help!</p>
               </div>
             </div>
             <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant/60 hover:text-on-surface">
