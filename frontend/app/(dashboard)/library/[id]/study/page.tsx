@@ -196,6 +196,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNextSection = () => {
+    // Only advance if current section is completed
+    if (!completed.has(sectionIndex)) {
+      toast.error('Complete this section first before moving on.')
+      return
+    }
     if (sectionIndex < total - 1) { goToSection(sectionIndex + 1) }
     else {
       // All sections done — trigger Mastery
@@ -418,20 +423,21 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             {sections.map((sec, i) => {
               const isDone = completed.has(i)
               const isActive = i === sectionIndex && phase !== 'mastery' && phase !== 'mastery_complete'
-              const isNext = i === sectionIndex + 1 && !isDone
-              const isLocked = i > sectionIndex + 1 && !isDone && !completed.has(i)
-              const canClick = !isLocked || isDone
+              // Can only click if already completed OR it is the current section
+              // Next sections are locked until current is done
+              const isLocked = !isDone && i !== sectionIndex
+              const canClick = isDone || i === sectionIndex
               return (
                 <button key={i} onClick={() => canClick && goToSection(i)} disabled={!canClick}
+                  title={isLocked ? 'Complete this section first' : undefined}
                   className={cn('flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[13px] font-semibold transition-all',
-                    isDone ? 'bg-primary-container text-on-primary-container shadow-[0_3px_0_0_#763300]' :
+                    isDone ? 'bg-primary-container text-on-primary-container shadow-[0_3px_0_0_#763300] hover:brightness-110' :
                     isActive ? 'bg-surface-container-high border-2 border-primary text-on-surface' :
-                    isNext ? 'bg-surface-container border border-outline-variant/40 text-on-surface hover:bg-surface-container-high' :
                     isLocked ? 'text-on-surface-variant/30 cursor-not-allowed' :
                     'text-on-surface-variant hover:bg-surface-container-high'
                   )}>
                   <span className="text-[16px] shrink-0">
-                    {isDone ? '✅' : isActive ? '▶️' : sec.icon || (isLocked ? '🔒' : '📖')}
+                    {isDone ? '✅' : isActive ? '▶️' : sec.icon || '🔒'}
                   </span>
                   <span className="truncate">{sec.title || `Section ${i + 1}`}</span>
                 </button>
@@ -553,10 +559,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Action bar */}
                 <div className="px-8 py-6 mt-4 border-t border-outline-variant/20 flex items-center justify-between gap-4">
-                  <button onClick={() => sectionIndex > 0 && goToSection(sectionIndex - 1)} disabled={sectionIndex === 0}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-outline-variant/40 text-on-surface-variant text-[13px] font-bold hover:border-outline-variant hover:text-on-surface disabled:opacity-30 disabled:pointer-events-none transition-all">
-                    <span className="material-symbols-outlined text-[18px]">arrow_back</span> Previous
-                  </button>
+                    <button onClick={() => sectionIndex > 0 && goToSection(sectionIndex - 1)} disabled={sectionIndex === 0}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-outline-variant/40 text-on-surface-variant text-[13px] font-bold hover:border-outline-variant hover:text-on-surface disabled:opacity-30 disabled:pointer-events-none transition-all">
+                      <span className="material-symbols-outlined text-[18px]">arrow_back</span> Previous
+                    </button>
                   <div className="flex items-center gap-3">
                     <button onClick={readAloud}
                       className={cn('flex items-center gap-2 px-4 py-2.5 rounded-full border text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
