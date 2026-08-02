@@ -103,12 +103,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             await self._start_gemini_session(resource_context)
 
         elif msg_type == 'audio':
-            if self.audio_queue and self.session_active:
+            if self.gemini_ws and self.session_active:
                 audio_b64 = msg.get('data', '')
                 if audio_b64:
-                    # Non-blocking put — drop if queue is backing up (>50 chunks = ~1s lag)
-                    if self.audio_queue.qsize() < 50:
-                        self.audio_queue.put_nowait(audio_b64)
+                    await self._send_audio_to_gemini(audio_b64)
 
         elif msg_type == 'text_message':
             # User typed a message instead of speaking.
