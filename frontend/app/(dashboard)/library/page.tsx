@@ -185,93 +185,117 @@ export default function LibraryPage() {
       {/* Materials grid */}
       <section>
         <div className="flex items-center justify-between mb-stack-md">
-          <h3 className="text-[16px] font-bold text-on-surface flex items-center gap-base">
+          <h3 className="text-[16px] font-bold text-on-surface flex items-center gap-2">
             Recent Materials
-            <span className="px-2 py-0.5 bg-surface-container-highest rounded-full text-[13px] font-bold text-primary">{resources.length} items</span>
+            {resources.length > 0 && (
+              <span className="px-2 py-0.5 bg-surface-container-highest rounded-full text-[12px] font-bold text-on-surface-variant">
+                {resources.length} {resources.length === 1 ? 'item' : 'items'}
+              </span>
+            )}
           </h3>
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-surface-container-low rounded-[1.5rem] p-stack-md border border-outline-variant/20 animate-pulse">
-                <div className="w-10 h-10 bg-surface-container-high rounded-[1rem] mb-stack-sm" />
-                <div className="h-5 bg-surface-container-high rounded w-3/4 mb-2" />
-                <div className="h-4 bg-surface-container-high rounded w-1/2" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-surface-container rounded-[1.5rem] p-5 border border-outline-variant/20 animate-pulse">
+                <div className="w-10 h-10 bg-surface-container-high rounded-[1rem] mb-4" />
+                <div className="h-4 bg-surface-container-high rounded w-3/4 mb-2" />
+                <div className="h-3 bg-surface-container-high rounded w-1/2" />
               </div>
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] p-stack-lg text-center flex flex-col items-center gap-stack-md">
-            <div className="w-20 h-20 bg-surface-container rounded-full flex items-center justify-center">
-              <span className="material-symbols-outlined text-[40px] text-on-surface-variant">menu_book</span>
+          <div className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] py-16 text-center flex flex-col items-center gap-4">
+            <div className="w-16 h-16 bg-surface-container rounded-full flex items-center justify-center">
+              <span className="material-symbols-outlined text-[36px] text-on-surface-variant/40">menu_book</span>
             </div>
             <div>
-              <p className="font-bold text-on-surface text-[18px] mb-base">{search ? 'No results found' : 'Library is empty'}</p>
-              <p className="text-[14px] text-on-surface-variant mb-stack-md">
+              <p className="font-bold text-on-surface text-[16px] mb-1">{search ? 'No results found' : 'Library is empty'}</p>
+              <p className="text-[13px] text-on-surface-variant">
                 {search ? 'Try a different search term.' : 'Upload your first material to unlock AI study tools.'}
               </p>
-              {!search && (
-                <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-base bg-primary text-on-primary text-[14px] font-bold px-stack-md py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                  Upload Now
-                </button>
-              )}
             </div>
+            {!search && (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container text-[14px] font-bold px-5 py-2.5 rounded-full shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                Upload Now
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-            {/* Wide featured card for first item */}
-            {filtered.slice(0, 1).map((r: any) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filtered.map((r: any) => {
               const badge = getMasteryBadge(r.mastery ?? 0)
-              return (
-                <Link key={r.id} href={`/library/${r.id}`} className="md:col-span-2 bg-surface-container-high rounded-[1.5rem] border border-outline-variant overflow-hidden flex flex-col md:flex-row shadow-xl hover:border-primary/40 transition-all group">
-                  <div className="w-full md:w-1/3 h-48 md:h-full relative bg-surface-container-highest flex items-center justify-center">
-                    <span className={cn('material-symbols-outlined text-[64px]', TYPE_COLOR[r.resource_type] || TYPE_COLOR.other)} style={{ fontVariationSettings: "'FILL' 1" }}>
-                      {TYPE_ICON[r.resource_type] || TYPE_ICON.other}
-                    </span>
-                    <div className="absolute bottom-3 left-3">
-                      <span className="bg-primary text-on-primary text-[11px] font-bold px-3 py-1 rounded-full uppercase">Featured</span>
-                    </div>
-                  </div>
-                  <div className="p-stack-md flex flex-col justify-center gap-base md:w-2/3">
-                    <h4 className="text-[20px] font-bold text-on-surface group-hover:text-primary transition-colors">{r.title}</h4>
-                    <p className="text-[14px] text-on-surface-variant line-clamp-2">{r.ai_summary || `${r.subject || r.resource_type} study material`}</p>
-                    <div className="flex items-center gap-base">
-                      <span className={cn('text-[12px] font-bold px-2 py-0.5 rounded-full', badge.color, badge.bg)}>{badge.label}</span>
-                      {r.has_study_kit && <span className="text-[12px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Kit Ready</span>}
-                    </div>
-                    <button className="w-full bg-primary text-on-primary py-3 rounded-[1rem] font-bold btn-3d hover:brightness-110 transition-all text-[15px]">
-                      Resume Study Path
-                    </button>
-                  </div>
-                </Link>
-              )
-            })}
+              const typeIcon = TYPE_ICON[r.resource_type] || TYPE_ICON.other
+              const typeColor = TYPE_COLOR[r.resource_type] || TYPE_COLOR.other
+              const date = r.created_at
+                ? new Date(r.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
+                : ''
 
-            {/* Regular cards */}
-            {filtered.slice(1).map((r: any) => {
-              const badge = getMasteryBadge(r.mastery ?? 0)
               return (
-                <Link key={r.id} href={`/library/${r.id}`} className="bg-surface-container rounded-[1.5rem] p-stack-md border border-outline-variant hover:border-primary/40 transition-all flex flex-col gap-stack-sm group">
-                  <div className="flex items-start justify-between">
-                    <div className="p-3 bg-surface-container-high rounded-[1rem]">
-                      <span className={cn('material-symbols-outlined text-[28px]', TYPE_COLOR[r.resource_type] || TYPE_COLOR.other)}>
-                        {TYPE_ICON[r.resource_type] || TYPE_ICON.other}
+                <Link
+                  key={r.id}
+                  href={`/library/${r.id}`}
+                  className="group flex flex-col bg-surface-container rounded-[1.5rem] border border-outline-variant/30 hover:border-outline-variant hover:bg-surface-container-high transition-all overflow-hidden"
+                >
+                  {/* Top color band with icon */}
+                  <div className="relative h-28 bg-surface-container-high flex items-center justify-center border-b border-outline-variant/20">
+                    <span
+                      className={cn('material-symbols-outlined text-[52px] opacity-60 group-hover:opacity-90 transition-opacity', typeColor)}
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      {typeIcon}
+                    </span>
+                    {/* Kit ready badge top-right */}
+                    {r.has_study_kit && (
+                      <div className="absolute top-3 right-3 flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                        Kit Ready
+                      </div>
+                    )}
+                    {/* Processing indicator */}
+                    {r.status === 'processing' && (
+                      <div className="absolute top-3 right-3 flex items-center gap-1 bg-secondary/15 text-secondary border border-secondary/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <span className="material-symbols-outlined text-[12px] animate-spin">autorenew</span>
+                        Processing
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4 flex flex-col gap-2 flex-1">
+                    {/* Type label */}
+                    <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">
+                      {r.resource_type || 'Document'}
+                    </span>
+
+                    {/* Title */}
+                    <h4 className="text-[15px] font-bold text-on-surface group-hover:text-primary transition-colors leading-snug line-clamp-2">
+                      {r.title}
+                    </h4>
+
+                    {/* Summary */}
+                    {r.ai_summary && (
+                      <p className="text-[12px] text-on-surface-variant line-clamp-2 leading-relaxed">
+                        {r.ai_summary}
+                      </p>
+                    )}
+
+                    {/* Footer */}
+                    <div className="mt-auto pt-2 flex items-center justify-between">
+                      {/* Mastery */}
+                      <span className={cn('text-[11px] font-bold px-2 py-0.5 rounded-full', badge.color, badge.bg)}>
+                        {badge.label}
                       </span>
+                      {/* Date */}
+                      {date && (
+                        <span className="text-[11px] text-on-surface-variant/50">{date}</span>
+                      )}
                     </div>
-                    <div className={cn('flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold', badge.color, badge.bg)}>
-                      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                      {badge.label}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-[18px] font-bold text-on-surface mb-1 group-hover:text-primary transition-colors line-clamp-1">{r.title}</h4>
-                    <p className="text-[13px] text-on-surface-variant line-clamp-2">{r.ai_summary || `${r.subject || r.resource_type} — tap to study`}</p>
-                  </div>
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className="text-[12px] text-on-surface-variant">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}</span>
-                    <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">more_vert</span>
                   </div>
                 </Link>
               )
