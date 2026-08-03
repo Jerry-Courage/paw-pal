@@ -3,32 +3,34 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi, aiApi } from '@/lib/api'
-import {
-  ArrowLeft, Loader2, Send, Lightbulb,
-  CheckCircle2, XCircle, TrendingUp, Award, Target,
-  RotateCcw, BookOpen, Sparkles, ChevronRight
-} from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useStudyTimer } from '@/hooks/useStudyTimer'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { normalizeReadableMath } from '@/lib/mathFormatting'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 interface Question { question: string; type: string; hint?: string; model_answer: string }
 interface GradeResult { score: number; grade: string; correct: boolean; feedback: string; strengths: string[]; improvements: string[]; tip: string }
 
 const GRADE_COLOR = (g: string) => {
-  if (['A', 'A+', 'A-'].includes(g)) return 'text-emerald-400'
-  if (['B', 'B+', 'B-'].includes(g)) return 'text-sky-400'
+  if (['A', 'A+', 'A-'].includes(g)) return 'text-green-400'
+  if (['B', 'B+', 'B-'].includes(g)) return 'text-secondary'
   if (['C', 'C+', 'C-'].includes(g)) return 'text-yellow-400'
-  return 'text-red-400'
+  return 'text-error'
 }
-const SCORE_BG = (s: number) => s >= 80 ? 'bg-emerald-500' : s >= 60 ? 'bg-sky-500' : s >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+
+const STUDY_TIPS = [
+  '"Explaining things in your own words helps your brain remember them 2× faster!"',
+  '"Retrieval practice is the most powerful learning technique known to science."',
+  '"Writing your answer before checking trains deeper memory than re-reading."',
+  '"Short, focused practice beats long cramming sessions every time."',
+  '"Getting something wrong is more useful than getting it right without effort."',
+]
 
 export default function PracticePage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
@@ -41,6 +43,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
   const [submitted, setSubmitted] = useState<Record<number, boolean>>({})
   const [grading, setGrading] = useState(false)
   const [showHint, setShowHint] = useState(false)
+  const [tip] = useState(() => STUDY_TIPS[Math.floor(Math.random() * STUDY_TIPS.length)])
 
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],
@@ -82,24 +85,31 @@ export default function PracticePage({ params }: { params: { id: string } }) {
     else setPhase('results')
   }
 
-  const handleRestart = () => { setCurrent(0); setAnswers({}); setGrades({}); setSubmitted({}); setShowHint(false); setPhase('test') }
+  const handleRestart = () => {
+    setCurrent(0); setAnswers({}); setGrades({}); setSubmitted({})
+    setShowHint(false); setPhase('test')
+  }
 
   const totalAnswered = Object.keys(submitted).length
-  const avgScore = totalAnswered > 0 ? Math.round(Object.values(grades).reduce((s, g) => s + (g.score || 0), 0) / totalAnswered) : 0
+  const avgScore = totalAnswered > 0
+    ? Math.round(Object.values(grades).reduce((s, g) => s + (g.score || 0), 0) / totalAnswered)
+    : 0
 
   // ── Loading ──────────────────────────────────────────────────────
   if (phase === 'loading') return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-5 text-center max-w-xs px-6">
-        <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-          <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
+    <div className="fixed inset-0 bg-background flex items-center justify-center">
+      <div className="flex flex-col items-center gap-6 text-center max-w-xs px-6">
+        <div className="w-16 h-16 bg-primary/10 border border-primary/20 rounded-[1.5rem] flex items-center justify-center animate-pulse">
+          <span className="material-symbols-outlined text-primary text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
         </div>
         <div>
-          <h2 className="text-xl font-black text-white tracking-tight">Preparing Drill</h2>
-          <p className="text-slate-500 mt-1.5 text-sm">Generating AI-graded practice questions...</p>
+          <h2 className="text-[22px] font-bold text-on-surface tracking-tight">Preparing Practice</h2>
+          <p className="text-on-surface-variant mt-2 text-[14px]">Generating AI-graded questions…</p>
         </div>
-        <div className="flex gap-1.5">
-          {[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
+        <div className="flex gap-2">
+          {[0,1,2].map(i => (
+            <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />
+          ))}
         </div>
       </div>
     </div>
@@ -109,63 +119,78 @@ export default function PracticePage({ params }: { params: { id: string } }) {
   if (phase === 'results') {
     const passed = avgScore >= 60
     return (
-      <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
-          <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
-            <ArrowLeft className="w-4 h-4 text-slate-400" />
+      <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+        <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
+          <Link href={`/library/${resourceId}`}
+            className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all">
+            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           </Link>
-          <div>
-            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Session Complete</p>
-            <h1 className="text-sm font-black text-white truncate">{resource?.title}</h1>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-5 max-w-2xl mx-auto w-full space-y-5 scrollbar-hide">
-          <div className="text-center space-y-4 py-4">
-            <div className="relative w-28 h-28 mx-auto">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="6" className="text-white/5" />
-                <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 38}`}
-                  strokeDashoffset={`${2 * Math.PI * 38 * (1 - avgScore / 100)}`}
-                  className={passed ? 'text-emerald-400' : 'text-orange-400'}
-                  style={{ transition: 'stroke-dashoffset 1.2s ease' }} />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-black text-white">{avgScore}</span>
-                <span className="text-[10px] text-slate-500 font-black">/100</span>
+          <p className="text-[12px] font-bold text-on-surface-variant uppercase tracking-widest">Results</p>
+          <div className="w-9" />
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-6 max-w-2xl mx-auto w-full scrollbar-hide">
+          <div className="space-y-6">
+            {/* Score ring */}
+            <div className="flex flex-col items-center gap-4 py-4">
+              <div className="relative w-32 h-32">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="6" className="text-surface-container-high" />
+                  <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 38}`}
+                    strokeDashoffset={`${2 * Math.PI * 38 * (1 - avgScore / 100)}`}
+                    className={passed ? 'text-green-400' : 'text-primary'}
+                    style={{ transition: 'stroke-dashoffset 1.2s ease' }} />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-[32px] font-bold text-on-surface">{avgScore}</span>
+                  <span className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider">Score</span>
+                </div>
+              </div>
+              <div className="text-center">
+                <h2 className="text-[24px] font-bold text-on-surface tracking-tight">
+                  {passed ? '🎉 Solid work!' : '💪 Keep drilling!'}
+                </h2>
+                <p className="text-on-surface-variant mt-1 text-[14px]">{totalAnswered} of {questions.length} answered</p>
               </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-black text-white tracking-tight">{passed ? '🎉 Solid work!' : '💪 Keep drilling!'}</h2>
-              <p className="text-slate-500 mt-1 text-sm">{totalAnswered} of {questions.length} answered</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {questions.map((q, i) => {
-              const g = grades[i]
-              return (
-                <div key={i} className="flex items-center gap-3 bg-[#1a1a1a] border border-white/5 rounded-2xl px-4 py-3">
-                  <span className="text-xs text-slate-600 w-5 shrink-0">Q{i+1}</span>
-                  <p className="flex-1 text-xs text-slate-400 truncate">{q.question}</p>
-                  {g ? (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="w-12 h-1.5 bg-white/8 rounded-full overflow-hidden">
-                        <div className={cn('h-full rounded-full', SCORE_BG(g.score))} style={{ width: `${g.score}%` }} />
+
+            {/* Per-question breakdown */}
+            <div className="space-y-2">
+              {questions.map((q, i) => {
+                const g = grades[i]
+                return (
+                  <div key={i} className="flex items-center gap-3 bg-surface-container border border-outline-variant/20 rounded-[1.25rem] px-4 py-3">
+                    <span className="text-[11px] text-on-surface-variant/60 w-5 shrink-0 font-bold">Q{i+1}</span>
+                    <p className="flex-1 text-[13px] text-on-surface-variant truncate">{q.question}</p>
+                    {g ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="w-12 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full transition-all',
+                            g.score >= 80 ? 'bg-green-400' : g.score >= 60 ? 'bg-secondary' : g.score >= 40 ? 'bg-yellow-400' : 'bg-error'
+                          )} style={{ width: `${g.score}%` }} />
+                        </div>
+                        <span className={cn('text-[12px] font-bold w-5', GRADE_COLOR(g.grade))}>{g.grade}</span>
                       </div>
-                      <span className={cn('text-xs font-black w-5', GRADE_COLOR(g.grade))}>{g.grade}</span>
-                    </div>
-                  ) : <span className="text-xs text-slate-600 shrink-0">Skipped</span>}
-                </div>
-              )
-            })}
-          </div>
-          <div className="flex gap-2.5 pb-4">
-            <button onClick={handleRestart} className="flex-1 py-3.5 rounded-2xl bg-white/5 border border-white/8 text-white font-black text-sm hover:bg-white/8 transition-all flex items-center justify-center gap-2">
-              <RotateCcw className="w-4 h-4" /> Retry
-            </button>
-            <Link href={`/library/${resourceId}`} className="flex-1 py-3.5 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2">
-              <BookOpen className="w-4 h-4" /> Notes
-            </Link>
+                    ) : (
+                      <span className="text-[11px] text-on-surface-variant/40 shrink-0">Skipped</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pb-4">
+              <button onClick={handleRestart}
+                className="flex-1 py-4 rounded-[1rem] bg-surface-container-high border border-outline-variant text-on-surface font-bold text-[15px] hover:bg-surface-container-highest transition-all flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">refresh</span> Retry
+              </button>
+              <Link href={`/library/${resourceId}`}
+                className="flex-1 py-4 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">menu_book</span> Done
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -176,160 +201,267 @@ export default function PracticePage({ params }: { params: { id: string } }) {
   const q = questions[current]
   const grade = grades[current]
   const isSubmitted = submitted[current]
+  const charCount = (answers[current] || '').length
+  const pct = questions.length > 0 ? ((current + 1) / questions.length) * 100 : 0
+
+  const progressLabel = () => {
+    const remaining = questions.length - current - 1
+    if (current === 0) return 'Just getting started!'
+    if (remaining === 0) return 'Last one! 🚀'
+    if (remaining === 1) return 'Almost there! 🎯'
+    return `${remaining} left — keep going!`
+  }
 
   return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={handleRestart} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
-            <ArrowLeft className="w-4 h-4 text-slate-400" />
-          </button>
-          <div>
-            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Question {current+1} of {questions.length}</p>
-            <h1 className="text-xs font-black text-slate-400 truncate max-w-[180px]">{resource?.title}</h1>
-          </div>
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden select-none">
+
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between px-6 py-4 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-[13px] font-bold">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          Exit Practice
+        </Link>
+        <p className="text-[13px] font-bold text-primary uppercase tracking-widest">
+          {resource?.subject || resource?.title?.slice(0, 20) || 'Practice'}
+        </p>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
+          <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+          <span className="text-[12px] font-black text-primary">{totalAnswered * 50} XP</span>
         </div>
-        <span className="text-xs font-black text-slate-600">{totalAnswered} answered · avg {avgScore}/100</span>
+      </header>
+
+      {/* ── Progress bar ────────────────────────────────────────── */}
+      <div className="px-6 pb-3 shrink-0 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-black text-on-surface-variant uppercase tracking-widest">
+            Question {current + 1} of {questions.length}
+          </p>
+          <p className="text-[11px] font-bold text-primary">{progressLabel()}</p>
+        </div>
+        <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
+          <div className="h-full bg-primary rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }} />
+        </div>
       </div>
 
-      <div className="flex gap-0.5 px-5 pt-3 shrink-0">
-        {questions.map((_, i) => (
-          <div key={i} className={cn('flex-1 h-1 rounded-full transition-all duration-500',
-            submitted[i] && grades[i]?.correct ? 'bg-emerald-500' :
-            submitted[i] && !grades[i]?.correct ? 'bg-red-500' :
-            i === current ? 'bg-orange-500' : 'bg-white/8'
-          )} />
-        ))}
-      </div>
+      {/* ── Body ────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="px-6 py-4 max-w-5xl mx-auto">
+          <div className="flex flex-col lg:flex-row gap-5">
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 max-w-2xl mx-auto w-full scrollbar-hide">
-        <div className="bg-[#1a1a1a] border border-white/6 rounded-2xl p-5">
-          <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2 block">
-            {q?.type?.replace('_', ' ') || 'Short Answer'}
-          </span>
-          <ReactMarkdown 
-            remarkPlugins={[remarkGfm, remarkMath]} 
-            rehypePlugins={[rehypeKatex]}
-            className="text-base font-bold text-white leading-relaxed prose prose-invert max-w-none"
-          >
-            {normalizeReadableMath(q?.question || '')}
-          </ReactMarkdown>
-          {q?.hint && (
-            <div className="mt-3">
-              {!showHint ? (
-                <button onClick={() => setShowHint(true)} className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors">
-                  <Lightbulb className="w-3.5 h-3.5" /> Show hint
-                </button>
+            {/* LEFT: Question card + answer */}
+            <div className="flex-1 space-y-4">
+
+              {/* Question card */}
+              <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
+                  <span className="text-[11px] font-black text-primary uppercase tracking-widest">
+                    {q?.type?.replace('_', ' ') || 'Short Answer'}
+                  </span>
+                </div>
+                <div className="text-[18px] font-bold text-on-surface leading-relaxed prose prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {normalizeReadableMath(q?.question || '')}
+                  </ReactMarkdown>
+                </div>
+
+                {/* Answer textarea */}
+                {!isSubmitted && (
+                  <div className="mt-5 space-y-2">
+                    <textarea
+                      value={answers[current] || ''}
+                      onChange={e => setAnswers(a => ({ ...a, [current]: e.target.value }))}
+                      placeholder="Type your answer here..."
+                      rows={5}
+                      disabled={grading}
+                      className="w-full bg-surface-container border border-outline-variant/40 rounded-[1rem] px-4 py-3 text-on-surface text-[14px] leading-relaxed resize-none focus:outline-none focus:border-primary/50 placeholder:text-on-surface-variant/40 transition-all"
+                    />
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[11px] text-on-surface-variant/50">
+                        Characters: {charCount} / 500
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Grade result */}
+                {isSubmitted && grade && (
+                  <div className="mt-5 space-y-3">
+                    {/* Score + feedback */}
+                    <div className={cn('rounded-[1.25rem] p-4 flex items-start gap-4',
+                      grade.correct ? 'bg-green-500/8 border border-green-500/20' : 'bg-error/8 border border-error/20')}>
+                      <div className={cn('w-14 h-14 rounded-full flex flex-col items-center justify-center shrink-0 text-white font-bold',
+                        grade.score >= 80 ? 'bg-green-500' : grade.score >= 60 ? 'bg-secondary-container' : grade.score >= 40 ? 'bg-yellow-500' : 'bg-error-container')}>
+                        <span className="text-[18px] leading-none">{grade.score}</span>
+                        <span className="text-[9px] opacity-80">/100</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="material-symbols-outlined text-[16px]"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                            className={grade.correct ? 'text-green-400' : 'text-error'}>
+                            {grade.correct ? 'check_circle' : 'cancel'}
+                          </span>
+                          <span className={cn('text-[13px] font-black', GRADE_COLOR(grade.grade))}>Grade: {grade.grade}</span>
+                        </div>
+                        <div className="text-[13px] text-on-surface-variant leading-relaxed prose prose-invert prose-sm max-w-none">
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                            {normalizeReadableMath(grade.feedback || '')}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Strengths */}
+                    {grade.strengths?.length > 0 && (
+                      <div className="bg-green-500/8 border border-green-500/20 rounded-[1.25rem] p-4">
+                        <p className="text-[10px] font-black text-green-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[14px]">check_circle</span> What you got right
+                        </p>
+                        <ul className="space-y-1">
+                          {grade.strengths.map((s, i) => (
+                            <li key={i} className="text-[13px] text-green-300 flex items-start gap-1.5">
+                              <span className="mt-0.5 shrink-0">•</span>
+                              <span>{s}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Improvements */}
+                    {grade.improvements?.length > 0 && (
+                      <div className="bg-primary/8 border border-primary/20 rounded-[1.25rem] p-4">
+                        <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[14px]">trending_up</span> How to improve
+                        </p>
+                        <ul className="space-y-1">
+                          {grade.improvements.map((s, i) => (
+                            <li key={i} className="text-[13px] text-on-surface-variant flex items-start gap-1.5">
+                              <span className="mt-0.5 shrink-0">•</span>
+                              <span>{s}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              {!isSubmitted ? (
+                <div className="flex gap-3">
+                  {/* Hint button */}
+                  {q?.hint && (
+                    <button onClick={() => setShowHint(h => !h)}
+                      className="flex items-center gap-2 px-5 py-4 rounded-[1rem] bg-secondary-container text-on-secondary-container font-bold text-[14px] hover:brightness-110 transition-all">
+                      <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
+                      {showHint ? 'Hide Hint' : 'Need a Hint?'}
+                    </button>
+                  )}
+                  {/* Submit */}
+                  <button onClick={handleSubmit}
+                    disabled={grading || !answers[current]?.trim()}
+                    className="flex-1 py-4 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2.5">
+                    {grading ? (
+                      <><span className="material-symbols-outlined text-[18px] animate-spin">autorenew</span> Grading…</>
+                    ) : (
+                      <><span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span> Check Answer</>
+                    )}
+                  </button>
+                </div>
               ) : (
-                <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2.5 mt-2">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-300">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm, remarkMath]} 
-                      rehypePlugins={[rehypeKatex]}
-                      className="prose prose-invert prose-sm max-w-none text-amber-300"
-                    >
-                      {normalizeReadableMath(q.hint || '')}
+                <button onClick={handleNext}
+                  className="w-full py-4 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all flex items-center justify-center gap-2.5">
+                  {current < questions.length - 1
+                    ? <><span>Next Question</span><span className="material-symbols-outlined text-[18px]">arrow_forward</span></>
+                    : <><span>See Results</span><span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>emoji_events</span></>
+                  }
+                </button>
+              )}
+
+              {/* Hint card (inline, below buttons) */}
+              {showHint && q?.hint && !isSubmitted && (
+                <div className="flex items-start gap-3 p-4 rounded-[1.25rem] border border-tertiary/20 bg-tertiary/5">
+                  <span className="material-symbols-outlined text-tertiary text-[18px] shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
+                  <div className="text-[13px] text-on-surface-variant leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {normalizeReadableMath(q.hint)}
                     </ReactMarkdown>
                   </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {!isSubmitted ? (
-          <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Your Answer</label>
-            <textarea
-              value={answers[current] || ''}
-              onChange={e => setAnswers(a => ({ ...a, [current]: e.target.value }))}
-              placeholder="Write your answer here... Be as detailed as you can."
-              rows={6}
-              disabled={grading}
-              className="w-full bg-[#1a1a1a] border border-white/8 rounded-2xl p-4 text-white text-sm leading-relaxed resize-none focus:outline-none focus:border-orange-500/40 placeholder:text-slate-600 transition-all"
-            />
-            <button onClick={handleSubmit} disabled={grading || !answers[current]?.trim()}
-              className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2">
-              {grading ? <><Loader2 className="w-4 h-4 animate-spin" /> Grading...</> : <><Send className="w-4 h-4" /> Submit Answer</>}
-            </button>
-          </div>
-        ) : grade && (
-          <div className="space-y-3">
-            <div className={cn('rounded-2xl p-4 flex items-center gap-4', grade.correct ? 'bg-emerald-500/8 border border-emerald-500/20' : 'bg-red-500/8 border border-red-500/20')}>
-              <div className={cn('w-14 h-14 rounded-full flex flex-col items-center justify-center shrink-0 text-white font-black', SCORE_BG(grade.score))}>
-                <span className="text-lg leading-none">{grade.score}</span>
-                <span className="text-[9px] opacity-70">/100</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {grade.correct ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-red-400" />}
-                  <span className={cn('text-sm font-black', GRADE_COLOR(grade.grade))}>Grade: {grade.grade}</span>
+            {/* RIGHT: AI assistant + study tip */}
+            <div className="w-full lg:w-[280px] shrink-0 space-y-4">
+
+              {/* AI assistant card */}
+              <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-5 text-center">
+                {/* Robot avatar */}
+                <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                  <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+                    <rect x="10" y="12" width="36" height="30" rx="6" fill="#ff8a3d" opacity="0.92"/>
+                    <circle cx="20" cy="22" r="5" fill="#1a0033"/>
+                    <circle cx="36" cy="22" r="5" fill="#1a0033"/>
+                    <circle cx="21.5" cy="20.5" r="1.8" fill="white" opacity="0.85"/>
+                    <circle cx="37.5" cy="20.5" r="1.8" fill="white" opacity="0.85"/>
+                    <path d="M21 33 Q28 37 35 33" stroke="#1a0033" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8"/>
+                    <line x1="28" y1="12" x2="28" y2="6" stroke="#ffb68d" strokeWidth="2.5"/>
+                    <circle cx="28" cy="4" r="3" fill="#ffb68d"/>
+                    <rect x="4" y="20" width="6" height="10" rx="3" fill="#ff8a3d" opacity="0.7"/>
+                    <rect x="46" y="20" width="6" height="10" rx="3" fill="#ff8a3d" opacity="0.7"/>
+                  </svg>
                 </div>
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm, remarkMath]} 
-                  rehypePlugins={[rehypeKatex]}
-                  className="text-xs text-slate-400 leading-relaxed prose prose-invert prose-sm max-w-none"
-                >
-                  {normalizeReadableMath(grade.feedback || '')}
-                </ReactMarkdown>
+                <h3 className="text-[16px] font-black text-primary mb-2">Hi, I'm FlowAI!</h3>
+                <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                  {isSubmitted
+                    ? grade?.correct
+                      ? 'Great answer! Ready for the next one? 🎉'
+                      : 'Nice try! Read the feedback and you\'ll nail the next one. 💪'
+                    : 'Take your time to think! I\'m here to help you get those stars. Ready when you are!'}
+                </p>
+              </div>
+
+              {/* Study tip card */}
+              {grade?.tip ? (
+                <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-secondary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
+                    <p className="text-[10px] font-black text-secondary uppercase tracking-widest">AI Study Tip</p>
+                  </div>
+                  <p className="text-[13px] text-on-surface-variant leading-relaxed italic">
+                    &ldquo;{grade.tip}&rdquo;
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-secondary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
+                    <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Study Tip</p>
+                  </div>
+                  <p className="text-[13px] text-on-surface-variant leading-relaxed italic">{tip}</p>
+                </div>
+              )}
+
+              {/* Dot progress */}
+              <div className="flex flex-wrap gap-1.5 justify-center py-1">
+                {questions.map((_, i) => (
+                  <div key={i} className={cn('rounded-full transition-all duration-300',
+                    i === current ? 'w-3 h-3 bg-primary scale-110' :
+                    submitted[i] && grades[i]?.correct ? 'w-2.5 h-2.5 bg-green-400' :
+                    submitted[i] ? 'w-2.5 h-2.5 bg-error/60' :
+                    'w-2.5 h-2.5 bg-surface-container-highest'
+                  )} />
+                ))}
               </div>
             </div>
-            {grade.strengths?.length > 0 && (
-              <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-2xl p-4">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> What you got right</p>
-                <ul className="space-y-1">
-                  {grade.strengths.map((s, i) => (
-                    <li key={i} className="text-xs text-emerald-300 flex items-start gap-1.5">
-                      <span className="mt-0.5 shrink-0">•</span>
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} className="inline prose prose-invert prose-sm max-w-none text-emerald-300">{s}</ReactMarkdown>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {grade.improvements?.length > 0 && (
-              <div className="bg-orange-500/8 border border-orange-500/20 rounded-2xl p-4">
-                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> How to improve</p>
-                <ul className="space-y-1">
-                  {grade.improvements.map((s, i) => (
-                    <li key={i} className="text-xs text-orange-300 flex items-start gap-1.5">
-                      <span className="mt-0.5 shrink-0">•</span>
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} className="inline prose prose-invert prose-sm max-w-none text-orange-300">{s}</ReactMarkdown>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {grade.tip && (
-              <div className="bg-sky-500/8 border border-sky-500/20 rounded-2xl p-4 flex items-start gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-sky-300">
-                  <span className="font-black">Study tip:</span> 
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm, remarkMath]} 
-                    rehypePlugins={[rehypeKatex]}
-                    className="inline prose prose-invert prose-sm max-w-none text-sky-300 ml-1"
-                  >
-                    {normalizeReadableMath(grade.tip || '')}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )}
           </div>
-        )}
-      </div>
-
-      {isSubmitted && (
-        <div className="px-5 pb-6 pt-3 shrink-0 max-w-2xl mx-auto w-full">
-          <button onClick={handleNext}
-            className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2.5">
-            {current < questions.length - 1
-              ? <><span>Next Question</span><ChevronRight className="w-4 h-4" /></>
-              : <><span>See Results</span><Award className="w-4 h-4" /></>}
-          </button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
