@@ -35,7 +35,7 @@ const STUDY_TIPS = [
 export default function PracticePage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   useStudyTimer(true)
-  const [phase, setPhase] = useState<'loading' | 'test' | 'results'>('loading')
+  const [phase, setPhase] = useState<'loading' | 'test' | 'results' | 'error'>('loading')
   const [questions, setQuestions] = useState<Question[]>([])
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, string>>({})
@@ -50,7 +50,10 @@ export default function PracticePage({ params }: { params: { id: string } }) {
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
   })
 
+  const [retryCount, setRetryCount] = useState(0)
+
   useEffect(() => {
+    if (phase !== 'loading') return
     const load = async () => {
       try {
         const res = await libraryApi.getResource(resourceId)
@@ -58,12 +61,16 @@ export default function PracticePage({ params }: { params: { id: string } }) {
         if (existing?.length) { setQuestions(existing); setPhase('test'); return }
         const gen = await libraryApi.generatePracticeQuestions(resourceId, 'medium', 10)
         const qs = gen.data.questions || gen.data || []
-        if (!qs.length) throw new Error('No questions')
+        if (!qs.length) throw new Error('No questions returned')
         setQuestions(qs); setPhase('test')
-      } catch { toast.error('Failed to load practice questions.'); setPhase('loading') }
+      } catch (err: any) {
+        console.error('[Practice] Load error:', err?.response?.data || err?.message || err)
+        toast.error('Failed to load practice questions.')
+        setPhase('error')
+      }
     }
     load()
-  }, [resourceId])
+  }, [resourceId, retryCount])
 
   const handleSubmit = async () => {
     const answer = answers[current]?.trim()
@@ -110,6 +117,35 @@ export default function PracticePage({ params }: { params: { id: string } }) {
           {[0,1,2].map(i => (
             <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />
           ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Error ────────────────────────────────────────────────────────
+  if (phase === 'error') return (
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all">
+          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+        </Link>
+        <p className="text-[12px] font-bold text-on-surface-variant uppercase tracking-widest">Practice</p>
+        <div className="w-9" />
+      </header>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-6 text-center max-w-xs px-6">
+          <span className="material-symbols-outlined text-error text-[48px]">error</span>
+          <div>
+            <h2 className="text-[20px] font-bold text-on-surface">Couldn't load questions</h2>
+            <p className="text-on-surface-variant mt-2 text-[14px] leading-relaxed">
+              The AI couldn't generate questions right now. This usually means the study kit is still processing.
+            </p>
+          </div>
+          <button onClick={() => { setPhase('loading'); setRetryCount(c => c + 1) }}
+            className="w-full py-4 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[15px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all flex items-center justify-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">refresh</span> Try Again
+          </button>
         </div>
       </div>
     </div>
