@@ -413,7 +413,8 @@ Begin your response with [ and end with ]. No other text."""
                 {'type': 'text', 'text': system_prompt},
                 {'type': 'image_url', 'image_url': {'url': image_data}},
             ]
-            result = ai.chat_sync([{'role': 'user', 'content': content_parts}])
+            # Use 8192 tokens — timetables can have many sessions and 4096 truncates them
+            result = ai.chat_sync([{'role': 'user', 'content': content_parts}], max_tokens=8192)
 
             logger.info(f'[ParseTimetable] AI raw response (first 500): {result[:500] if result else "EMPTY"}')
 
@@ -424,30 +425,42 @@ Begin your response with [ and end with ]. No other text."""
             # Strip markdown code fences first
             clean = _re.sub(r'```(?:json)?\s*', '', result or '').strip()
 
+            raw_sessions = None
+
             # Try to find a JSON array anywhere in the response
             match = _re.search(r'\[[\s\S]*\]', clean)
-            if not match:
+            if match:
+                try:
+                    raw_sessions = _json.loads(match.group(0))
+                except _json.JSONDecodeError:
+                    # Response was truncated — salvage complete objects from the partial array
+                    partial = match.group(0)
+                    # Find all complete {...} objects inside the array
+                    objects = _re.findall(r'\{[^{}]*\}', partial)
+                    raw_sessions = []
+                    for obj_str in objects:
+                        try:
+                            raw_sessions.append(_json.loads(obj_str))
+                        except Exception:
+                            continue
+                    if not raw_sessions:
+                        logger.error(f'[ParseTimetable] JSON truncated and no complete objects salvaged. partial={partial[:300]}')
+                        return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
+                    logger.warning(f'[ParseTimetable] JSON was truncated — salvaged {len(raw_sessions)} complete sessions')
+
+            if raw_sessions is None:
                 # Maybe the AI returned a JSON object with a sessions key
                 obj_match = _re.search(r'\{[\s\S]*\}', clean)
                 if obj_match:
                     try:
                         obj = _json.loads(obj_match.group(0))
                         raw_sessions = obj.get('sessions', [])
-                        if raw_sessions:
-                            match = None  # handled below
-                        else:
-                            logger.error(f'[ParseTimetable] AI returned object but no sessions key. clean={clean[:300]}')
-                            return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
                     except Exception:
-                        logger.error(f'[ParseTimetable] No JSON array or object found. clean={clean[:300]}')
-                        return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
-                else:
-                    logger.error(f'[ParseTimetable] No JSON found in AI response. clean={clean[:300]}')
-                    return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
+                        pass
 
-            if match:
-                raw_sessions = _json.loads(match.group(0))
-            # else raw_sessions already set from the object path above
+            if not raw_sessions:
+                logger.error(f'[ParseTimetable] No parseable JSON in AI response. clean={clean[:300]}')
+                return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
 
             # Convert day_of_week + time strings → ISO start/end for the current week.
             # Use naive datetimes (no timezone suffix) so the frontend's date-part
