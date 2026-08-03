@@ -190,7 +190,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                             'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
                             'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
-                            'silenceDurationMs': 300,
+                            'silenceDurationMs': 250,
                         }
                     },
                 }

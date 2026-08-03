@@ -194,7 +194,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       if (micCtx.state === 'suspended') await micCtx.resume()
 
       const source = micCtx.createMediaStreamSource(stream)
-      const processor = micCtx.createScriptProcessor(2048, 1, 1)
+      const processor = micCtx.createScriptProcessor(1024, 1, 1)
       liveMicProcessorRef.current = processor
 
       processor.onaudioprocess = async (e) => {
