@@ -298,6 +298,11 @@ export const plannerApi = {
     api.patch(`/planner/deadlines/${id}/`, data),
   getSmartSchedule: () => api.get('/planner/smart-schedule/'),
   interpret: (prompt: string) => api.post('/planner/interpret/', { prompt }),
+  parseTimetable: (data: FormData) =>
+    api.post('/planner/parse-timetable/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  parseTimetableBase64: (image: string) =>
+    api.post('/planner/parse-timetable/', { image }),
+  sendReminders: () => api.post('/planner/send-reminders/', {}),
 }
 
 // Assignments

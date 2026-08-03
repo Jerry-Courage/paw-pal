@@ -324,3 +324,157 @@ class InterpretScheduleView(APIView):
                 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+import logging
+logger = logging.getLogger('nitemind')
+
+
+class ParseTimetableView(APIView):
+    """
+    POST /api/planner/parse-timetable/
+    Accepts an image or PDF of a class timetable and returns structured sessions.
+    Body: multipart/form-data with 'file' field, or JSON with 'image' (base64 data-url).
+    Returns: { sessions: [{title, session_type, start_time, end_time, subject}] }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [__import__('rest_framework').parsers.MultiPartParser,
+                      __import__('rest_framework').parsers.FormParser,
+                      __import__('rest_framework').parsers.JSONParser]
+
+    def post(self, request):
+        import base64
+
+        now = timezone.now()
+        image_data = request.data.get('image', '')
+        file_obj = request.FILES.get('file')
+
+        if file_obj:
+            ext = file_obj.name.lower().split('.')[-1] if '.' in file_obj.name else ''
+            if ext == 'pdf':
+                # Extract first page as image for vision
+                try:
+                    import fitz  # PyMuPDF
+                    pdf_bytes = file_obj.read()
+                    doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+                    page = doc[0]
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    img_bytes = pix.tobytes('png')
+                    b64 = base64.b64encode(img_bytes).decode('utf-8')
+                    image_data = f'data:image/png;base64,{b64}'
+                except Exception as e:
+                    logger.error(f'[ParseTimetable] PDF render error: {e}')
+                    return Response({'error': 'Could not read PDF. Try uploading an image instead.'}, status=400)
+            else:
+                raw = file_obj.read()
+                mime = file_obj.content_type or 'image/png'
+                b64 = base64.b64encode(raw).decode('utf-8')
+                image_data = f'data:{mime};base64,{b64}'
+
+        if not image_data:
+            return Response({'error': 'No image or file provided.'}, status=400)
+
+        system_prompt = f"""
+You are a timetable parser. Today is {now.strftime('%A, %B %d, %Y')}.
+Extract ALL class/study sessions from the timetable image.
+Return ONLY a raw JSON array of sessions. No markdown, no explanation.
+Each session must have:
+  "title": string (subject/class name),
+  "session_type": "class" | "study" | "exam" | "assignment",
+  "subject": string,
+  "day_of_week": 0-6 (0=Mon, 6=Sun),
+  "start_time": "HH:MM" (24-hour),
+  "end_time": "HH:MM" (24-hour),
+  "location": string or ""
+Start your response with [ and end with ].
+"""
+        ai = AIService()
+        try:
+            content_parts = [
+                {'type': 'text', 'text': system_prompt},
+                {'type': 'image_url', 'image_url': {'url': image_data}},
+            ]
+            result = ai.chat_sync([{'role': 'user', 'content': content_parts}])
+
+            # Parse the JSON
+            import re as _re
+            clean = _re.sub(r'```json\s*|\s*```', '', result).strip()
+            match = _re.search(r'\[[\s\S]*\]', clean)
+            if not match:
+                return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
+
+            import json as _json
+            raw_sessions = _json.loads(match.group(0))
+
+            # Convert day_of_week + time strings → ISO start/end for the current week
+            sessions = []
+            week_monday = now.date() - __import__('datetime').timedelta(days=now.weekday())
+            for s in raw_sessions:
+                try:
+                    dow = int(s.get('day_of_week', 0))
+                    session_date = week_monday + __import__('datetime').timedelta(days=dow)
+                    sh, sm = map(int, s['start_time'].split(':'))
+                    eh, em = map(int, s['end_time'].split(':'))
+                    from django.utils.timezone import make_aware
+                    import datetime as _dt
+                    start_dt = make_aware(_dt.datetime.combine(session_date, _dt.time(sh, sm)))
+                    end_dt = make_aware(_dt.datetime.combine(session_date, _dt.time(eh, em)))
+                    sessions.append({
+                        'title': s.get('title', 'Class'),
+                        'session_type': s.get('session_type', 'class'),
+                        'subject': s.get('subject', ''),
+                        'location': s.get('location', ''),
+                        'start_time': start_dt.isoformat(),
+                        'end_time': end_dt.isoformat(),
+                        'status': 'scheduled',
+                    })
+                except Exception as ex:
+                    logger.warning(f'[ParseTimetable] Skipped session: {ex}')
+                    continue
+
+            return Response({'sessions': sessions, 'count': len(sessions)})
+
+        except Exception as e:
+            logger.error(f'[ParseTimetable] Error: {e}')
+            return Response({'error': str(e)}, status=500)
+
+
+class SessionRemindersView(APIView):
+    """
+    POST /api/planner/send-reminders/
+    Sends push notifications for sessions starting within the next 20 minutes.
+    Safe to call frequently — deduplication is handled by a simple in-memory set
+    on the server side (stateless — each Render dyno is independent, good enough for now).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    _sent_ids: set = set()  # class-level dedup — reset on dyno restart
+
+    def post(self, request):
+        from users.push_service import PushService
+        now = timezone.now()
+        window_end = now + timedelta(minutes=20)
+
+        upcoming = StudySession.objects.filter(
+            user=request.user,
+            start_time__gte=now,
+            start_time__lte=window_end,
+            status='scheduled',
+        )
+
+        sent = 0
+        for session in upcoming:
+            if session.id in SessionRemindersView._sent_ids:
+                continue
+            minutes_away = max(0, int((session.start_time - now).total_seconds() / 60))
+            label = 'now' if minutes_away < 2 else f'in {minutes_away} min'
+            PushService.send_notification(
+                user=request.user,
+                title=f'⏰ {session.title} starts {label}!',
+                body=f'{session.session_type.title()} · {session.start_time.strftime("%I:%M %p")}',
+                link='/planner',
+            )
+            SessionRemindersView._sent_ids.add(session.id)
+            sent += 1
+
+        return Response({'sent': sent})

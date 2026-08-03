@@ -3,7 +3,8 @@ from .views import (
     StudySessionListCreateView, StudySessionDetailView,
     DeadlineListCreateView, DeadlineDetailView,
     SmartScheduleView, CompleteSessionView,
-    BulkCreateSessionsView, InterpretScheduleView
+    BulkCreateSessionsView, InterpretScheduleView,
+    ParseTimetableView, SessionRemindersView,
 )
 
 urlpatterns = [
@@ -15,4 +16,6 @@ urlpatterns = [
     path('deadlines/<int:pk>/', DeadlineDetailView.as_view()),
     path('smart-schedule/', SmartScheduleView.as_view()),
     path('interpret/', InterpretScheduleView.as_view()),
+    path('parse-timetable/', ParseTimetableView.as_view()),
+    path('send-reminders/', SessionRemindersView.as_view()),
 ]
