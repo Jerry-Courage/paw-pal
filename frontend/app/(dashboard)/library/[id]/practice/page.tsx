@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { libraryApi, aiApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -50,6 +50,17 @@ export default function PracticePage({ params }: { params: { id: string } }) {
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
   })
 
+  const qc = useQueryClient()
+
+  // Save XP when practice session ends (results phase)
+  const savePracticeXp = useCallback(async (answeredCount: number, avgScore: number) => {
+    try {
+      await libraryApi.completeStep(resourceId, 'practice', avgScore)
+      qc.invalidateQueries({ queryKey: ['progress', resourceId] })
+      qc.invalidateQueries({ queryKey: ['profile'] })
+    } catch { /* silent — XP will sync next time */ }
+  }, [resourceId, qc])
+
   const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
@@ -89,7 +100,16 @@ export default function PracticePage({ params }: { params: { id: string } }) {
 
   const handleNext = () => {
     if (current < questions.length - 1) { setCurrent(c => c + 1); setShowHint(false) }
-    else setPhase('results')
+    else {
+      // Save XP before showing results
+      const answered = Object.keys(submitted).length + 1 // +1 for current
+      const allGrades = { ...grades }
+      if (grades[current]) {
+        const avg = Math.round(Object.values(allGrades).reduce((s, g) => s + (g.score || 0), 0) / Object.values(allGrades).length)
+        savePracticeXp(answered, avg)
+      }
+      setPhase('results')
+    }
   }
 
   const handleRestart = () => {
@@ -263,7 +283,9 @@ export default function PracticePage({ params }: { params: { id: string } }) {
         </p>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
           <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-          <span className="text-[12px] font-black text-primary">{totalAnswered * 50} XP</span>
+          <span className="text-[12px] font-black text-primary">
+            {totalAnswered > 0 ? `+${Math.round(avgScore / 100 * 100)} XP` : '100 XP'}
+          </span>
         </div>
       </header>
 

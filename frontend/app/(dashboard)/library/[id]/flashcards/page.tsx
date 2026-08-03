@@ -90,8 +90,16 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
     if (card.id) reviewMutation.mutate({ id: card.id, quality: result === 'know' ? 4 : 1 })
     setFlipped(false)
     setTimeout(() => {
-      if (current + 1 >= cards.length) setPhase('results')
-      else setCurrent(c => c + 1)
+      if (current + 1 >= cards.length) {
+        // Save XP on completion — score = % known
+        const known = Object.values({ ...results, [card.id]: result }).filter(v => v === 'know').length
+        const score = cards.length ? Math.round((known / cards.length) * 100) : 0
+        libraryApi.completeStep(resourceId, 'flashcards', score).catch(() => {})
+        qc.invalidateQueries({ queryKey: ['profile'] })
+        setPhase('results')
+      } else {
+        setCurrent(c => c + 1)
+      }
     }, 150)
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { libraryApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -53,6 +53,7 @@ function normalizeQuestion(q: any): MCQQuestion | null {
 export default function QuizPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   useStudyTimer(true)
+  const qc = useQueryClient()
 
   const [phase, setPhase] = useState<'loading' | 'config' | 'quiz' | 'results'>('loading')
   const [questions, setQuestions] = useState<MCQQuestion[]>([])
@@ -127,7 +128,17 @@ export default function QuizPage({ params }: { params: { id: string } }) {
 
   const handleSelect = (opt: string) => { if (!revealed[current]) setSelected(s => ({ ...s, [current]: opt })) }
   const handleReveal = () => { if (selected[current]) setRevealed(r => ({ ...r, [current]: true })) }
-  const handleNext = () => { current < questions.length - 1 ? setCurrent(c => c + 1) : setPhase('results') }
+  const handleNext = () => {
+    if (current < questions.length - 1) {
+      setCurrent(c => c + 1)
+    } else {
+      // Save XP on completion
+      const score = questions.length ? Math.round((questions.filter((q, i) => selected[i] === q.correct_answer).length / questions.length) * 100) : 0
+      libraryApi.completeStep(resourceId, 'quiz', score).catch(() => {})
+      qc.invalidateQueries({ queryKey: ['profile'] })
+      setPhase('results')
+    }
+  }
   const handleRestart = () => { setCurrent(0); setSelected({}); setRevealed({}); setPhase('config') }
 
   const score = questions.filter((q, i) => selected[i] === q.correct_answer).length
