@@ -51,13 +51,19 @@ class ResourceSerializer(serializers.ModelSerializer):
         if not obj.file:
             return None
         try:
-            # Check file actually exists on disk first — Render's ephemeral
-            # filesystem wipes files on every redeploy
-            import os
-            if not os.path.exists(obj.file.path):
-                return None
+            # For local filesystem: check the file actually exists on disk
+            # (Render ephemeral disk wipes on redeploy). Skip this check for
+            # cloud storage backends (Cloudinary, S3) which don't use local paths.
+            from django.core.files.storage import default_storage
+            from django.conf import settings as django_settings
+            backend = getattr(django_settings, 'STORAGES', {}).get('default', {}).get('BACKEND', '')
+            is_local = 'FileSystemStorage' in backend or backend == ''
+            if is_local:
+                import os
+                if not os.path.exists(obj.file.path):
+                    return None
         except Exception:
-            return None
+            pass
         if request:
             from django.urls import reverse
             return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
@@ -107,11 +113,14 @@ class ResourceListSerializer(serializers.ModelSerializer):
         if not obj.file:
             return None
         try:
-            import os
-            if not os.path.exists(obj.file.path):
-                return None
+            from django.conf import settings as _s
+            backend = getattr(_s, 'STORAGES', {}).get('default', {}).get('BACKEND', '')
+            if 'FileSystemStorage' in backend or backend == '':
+                import os
+                if not os.path.exists(obj.file.path):
+                    return None
         except Exception:
-            return None
+            pass
         if request:
             from django.urls import reverse
             return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))

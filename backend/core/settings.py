@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'cloudinary_storage',
+    'cloudinary',
     # Local
     'users',
     'library',
@@ -118,10 +120,30 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# ─── STORAGE CONFIGURATION (S3 / Cloudflare R2) ──────────────────────────────
+# ─── STORAGE CONFIGURATION ───────────────────────────────────────────────────
 USE_S3 = os.getenv('USE_S3', 'False') == 'True'
+USE_CLOUDINARY = os.getenv('CLOUDINARY_URL', '') != ''
 
-if USE_S3:
+if USE_CLOUDINARY:
+    # Cloudinary — set CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
+    # on Render (or any env). django-cloudinary-storage picks it up automatically.
+    import cloudinary
+    cloudinary.config(
+        cloudinary_url=os.getenv('CLOUDINARY_URL'),
+        secure=True,
+    )
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    # Keep MEDIA_URL pointing to Cloudinary's delivery base
+    MEDIA_URL = '/media/'
+
+elif USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')

@@ -540,16 +540,15 @@ class ResourceFileView(APIView):
 
     def get(self, request, resource_id):
         resource = get_object_or_404(Resource, id=resource_id)
-        
+
         if not resource.file:
             return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            import base64, os
-            # Check file exists before trying to read
-            if not os.path.exists(resource.file.path):
-                return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
-            file_data = resource.file.read()
+            import base64
+            # Read via storage API — works for both local and cloud backends
+            with resource.file.open('rb') as f:
+                file_data = f.read()
             base64_data = base64.b64encode(file_data).decode('utf-8')
             return Response({
                 'data': base64_data,
