@@ -77,13 +77,48 @@ export default function PlannerPage() {
     const timer = setInterval(() => setAiStatusIdx(i => (i + 1) % AI_STATUSES.length), 1500)
     try {
       const res = await plannerApi.interpret(aiPrompt)
-      if (res.data?.session) {
-        await createMutation.mutateAsync(res.data.session)
+      // The interpret endpoint returns the session data directly (not nested under .session)
+      const parsed = res.data
+      if (!parsed || parsed.error) {
+        toast.error('Could not understand that. Try rephrasing.')
+        return
       }
-      toast.success('AI scheduled your session!')
+
+      // Compute end_time from start_time + duration_minutes
+      const start = new Date(parsed.start_time)
+      const durationMs = (parsed.duration_minutes || 60) * 60 * 1000
+      const end = new Date(start.getTime() + durationMs)
+
+      const sessionPayload = {
+        title: parsed.title || 'Study Session',
+        subject: parsed.subject || '',
+        session_type: parsed.session_type || 'study',
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        status: 'scheduled',
+      }
+
+      if (parsed.is_recurring && parsed.days?.length) {
+        // Recurring — use bulk-create endpoint
+        await plannerApi.createRecurring({
+          ...sessionPayload,
+          days: parsed.days,
+          recurrence_type: 'weekly',
+          // Recur for the next 8 weeks
+          end_date: new Date(start.getTime() + 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        })
+        toast.success(`Recurring session scheduled for ${parsed.days.length} day(s) a week!`)
+      } else {
+        await createMutation.mutateAsync(sessionPayload)
+        toast.success('Session scheduled! ✅')
+      }
+
       setAiPrompt('')
-    } catch { toast.error('AI scheduling failed. Try phrasing it differently.') }
-    finally { setAiLoading(false); clearInterval(timer) }
+      queryClient.invalidateQueries({ queryKey: ['planner-sessions'] })
+    } catch (err: any) {
+      console.error('[AI Schedule] Error:', err?.response?.data || err?.message)
+      toast.error('AI scheduling failed. Try phrasing it differently.')
+    } finally { setAiLoading(false); clearInterval(timer) }
   }
 
   const sessions = sessionsData?.results || []
