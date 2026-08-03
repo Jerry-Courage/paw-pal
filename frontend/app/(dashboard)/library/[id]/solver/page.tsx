@@ -23,7 +23,20 @@ interface MathSolution {
 
 type InputMode = 'type' | 'snap' | 'draw'
 
-// ── KaTeX renderer ────────────────────────────────────────────────
+// Strip LaTeX dollar signs for plain text display
+// Converts "$x^2$" → "x^2", "$$\frac{a}{b}$$" → "\frac{a}{b}"
+// Used in step labels and Why? explanations where we want readable prose
+function stripLatex(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(/\$\$([^$]+)\$\$/g, '$1')   // $$...$$ block
+    .replace(/\$([^$]+)\$/g, '$1')        // $...$ inline
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2')  // \frac{a}{b} → a/b
+    .replace(/\^(\{[^}]+\}|\S)/g, (_, p) => '^' + p.replace(/[{}]/g, ''))  // ^{2} → ^2
+    .replace(/\\[a-zA-Z]+/g, '')          // strip remaining latex commands
+    .replace(/[{}]/g, '')                 // strip stray braces
+    .trim()
+}
 function KatexDisplay({ formula, inline = false }: { formula: string; inline?: boolean }) {
   const [html, setHtml] = useState('')
   useEffect(() => {
@@ -139,7 +152,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
     if (whyText[idx] || whyLoading[idx]) return
     setWhyLoading(w => ({ ...w, [idx]: true }))
     try {
-      const q = `In simple terms, why do we "${step.label}" in this step? The formula is ${step.formula}. Give one short sentence.`
+      const q = `In simple terms, why do we "${stripLatex(step.label)}" in this step? Give one short sentence in plain English only. No dollar signs, no LaTeX, no backslashes.`
       const res = await aiApi.quickAsk(q, resourceId)
       setWhyText(w => ({ ...w, [idx]: res.data?.answer || res.data?.reply || 'This step simplifies the expression towards the solution.' }))
     } catch {
@@ -363,7 +376,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
                     {/* Card */}
                     <div className="flex-1 pb-2">
                       <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4 space-y-3">
-                        <p className="text-[14px] font-bold text-on-surface">{step.label}</p>
+                        <p className="text-[14px] font-bold text-on-surface">{stripLatex(step.label)}</p>
                         <div className="bg-surface-container rounded-[1rem] p-3 overflow-x-auto">
                           <KatexDisplay formula={step.formula} />
                         </div>
@@ -382,7 +395,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
                         ) : (
                           <div className="flex items-start gap-2 bg-secondary/8 border border-secondary/20 rounded-[1rem] px-3 py-2.5">
                             <span className="material-symbols-outlined text-secondary text-[14px] shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
-                            <p className="text-[12px] text-on-surface-variant leading-relaxed">{whyText[idx]}</p>
+                            <p className="text-[12px] text-on-surface-variant leading-relaxed">{stripLatex(whyText[idx])}</p>
                           </div>
                         )}
                       </div>

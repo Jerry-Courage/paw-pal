@@ -2719,11 +2719,12 @@ class AIService:
             "{\n"
             "  \"problem\": \"The mathematical statement (extracted from the image if present)\",\n"
             "  \"steps\": [\n"
-            "    {\"label\": \"Step Name\", \"formula\": \"LaTeX formula string\", \"explanation\": \"Logical transition intuition\"}\n"
+            "    {\"label\": \"Plain English step name — NO dollar signs or LaTeX\", \"formula\": \"LaTeX formula string\", \"explanation\": \"Plain English explanation — no LaTeX, no dollar signs\"}\n"
             "  ],\n"
             "  \"final_answer\": \"LaTeX final solution term\",\n"
-            "  \"key_theorems\": [\"Theorem|Rule Name\"]\n"
-            "}"
+            "  \"key_theorems\": [\"Theorem or Rule Name — plain text only\"]\n"
+            "}\n"
+            "IMPORTANT: 'label', 'explanation', and 'key_theorems' must be plain English with NO LaTeX, NO dollar signs, NO backslashes. Only 'formula' and 'final_answer' should contain LaTeX."
         )
         content_parts.append({"type": "text", "text": instructions})
         
