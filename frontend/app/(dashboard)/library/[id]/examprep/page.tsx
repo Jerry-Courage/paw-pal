@@ -705,34 +705,32 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
 
   // Setup phase
   if (phase === 'setup') return (
-    <div className="fixed inset-0 bg-[#0e0e10] flex flex-col overflow-hidden text-white select-none">
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden select-none">
 
-      {/* Ambient glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-orange-500/[0.04] blur-[160px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-violet-600/[0.05] blur-[160px] rounded-full pointer-events-none" />
-
-      {/* Header — back + label only */}
-      <div className="flex items-center gap-3 px-5 py-4 shrink-0 z-10">
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
         <Link href={`/library/${resourceId}`}
-          className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all active:scale-95">
-          <ArrowLeft className="w-4 h-4 text-slate-400" />
+          className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all">
+          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
         </Link>
-        <div className="min-w-0">
-          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Learning Techniques</p>
-          <h1 className="text-[13px] font-black text-white truncate">{resource?.title || '…'}</h1>
-        </div>
-      </div>
+        <p className="text-[12px] font-bold text-on-surface-variant uppercase tracking-widest">Learning Techniques</p>
+        <div className="w-9" />
+      </header>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 md:py-8 z-10 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-5 py-8 scrollbar-hide">
         <div className="max-w-2xl mx-auto space-y-8">
 
           {/* Hero heading */}
-          <div className="text-center space-y-2 pt-2">
-            <h2 className="text-[28px] md:text-[32px] font-black text-white tracking-tight">
+          <div className="text-center space-y-2">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+              <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+            </div>
+            <h2 className="text-[28px] md:text-[30px] font-bold text-on-surface tracking-tight">
               Choose Your Study Power!
             </h2>
-            <p className="text-slate-400 text-[14px] max-w-md mx-auto leading-relaxed">
+            <p className="text-on-surface-variant text-[14px] max-w-md mx-auto leading-relaxed">
               Pick a technique to help your brain store information like a supercomputer before we start our voice session.
             </p>
           </div>
@@ -741,86 +739,92 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             {/* Feynman */}
-            <div className={cn(
-              'relative flex flex-col items-center text-center p-6 rounded-[1.75rem] border-2 transition-all cursor-pointer',
-              technique === 'feynman'
-                ? 'border-orange-400/60 bg-[#1e1610]'
-                : 'border-white/8 bg-[#141414] hover:border-white/15'
-            )} onClick={() => setTechnique('feynman')}>
+            <button
+              onClick={() => startSession('feynman')}
+              disabled={isConnecting}
+              className={cn(
+                'relative flex flex-col items-center text-center p-6 rounded-[1.5rem] border-2 transition-all active:scale-[0.98] disabled:opacity-50',
+                technique === 'feynman'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-outline-variant/40 bg-surface-container-low hover:border-primary/40 hover:bg-surface-container'
+              )}
+              onMouseEnter={() => setTechnique('feynman')}
+            >
               {/* Avatar circle */}
-              <div className="w-20 h-20 rounded-full bg-[#2a1f10] border-2 border-orange-400/30 flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(251,146,60,0.15)]">
-                <Brain className="w-9 h-9 text-orange-400" />
+              <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-primary text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>record_voice_over</span>
               </div>
               {/* Title */}
-              <h3 className="text-[18px] font-black text-orange-400 mb-2">The Feynman Method</h3>
+              <h3 className="text-[17px] font-bold text-primary mb-2">The Feynman Method</h3>
               {/* Badge */}
-              <span className="px-3 py-1 rounded-full bg-white/8 border border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+              <span className="px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/40 text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-4">
                 Teach to Learn
               </span>
               {/* Description */}
-              <p className="text-[13px] text-slate-400 leading-relaxed mb-6">
+              <p className="text-[13px] text-on-surface-variant leading-relaxed mb-6">
                 Try explaining the topic in very simple words, like you&apos;re teaching a younger sibling!
               </p>
               {/* CTA */}
-              <button
-                onClick={(e) => { e.stopPropagation(); startSession('feynman') }}
-                disabled={isConnecting && technique === 'feynman'}
-                className="w-full py-3.5 rounded-2xl bg-orange-400 text-[#1a0a00] font-black text-[14px] hover:bg-orange-300 active:scale-[0.98] transition-all shadow-lg shadow-orange-500/20 disabled:opacity-60 flex items-center justify-center gap-2"
-              >
+              <div className="w-full py-3.5 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[14px] shadow-[0_4px_0_0_#763300] flex items-center justify-center gap-2">
                 {isConnecting && technique === 'feynman'
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Connecting…</>
-                  : 'Choose This'}
-              </button>
-            </div>
+                  ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Connecting…</>
+                  : <><span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>mic</span> Choose This</>
+                }
+              </div>
+            </button>
 
             {/* Active Recall */}
-            <div className={cn(
-              'relative flex flex-col items-center text-center p-6 rounded-[1.75rem] border-2 transition-all cursor-pointer',
-              technique === 'active_recall'
-                ? 'border-violet-400/60 bg-[#16132a]'
-                : 'border-white/8 bg-[#141414] hover:border-white/15'
-            )} onClick={() => setTechnique('active_recall')}>
+            <button
+              onClick={() => startSession('active_recall')}
+              disabled={isConnecting}
+              className={cn(
+                'relative flex flex-col items-center text-center p-6 rounded-[1.5rem] border-2 transition-all active:scale-[0.98] disabled:opacity-50',
+                technique === 'active_recall'
+                  ? 'border-secondary bg-secondary/5'
+                  : 'border-outline-variant/40 bg-surface-container-low hover:border-secondary/40 hover:bg-surface-container'
+              )}
+              onMouseEnter={() => setTechnique('active_recall')}
+            >
               {/* Avatar circle */}
-              <div className="w-20 h-20 rounded-full bg-[#1c1830] border-2 border-violet-400/30 flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(167,139,250,0.15)]">
-                <Zap className="w-9 h-9 text-violet-400" />
+              <div className="w-20 h-20 rounded-full bg-secondary/10 border-2 border-secondary/30 flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-secondary text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
               </div>
               {/* Title */}
-              <h3 className="text-[18px] font-black text-violet-400 mb-2">Active Recall</h3>
+              <h3 className="text-[17px] font-bold text-secondary mb-2">Active Recall</h3>
               {/* Badge */}
-              <span className="px-3 py-1 rounded-full bg-white/8 border border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+              <span className="px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/40 text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-4">
                 Test Knowledge
               </span>
               {/* Description */}
-              <p className="text-[13px] text-slate-400 leading-relaxed mb-6">
+              <p className="text-[13px] text-on-surface-variant leading-relaxed mb-6">
                 Close your eyes and try to remember the main facts without looking at your notes.
               </p>
               {/* CTA */}
-              <button
-                onClick={(e) => { e.stopPropagation(); startSession('active_recall') }}
-                disabled={isConnecting && technique === 'active_recall'}
-                className="w-full py-3.5 rounded-2xl bg-violet-400 text-[#0e0820] font-black text-[14px] hover:bg-violet-300 active:scale-[0.98] transition-all shadow-lg shadow-violet-500/20 disabled:opacity-60 flex items-center justify-center gap-2"
-              >
+              <div className="w-full py-3.5 rounded-[1rem] bg-secondary-container text-on-secondary-container font-bold text-[14px] flex items-center justify-center gap-2">
                 {isConnecting && technique === 'active_recall'
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Connecting…</>
-                  : 'Choose This'}
-              </button>
-            </div>
+                  ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Connecting…</>
+                  : <><span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span> Choose This</>
+                }
+              </div>
+            </button>
 
           </div>
 
-          {/* Voice picker — compact row */}
-          <div className="space-y-2.5">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">AI Voice Companion</p>
+          {/* Voice picker */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-black text-on-surface-variant uppercase tracking-widest text-center">
+              AI Voice Companion
+            </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button onClick={() => setVoice('')}
                 className={cn('py-1.5 px-4 rounded-full border text-[12px] font-bold transition-all',
-                  voice === '' ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/8 text-slate-500 hover:border-white/15')}>
+                  voice === '' ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-primary/30')}>
                 Auto ✨
               </button>
               {GEMINI_VOICES.map(v => (
                 <button key={v.id} onClick={() => setVoice(v.id)}
                   className={cn('py-1.5 px-4 rounded-full border text-[12px] font-bold transition-all',
-                    voice === v.id ? 'border-orange-500 bg-orange-500/15 text-orange-400' : 'border-white/8 text-slate-500 hover:border-white/15')}>
+                    voice === v.id ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-primary/30')}>
                   {v.label}
                 </button>
               ))}
@@ -828,13 +832,13 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           </div>
 
           {/* What's This? info strip */}
-          <div className="flex items-start gap-3 p-4 rounded-[1.25rem] border border-orange-500/20 bg-orange-500/[0.04]">
-            <div className="w-7 h-7 rounded-full border border-orange-500/30 flex items-center justify-center shrink-0 mt-0.5">
-              <span className="text-orange-400 text-[13px] font-black">?</span>
+          <div className="flex items-start gap-3 p-4 rounded-[1.25rem] border border-primary/20 bg-primary/5">
+            <div className="w-7 h-7 rounded-full border border-primary/30 flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-primary text-[13px] font-black">?</span>
             </div>
             <div>
-              <p className="text-[11px] font-black text-orange-400 uppercase tracking-widest mb-1">What&apos;s This?</p>
-              <p className="text-[13px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] font-black text-primary uppercase tracking-widest mb-1">What&apos;s This?</p>
+              <p className="text-[13px] text-on-surface-variant leading-relaxed">
                 Both methods are proven to make memories &quot;stick&quot; in your brain much longer than just reading. FlowState will guide you through either choice step-by-step!
               </p>
             </div>
