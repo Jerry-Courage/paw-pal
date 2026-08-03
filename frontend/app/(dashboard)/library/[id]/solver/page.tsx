@@ -23,6 +23,15 @@ interface MathSolution {
 
 type InputMode = 'type' | 'snap' | 'draw'
 
+// Detect prose text vs real math formula — if it's a sentence, don't try to KaTeX render it
+function isProseText(s: string): boolean {
+  if (!s) return false
+  const stripped = s.replace(/\$[^$]+\$/g, 'X').trim()
+  const wordCount = stripped.split(/\s+/).filter(w => /[a-zA-Z]{2,}/.test(w)).length
+  const hasMathStructure = /[=+\-*/^\\{}]|\\frac|\\sqrt|\\int/.test(stripped)
+  return wordCount >= 4 && !hasMathStructure
+}
+
 // Strip LaTeX dollar signs for plain text display
 // Converts "$x^2$" → "x^2", "$$\frac{a}{b}$$" → "\frac{a}{b}"
 // Used in step labels and Why? explanations where we want readable prose
@@ -350,7 +359,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
                     )}
                   </div>
                   <p className="text-[15px] font-bold text-on-surface leading-snug max-w-sm">
-                    {solution.problem || problem}
+                    {stripLatex(solution.problem || problem)}
                   </p>
                 </div>
                 <button onClick={reset}
@@ -378,7 +387,9 @@ export default function SolverPage({ params }: { params: { id: string } }) {
                       <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4 space-y-3">
                         <p className="text-[14px] font-bold text-on-surface">{stripLatex(step.label)}</p>
                         <div className="bg-surface-container rounded-[1rem] p-3 overflow-x-auto">
-                          <KatexDisplay formula={step.formula} />
+                          {isProseText(step.formula)
+                            ? <p className="text-[13px] text-on-surface-variant leading-relaxed">{stripLatex(step.formula)}</p>
+                            : <KatexDisplay formula={step.formula} />}
                         </div>
 
                         {/* Why button */}
