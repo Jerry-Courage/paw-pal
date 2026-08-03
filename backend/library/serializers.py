@@ -48,8 +48,17 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         request = self.context.get('request')
-        if obj.file and request:
-            # Return our cloaked API endpoint instead of direct media URL
+        if not obj.file:
+            return None
+        try:
+            # Check file actually exists on disk first — Render's ephemeral
+            # filesystem wipes files on every redeploy
+            import os
+            if not os.path.exists(obj.file.path):
+                return None
+        except Exception:
+            return None
+        if request:
             from django.urls import reverse
             return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
         return None
@@ -95,7 +104,15 @@ class ResourceListSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         request = self.context.get('request')
-        if obj.file and request:
+        if not obj.file:
+            return None
+        try:
+            import os
+            if not os.path.exists(obj.file.path):
+                return None
+        except Exception:
+            return None
+        if request:
             from django.urls import reverse
             return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
         return None

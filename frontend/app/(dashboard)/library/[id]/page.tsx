@@ -274,6 +274,14 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
               <div className="h-[480px] overflow-hidden">
                 {resource.resource_type === 'pdf' && resource.file_url ? (
                   <PDFViewer fileUrl={resource.file_url} title={resource.title} />
+                ) : resource.resource_type === 'pdf' && !resource.file_url ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+                    <span className="material-symbols-outlined text-on-surface-variant/30 text-[48px]">cloud_off</span>
+                    <p className="text-[14px] font-bold text-on-surface-variant">File not available</p>
+                    <p className="text-[12px] text-on-surface-variant/60 max-w-xs leading-relaxed">
+                      The file was cleared after a server restart. Your AI study kit is still intact — all tools work normally.
+                    </p>
+                  </div>
                 ) : resource.resource_type === 'video' && resource.url ? (
                   <iframe
                     src={`https://www.youtube.com/embed/${

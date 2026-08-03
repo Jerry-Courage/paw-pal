@@ -33,6 +33,9 @@ export default function PDFViewer({ fileUrl, title }: Props) {
       try {
         const res = await fetch(fileUrl)
         if (!res.ok) {
+          if (res.status === 404) {
+            throw new Error('File not available — it may have been cleared after a server restart. Please re-upload your document.')
+          }
           throw new Error(`Failed to fetch PDF: ${res.status} ${res.statusText}`)
         }
         
