@@ -59,7 +59,7 @@ export default function ExpandableMobileHUD({
     { id: 'podcast',    icon: Radio,      label: 'Podcast',     desc: 'AI conversation',color: 'bg-pink-500',   href: resourceId ? `/library/${resourceId}/podcast`    : undefined },
     { id: 'mindmap',    icon: GitGraph,   label: 'Mind Map',    desc: 'Visual flow',    color: 'bg-indigo-500', href: resourceId ? `/library/${resourceId}/mindmap`    : undefined },
     { id: 'practice',   icon: Wand2,      label: 'Written Test',desc: 'AI grading',     color: 'bg-emerald-500',href: resourceId ? `/library/${resourceId}/practice`   : undefined },
-    { id: 'examprep',   icon: Brain,      label: 'Exam Prep',   desc: 'Feynman + exam', color: 'bg-violet-500', href: resourceId ? `/library/${resourceId}/examprep`   : undefined },
+    { id: 'examprep',   icon: Brain,      label: 'Learn Techniques', desc: 'Feynman + recall', color: 'bg-violet-500', href: resourceId ? `/library/${resourceId}/examprep`   : undefined },
     { id: 'math',       icon: Calculator, label: 'Math Solver', desc: 'Step-by-step',   color: 'bg-teal-500',   href: resourceId ? `/library/${resourceId}/solver`     : undefined },
     { id: 'music',      icon: Music2,     label: 'Focus Music', desc: 'Study audio',    color: 'bg-purple-500' },
   ]

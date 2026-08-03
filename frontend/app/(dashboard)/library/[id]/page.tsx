@@ -63,11 +63,11 @@ const STUDY_TOOLS = [
   },
   {
     id: 'examprep',
-    name: 'Exam Prep',
-    desc: 'Focus on likely exam questions.',
-    icon: 'school',
-    color: 'text-primary',
-    bg: 'bg-primary/15',
+    name: 'Learning Techniques',
+    desc: 'Feynman, Active Recall & voice AI.',
+    icon: 'psychology',
+    color: 'text-violet-400',
+    bg: 'bg-violet-400/15',
     href: (id: number) => `/library/${id}/examprep`,
   },
   {
