@@ -2344,7 +2344,7 @@ class AIService:
         has_images = False
         for source in assignment.sources.filter(file_type='image'):
             try:
-                with open(source.file.path, "rb") as image_file:
+                with source.file.open("rb") as image_file:
                     encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
                     mime_type = "image/jpeg" if source.file.name.endswith(('.jpg', '.jpeg')) else "image/png"
                     content_parts.append({

@@ -363,17 +363,19 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             if assignment.file:
                 try:
                     from library.pdf_extractor import extract_pdf_text
-                    text = extract_pdf_text(assignment.file.path)
+                    with assignment.file.open('rb') as f:
+                        text = extract_pdf_text(file_bytes=f.read())
                     if text:
                         extracted_texts.append(text[:4000])
                 except Exception as e:
                     logger.warning(f'Primary PDF extraction failed: {e}')
-            
+
             # Also extract from any additional PDF sources
             for source in assignment.sources.filter(file_type='pdf'):
                 try:
                     from library.pdf_extractor import extract_pdf_text
-                    text = extract_pdf_text(source.file.path)
+                    with source.file.open('rb') as f:
+                        text = extract_pdf_text(file_bytes=f.read())
                     if text:
                         extracted_texts.append(text[:2000])
                 except Exception as e:

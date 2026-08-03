@@ -154,7 +154,7 @@ class WorkspaceMessageView(APIView):
         # 4. Neural Transcription (Background Transcription)
         if audio_file:
             ai = AIService()
-            transcript = ai.transcribe_audio(msg.audio_file.path)
+            transcript = ai.transcribe_audio(msg.audio_file)  # pass file object, not .path
             if transcript:
                 msg.content = transcript
                 msg.save()
