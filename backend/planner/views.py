@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions, status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
@@ -359,9 +360,7 @@ class ParseTimetableView(APIView):
     Returns: { sessions: [{title, session_type, start_time, end_time, subject}] }
     """
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [__import__('rest_framework').parsers.MultiPartParser,
-                      __import__('rest_framework').parsers.FormParser,
-                      __import__('rest_framework').parsers.JSONParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
         import base64
@@ -373,7 +372,6 @@ class ParseTimetableView(APIView):
         if file_obj:
             ext = file_obj.name.lower().split('.')[-1] if '.' in file_obj.name else ''
             if ext == 'pdf':
-                # Extract first page as image for vision
                 try:
                     import fitz  # PyMuPDF
                     pdf_bytes = file_obj.read()
@@ -393,6 +391,7 @@ class ParseTimetableView(APIView):
                 image_data = f'data:{mime};base64,{b64}'
 
         if not image_data:
+            logger.error(f'[ParseTimetable] No image data. FILES={list(request.FILES.keys())} DATA_KEYS={list(request.data.keys())}')
             return Response({'error': 'No image or file provided.'}, status=400)
 
         system_prompt = f"""
@@ -427,26 +426,29 @@ Start your response with [ and end with ].
             import json as _json
             raw_sessions = _json.loads(match.group(0))
 
-            # Convert day_of_week + time strings → ISO start/end for the current week
+            # Convert day_of_week + time strings → ISO start/end for the current week.
+            # Use naive datetimes (no timezone suffix) so the frontend's date-part
+            # matching works correctly regardless of the user's local timezone.
             sessions = []
-            week_monday = now.date() - __import__('datetime').timedelta(days=now.weekday())
+            import datetime as _dt
+            week_monday = now.date() - _dt.timedelta(days=now.weekday())
             for s in raw_sessions:
                 try:
                     dow = int(s.get('day_of_week', 0))
-                    session_date = week_monday + __import__('datetime').timedelta(days=dow)
+                    session_date = week_monday + _dt.timedelta(days=dow)
                     sh, sm = map(int, s['start_time'].split(':'))
                     eh, em = map(int, s['end_time'].split(':'))
-                    from django.utils.timezone import make_aware
-                    import datetime as _dt
-                    start_dt = make_aware(_dt.datetime.combine(session_date, _dt.time(sh, sm)))
-                    end_dt = make_aware(_dt.datetime.combine(session_date, _dt.time(eh, em)))
+                    # Naive ISO string — no timezone suffix — keeps the calendar
+                    # date stable on the frontend regardless of the user's offset.
+                    start_str = f"{session_date}T{sh:02d}:{sm:02d}:00"
+                    end_str   = f"{session_date}T{eh:02d}:{em:02d}:00"
                     sessions.append({
                         'title': s.get('title', 'Class'),
                         'session_type': s.get('session_type', 'class'),
                         'subject': s.get('subject', ''),
                         'location': s.get('location', ''),
-                        'start_time': start_dt.isoformat(),
-                        'end_time': end_dt.isoformat(),
+                        'start_time': start_str,
+                        'end_time': end_str,
                         'status': 'scheduled',
                     })
                 except Exception as ex:
