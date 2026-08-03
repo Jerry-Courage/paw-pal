@@ -1,18 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { libraryApi } from '@/lib/api'
-import {
-  ArrowLeft, Calculator, Sparkles, Brain, CheckCircle2,
-  Loader2, Info, RotateCcw, Camera, Paperclip, X
-} from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { libraryApi, aiApi, authApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import ReactMarkdown from 'react-markdown'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 
@@ -21,7 +14,6 @@ interface MathStep {
   formula: string
   explanation: string
 }
-
 interface MathSolution {
   problem: string
   steps: MathStep[]
@@ -29,224 +21,861 @@ interface MathSolution {
   key_theorems: string[]
 }
 
-// Safe KaTeX renderer — falls back to plain text if katex isn't available
-function KatexDisplay({ formula }: { formula: string }) {
+type InputMode = 'type' | 'snap' | 'draw'
+
+// ── KaTeX renderer ────────────────────────────────────────────────
+function KatexDisplay({ formula, inline = false }: { formula: string; inline?: boolean }) {
   const [html, setHtml] = useState('')
   useEffect(() => {
-    if (!formula) {
-      setHtml('')
-      return
-    }
-    
-    // Normalize formula to prevent parser crashes
+    if (!formula) { setHtml(''); return }
     let clean = formula.trim()
-    if (clean.startsWith('```latex')) {
-      clean = clean.replace(/^```latex/, '').replace(/```$/, '').trim()
-    } else if (clean.startsWith('```')) {
-      clean = clean.replace(/^```/, '').replace(/```$/, '').trim()
-    }
-    clean = clean.replace(/^\$\$?/, '').replace(/\$\$?$/, '').trim()
-
+      .replace(/^```latex/, '').replace(/```$/, '')
+      .replace(/^```/, '').replace(/```$/, '')
+      .replace(/^\$\$?/, '').replace(/\$\$?$/, '').trim()
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const katex = require('katex')
-      setHtml(katex.renderToString(clean, { displayMode: true, throwOnError: false, trust: true }))
+      setHtml(katex.renderToString(clean, { displayMode: !inline, throwOnError: false, trust: true }))
     } catch {
-      setHtml(`<span class="font-mono text-orange-400">${clean}</span>`)
+      setHtml(`<span class="font-mono text-primary">${clean}</span>`)
     }
-  }, [formula])
+  }, [formula, inline])
   return <div dangerouslySetInnerHTML={{ __html: html }} className="overflow-x-auto" />
 }
 
 export default function SolverPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   useStudyTimer(true)
+  const qc = useQueryClient()
+
+  // ── State ────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<InputMode>('type')
   const [problem, setProblem] = useState('')
   const [image, setImage] = useState<string | null>(null)
   const [solving, setSolving] = useState(false)
   const [solution, setSolution] = useState<MathSolution | null>(null)
+  const [xpAwarded, setXpAwarded] = useState(false)
+  const [whyLoading, setWhyLoading] = useState<Record<number, boolean>>({})
+  const [whyText, setWhyText] = useState<Record<number, string>>({})
+  const [similarProblems, setSimilarProblems] = useState<string[]>([])
+  const [loadingSimilar, setLoadingSimilar] = useState(false)
+
+  // Draw mode
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [lastPos, setLastPos] = useState({ x: 0, y: 0 })
+  const [hasDrawing, setHasDrawing] = useState(false)
 
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
   })
 
+  // ── Canvas helpers ───────────────────────────────────────────────
+  const getCanvasPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    return { x: clientX - rect.left, y: clientY - rect.top }
+  }
+
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    const canvas = canvasRef.current; if (!canvas) return
+    const pos = getCanvasPos(e, canvas)
+    setIsDrawing(true); setLastPos(pos)
+  }
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    if (!isDrawing) return
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d'); if (!ctx) return
+    const pos = getCanvasPos(e, canvas)
+    ctx.beginPath(); ctx.moveTo(lastPos.x, lastPos.y)
+    ctx.lineTo(pos.x, pos.y)
+    ctx.strokeStyle = '#ffb68d'; ctx.lineWidth = 3; ctx.lineCap = 'round'
+    ctx.stroke(); setLastPos(pos); setHasDrawing(true)
+  }
+
+  const stopDraw = () => setIsDrawing(false)
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d'); if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setHasDrawing(false)
+  }
+
+  const getCanvasImage = (): string | null => {
+    const canvas = canvasRef.current; if (!canvas || !hasDrawing) return null
+    return canvas.toDataURL('image/png')
+  }
+
+  // ── Image upload ─────────────────────────────────────────────────
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be under 5MB')
-      return
-    }
-    
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return }
     const reader = new FileReader()
-    reader.onloadend = () => {
-      setImage(reader.result as string)
-      toast.success('Math image attached!')
-    }
+    reader.onloadend = () => { setImage(reader.result as string); toast.success('Photo attached!') }
     reader.readAsDataURL(file)
   }
 
+  // ── Solve ────────────────────────────────────────────────────────
   const handleSolve = async () => {
-    if (!problem.trim() && !image) return
-    setSolving(true)
+    const imgData = mode === 'draw' ? getCanvasImage() : image
+    if (!problem.trim() && !imgData) return
+    setSolving(true); setWhyText({}); setWhyLoading({}); setSimilarProblems([])
     try {
-      const res = await libraryApi.solveMath(resourceId, problem, image || undefined)
+      const res = await libraryApi.solveMath(resourceId, problem, imgData || undefined)
       setSolution(res.data)
+      // Award 20 XP once per problem
+      if (!xpAwarded) {
+        authApi.awardXp(20, `AI Solver: ${problem.slice(0, 60) || 'Photo problem'}`, resourceId).catch(() => {})
+        qc.invalidateQueries({ queryKey: ['profile'] })
+        setXpAwarded(true)
+        toast.success('+20 XP earned! 🎉', { duration: 2000 })
+      }
     } catch {
-      toast.error('Could not solve this problem. Try simplifying it.')
-    } finally {
-      setSolving(false)
-    }
+      toast.error('Could not solve. Try rephrasing or using a clearer photo.')
+    } finally { setSolving(false) }
   }
 
+  // ── Why? ─────────────────────────────────────────────────────────
+  const handleWhy = async (idx: number, step: MathStep) => {
+    if (whyText[idx] || whyLoading[idx]) return
+    setWhyLoading(w => ({ ...w, [idx]: true }))
+    try {
+      const q = `In simple terms, why do we "${step.label}" in this step? The formula is ${step.formula}. Give one short sentence.`
+      const res = await aiApi.quickAsk(q, resourceId)
+      setWhyText(w => ({ ...w, [idx]: res.data?.answer || res.data?.reply || 'This step simplifies the expression towards the solution.' }))
+    } catch {
+      setWhyText(w => ({ ...w, [idx]: 'This step brings us closer to isolating the unknown.' }))
+    } finally { setWhyLoading(w => ({ ...w, [idx]: false })) }
+  }
+
+  // ── Similar Problems ─────────────────────────────────────────────
+  const handleSimilar = async () => {
+    if (!solution || loadingSimilar) return
+    setLoadingSimilar(true)
+    try {
+      const q = `Generate 3 similar practice problems to: "${solution.problem}". Return ONLY a JSON array of 3 strings, each a problem statement.`
+      const res = await aiApi.quickAsk(q, resourceId)
+      const raw = res.data?.answer || res.data?.reply || '[]'
+      // Try to parse JSON array
+      const match = raw.match(/\[[\s\S]*\]/)
+      if (match) {
+        const arr = JSON.parse(match[0])
+        if (Array.isArray(arr)) { setSimilarProblems(arr.slice(0, 3)); return }
+      }
+      // Fallback: split by newlines
+      const lines = raw.split('\n').filter((l: string) => l.trim().length > 5).slice(0, 3)
+      setSimilarProblems(lines)
+    } catch {
+      toast.error('Could not generate similar problems.')
+    } finally { setLoadingSimilar(false) }
+  }
+
+  const reset = () => {
+    setSolution(null); setProblem(''); setImage(null)
+    setWhyText({}); setWhyLoading({}); setSimilarProblems([])
+    setXpAwarded(false); clearCanvas()
+  }
+
+  // ── RENDER ───────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 [top:var(--nav-height)] bg-[#0d0d0d] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
-        <Link href={`/library/${resourceId}`} className="p-2 rounded-xl bg-white/5 hover:bg-white/8 transition-all">
-          <ArrowLeft className="w-4 h-4 text-slate-400" />
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-[13px] font-bold">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          Back
         </Link>
-        <div>
-          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Math Solver</p>
-          <h1 className="text-xs font-black text-slate-400 truncate max-w-[200px]">{resource?.title}</h1>
+        <div className="text-center">
+          <h1 className="text-[15px] font-black text-on-surface">AI Problem Solver</h1>
+          <p className="text-[11px] text-on-surface-variant">Step-by-step solutions</p>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
+          <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+          <span className="text-[12px] font-black text-primary">+20 XP</span>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="max-w-2xl mx-auto px-5 py-6 space-y-6">
+
+          {!solution ? (
+            <>
+              {/* Page title */}
+              <div>
+                <h2 className="text-[26px] font-black text-on-surface tracking-tight">AI Problem Solver</h2>
+                <p className="text-on-surface-variant text-[14px] mt-1">
+                  Drop your math or science question here, and I'll help you figure it out step-by-step!
+                </p>
+              </div>
+
+              {/* Mode picker */}
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { id: 'type', icon: 'keyboard', label: 'Type It',     desc: 'Write your question' },
+                  { id: 'snap', icon: 'photo_camera', label: 'Snap Photo', desc: 'Take a picture of the page' },
+                  { id: 'draw', icon: 'draw',        label: 'Draw It',    desc: 'Use your digital pen' },
+                ] as const).map(m => (
+                  <button key={m.id} onClick={() => setMode(m.id as InputMode)}
+                    className={cn('flex flex-col items-center text-center p-4 rounded-[1.5rem] border-2 transition-all',
+                      mode === m.id
+                        ? 'border-primary bg-primary/8'
+                        : 'border-outline-variant/40 bg-surface-container-low hover:border-primary/40')}>
+                    <span className="material-symbols-outlined text-[28px] mb-2"
+                      style={{ fontVariationSettings: "'FILL' 1", color: mode === m.id ? 'var(--primary)' : 'var(--on-surface-variant)' }}>
+                      {m.icon}
+                    </span>
+                    <p className={cn('text-[13px] font-black', mode === m.id ? 'text-primary' : 'text-on-surface')}>{m.label}</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">{m.desc}</p>
+                  </button>
+                ))}
+              </div>
+
+              {/* Type mode */}
+              {mode === 'type' && (
+                <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4 space-y-3 focus-within:border-primary/40 transition-all">
+                  <textarea autoFocus value={problem} onChange={e => setProblem(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSolve() }}
+                    placeholder="Type your problem… e.g. Solve 3x + 5 = 20"
+                    rows={5}
+                    className="w-full bg-transparent text-on-surface text-[15px] leading-relaxed resize-none focus:outline-none placeholder:text-on-surface-variant/40" />
+                  <p className="text-[11px] text-on-surface-variant/50 text-right">Ctrl/⌘ + Enter to solve</p>
+                </div>
+              )}
+
+              {/* Snap mode */}
+              {mode === 'snap' && (
+                <div className="space-y-3">
+                  {image ? (
+                    <div className="relative rounded-[1.5rem] overflow-hidden border border-outline-variant/30">
+                      <img src={image} alt="Problem" className="w-full max-h-64 object-contain bg-surface-container" />
+                      <div className="absolute top-3 right-3 flex gap-2">
+                        <button onClick={() => setImage(null)}
+                          className="p-2 rounded-full bg-error-container text-on-error-container hover:brightness-110 transition-all">
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                      </div>
+                      <div className="absolute bottom-3 left-3 flex items-center gap-2 px-3 py-1.5 bg-surface-container/90 backdrop-blur rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                        <span className="text-[11px] font-black text-on-surface">Solving Now</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <label htmlFor="solver-img"
+                      className="flex flex-col items-center justify-center gap-4 p-10 rounded-[1.5rem] border-2 border-dashed border-outline-variant/50 bg-surface-container-low cursor-pointer hover:border-primary/40 hover:bg-primary/3 transition-all">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-primary text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>photo_camera</span>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[15px] font-bold text-on-surface">Tap to upload or take photo</p>
+                        <p className="text-[12px] text-on-surface-variant mt-1">JPG, PNG up to 5MB</p>
+                      </div>
+                    </label>
+                  )}
+                  <input id="solver-img" type="file" accept="image/*" capture="environment"
+                    className="hidden" onChange={handleImageChange} />
+                  {image && (
+                    <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.25rem] p-3">
+                      <textarea value={problem} onChange={e => setProblem(e.target.value)}
+                        placeholder="Optional: add any extra context or specific question about the image…"
+                        rows={2}
+                        className="w-full bg-transparent text-on-surface text-[13px] leading-relaxed resize-none focus:outline-none placeholder:text-on-surface-variant/40" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Draw mode */}
+              {mode === 'draw' && (
+                <div className="space-y-3">
+                  <div className="relative rounded-[1.5rem] overflow-hidden border border-outline-variant/30 bg-surface-container-low">
+                    <canvas ref={canvasRef} width={600} height={280}
+                      className="w-full cursor-crosshair touch-none"
+                      style={{ background: '#1a1c1e' }}
+                      onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+                      onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
+                    <div className="absolute top-3 right-3 flex gap-2">
+                      <button onClick={clearCanvas}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/40 text-[11px] font-bold text-on-surface-variant hover:text-on-surface transition-all">
+                        <span className="material-symbols-outlined text-[14px]">refresh</span> Clear
+                      </button>
+                    </div>
+                    {!hasDrawing && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <p className="text-on-surface-variant/30 text-[13px] font-medium">Draw your equation here…</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.25rem] p-3">
+                    <textarea value={problem} onChange={e => setProblem(e.target.value)}
+                      placeholder="Optional: describe what you drew for better accuracy…"
+                      rows={2}
+                      className="w-full bg-transparent text-on-surface text-[13px] leading-relaxed resize-none focus:outline-none placeholder:text-on-surface-variant/40" />
+                  </div>
+                </div>
+              )}
+
+              {/* Solve button */}
+              <button onClick={handleSolve}
+                disabled={solving || (mode === 'type' && !problem.trim()) || (mode === 'snap' && !image) || (mode === 'draw' && !hasDrawing && !problem.trim())}
+                className="w-full py-4 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[16px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2.5">
+                {solving
+                  ? <><span className="material-symbols-outlined text-[18px] animate-spin">autorenew</span> Solving…</>
+                  : <><span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>calculate</span> Solve Step-by-Step</>}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* ── Solution view ── */}
+
+              {/* Re-scan / header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-black text-green-400 uppercase tracking-widest">
+                      Solved
+                    </span>
+                    {resource?.subject && (
+                      <span className="text-[12px] text-on-surface-variant">{resource.subject}</span>
+                    )}
+                  </div>
+                  <p className="text-[15px] font-bold text-on-surface leading-snug max-w-sm">
+                    {solution.problem || problem}
+                  </p>
+                </div>
+                <button onClick={reset}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-[1rem] bg-surface-container-high border border-outline-variant/30 text-[12px] font-bold text-on-surface-variant hover:text-on-surface transition-all">
+                  <span className="material-symbols-outlined text-[16px]">refresh</span> Re-scan
+                </button>
+              </div>
+
+              {/* Steps */}
+              <div className="space-y-4">
+                {solution.steps?.map((step, idx) => (
+                  <div key={idx} className="flex gap-4">
+                    {/* Number + line */}
+                    <div className="flex flex-col items-center">
+                      <div className="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-black text-[14px] flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </div>
+                      {idx < solution.steps.length - 1 && (
+                        <div className="w-px flex-1 bg-outline-variant/30 my-2" />
+                      )}
+                    </div>
+
+                    {/* Card */}
+                    <div className="flex-1 pb-2">
+                      <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4 space-y-3">
+                        <p className="text-[14px] font-bold text-on-surface">{step.label}</p>
+                        <div className="bg-surface-container rounded-[1rem] p-3 overflow-x-auto">
+                          <KatexDisplay formula={step.formula} />
+                        </div>
+
+                        {/* Why button */}
+                        {!whyText[idx] ? (
+                          <button onClick={() => handleWhy(idx, step)}
+                            disabled={whyLoading[idx]}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/10 border border-secondary/20 text-[12px] font-bold text-secondary hover:bg-secondary/15 transition-all disabled:opacity-50">
+                            {whyLoading[idx]
+                              ? <span className="material-symbols-outlined text-[14px] animate-spin">autorenew</span>
+                              : <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>help</span>
+                            }
+                            Why?
+                          </button>
+                        ) : (
+                          <div className="flex items-start gap-2 bg-secondary/8 border border-secondary/20 rounded-[1rem] px-3 py-2.5">
+                            <span className="material-symbols-outlined text-secondary text-[14px] shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
+                            <p className="text-[12px] text-on-surface-variant leading-relaxed">{whyText[idx]}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Final answer */}
+                <div className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="w-9 h-9 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-green-400 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="bg-surface-container-low border-2 border-secondary/40 rounded-[1.5rem] p-5 relative overflow-hidden">
+                      <div className="absolute top-3 right-3 flex flex-col items-center justify-center w-12 h-12 rounded-full bg-primary/10 border border-primary/20">
+                        <span className="text-[13px] font-black text-primary">+20</span>
+                        <span className="text-[8px] font-black text-primary uppercase">XP</span>
+                      </div>
+                      <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-3">Final Answer</p>
+                      <div className="text-[22px] font-black text-on-surface overflow-x-auto">
+                        <KatexDisplay formula={solution.final_answer} />
+                      </div>
+
+                      {/* Similar Problems */}
+                      <div className="mt-4 space-y-2">
+                        {similarProblems.length === 0 ? (
+                          <button onClick={handleSimilar} disabled={loadingSimilar}
+                            className="w-full py-3 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[14px] shadow-[0_3px_0_0_#763300] active:translate-y-0.5 active:shadow-none hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                            {loadingSimilar
+                              ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Loading…</>
+                              : <><span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>refresh</span> Similar Problems</>}
+                          </button>
+                        ) : (
+                          <div className="space-y-2 pt-1">
+                            <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Try these next:</p>
+                            {similarProblems.map((sp, i) => (
+                              <button key={i} onClick={() => { setProblem(sp); setSolution(null); setMode('type'); setWhyText({}); setSimilarProblems([]) }}
+                                className="w-full text-left px-4 py-3 rounded-[1rem] bg-surface-container border border-outline-variant/30 text-[13px] text-on-surface hover:border-primary/40 hover:bg-primary/5 transition-all">
+                                {sp}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button onClick={reset}
+                          className="w-full py-2.5 rounded-[1rem] bg-surface-container border border-outline-variant/30 text-[13px] font-bold text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2">
+                          <span className="material-symbols-outlined text-[16px]">arrow_back</span> New Problem
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Key theorems */}
+              {solution.key_theorems?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-black text-on-surface-variant uppercase tracking-widest flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px]">psychology</span> Concepts Used
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {solution.key_theorems.map((t, i) => (
+                      <span key={i} className="px-3 py-1.5 bg-surface-container border border-outline-variant/30 rounded-full text-[12px] font-bold text-on-surface-variant">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="h-4" />
         </div>
       </div>
+    </div>
+  )
+}
+  // ── State ────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<InputMode>('type')
+  const [problem, setProblem] = useState('')
+  const [image, setImage] = useState<string | null>(null)
+  const [solving, setSolving] = useState(false)
+  const [solution, setSolution] = useState<MathSolution | null>(null)
+  const [xpAwarded, setXpAwarded] = useState(false)
+  const [whyLoading, setWhyLoading] = useState<Record<number, boolean>>({})
+  const [whyText, setWhyText] = useState<Record<number, string>>({})
+  const [similarProblems, setSimilarProblems] = useState<string[]>([])
+  const [loadingSimilar, setLoadingSimilar] = useState(false)
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 max-w-2xl mx-auto w-full space-y-6 scrollbar-hide">
-        {!solution ? (
-          <>
-            <div className="flex flex-col items-center text-center gap-3 py-4">
-              <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center">
-                <Calculator className="w-8 h-8 text-orange-400" />
-              </div>
+  // Draw mode
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [lastPos, setLastPos] = useState({ x: 0, y: 0 })
+  const [hasDrawing, setHasDrawing] = useState(false)
+
+  const { data: resource } = useQuery({
+    queryKey: ['resource', resourceId],
+    queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
+  })
+
+  // ── Canvas helpers ───────────────────────────────────────────────
+  const getCanvasPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY }
+  }
+
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    const canvas = canvasRef.current; if (!canvas) return
+    setIsDrawing(true); setLastPos(getCanvasPos(e, canvas))
+  }
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    if (!isDrawing) return
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d'); if (!ctx) return
+    const pos = getCanvasPos(e, canvas)
+    ctx.beginPath(); ctx.moveTo(lastPos.x, lastPos.y)
+    ctx.lineTo(pos.x, pos.y)
+    ctx.strokeStyle = '#ffb68d'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    ctx.stroke(); setLastPos(pos); setHasDrawing(true)
+  }
+
+  const stopDraw = () => setIsDrawing(false)
+
+  const clearCanvas = useCallback(() => {
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d'); if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setHasDrawing(false)
+  }, [])
+
+  const getCanvasImage = (): string | null => {
+    const canvas = canvasRef.current; if (!canvas || !hasDrawing) return null
+    return canvas.toDataURL('image/png')
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return }
+    const reader = new FileReader()
+    reader.onloadend = () => { setImage(reader.result as string) }
+    reader.readAsDataURL(file)
+  }
+
+  // ── Solve ────────────────────────────────────────────────────────
+  const handleSolve = async () => {
+    const imgData = mode === 'draw' ? getCanvasImage() : image
+    if (!problem.trim() && !imgData) return
+    setSolving(true); setWhyText({}); setWhyLoading({}); setSimilarProblems([])
+    try {
+      const res = await libraryApi.solveMath(resourceId, problem, imgData || undefined)
+      setSolution(res.data)
+      if (!xpAwarded) {
+        authApi.awardXp(20, `AI Solver: ${problem.slice(0, 60) || 'Photo/draw problem'}`, resourceId).catch(() => {})
+        qc.invalidateQueries({ queryKey: ['profile'] })
+        setXpAwarded(true)
+        toast.success('+20 XP earned! 🎉', { duration: 2000 })
+      }
+    } catch {
+      toast.error('Could not solve. Try rephrasing or using a clearer image.')
+    } finally { setSolving(false) }
+  }
+
+  // ── Why? ─────────────────────────────────────────────────────────
+  const handleWhy = async (idx: number, step: MathStep) => {
+    if (whyText[idx] || whyLoading[idx]) return
+    setWhyLoading(w => ({ ...w, [idx]: true }))
+    try {
+      const q = `In one simple sentence, explain WHY we do this step: "${step.label}". Formula: ${step.formula}. Be brief and clear.`
+      const res = await aiApi.quickAsk(q, resourceId)
+      setWhyText(w => ({ ...w, [idx]: res.data?.answer || res.data?.reply || 'This step simplifies towards the solution.' }))
+    } catch {
+      setWhyText(w => ({ ...w, [idx]: 'This step brings us closer to isolating the unknown.' }))
+    } finally { setWhyLoading(w => ({ ...w, [idx]: false })) }
+  }
+
+  // ── Similar Problems ─────────────────────────────────────────────
+  const handleSimilar = async () => {
+    if (!solution || loadingSimilar) return
+    setLoadingSimilar(true)
+    try {
+      const q = `Generate 3 similar practice problems to: "${solution.problem}". Return ONLY a JSON array of 3 problem strings. No explanation.`
+      const res = await aiApi.quickAsk(q, resourceId)
+      const raw = res.data?.answer || res.data?.reply || '[]'
+      const match = raw.match(/\[[\s\S]*\]/)
+      if (match) {
+        try {
+          const arr = JSON.parse(match[0])
+          if (Array.isArray(arr)) { setSimilarProblems(arr.slice(0, 3).map(String)); return }
+        } catch {}
+      }
+      const lines = raw.split('\n').map((l: string) => l.replace(/^\d+\.\s*/, '').trim()).filter((l: string) => l.length > 5).slice(0, 3)
+      setSimilarProblems(lines)
+    } catch {
+      toast.error('Could not generate similar problems.')
+    } finally { setLoadingSimilar(false) }
+  }
+
+  const reset = () => {
+    setSolution(null); setProblem(''); setImage(null)
+    setWhyText({}); setWhyLoading({}); setSimilarProblems([])
+    setXpAwarded(false); clearCanvas()
+  }
+
+  // ── RENDER ───────────────────────────────────────────────────────
+  return (
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
+        <Link href={`/library/${resourceId}`}
+          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-[13px] font-bold">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          Back
+        </Link>
+        <p className="text-[13px] font-black text-on-surface-variant uppercase tracking-widest">AI Problem Solver</p>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
+          <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+          <span className="text-[12px] font-black text-primary">+20 XP</span>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="max-w-2xl mx-auto px-5 py-6 space-y-5">
+
+          {!solution ? (
+            <>
+              {/* Page title */}
               <div>
-                <h2 className="text-2xl font-black text-white tracking-tight">Math Solver</h2>
-                <p className="text-slate-500 mt-1.5 text-sm">Step-by-step AI solutions with full derivations.</p>
+                <h2 className="text-[26px] font-black text-on-surface tracking-tight">AI Problem Solver</h2>
+                <p className="text-on-surface-variant text-[13px] mt-1 leading-relaxed">
+                  Drop your math or science question here, and I'll help you figure it out step-by-step!
+                </p>
               </div>
-            </div>
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Describe your problem or attach an image</label>
-              <div className="relative bg-[#1a1a1a] border border-white/8 rounded-2xl p-4 transition-all focus-within:border-orange-500/40">
-                <textarea autoFocus
-                  placeholder="Type your problem here (e.g., Solve x² - 4 = 0) or upload a photo of the equation below..."
-                  rows={4} value={problem} onChange={e => setProblem(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleSolve() }}
-                  className="w-full bg-transparent text-white text-sm leading-relaxed resize-none focus:outline-none placeholder:text-slate-600"
-                />
-                
-                {/* Image Attachments Tray */}
-                {image && (
-                  <div className="relative inline-block mt-3 group">
-                    <img src={image} alt="Math problem" className="h-20 w-auto rounded-lg border border-white/10 object-cover shadow-lg" />
-                    <button 
-                      onClick={() => setImage(null)}
-                      className="absolute -top-1.5 -right-1.5 p-1 bg-red-500 text-white rounded-full hover:bg-red-400 transition-colors shadow-md"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
 
-                {/* Bottom Actions Row inside Textarea container */}
-                <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-3">
-                  <div className="flex gap-2">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      id="image-file-input" 
-                      onChange={handleImageChange} 
-                    />
-                    <label 
-                      htmlFor="image-file-input"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/8 active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Paperclip className="w-3.5 h-3.5 text-orange-400" />
-                      Attach Photo
-                    </label>
-                    <label 
-                      htmlFor="image-file-input"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/8 active:scale-95 transition-all cursor-pointer sm:flex hidden"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-orange-400" />
-                      Take Picture
-                    </label>
-                  </div>
-                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-                    AI Multimodal Solver
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 bg-orange-500/5 border border-orange-500/10 rounded-2xl p-4">
-              <Info className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Be specific. You can type instructions, equations, or simply submit an image. Press <kbd className="px-1.5 py-0.5 bg-white/8 rounded text-xs font-mono">⌘ Enter</kbd> to solve.
-              </p>
-            </div>
-            <button onClick={handleSolve} disabled={(!problem.trim() && !image) || solving}
-              className="w-full py-4 rounded-2xl bg-orange-500 text-white font-black text-sm hover:bg-orange-400 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/20 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2.5">
-              {solving ? <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</> : <><Sparkles className="w-4 h-4" /> Solve Step-by-Step</>}
-            </button>
-          </>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between bg-[#1a1a1a] border border-white/5 rounded-2xl px-4 py-3">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Solution</span>
-              <button onClick={() => { setSolution(null); setProblem('') }}
-                className="flex items-center gap-1.5 text-[10px] font-black text-orange-400 uppercase tracking-widest hover:text-orange-300 transition-colors">
-                <RotateCcw className="w-3 h-3" /> Solve Another
-              </button>
-            </div>
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-4">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Problem</p>
-              <p className="text-white font-medium text-sm">{solution.problem || problem}</p>
-            </div>
-            <div className="space-y-5">
-              {solution.steps?.map((step, idx) => (
-                <div key={idx} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-[#1a1a1a] border border-orange-500/20 flex items-center justify-center text-orange-400 font-black text-xs shrink-0">{idx + 1}</div>
-                    {idx !== solution.steps.length - 1 && <div className="w-px flex-1 bg-gradient-to-b from-orange-500/20 to-transparent my-2" />}
-                  </div>
-                  <div className="flex-1 pb-4">
-                    <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-2">{step.label}</p>
-                    <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-4 mb-2 overflow-x-auto">
-                      <KatexDisplay formula={step.formula} />
-                    </div>
-                    <p className="text-xs text-slate-500 leading-relaxed italic">"{step.explanation}"</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="relative overflow-hidden rounded-2xl bg-orange-500 p-6 shadow-xl shadow-orange-500/20">
-              <Sparkles className="absolute -top-3 -right-3 w-20 h-20 text-white/10 rotate-12" />
-              <div className="relative space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-white" />
-                  <span className="text-[10px] font-black text-white/70 uppercase tracking-widest">Final Answer</span>
-                </div>
-                <div className="text-white overflow-x-auto"><KatexDisplay formula={solution.final_answer} /></div>
-              </div>
-            </div>
-            {solution.key_theorems?.length > 0 && (
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                  <Brain className="w-3.5 h-3.5" /> Core Concepts Used
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {solution.key_theorems.map((t, i) => (
-                    <span key={i} className="px-3 py-1.5 bg-[#1a1a1a] border border-white/8 rounded-full text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-orange-400" /> {t}
+              {/* Mode picker */}
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { id: 'type' as InputMode, icon: 'keyboard',     label: 'Type It',    desc: 'Write your question' },
+                  { id: 'snap' as InputMode, icon: 'photo_camera', label: 'Snap Photo',  desc: 'Take a picture of the page' },
+                  { id: 'draw' as InputMode, icon: 'draw',         label: 'Draw It',     desc: 'Use your digital pen' },
+                ]).map(m => (
+                  <button key={m.id} onClick={() => setMode(m.id)}
+                    className={cn('flex flex-col items-center text-center p-4 rounded-[1.5rem] border-2 transition-all active:scale-[0.97]',
+                      mode === m.id
+                        ? 'border-primary bg-primary/8'
+                        : 'border-outline-variant/40 bg-surface-container-low hover:border-primary/40')}>
+                    <span className={cn('material-symbols-outlined text-[28px] mb-2', mode === m.id ? 'text-primary' : 'text-on-surface-variant')}
+                      style={{ fontVariationSettings: "'FILL' 1" }}>
+                      {m.icon}
                     </span>
-                  ))}
+                    <p className={cn('text-[13px] font-black', mode === m.id ? 'text-primary' : 'text-on-surface')}>{m.label}</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">{m.desc}</p>
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Type mode ── */}
+              {mode === 'type' && (
+                <div className={cn('bg-surface-container-low border rounded-[1.5rem] p-4 transition-all',
+                  'border-outline-variant/30 focus-within:border-primary/40')}>
+                  <textarea autoFocus value={problem} onChange={e => setProblem(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSolve() }}
+                    placeholder="e.g. Solve 3x + 5 = 20"
+                    rows={5}
+                    className="w-full bg-transparent text-on-surface text-[15px] leading-relaxed resize-none focus:outline-none placeholder:text-on-surface-variant/40" />
+                  <p className="text-[11px] text-on-surface-variant/40 text-right mt-1">Ctrl/⌘ + Enter to solve</p>
+                </div>
+              )}
+
+              {/* ── Snap mode ── */}
+              {mode === 'snap' && (
+                <div className="space-y-3">
+                  {image ? (
+                    <div className="relative rounded-[1.5rem] overflow-hidden border border-outline-variant/30">
+                      <img src={image} alt="Problem" className="w-full max-h-72 object-contain bg-surface-container" />
+                      <button onClick={() => setImage(null)}
+                        className="absolute top-3 right-3 p-2 rounded-full bg-error-container text-on-error-container hover:brightness-110 transition-all">
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor="solver-img"
+                      className="flex flex-col items-center justify-center gap-4 py-12 rounded-[1.5rem] border-2 border-dashed border-outline-variant/50 bg-surface-container-low cursor-pointer hover:border-primary/40 hover:bg-primary/3 transition-all">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-primary text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>photo_camera</span>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[14px] font-bold text-on-surface">Tap to upload or take photo</p>
+                        <p className="text-[12px] text-on-surface-variant mt-1">JPG, PNG — up to 5MB</p>
+                      </div>
+                    </label>
+                  )}
+                  <input id="solver-img" type="file" accept="image/*" capture="environment"
+                    className="hidden" onChange={handleImageChange} />
+                  {image && (
+                    <textarea value={problem} onChange={e => setProblem(e.target.value)}
+                      placeholder="Optional: add context or a specific question about the image…"
+                      rows={2}
+                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-[1.25rem] px-4 py-3 text-on-surface text-[13px] leading-relaxed resize-none focus:outline-none placeholder:text-on-surface-variant/40 focus:border-primary/40 transition-all" />
+                  )}
+                </div>
+              )}
+
+              {/* ── Draw mode ── */}
+              {mode === 'draw' && (
+                <div className="space-y-3">
+                  <div className="relative rounded-[1.5rem] overflow-hidden border border-outline-variant/30">
+                    <canvas ref={canvasRef} width={600} height={260}
+                      className="w-full cursor-crosshair touch-none block"
+                      style={{ background: '#1a1c1e' }}
+                      onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+                      onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
+                    <button onClick={clearCanvas}
+                      className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/40 text-[11px] font-bold text-on-surface-variant hover:text-on-surface transition-all">
+                      <span className="material-symbols-outlined text-[14px]">refresh</span> Clear
+                    </button>
+                    {!hasDrawing && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <p className="text-on-surface-variant/25 text-[14px] font-medium">Draw your equation here…</p>
+                      </div>
+                    )}
+                  </div>
+                  <textarea value={problem} onChange={e => setProblem(e.target.value)}
+                    placeholder="Optional: describe what you drew for better accuracy…"
+                    rows={2}
+                    className="w-full bg-surface-container-low border border-outline-variant/30 rounded-[1.25rem] px-4 py-3 text-on-surface text-[13px] leading-relaxed resize-none focus:outline-none placeholder:text-on-surface-variant/40 focus:border-primary/40 transition-all" />
+                </div>
+              )}
+
+              {/* Solve button */}
+              <button onClick={handleSolve}
+                disabled={solving
+                  || (mode === 'type' && !problem.trim())
+                  || (mode === 'snap' && !image)
+                  || (mode === 'draw' && !hasDrawing && !problem.trim())}
+                className="w-full py-4 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[16px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2.5">
+                {solving
+                  ? <><span className="material-symbols-outlined text-[18px] animate-spin">autorenew</span> Solving…</>
+                  : <><span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>calculate</span> Solve Step-by-Step</>}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* ── Solution view ── */}
+
+              {/* Solved header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-black text-green-400 uppercase tracking-widest animate-pulse">
+                      Solving Now
+                    </span>
+                    {resource?.subject && (
+                      <span className="text-[12px] text-on-surface-variant">{resource.subject}</span>
+                    )}
+                  </div>
+                  <p className="text-[15px] font-bold text-on-surface leading-snug">
+                    {solution.problem || problem}
+                  </p>
+                </div>
+                <button onClick={reset}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-[1rem] bg-surface-container-high border border-outline-variant/30 text-[12px] font-bold text-on-surface-variant hover:text-on-surface transition-all shrink-0">
+                  <span className="material-symbols-outlined text-[16px]">refresh</span> Re-scan
+                </button>
+              </div>
+
+              {/* Steps */}
+              <div className="space-y-4">
+                {solution.steps?.map((step, idx) => (
+                  <div key={idx} className="flex gap-4">
+                    {/* Number + connector */}
+                    <div className="flex flex-col items-center">
+                      <div className="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-black text-[14px] flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </div>
+                      {idx < solution.steps.length - 1 && (
+                        <div className="w-px flex-1 bg-outline-variant/30 my-2" />
+                      )}
+                    </div>
+                    {/* Card */}
+                    <div className="flex-1 pb-2">
+                      <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-4 space-y-3">
+                        <p className="text-[14px] font-bold text-on-surface">{step.label}</p>
+                        <div className="bg-surface-container rounded-[1rem] p-3 overflow-x-auto">
+                          <KatexDisplay formula={step.formula} />
+                        </div>
+                        {/* Why button */}
+                        {!whyText[idx] ? (
+                          <button onClick={() => handleWhy(idx, step)} disabled={whyLoading[idx]}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/10 border border-secondary/20 text-[12px] font-bold text-secondary hover:bg-secondary/15 transition-all disabled:opacity-50">
+                            {whyLoading[idx]
+                              ? <span className="material-symbols-outlined text-[14px] animate-spin">autorenew</span>
+                              : <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>help</span>}
+                            Why?
+                          </button>
+                        ) : (
+                          <div className="flex items-start gap-2 bg-secondary/8 border border-secondary/20 rounded-[1rem] px-3 py-2.5">
+                            <span className="material-symbols-outlined text-secondary text-[14px] shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
+                            <p className="text-[12px] text-on-surface-variant leading-relaxed">{whyText[idx]}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Final answer card */}
+                <div className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="w-9 h-9 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-green-400 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="bg-surface-container-low border-2 border-secondary/40 rounded-[1.5rem] p-5 relative overflow-hidden">
+                      {/* XP badge */}
+                      <div className="absolute top-4 right-4 flex flex-col items-center justify-center w-12 h-12 rounded-full bg-primary/10 border border-primary/20">
+                        <span className="text-[13px] font-black text-primary leading-none">+20</span>
+                        <span className="text-[8px] font-black text-primary uppercase tracking-wide">XP</span>
+                      </div>
+                      <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-3">Final Answer</p>
+                      <div className="text-on-surface overflow-x-auto pr-14">
+                        <KatexDisplay formula={solution.final_answer} />
+                      </div>
+
+                      {/* Similar Problems / new problem */}
+                      <div className="mt-5 space-y-2">
+                        {similarProblems.length === 0 ? (
+                          <button onClick={handleSimilar} disabled={loadingSimilar}
+                            className="w-full py-3 rounded-[1rem] bg-primary-container text-on-primary-container font-bold text-[14px] shadow-[0_3px_0_0_#763300] active:translate-y-0.5 active:shadow-none hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                            {loadingSimilar
+                              ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Loading…</>
+                              : <><span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>refresh</span> Similar Problems</>}
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Try these next:</p>
+                            {similarProblems.map((sp, i) => (
+                              <button key={i} onClick={() => { setProblem(sp); setSolution(null); setMode('type'); setWhyText({}); setSimilarProblems([]) }}
+                                className="w-full text-left px-4 py-3 rounded-[1rem] bg-surface-container border border-outline-variant/30 text-[13px] text-on-surface hover:border-primary/40 hover:bg-primary/5 transition-all">
+                                {sp}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button onClick={reset}
+                          className="w-full py-2.5 rounded-[1rem] bg-surface-container-high border border-outline-variant/30 text-[13px] font-bold text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2">
+                          <span className="material-symbols-outlined text-[16px]">add</span> New Problem
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Key theorems */}
+              {solution.key_theorems?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-black text-on-surface-variant uppercase tracking-widest flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px]">psychology</span> Concepts Used
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {solution.key_theorems.map((t, i) => (
+                      <span key={i} className="px-3 py-1.5 bg-surface-container border border-outline-variant/30 rounded-full text-[12px] font-bold text-on-surface-variant">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          <div className="h-4" />
+        </div>
       </div>
     </div>
   )
