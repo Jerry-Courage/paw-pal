@@ -555,11 +555,12 @@ class ResourceFileView(APIView):
                 'file_name': resource.file.name,
                 'size': len(file_data)
             })
-        except FileNotFoundError:
+        except (FileNotFoundError, IOError, OSError):
             return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"[ResourceFileView] Error reading file for resource {resource_id}: {e}")
-            return Response({'error': 'Failed to read file.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Return 404 so the PDF viewer shows a friendly message rather than a crash
+            return Response({'error': 'File could not be read. It may have been cleared or is stored remotely.'}, status=status.HTTP_404_NOT_FOUND)
 
 class ReprocessResourceView(APIView):
     """

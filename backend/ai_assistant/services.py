@@ -1989,16 +1989,14 @@ class AIService:
     def generate_practice_questions(self, resource, difficulty: str = 'medium', count: int = 5) -> list:
         """Generate exam-style practice questions with detailed model answers."""
         context = self._get_resource_context(resource)
+        # Keep context tight — Groq has a smaller context window, 413 at 8k chars
+        context_snippet = (context[:3000] if context else resource.title)
         prompt = (
-            f"Generate exactly {count} {difficulty}-difficulty exam practice questions for '{resource.title}'.\n\n"
-            f"Content:\n{context[:8000] if context else resource.title}\n\n"
-            f"IMPORTANT: You MUST return exactly {count} questions. No more, no less.\n"
-            "Return ONLY a raw JSON array (no markdown, no code blocks). Each object must have:\n"
-            '  \"question\": the full question text,\n'
-            '  \"type\": one of \"short_answer\", \"essay\", or \"analysis\",\n'
-            '  \"hint\": a brief hint to guide the student,\n'
-            '  \"model_answer\": a detailed 2-3 paragraph model answer.\n'
-            "Start your response with [ and end with ]."
+            f"Generate exactly {count} {difficulty}-difficulty practice questions for '{resource.title}'.\n\n"
+            f"Content:\n{context_snippet}\n\n"
+            f"Return ONLY a JSON array of exactly {count} objects. Each object:\n"
+            '{"question":"...","type":"short_answer","hint":"...","model_answer":"..."}\n'
+            "Start with [ and end with ]."
         )
         result = self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
         # If model returned a dict instead of list, try to extract the list
