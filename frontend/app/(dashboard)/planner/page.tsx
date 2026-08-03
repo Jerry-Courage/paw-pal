@@ -24,11 +24,13 @@ function getDayName(date: Date) {
 }
 function getWeekDates() {
   const today = new Date()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - today.getDay() + 1)
+  // Use local day-of-week (0=Sun, 1=Mon…) to avoid UTC offset shifting the week
+  const dayOfWeek = today.getDay() // 0=Sun
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
+    const d = new Date(today)
+    d.setDate(today.getDate() - daysFromMonday + i)
+    d.setHours(0, 0, 0, 0)
     return d
   })
 }
@@ -121,13 +123,28 @@ export default function PlannerPage() {
     } finally { setAiLoading(false); clearInterval(timer) }
   }
 
-  const sessions = sessionsData?.results || []
-  const deadlines = deadlinesData?.results || []
+  const sessions = Array.isArray(sessionsData)
+    ? sessionsData
+    : (sessionsData?.results || [])
+  const deadlines = Array.isArray(deadlinesData)
+    ? deadlinesData
+    : (deadlinesData?.results || [])
 
-  // Group sessions by day of week
+  // Group sessions by day — compare in local time to avoid UTC offset issues
   const sessionsByDay = weekDates.map(date => {
-    const dateStr = date.toISOString().split('T')[0]
-    return sessions.filter((s: any) => s.start_time?.startsWith(dateStr))
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const localDateStr = `${y}-${m}-${d}`
+    return sessions.filter((s: any) => {
+      if (!s.start_time) return false
+      // Parse the ISO string and convert to local date
+      const sessionDate = new Date(s.start_time)
+      const sy = sessionDate.getFullYear()
+      const sm = String(sessionDate.getMonth() + 1).padStart(2, '0')
+      const sd = String(sessionDate.getDate()).padStart(2, '0')
+      return `${sy}-${sm}-${sd}` === localDateStr
+    })
   })
 
   // Today stats
