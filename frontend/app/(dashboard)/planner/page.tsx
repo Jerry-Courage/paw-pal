@@ -49,9 +49,11 @@ export default function PlannerPage() {
   const weekDates = getWeekDates()
   const today = new Date()
 
-  const { data: sessionsData } = useQuery({
+  const { data: sessionsData, refetch: refetchSessions } = useQuery({
     queryKey: ['planner-sessions'],
     queryFn: () => plannerApi.getSessions().then(r => r.data),
+    staleTime: 0,
+    refetchOnMount: true,
   })
   const { data: deadlinesData } = useQuery({
     queryKey: ['planner-deadlines'],
@@ -61,8 +63,7 @@ export default function PlannerPage() {
   const createMutation = useMutation({
     mutationFn: (data: any) => plannerApi.createSession(data),
     onSuccess: () => {
-      toast.success('Session scheduled!')
-      queryClient.invalidateQueries({ queryKey: ['planner-sessions'] })
+      queryClient.refetchQueries({ queryKey: ['planner-sessions'] })
       setShowNewSession(false); setNewTitle(''); setNewDate(''); setNewStart('09:00'); setNewEnd('10:00')
     },
     onError: () => toast.error('Failed to create session.'),
@@ -79,14 +80,12 @@ export default function PlannerPage() {
     const timer = setInterval(() => setAiStatusIdx(i => (i + 1) % AI_STATUSES.length), 1500)
     try {
       const res = await plannerApi.interpret(aiPrompt)
-      // The interpret endpoint returns the session data directly (not nested under .session)
       const parsed = res.data
       if (!parsed || parsed.error) {
         toast.error('Could not understand that. Try rephrasing.')
         return
       }
 
-      // Compute end_time from start_time + duration_minutes
       const start = new Date(parsed.start_time)
       const durationMs = (parsed.duration_minutes || 60) * 60 * 1000
       const end = new Date(start.getTime() + durationMs)
@@ -101,26 +100,27 @@ export default function PlannerPage() {
       }
 
       if (parsed.is_recurring && parsed.days?.length) {
-        // Recurring — use bulk-create endpoint
         await plannerApi.createRecurring({
           ...sessionPayload,
           days: parsed.days,
           recurrence_type: 'weekly',
-          // Recur for the next 8 weeks
           end_date: new Date(start.getTime() + 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         })
-        toast.success(`Recurring session scheduled for ${parsed.days.length} day(s) a week!`)
+        toast.success(`Recurring session scheduled for ${parsed.days.length} day(s)!`)
       } else {
-        await createMutation.mutateAsync(sessionPayload)
+        await plannerApi.createSession(sessionPayload)
         toast.success('Session scheduled! ✅')
       }
 
       setAiPrompt('')
-      queryClient.invalidateQueries({ queryKey: ['planner-sessions'] })
+      await refetchSessions()
     } catch (err: any) {
       console.error('[AI Schedule] Error:', err?.response?.data || err?.message)
-      toast.error('AI scheduling failed. Try phrasing it differently.')
-    } finally { setAiLoading(false); clearInterval(timer) }
+      toast.error('AI scheduling failed. Try rephrasing.')
+    } finally {
+      setAiLoading(false)
+      clearInterval(timer)
+    }
   }
 
   const sessions = Array.isArray(sessionsData)
