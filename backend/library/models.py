@@ -164,7 +164,7 @@ class DocumentChunk(models.Model):
 class ResourceProgress(models.Model):
     """Tracks study path progress per user per resource."""
     STEP_ORDER = ['notes', 'flashcards', 'quiz', 'practice', 'examprep']
-    STEP_XP = {'notes': 50, 'flashcards': 75, 'quiz': 100, 'practice': 100, 'examprep': 150}
+    STEP_XP = {'notes': 50, 'flashcards': 10, 'quiz': 10, 'practice': 100, 'examprep': 150}
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='resource_progress')
     resource = models.ForeignKey('Resource', on_delete=models.CASCADE, related_name='progress')

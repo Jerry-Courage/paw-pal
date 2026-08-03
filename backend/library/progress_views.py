@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from .models import Resource, ResourceProgress
 
 STEP_ORDER = ['notes', 'flashcards', 'quiz', 'practice', 'examprep']
-STEP_XP = {'notes': 50, 'flashcards': 75, 'quiz': 100, 'practice': 100, 'examprep': 150}
+STEP_XP = {'notes': 50, 'flashcards': 10, 'quiz': 10, 'practice': 100, 'examprep': 150}
 
 
 class ResourceProgressView(APIView):
