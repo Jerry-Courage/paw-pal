@@ -93,12 +93,15 @@ export default function PlannerPage() {
   const deadlines = Array.isArray(deadlinesRaw) ? deadlinesRaw : (deadlinesRaw?.results || [])
 
   // ── Group sessions by local date
+  // Group sessions by local date — extract date portion directly from ISO string
+  // to avoid timezone conversion issues entirely
   const sessionsByDay = weekDates.map(date => {
     const ds = localDateStr(date)
     return sessions.filter((s: any) => {
       if (!s.start_time) return false
-      const sd = new Date(s.start_time)
-      return localDateStr(sd) === ds
+      // Grab just the date part "2026-08-04" from any ISO format
+      const datePart = String(s.start_time).replace(' ', 'T').split('T')[0]
+      return datePart === ds
     })
   })
 
@@ -154,8 +157,12 @@ export default function PlannerPage() {
         title: p.title || 'Study Session',
         subject: p.subject || '',
         session_type: p.session_type || 'study',
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
+        // Send the datetime string directly — don't convert to UTC via toISOString()
+        // The backend parses ISO strings and stores them; converting to UTC via toISOString()
+        // can shift the date across midnight for users outside UTC
+        start_time: p.start_time,
+        end_time: new Date(new Date(p.start_time).getTime() + (p.duration_minutes || 60) * 60000)
+          .toISOString().replace(/\.\d{3}Z$/, ''),
         status: 'scheduled',
       }
 
