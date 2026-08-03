@@ -472,9 +472,14 @@ export default function PlannerPage() {
       {/* ── Timetable Import Modal ── */}
       {showImport && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-surface-container-low rounded-[1.75rem] p-5 w-full max-w-lg space-y-4 border border-outline-variant/30">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-bold text-on-surface">Import Timetable</h3>
+          <div className="bg-surface-container-low rounded-[1.75rem] p-5 w-full max-w-2xl border border-outline-variant/30 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <div>
+                <h3 className="text-[18px] font-bold text-on-surface">Import Timetable</h3>
+                {!importLoading && importSessions.length > 0 && (
+                  <p className="text-[11px] text-on-surface-variant mt-0.5">Edit any session before importing — tap a field to fix AI mistakes</p>
+                )}
+              </div>
               <button onClick={() => { setShowImport(false); setImportSessions([]) }}
                 className="p-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -488,24 +493,100 @@ export default function PlannerPage() {
               </div>
             ) : importSessions.length > 0 ? (
               <>
-                <p className="text-[13px] text-on-surface-variant">Found <span className="text-primary font-bold">{importSessions.length} sessions</span>. Review and confirm:</p>
-                <div className="max-h-64 overflow-y-auto space-y-2 scrollbar-hide">
-                  {importSessions.map((s, i) => (
-                    <div key={i} className={cn('rounded-[1rem] p-3 border-l-4', TYPE_COLOR[s.session_type] || TYPE_COLOR.study)}>
-                      <p className="text-[13px] font-bold text-on-surface">{s.title}</p>
-                      <p className="text-[11px] text-on-surface-variant mt-0.5">
-                        {new Date(s.start_time).toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'})} · {fmtTime(s.start_time)} – {fmtTime(s.end_time)}
-                      </p>
-                    </div>
-                  ))}
+                <p className="text-[12px] text-on-surface-variant mb-2 shrink-0">
+                  Found <span className="text-primary font-bold">{importSessions.length} sessions</span>. Review and edit, then import:
+                </p>
+
+                {/* Editable session list */}
+                <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide pr-1">
+                  {importSessions.map((s: any, i: number) => {
+                    // Extract date and time parts from the ISO string for editing
+                    const isoDate  = s.start_time?.split('T')[0] || ''
+                    const isoStart = s.start_time?.split('T')[1]?.slice(0,5) || ''
+                    const isoEnd   = s.end_time?.split('T')[1]?.slice(0,5) || ''
+
+                    const updateSession = (patch: Partial<any>) => {
+                      setImportSessions((prev: any[]) =>
+                        prev.map((x, idx) => idx === i ? { ...x, ...patch } : x)
+                      )
+                    }
+
+                    const updateTime = (field: 'start_time' | 'end_time', timeVal: string) => {
+                      const date = (field === 'start_time' ? s.start_time : s.end_time)?.split('T')[0] || isoDate
+                      updateSession({ [field]: `${date}T${timeVal}:00` })
+                    }
+
+                    const updateDate = (dateVal: string) => {
+                      updateSession({
+                        start_time: `${dateVal}T${isoStart}:00`,
+                        end_time:   `${dateVal}T${isoEnd}:00`,
+                      })
+                    }
+
+                    return (
+                      <div key={i} className={cn('rounded-[1rem] p-3 border-l-4 bg-surface-container space-y-2', TYPE_COLOR[s.session_type] || TYPE_COLOR.study)}>
+                        {/* Row 1: title + delete */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="flex-1 bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-1.5 text-[13px] font-bold text-on-surface focus:outline-none focus:border-primary/50"
+                            value={s.title}
+                            onChange={e => updateSession({ title: e.target.value })}
+                          />
+                          <select
+                            className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-2 py-1.5 text-[11px] text-on-surface focus:outline-none appearance-none"
+                            value={s.session_type}
+                            onChange={e => updateSession({ session_type: e.target.value })}
+                          >
+                            <option value="class">Class</option>
+                            <option value="study">Study</option>
+                            <option value="exam">Exam</option>
+                            <option value="assignment">Assignment</option>
+                            <option value="personal">Personal</option>
+                          </select>
+                          <button
+                            onClick={() => setImportSessions((prev: any[]) => prev.filter((_, idx) => idx !== i))}
+                            className="p-1.5 rounded-full bg-error/15 text-error hover:bg-error/25 transition-all shrink-0"
+                            title="Remove this session">
+                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                          </button>
+                        </div>
+
+                        {/* Row 2: date + start + end */}
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[14px] text-on-surface-variant shrink-0">calendar_today</span>
+                          <input
+                            type="date"
+                            className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-2 py-1 text-[12px] text-on-surface focus:outline-none focus:border-primary/50"
+                            value={isoDate}
+                            onChange={e => updateDate(e.target.value)}
+                          />
+                          <span className="material-symbols-outlined text-[14px] text-on-surface-variant shrink-0">schedule</span>
+                          <input
+                            type="time"
+                            className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-2 py-1 text-[12px] text-on-surface focus:outline-none focus:border-primary/50"
+                            value={isoStart}
+                            onChange={e => updateTime('start_time', e.target.value)}
+                          />
+                          <span className="text-[11px] text-on-surface-variant">–</span>
+                          <input
+                            type="time"
+                            className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-2 py-1 text-[12px] text-on-surface focus:outline-none focus:border-primary/50"
+                            value={isoEnd}
+                            onChange={e => updateTime('end_time', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="flex gap-2">
+
+                <div className="flex gap-2 pt-3 shrink-0">
                   <button onClick={handleImportConfirm}
                     className="flex-1 bg-primary-container text-on-primary-container font-bold py-3 rounded-[1rem] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
-                    Import All Sessions 📅
+                    Import {importSessions.length} Sessions 📅
                   </button>
                   <button onClick={() => { setShowImport(false); setImportSessions([]) }}
-                    className="px-5 bg-surface-container-high text-on-surface-variant font-bold rounded-[1rem]">
+                    className="px-5 bg-surface-container-high text-on-surface-variant font-bold rounded-[1rem] hover:bg-surface-container-highest transition-all">
                     Cancel
                   </button>
                 </div>

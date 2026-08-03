@@ -395,17 +395,23 @@ class ParseTimetableView(APIView):
             return Response({'error': 'No image or file provided.'}, status=400)
 
         system_prompt = f"""You are a timetable parser. Today is {now.strftime('%A, %B %d, %Y')}.
-Extract ALL class/study sessions visible in the timetable image.
+
+IMPORTANT: The timetable columns may be numbered periods with time ranges shown in the header row (e.g. "1 / 8:00-8:55", "5 / 13:00-13:55"). You MUST read the actual time ranges from the column headers — do not guess or invent times.
+
+Days: Mo/Mon=0, Tu/Tue=1, We/Wed=2, Th/Thu=3, Fr/Fri=4, Sa/Sat=5, Su/Sun=6
+
+Extract EVERY class cell visible. Each cell may contain a course code, group label, lecturer name, and room code. Create one session object per cell.
+
 YOUR ENTIRE RESPONSE MUST BE ONLY a raw JSON array — nothing before [, nothing after ].
 No markdown, no code fences, no explanation text whatsoever.
 Each session object must have exactly these keys:
-  "title": string (subject/class name),
-  "session_type": one of "class", "study", "exam", "assignment",
-  "subject": string (same as title if unknown),
-  "day_of_week": integer 0-6 (0=Monday, 6=Sunday),
-  "start_time": "HH:MM" in 24-hour format,
-  "end_time": "HH:MM" in 24-hour format,
-  "location": string or empty string
+  "title": course code + group label if present (e.g. "CSM 258 Group 1"),
+  "session_type": "class",
+  "subject": just the course code (e.g. "CSM 258"),
+  "day_of_week": integer 0-6 (0=Monday),
+  "start_time": "HH:MM" 24-hour — taken directly from the column header time range,
+  "end_time": "HH:MM" 24-hour — taken directly from the column header time range,
+  "location": room/venue code or empty string
 Begin your response with [ and end with ]. No other text."""
         ai = AIService()
         try:
