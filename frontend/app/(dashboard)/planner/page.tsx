@@ -51,7 +51,11 @@ export default function PlannerPage() {
 
   const { data: sessionsData, refetch: refetchSessions } = useQuery({
     queryKey: ['planner-sessions'],
-    queryFn: () => plannerApi.getSessions().then(r => r.data),
+    queryFn: async () => {
+      const r = await plannerApi.getSessions()
+      console.log('[Planner] sessions response:', r.data)
+      return r.data
+    },
     staleTime: 0,
     refetchOnMount: true,
   })
@@ -126,6 +130,7 @@ export default function PlannerPage() {
   const sessions = Array.isArray(sessionsData)
     ? sessionsData
     : (sessionsData?.results || [])
+  console.log('[Planner] parsed sessions:', sessions.length, sessions.map((s: any) => s.start_time))
   const deadlines = Array.isArray(deadlinesData)
     ? deadlinesData
     : (deadlinesData?.results || [])
