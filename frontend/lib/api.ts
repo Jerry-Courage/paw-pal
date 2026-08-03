@@ -297,7 +297,14 @@ export const plannerApi = {
   updateDeadline: (id: number, data: any) =>
     api.patch(`/planner/deadlines/${id}/`, data),
   getSmartSchedule: () => api.get('/planner/smart-schedule/'),
-  interpret: (prompt: string) => api.post('/planner/interpret/', { prompt }),
+  interpret: (prompt: string) => {
+    // Send the client's local ISO datetime so the AI anchors "today/tomorrow"
+    // to the user's actual calendar day, not the UTC server time.
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const localNow = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:00`
+    return api.post('/planner/interpret/', { prompt, local_now: localNow })
+  },
   parseTimetable: (data: FormData) =>
     api.post('/planner/parse-timetable/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   parseTimetableBase64: (image: string) =>

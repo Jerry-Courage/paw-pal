@@ -92,6 +92,11 @@ export default function PlannerPage() {
   const sessions  = Array.isArray(sessionsRaw)  ? sessionsRaw  : (sessionsRaw?.results  || [])
   const deadlines = Array.isArray(deadlinesRaw) ? deadlinesRaw : (deadlinesRaw?.results || [])
 
+  // Debug: log what the API returned so we can verify data is coming back
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Planner] sessionsRaw:', sessionsRaw, '→ sessions:', sessions)
+  }
+
   // ── Group sessions by local date
   // Group sessions by local date — extract date portion directly from ISO string
   // to avoid timezone conversion issues entirely

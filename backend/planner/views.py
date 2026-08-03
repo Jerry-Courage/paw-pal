@@ -13,6 +13,9 @@ import re
 class StudySessionListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = StudySessionSerializer
+    # Disable pagination for the planner — the calendar needs ALL sessions for
+    # the current week in one flat array, not a paginated envelope.
+    pagination_class = None
 
     def get_queryset(self):
         qs = StudySession.objects.filter(user=self.request.user)
@@ -22,7 +25,7 @@ class StudySessionListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(start_time__gte=start)
         if end:
             qs = qs.filter(start_time__lte=end)
-        return qs
+        return qs.order_by('start_time')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -260,10 +263,19 @@ class InterpretScheduleView(APIView):
         if not prompt:
             return Response({'error': 'Prompt required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        now = timezone.now()
+        # Prefer the client's local datetime so the AI interprets "today/tomorrow"
+        # relative to the user's actual calendar day, not the UTC server clock.
+        local_now_str = request.data.get('local_now', '')
+        if local_now_str:
+            from django.utils.dateparse import parse_datetime
+            parsed = parse_datetime(local_now_str)
+            now_for_ai = parsed if parsed else timezone.now()
+        else:
+            now_for_ai = timezone.now()
+
         system_prompt = f"""
-        Current Time: {now.isoformat()}
-        Today is {now.strftime('%A, %B %d, %Y')}.
+        Current Time: {now_for_ai.strftime('%Y-%m-%dT%H:%M:%S')}
+        Today is {now_for_ai.strftime('%A, %B %d, %Y')}.
         
         Extract study session details from the user prompt. 
         Detect if it's RECURRING (e.g. "every", "weekly", "daily").
@@ -276,7 +288,7 @@ class InterpretScheduleView(APIView):
           "title": "mission title",
           "subject": "subject name or empty",
           "session_type": "study, class, exam, assignment, or personal",
-          "start_time": "ISO 8601 string",
+          "start_time": "ISO 8601 string WITHOUT timezone suffix (e.g. 2026-08-04T09:00:00 — no Z, no +00:00)",
           "duration_minutes": integer,
           "is_recurring": boolean,
           "days": [integer]
@@ -313,6 +325,15 @@ class InterpretScheduleView(APIView):
                 if start != -1 and end != -1:
                     json_str = clean_text[start:end+1]
                     data = json.loads(json_str)
+                    # Strip any timezone suffix from start_time so the frontend
+                    # gets a naive local ISO string. The client sent us local time
+                    # and expects local time back — we don't want Z or +00:00
+                    # causing a UTC conversion when JS parses the date.
+                    if isinstance(data.get('start_time'), str):
+                        st = data['start_time']
+                        # Remove trailing Z or offset like +05:30 / -08:00
+                        st = re.sub(r'([+-]\d{2}:\d{2}|Z)$', '', st)
+                        data['start_time'] = st
                     return Response(data)
                 raise ValueError("No valid JSON payload detected")
             except Exception as parse_err:
