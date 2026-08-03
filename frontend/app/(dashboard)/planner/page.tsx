@@ -131,6 +131,7 @@ export default function PlannerPage() {
       setShowModal(false)
       setNewTitle(''); setNewDate(''); setNewSubject('')
       setNewStart('09:00'); setNewEnd('10:00')
+      await qc.invalidateQueries({ queryKey: ['planner-sessions'] })
       await refetchSessions()
       toast.success('Session locked in! ✅')
     },
@@ -151,18 +152,26 @@ export default function PlannerPage() {
       const p = res.data
       if (!p || p.error) { toast.error('Could not understand that. Try rephrasing.'); return }
 
-      const start = new Date(p.start_time)
-      const end   = new Date(start.getTime() + (p.duration_minutes || 60) * 60000)
+      // Build end_time from the same start_time string to avoid UTC shift.
+      // toISOString() converts to UTC which can push the time to a different
+      // calendar date for users in non-UTC timezones — keep everything as a
+      // naive local ISO string the same way start_time comes from the AI.
+      const durationMs = (p.duration_minutes || 60) * 60000
+      const startDate  = new Date(p.start_time)
+      const endDate    = new Date(startDate.getTime() + durationMs)
+      // Format as local ISO without timezone offset so the backend stores the
+      // intended local time rather than the UTC-shifted equivalent.
+      const toLocalISO = (d: Date) => {
+        const pad = (n: number) => String(n).padStart(2, '0')
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+      }
+
       const payload = {
         title: p.title || 'Study Session',
         subject: p.subject || '',
         session_type: p.session_type || 'study',
-        // Send the datetime string directly — don't convert to UTC via toISOString()
-        // The backend parses ISO strings and stores them; converting to UTC via toISOString()
-        // can shift the date across midnight for users outside UTC
-        start_time: p.start_time,
-        end_time: new Date(new Date(p.start_time).getTime() + (p.duration_minutes || 60) * 60000)
-          .toISOString().replace(/\.\d{3}Z$/, ''),
+        start_time: toLocalISO(startDate),
+        end_time:   toLocalISO(endDate),
         status: 'scheduled',
       }
 
@@ -171,7 +180,7 @@ export default function PlannerPage() {
           ...payload,
           days: p.days,
           recurrence_type: 'weekly',
-          end_date: new Date(start.getTime() + 56*24*3600000).toISOString().split('T')[0],
+          end_date: toLocalISO(new Date(startDate.getTime() + 56*24*3600000)).split('T')[0],
         })
         toast.success(`Recurring session scheduled! 🔁`)
       } else {
@@ -180,6 +189,10 @@ export default function PlannerPage() {
       }
 
       setAiPrompt('')
+      // Invalidate the cache so React Query re-fetches from the server,
+      // then explicitly refetch to make the update synchronous before the
+      // toast disappears — fixes the "session count stays at 0" bug.
+      await qc.invalidateQueries({ queryKey: ['planner-sessions'] })
       await refetchSessions()
     } catch (e: any) {
       console.error('[AI Schedule]', e?.response?.data || e?.message)
