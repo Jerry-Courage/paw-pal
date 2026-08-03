@@ -394,20 +394,19 @@ class ParseTimetableView(APIView):
             logger.error(f'[ParseTimetable] No image data. FILES={list(request.FILES.keys())} DATA_KEYS={list(request.data.keys())}')
             return Response({'error': 'No image or file provided.'}, status=400)
 
-        system_prompt = f"""
-You are a timetable parser. Today is {now.strftime('%A, %B %d, %Y')}.
-Extract ALL class/study sessions from the timetable image.
-Return ONLY a raw JSON array of sessions. No markdown, no explanation.
-Each session must have:
+        system_prompt = f"""You are a timetable parser. Today is {now.strftime('%A, %B %d, %Y')}.
+Extract ALL class/study sessions visible in the timetable image.
+YOUR ENTIRE RESPONSE MUST BE ONLY a raw JSON array — nothing before [, nothing after ].
+No markdown, no code fences, no explanation text whatsoever.
+Each session object must have exactly these keys:
   "title": string (subject/class name),
-  "session_type": "class" | "study" | "exam" | "assignment",
-  "subject": string,
-  "day_of_week": 0-6 (0=Mon, 6=Sun),
-  "start_time": "HH:MM" (24-hour),
-  "end_time": "HH:MM" (24-hour),
-  "location": string or ""
-Start your response with [ and end with ].
-"""
+  "session_type": one of "class", "study", "exam", "assignment",
+  "subject": string (same as title if unknown),
+  "day_of_week": integer 0-6 (0=Monday, 6=Sunday),
+  "start_time": "HH:MM" in 24-hour format,
+  "end_time": "HH:MM" in 24-hour format,
+  "location": string or empty string
+Begin your response with [ and end with ]. No other text."""
         ai = AIService()
         try:
             content_parts = [
@@ -416,15 +415,39 @@ Start your response with [ and end with ].
             ]
             result = ai.chat_sync([{'role': 'user', 'content': content_parts}])
 
-            # Parse the JSON
+            logger.info(f'[ParseTimetable] AI raw response (first 500): {result[:500] if result else "EMPTY"}')
+
+            # Parse the JSON — handle various formats the AI might return
             import re as _re
-            clean = _re.sub(r'```json\s*|\s*```', '', result).strip()
+            import json as _json
+
+            # Strip markdown code fences first
+            clean = _re.sub(r'```(?:json)?\s*', '', result or '').strip()
+
+            # Try to find a JSON array anywhere in the response
             match = _re.search(r'\[[\s\S]*\]', clean)
             if not match:
-                return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
+                # Maybe the AI returned a JSON object with a sessions key
+                obj_match = _re.search(r'\{[\s\S]*\}', clean)
+                if obj_match:
+                    try:
+                        obj = _json.loads(obj_match.group(0))
+                        raw_sessions = obj.get('sessions', [])
+                        if raw_sessions:
+                            match = None  # handled below
+                        else:
+                            logger.error(f'[ParseTimetable] AI returned object but no sessions key. clean={clean[:300]}')
+                            return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
+                    except Exception:
+                        logger.error(f'[ParseTimetable] No JSON array or object found. clean={clean[:300]}')
+                        return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
+                else:
+                    logger.error(f'[ParseTimetable] No JSON found in AI response. clean={clean[:300]}')
+                    return Response({'error': 'Could not parse timetable. Try a clearer image.'}, status=400)
 
-            import json as _json
-            raw_sessions = _json.loads(match.group(0))
+            if match:
+                raw_sessions = _json.loads(match.group(0))
+            # else raw_sessions already set from the object path above
 
             # Convert day_of_week + time strings → ISO start/end for the current week.
             # Use naive datetimes (no timezone suffix) so the frontend's date-part
