@@ -129,13 +129,6 @@ export default function SolverPage({ params }: { params: { id: string } }) {
     try {
       const res = await libraryApi.solveMath(resourceId, problem, imgData || undefined)
       setSolution(res.data)
-      // Award 20 XP once per problem
-      if (!xpAwarded) {
-        authApi.awardXp(20, `AI Solver: ${problem.slice(0, 60) || 'Photo problem'}`, resourceId).catch(() => {})
-        qc.invalidateQueries({ queryKey: ['profile'] })
-        setXpAwarded(true)
-        toast.success('+20 XP earned! 🎉', { duration: 2000 })
-      }
     } catch {
       toast.error('Could not solve. Try rephrasing or using a clearer photo.')
     } finally { setSolving(false) }
@@ -197,10 +190,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
           <h1 className="text-[15px] font-black text-on-surface">AI Problem Solver</h1>
           <p className="text-[11px] text-on-surface-variant">Step-by-step solutions</p>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
-          <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-          <span className="text-[12px] font-black text-primary">+20 XP</span>
-        </div>
+        <div className="w-9" />
       </header>
 
       <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -408,11 +398,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
                     </div>
                   </div>
                   <div className="flex-1">
-                    <div className="bg-surface-container-low border-2 border-secondary/40 rounded-[1.5rem] p-5 relative overflow-hidden">
-                      <div className="absolute top-3 right-3 flex flex-col items-center justify-center w-12 h-12 rounded-full bg-primary/10 border border-primary/20">
-                        <span className="text-[13px] font-black text-primary">+20</span>
-                        <span className="text-[8px] font-black text-primary uppercase">XP</span>
-                      </div>
+                    <div className="bg-surface-container-low border-2 border-secondary/40 rounded-[1.5rem] p-5 overflow-hidden">
                       <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-3">Final Answer</p>
                       <div className="text-[22px] font-black text-on-surface overflow-x-auto">
                         <KatexDisplay formula={solution.final_answer} />
