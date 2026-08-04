@@ -66,6 +66,7 @@ export default function PlannerPage() {
   const [aiLoading, setAiLoading]   = useState(false)
   const [showModal, setShowModal]   = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [mobileDayIdx, setMobileDayIdx] = useState(() => today.getDay() === 0 ? 6 : today.getDay() - 1)
   const [importLoading, setImportLoading] = useState(false)
   const [importConfirming, setImportConfirming] = useState(false)
   const [importSessions, setImportSessions] = useState<any[]>([])
@@ -268,7 +269,6 @@ export default function PlannerPage() {
               onChange={e => setAiPrompt(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAISchedule()}
             />
-            {/* Timetable upload */}
             <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleTimetableFile(f); e.target.value = '' }} />
             <button onClick={() => fileRef.current?.click()}
@@ -279,8 +279,8 @@ export default function PlannerPage() {
             <button onClick={handleAISchedule} disabled={aiLoading || !aiPrompt.trim()}
               className="bg-primary-container text-on-primary-container px-5 py-2 rounded-full font-bold flex items-center gap-2 disabled:opacity-40 text-[13px] shrink-0 shadow-[0_3px_0_0_#763300] active:translate-y-0.5 active:shadow-none hover:brightness-110 transition-all">
               {aiLoading
-                ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Scheduling…</>
-                : <><span>Execute</span><span className="material-symbols-outlined text-[16px]">send</span></>}
+                ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span></>
+                : <><span className="hidden md:inline">Execute</span><span className="material-symbols-outlined text-[16px]">send</span></>}
             </button>
           </div>
           <p className="text-[11px] text-on-surface-variant/50 text-center mt-1.5">
@@ -293,9 +293,6 @@ export default function PlannerPage() {
           <div className="flex items-center justify-between mb-4 shrink-0">
             <div className="flex items-center gap-3">
               <h2 className="text-[20px] font-bold text-on-surface">Weekly Planner</h2>
-              <span className="text-[11px] font-bold text-on-surface-variant bg-surface-container-highest px-3 py-1 rounded-full">
-                {weekDates[0].toLocaleDateString('en',{month:'short',day:'numeric'})} – {weekDates[6].toLocaleDateString('en',{month:'short',day:'numeric'})}
-              </span>
             </div>
             <button onClick={() => setShowModal(true)}
               className="flex items-center gap-1.5 bg-primary-container text-on-primary-container font-bold px-4 py-2 rounded-full text-[13px] shadow-[0_3px_0_0_#763300] active:translate-y-0.5 active:shadow-none hover:brightness-110 transition-all">
@@ -304,48 +301,71 @@ export default function PlannerPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 gap-2 mb-3 sticky top-0 bg-surface-container z-10 pb-2">
-              {weekDates.map((d,i) => {
-                const isToday = d.toDateString() === today.toDateString()
-                return (
-                  <div key={i} className={cn('text-center', isToday && 'text-primary')}>
-                    <p className={cn('text-[10px] font-black uppercase tracking-widest', isToday?'text-primary':'text-on-surface-variant')}>
-                      {d.toLocaleDateString('en',{weekday:'short'})}
-                    </p>
-                    <p className={cn('text-[18px] font-bold', isToday?'text-primary':'text-on-surface')}>{d.getDate()}</p>
-                    {isToday && <div className="w-1.5 h-1.5 rounded-full bg-primary mx-auto mt-0.5" />}
-                  </div>
-                )
-              })}
+            {/* Mobile Tab Scroller */}
+            <div className="flex md:hidden overflow-x-auto gap-2 pb-4 scrollbar-hide">
+              {weekDates.map((d, i) => (
+                <button key={i} onClick={() => setMobileDayIdx(i)}
+                  className={cn("flex flex-col items-center justify-center min-w-[50px] py-2 rounded-[0.75rem] border", mobileDayIdx === i ? "bg-primary text-on-primary border-primary" : "bg-surface-container-high border-outline-variant/20")}>
+                  <span className="text-[10px] uppercase font-bold opacity-70">{d.toLocaleDateString('en', {weekday: 'narrow'})}</span>
+                  <span className="text-[16px] font-bold">{d.getDate()}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Day headers (Desktop) */}
+            <div className="hidden md:grid grid-cols-7 gap-2 mb-3 sticky top-0 bg-surface-container z-10 pb-2">
+              {weekDates.map((d, i) => (
+                <div key={i} className={cn('text-center', d.toDateString() === today.toDateString() && 'text-primary')}>
+                  <p className={cn('text-[10px] font-black uppercase tracking-widest', d.toDateString() === today.toDateString() ?'text-primary':'text-on-surface-variant')}>
+                    {d.toLocaleDateString('en',{weekday:'short'})}
+                  </p>
+                  <p className={cn('text-[18px] font-bold', d.toDateString() === today.toDateString() ?'text-primary':'text-on-surface')}>{d.getDate()}</p>
+                </div>
+              ))}
             </div>
 
             {/* Session grid */}
-            <div className="grid grid-cols-7 gap-2 min-h-[240px]">
+            <div className="hidden md:grid grid-cols-7 gap-2 min-h-[240px]">
               {sessionsByDay.map((daySessions, dayIdx) => (
                 <div key={dayIdx} className="space-y-1.5">
-                  {daySessions.length === 0 ? (
-                    <div
-                      className="h-full min-h-[100px] rounded-[1rem] border-2 border-dashed border-outline-variant/15 hover:border-primary/30 transition-colors cursor-pointer"
-                      onClick={() => { setNewDate(localDateStr(weekDates[dayIdx])); setShowModal(true) }}
-                    />
-                  ) : (
-                    daySessions.map((s: any) => (
-                      <div key={s.id}
-                        className={cn('rounded-[0.875rem] p-2.5 border-l-4 flex flex-col gap-1 group relative cursor-default', TYPE_COLOR[s.session_type] || TYPE_COLOR.study)}>
-                        <p className="text-[10px] font-black uppercase tracking-wider opacity-60">{s.session_type}</p>
-                        <p className="text-[12px] font-bold leading-tight">{s.title}</p>
-                        <p className="text-[10px] opacity-60">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</p>
-                        <button
-                          onClick={() => deleteMutation.mutate(s.id)}
-                          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-error/20 text-error flex items-center justify-center">
-                          <span className="material-symbols-outlined text-[12px]">close</span>
-                        </button>
-                      </div>
-                    ))
-                  )}
+                  {daySessions.map((s: any) => (
+                    <div key={s.id} className={cn('rounded-[0.875rem] p-2.5 border-l-4 flex flex-col gap-1', TYPE_COLOR[s.session_type] || TYPE_COLOR.study)}>
+                      <p className="text-[10px] font-black uppercase tracking-wider opacity-60">{s.session_type}</p>
+                      <p className="text-[12px] font-bold leading-tight">{s.title}</p>
+                    </div>
+                  ))}
                 </div>
               ))}
+            </div>
+
+            {/* Mobile View */}
+            <div className="md:hidden space-y-2">
+              {(sessionsByDay[mobileDayIdx] || []).length === 0 ? (
+                <div
+                  className="h-32 rounded-[1rem] border-2 border-dashed border-outline-variant/20 flex flex-col items-center justify-center gap-2 text-on-surface-variant/40 cursor-pointer hover:border-primary/30 transition-colors"
+                  onClick={() => { setNewDate(localDateStr(weekDates[mobileDayIdx])); setShowModal(true) }}
+                >
+                  <span className="material-symbols-outlined text-[28px]">add_circle</span>
+                  <span className="text-[12px] font-semibold">Tap to add a session</span>
+                </div>
+              ) : (
+                (sessionsByDay[mobileDayIdx] || []).map((s: any) => (
+                  <div key={s.id} className={cn('rounded-[1rem] p-3 border-l-4 flex justify-between items-center gap-2', TYPE_COLOR[s.session_type] || TYPE_COLOR.study)}>
+                    <div className="flex items-start gap-2 min-w-0">
+                      <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5" style={{fontVariationSettings:"'FILL' 1"}}>{TYPE_ICON[s.session_type] || 'book'}</span>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold leading-tight truncate">{s.title}</p>
+                        {s.subject && <p className="text-[11px] opacity-60 truncate">{s.subject}</p>}
+                        <p className="text-[11px] opacity-60 mt-0.5">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => deleteMutation.mutate(s.id)}
+                      className="p-1.5 rounded-full bg-error/15 text-error hover:bg-error/25 transition-all shrink-0">
+                      <span className="material-symbols-outlined text-[14px]">close</span>
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
@@ -379,14 +399,18 @@ export default function PlannerPage() {
           <h3 className="text-[14px] font-black text-primary mb-3 flex items-center gap-2 uppercase tracking-widest">
             <span className="material-symbols-outlined text-[16px]">analytics</span>Today&apos;s HUD
           </h3>
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-3 md:grid-cols-2 gap-2 mb-3">
             <div className="bg-surface-container p-3 rounded-[1rem] text-center">
               <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest">Sessions</p>
-              <p className="text-[26px] font-bold text-primary">{todaySessions.length}</p>
+              <p className="text-[24px] font-bold text-primary">{todaySessions.length}</p>
             </div>
             <div className="bg-surface-container p-3 rounded-[1rem] text-center">
               <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest">Deadlines</p>
-              <p className="text-[26px] font-bold text-tertiary">{upcomingDeadlines.length}</p>
+              <p className="text-[24px] font-bold text-tertiary">{upcomingDeadlines.length}</p>
+            </div>
+            <div className="bg-surface-container p-3 rounded-[1rem] text-center md:hidden">
+              <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest">This Week</p>
+              <p className="text-[24px] font-bold text-secondary">{sessions.length}</p>
             </div>
           </div>
           <div className="bg-surface-container rounded-[1rem] p-3">

@@ -61,7 +61,7 @@ export default function MobileNav() {
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-low border-t border-outline-variant/20 flex justify-around items-center py-base nav-safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-low border-t border-outline-variant/20 flex justify-around items-start pt-3 nav-safe-bottom">
         {BOTTOM_ITEMS.map(item => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (

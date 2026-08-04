@@ -96,9 +96,17 @@
 .main-safe-top {
   padding-top: calc(4rem + env(safe-area-inset-top));
 }
-/* Bottom safe area for bottom nav bar */
+/*
+ * Bottom nav on iPhone X/11/12/13/14:
+ * The nav background must extend into the home indicator zone (pb for
+ * the inset), but the nav ITEMS must sit in the 56px content area
+ * above the inset — achieved by using padding-bottom on the <nav>
+ * itself (background extends) while items use items-start + pt-base.
+ */
 .nav-safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+  /* ensure total bar height = content + inset, not just inset */
+  min-height: calc(3.5rem + env(safe-area-inset-bottom));
 }
 
 /* ── Squishy button effects ─────────────────────────────────────── */
