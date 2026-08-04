@@ -88,6 +88,11 @@
   padding-top: env(safe-area-inset-top);
   height: calc(3.5rem + env(safe-area-inset-top)); /* 56px + notch */
 }
+/* Applied to full-viewport study tool page headers (quiz, flashcards,
+   podcast, mindmap etc.) — adds notch padding without enforcing h-14. */
+.tool-header-safe {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
 /* Applied to the side drawer header area */
 .mobile-drawer-header-safe {
   padding-top: calc(1rem + env(safe-area-inset-top));

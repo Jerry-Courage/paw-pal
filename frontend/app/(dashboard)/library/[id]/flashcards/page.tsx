@@ -216,7 +216,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden select-none">
 
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-6 py-4 shrink-0">
+      <header className="flex items-center justify-between px-6 py-4 shrink-0 tool-header-safe">
         {/* Left: back + subject/title */}
         <div className="flex items-center gap-3 min-w-0">
           <Link href={`/library/${resourceId}`}

@@ -373,7 +373,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
       `}</style>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-indigo-500/20 bg-black/60 backdrop-blur shrink-0">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-indigo-500/20 bg-black/60 backdrop-blur shrink-0 tool-header-safe">
         <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm">
           <ChevronLeft className="w-4 h-4" /> Back
         </Link>

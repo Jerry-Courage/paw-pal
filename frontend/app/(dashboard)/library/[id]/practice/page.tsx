@@ -272,7 +272,7 @@ export default function PracticePage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden select-none">
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-6 py-4 shrink-0">
+      <header className="flex items-center justify-between px-6 py-4 shrink-0 tool-header-safe">
         <Link href={`/library/${resourceId}`}
           className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors text-[13px] font-bold">
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>

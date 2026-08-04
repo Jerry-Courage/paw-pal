@@ -708,7 +708,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden select-none">
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0 tool-header-safe">
         <Link href={`/library/${resourceId}`}
           className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all">
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -859,7 +859,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
       `}} />
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0 tool-header-safe">
         <button onClick={endSession} disabled={isEndingSession}
           className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all">
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>

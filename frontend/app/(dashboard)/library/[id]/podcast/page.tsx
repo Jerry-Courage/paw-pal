@@ -384,7 +384,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   if (status === 'idle') return (
     <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0 tool-header-safe">
         <Link href={`/library/${resourceId}`}
           className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -430,7 +430,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   // ── Generating ───────────────────────────────────────────────────
   if (status === 'generating') return (
     <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0 tool-header-safe">
         <Link href={`/library/${resourceId}`}
           className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -458,7 +458,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   // ── Error ────────────────────────────────────────────────────────
   if (status === 'error') return (
     <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+      <div className="flex items-center gap-3 px-5 py-4 shrink-0 tool-header-safe">
         <Link href={`/library/${resourceId}`}
           className="p-2 rounded-[1rem] bg-white/5 hover:bg-white/10 border border-white/8 transition-all">
           <ArrowLeft className="w-4 h-4 text-slate-400" />
@@ -482,7 +482,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 bg-[#0d0d0d] flex flex-col overflow-hidden">
 
       {/* ── TOP HEADER — back button only ─────────────────────────── */}
-      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-5 py-4 pointer-events-none">
+      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-5 py-4 pointer-events-none tool-header-safe">
         <div className="pointer-events-auto flex items-center gap-3">
           <Link href={`/library/${resourceId}`}
             className="p-2 rounded-[1rem] bg-[#1a1a1a]/90 backdrop-blur-sm border border-white/8 text-slate-400 hover:text-white hover:bg-white/10 transition-all">

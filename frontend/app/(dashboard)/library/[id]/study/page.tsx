@@ -447,7 +447,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       )}
 
       {/* ── Top bar ── */}
-      <header className="h-14 sm:h-16 flex items-center gap-3 px-4 sm:px-6 border-b border-outline-variant/25 bg-surface-container-low shrink-0 z-20">
+      <header className="flex items-center gap-3 px-4 sm:px-6 border-b border-outline-variant/25 bg-surface-container-low shrink-0 z-20 tool-header-safe">
         <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors shrink-0">
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           <span className="text-sm font-semibold hidden sm:block">Exit</span>
