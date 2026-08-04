@@ -406,7 +406,7 @@ POWERUP_PRICES = {
     'clue_5050':    {'name': '50/50 Clue',       'cost_xp': 250, 'icon': 'tips_and_updates', 'desc': 'Eliminates 2 wrong options in a Quiz Battle'},
     'time_extend':  {'name': 'Time Extension',   'cost_xp': 300, 'icon': 'hourglass_top',    'desc': 'Adds +10 seconds to your question timer'},
     'streak_guard': {'name': 'Streak Guard',     'cost_xp': 500, 'icon': 'shield',           'desc': 'Saves your streak on 1 wrong answer'},
-    'double_xp':    {'name': '2x XP Boost',      'cost_xp': 400, 'icon': 'bolt', font_symbol: 'bolt', 'desc': 'Earn double XP for your next 3 Quiz Battles'},
+    'double_xp':    {'name': '2x XP Boost',      'cost_xp': 400, 'icon': 'bolt',             'desc': 'Earn double XP for your next 3 Quiz Battles'},
     'hint':         {'name': 'AI Clue / Poll',   'cost_xp': 350, 'icon': 'visibility',       'desc': 'Shows AI answer probability breakdown'},
 }
 
