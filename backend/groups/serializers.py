@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer
 from users.serializers import UserSerializer
 
 
@@ -88,3 +88,44 @@ class GroupDocumentSerializer(serializers.ModelSerializer):
         if obj.author:
             return obj.author.get_full_name() or obj.author.username
         return 'Unknown'
+
+
+class QuizQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = QuizQuestion
+        fields = ('id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d', 'correct')
+
+
+class QuizQuestionPublicSerializer(serializers.ModelSerializer):
+    """Like QuizQuestionSerializer but omits the correct answer — sent to players during game."""
+    class Meta:
+        model  = QuizQuestion
+        fields = ('id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d')
+
+
+class QuizPlayerSerializer(serializers.ModelSerializer):
+    username   = serializers.CharField(source='user.username', read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = QuizPlayer
+        fields = ('id', 'username', 'avatar_url', 'score', 'streak')
+
+    def get_avatar_url(self, obj):
+        try:
+            return obj.user.profile_picture.url if obj.user.profile_picture else None
+        except Exception:
+            return None
+
+
+class QuizRoomSerializer(serializers.ModelSerializer):
+    host_name  = serializers.CharField(source='host.username', read_only=True)
+    players    = QuizPlayerSerializer(many=True, read_only=True)
+    q_count    = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = QuizRoom
+        fields = ('id', 'pin', 'title', 'host_name', 'status', 'current_q_idx', 'time_per_q', 'players', 'q_count', 'created_at')
+
+    def get_q_count(self, obj):
+        return obj.questions.count()

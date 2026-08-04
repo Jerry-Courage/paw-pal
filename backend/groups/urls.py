@@ -3,6 +3,8 @@ from .views import (
     GroupListCreateView, GroupDetailView, JoinLeaveGroupView,
     GroupSessionListCreateView, GroupTaskView, GroupTaskDetailView,
     GroupMessageView, GroupDocumentView, GroupDocumentDetailView,
+    QuizRoomCreateView, QuizRoomJoinView, QuizRoomDetailView, QuizQuestionsView,
+    QuizGenerateView,
 )
 
 urlpatterns = [
@@ -15,4 +17,10 @@ urlpatterns = [
     path('<int:group_id>/messages/', GroupMessageView.as_view()),
     path('<int:group_id>/documents/', GroupDocumentView.as_view()),
     path('<int:group_id>/documents/<int:pk>/', GroupDocumentDetailView.as_view()),
+    # Quiz battle
+    path('quiz/', QuizRoomCreateView.as_view()),
+    path('quiz/generate/', QuizGenerateView.as_view()),
+    path('quiz/join/', QuizRoomJoinView.as_view()),
+    path('quiz/<str:pin>/', QuizRoomDetailView.as_view()),
+    path('quiz/<str:pin>/questions/', QuizQuestionsView.as_view()),
 ]

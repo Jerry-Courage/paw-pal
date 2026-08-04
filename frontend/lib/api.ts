@@ -280,6 +280,12 @@ export const groupsApi = {
   sendMessage: (groupId: number, content: string) =>
     api.post(`/groups/${groupId}/messages/`, { content }),
   getSessions: (groupId: number) => api.get(`/groups/${groupId}/sessions/`),
+  // Quiz Battle
+  createQuiz:    (data: any) => api.post('/groups/quiz/', data),
+  generateQuiz:  (data: any) => api.post('/groups/quiz/generate/', data),
+  joinQuiz:      (pin: string) => api.post('/groups/quiz/join/', { pin }),
+  getQuizRoom:   (pin: string) => api.get(`/groups/quiz/${pin}/`),
+  getQuizQuestions: (pin: string) => api.get(`/groups/quiz/${pin}/questions/`),
 }
 
 // Planner

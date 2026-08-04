@@ -3,10 +3,11 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer, QuizAnswer
 from .serializers import (
     StudyGroupSerializer, GroupSessionSerializer,
-    GroupTaskSerializer, GroupMessageSerializer, GroupDocumentSerializer
+    GroupTaskSerializer, GroupMessageSerializer, GroupDocumentSerializer,
+    QuizRoomSerializer, QuizQuestionSerializer,
 )
 from ai_assistant.services import AIService
 
@@ -141,3 +142,144 @@ class GroupDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return GroupDocument.objects.filter(group_id=self.kwargs['group_id'])
+
+
+# ── Quiz Battle Views ─────────────────────────────────────────────────────────
+
+class QuizRoomCreateView(APIView):
+    """POST /api/groups/quiz/  — create a quiz room with questions."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        title       = request.data.get('title', 'Quiz Battle').strip()
+        time_per_q  = int(request.data.get('time_per_q', 20))
+        questions   = request.data.get('questions', [])
+
+        if not questions:
+            return Response({'error': 'At least one question is required.'}, status=400)
+
+        room = QuizRoom.objects.create(
+            title=title,
+            host=request.user,
+            time_per_q=time_per_q,
+        )
+        for i, q in enumerate(questions):
+            QuizQuestion.objects.create(
+                room    = room,
+                order   = i,
+                text    = q.get('text', ''),
+                opt_a   = q.get('opt_a', ''),
+                opt_b   = q.get('opt_b', ''),
+                opt_c   = q.get('opt_c', ''),
+                opt_d   = q.get('opt_d', ''),
+                correct = q.get('correct', 'A'),
+            )
+        # Host auto-joins as first player
+        QuizPlayer.objects.create(room=room, user=request.user)
+        return Response(QuizRoomSerializer(room).data, status=201)
+
+
+class QuizRoomJoinView(APIView):
+    """POST /api/groups/quiz/join/  — join by 6-digit PIN."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        pin = request.data.get('pin', '').strip()
+        room = get_object_or_404(QuizRoom, pin=pin)
+
+        if room.status != 'lobby':
+            return Response({'error': 'Game already in progress.'}, status=400)
+
+        player, created = QuizPlayer.objects.get_or_create(room=room, user=request.user)
+        return Response(QuizRoomSerializer(room).data)
+
+
+class QuizRoomDetailView(APIView):
+    """GET /api/groups/quiz/<pin>/  — poll room state."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pin):
+        room = get_object_or_404(QuizRoom, pin=pin)
+        return Response(QuizRoomSerializer(room).data)
+
+
+class QuizQuestionsView(APIView):
+    """GET /api/groups/quiz/<pin>/questions/  — host-only: get all questions with answers."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pin):
+        room = get_object_or_404(QuizRoom, pin=pin, host=request.user)
+        qs   = room.questions.all()
+        return Response(QuizQuestionSerializer(qs, many=True).data)
+
+
+class QuizGenerateView(APIView):
+    """
+    POST /api/groups/quiz/generate/
+    Body: { resource_id, title?, count?, time_per_q? }
+
+    Calls AIService.generate_quiz() on the given library resource,
+    converts the AI output format into QuizQuestion rows, and returns
+    a ready-to-join QuizRoom (host is auto-added as first player).
+
+    AI output shape:
+      [{ question, options: [a, b, c, d], correct_answer: <exact string>, explanation }]
+
+    Our model shape:
+      opt_a/b/c/d  +  correct: 'A'|'B'|'C'|'D'
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from library.models import Resource
+        from ai_assistant.services import AIService
+        from django.db.models import Q
+
+        resource_id = request.data.get('resource_id')
+        count       = int(request.data.get('count', 10))
+        time_per_q  = int(request.data.get('time_per_q', 20))
+        title       = request.data.get('title', '').strip()
+
+        if not resource_id:
+            return Response({'error': 'resource_id is required.'}, status=400)
+
+        resource = get_object_or_404(
+            Resource,
+            Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True))
+        )
+
+        if not title:
+            title = f'{resource.title} — Quiz Battle'
+
+        ai = AIService()
+        raw_questions = ai.generate_quiz(resource, fmt='mcq', level='undergrad', count=count)
+
+        if not raw_questions:
+            return Response({'error': 'AI could not generate questions. Try a different resource.'}, status=500)
+
+        room = QuizRoom.objects.create(title=title, host=request.user, time_per_q=time_per_q)
+        QuizPlayer.objects.create(room=room, user=request.user)
+
+        for i, q in enumerate(raw_questions):
+            opts = q.get('options', [])
+            # Pad to 4 if AI returned fewer
+            while len(opts) < 4:
+                opts.append('—')
+            opt_a, opt_b, opt_c, opt_d = opts[0], opts[1], opts[2], opts[3]
+
+            correct_str = q.get('correct_answer', '')
+            # Map the exact answer string back to A/B/C/D
+            correct_letter = 'A'
+            for letter, opt in zip(['A','B','C','D'], [opt_a, opt_b, opt_c, opt_d]):
+                if opt.strip().lower() == correct_str.strip().lower():
+                    correct_letter = letter
+                    break
+
+            QuizQuestion.objects.create(
+                room=room, order=i,
+                text=q.get('question', ''),
+                opt_a=opt_a, opt_b=opt_b, opt_c=opt_c, opt_d=opt_d,
+                correct=correct_letter,
+            )
+
+        return Response(QuizRoomSerializer(room).data, status=201)
