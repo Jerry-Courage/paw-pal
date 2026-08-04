@@ -43,7 +43,7 @@ export default function MobileNav() {
   return (
     <>
       {/* Top bar (mobile only) */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-surface-container-low shadow-sm flex justify-between items-center px-margin-mobile py-base h-14">
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-surface-container-low shadow-sm flex justify-between items-center px-margin-mobile mobile-header-safe">
         <Link href="/dashboard">
           <span className="text-[22px] font-bold text-primary">FlowState</span>
         </Link>
@@ -61,7 +61,7 @@ export default function MobileNav() {
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-low border-t border-outline-variant/20 flex justify-around items-center py-base safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-low border-t border-outline-variant/20 flex justify-around items-center py-base nav-safe-bottom">
         {BOTTOM_ITEMS.map(item => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (
@@ -107,7 +107,7 @@ export default function MobileNav() {
             onClick={() => setDrawerOpen(false)}
           />
           <div className="fixed top-0 left-0 h-full w-72 bg-surface-container-low z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-250">
-            <div className="flex items-center justify-between px-stack-md pt-16 pb-stack-md border-b border-outline-variant/20">
+            <div className="flex items-center justify-between px-stack-md pb-stack-md border-b border-outline-variant/20 mobile-drawer-header-safe">
               <span className="text-[22px] font-bold text-primary">FlowState</span>
               <button onClick={() => setDrawerOpen(false)}>
                 <span className="material-symbols-outlined text-on-surface-variant">close</span>

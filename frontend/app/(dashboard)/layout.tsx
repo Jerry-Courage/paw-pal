@@ -78,7 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           'md:ml-[68px]',
           shouldFullViewport
             ? 'fixed inset-0 md:left-[68px] overflow-hidden z-30'
-            : 'min-h-screen pt-16 md:pt-6 pb-28 md:pb-8'
+            : 'min-h-screen main-safe-top md:pt-6 pb-28 md:pb-8'
         )}
       >
         {children}

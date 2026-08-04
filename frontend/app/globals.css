@@ -81,6 +81,26 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* ── iPhone safe-area utilities ─────────────────────────────────── */
+/* Applied to the fixed mobile top header so it expands below the   */
+/* notch / Dynamic Island. Height = h-14 (56px) + status bar inset. */
+.mobile-header-safe {
+  padding-top: env(safe-area-inset-top);
+  height: calc(3.5rem + env(safe-area-inset-top)); /* 56px + notch */
+}
+/* Applied to the side drawer header area */
+.mobile-drawer-header-safe {
+  padding-top: calc(1rem + env(safe-area-inset-top));
+}
+/* Applied to <main> on standard pages so content clears the header */
+.main-safe-top {
+  padding-top: calc(4rem + env(safe-area-inset-top));
+}
+/* Bottom safe area for bottom nav bar */
+.nav-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* ── Squishy button effects ─────────────────────────────────────── */
 .btn-squishy {
   transition: transform 0.1s ease, box-shadow 0.1s ease;
