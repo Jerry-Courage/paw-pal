@@ -62,7 +62,6 @@ export default function WorkspaceCollaborationStudio() {
   const [workspace, setWorkspace] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [inputText, setInputText] = useState('')
-  const [sidekickInput, setSidekickInput] = useState('')
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({})
   const [replyingTo, setReplyingTo] = useState<any>(null)
   const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState(false)
@@ -96,7 +95,6 @@ export default function WorkspaceCollaborationStudio() {
     onConfirm: () => {}
   })
   const scrollRef = useRef<HTMLDivElement>(null)
-  const sidekickScrollRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const timerRef = useRef<any>(null)
@@ -113,9 +111,6 @@ export default function WorkspaceCollaborationStudio() {
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-    if (sidekickScrollRef.current) {
-      sidekickScrollRef.current.scrollTop = sidekickScrollRef.current.scrollHeight
     }
   }, [messages])
 
@@ -321,31 +316,6 @@ export default function WorkspaceCollaborationStudio() {
       
       const response = await workspaceApi.sendMessage(Number(id), data, replyingTo?.id)
       setReplyingTo(null)
-    } catch (err) {
-      console.error(err)
-      setMessages(prev => prev.filter(m => m.id !== optimisticId))
-    }
-  }
-
-  const handleSendSidekick = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    if (!sidekickInput.trim()) return
-    const text = `@Flow ${sidekickInput.trim()}`
-    setSidekickInput('')
-    const optimisticId = `opt-sk-${Date.now()}`
-    const tempMsg = {
-      id: optimisticId,
-      content: text,
-      author: session?.user,
-      created_at: new Date().toISOString(),
-      is_ai: false,
-      is_optimistic: true,
-      audio_file: null,
-      attachment: null,
-    }
-    setMessages(prev => [...prev, tempMsg])
-    try {
-      await workspaceApi.sendMessage(Number(id), text, undefined)
     } catch (err) {
       console.error(err)
       setMessages(prev => prev.filter(m => m.id !== optimisticId))
@@ -853,96 +823,6 @@ export default function WorkspaceCollaborationStudio() {
         </main>
 
         {/* ── RIGHT PANEL: Sidekick AI (w-80) ── */}
-        <aside className="hidden lg:flex w-72 flex-shrink-0 flex-col bg-surface-container border-l border-outline-variant/20 overflow-hidden">
-          {/* Panel header */}
-          <div className="bg-surface-container-low border-b border-outline-variant/10 flex items-center justify-between p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-tertiary/20 flex items-center justify-center">
-                <span className="material-symbols-outlined text-tertiary" style={{ fontSize: 20 }}>smart_toy</span>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-on-surface leading-tight">Sidekick AI</p>
-                <p className="text-[11px] font-medium text-tertiary">Ready to help!</p>
-              </div>
-            </div>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant/60 hover:text-on-surface">
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>settings</span>
-            </button>
-          </div>
-
-          {/* AI message feed */}
-          <div ref={sidekickScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
-            {/* Starter message */}
-            <div className="flex items-start gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-white" style={{ fontSize: 13 }}>smart_toy</span>
-              </div>
-              <div className="bg-tertiary-container/10 border border-tertiary-container/20 rounded-2xl rounded-tl-sm text-on-surface px-4 py-3 text-sm max-w-[85%]">
-                <p className="text-[13px] leading-relaxed">
-                  Hey <span className="font-semibold text-primary-container">{workspace?.name}</span>! I'm here to help. Mention me with <span className="font-mono font-bold text-tertiary">@Flow</span> in the chat!
-                </p>
-              </div>
-            </div>
-
-            {/* AI messages from the main feed */}
-            {messages.filter(m => m.is_ai).map((ms, i) => (
-              <div key={ms.id || `ai-${i}`} className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div className="bg-tertiary-container/10 border border-tertiary-container/20 rounded-2xl rounded-tl-sm text-on-surface px-4 py-3 text-sm max-w-[85%]">
-                  <p className="text-[10px] font-semibold text-on-surface-variant mb-1">
-                    {new Date(ms.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                  <div className="prose prose-invert prose-xs max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {ms.content?.split(/\bACTION\b/i)[0].trim() || ''}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {messages.filter(m => m.is_ai).length === 0 && (
-              <div className="text-center py-6">
-                <span className="material-symbols-outlined text-on-surface-variant/20" style={{ fontSize: 36 }}>forum</span>
-                <p className="text-[11px] text-on-surface-variant/40 mt-2">AI responses will appear here</p>
-              </div>
-            )}
-          </div>
-
-          {/* Quick action chips */}
-          <div className="px-4 pb-2 flex flex-wrap gap-1.5">
-            {['Summarize Chat', 'Find Resources', 'Create Quiz'].map((chip) => (
-              <button
-                key={chip}
-                onClick={() => setSidekickInput(chip + ' ')}
-                className="px-3 py-1 bg-surface-container rounded-full text-[11px] font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container-high transition-colors"
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-
-          {/* Sidekick input */}
-          <div className="bg-surface-container-low border-t border-outline-variant/10 p-4">
-            <form onSubmit={handleSendSidekick} className="flex items-center gap-2">
-              <input
-                value={sidekickInput}
-                onChange={e => setSidekickInput(e.target.value)}
-                placeholder="Ask Sidekick something..."
-                className="flex-1 bg-surface-container-highest border-2 border-transparent focus:border-tertiary-container rounded-full px-4 py-2 text-[13px] focus:outline-none placeholder:text-on-surface-variant/40 transition-all min-w-0"
-              />
-              <button
-                type="submit"
-                disabled={!sidekickInput.trim()}
-                className="w-9 h-9 bg-tertiary rounded-full flex items-center justify-center text-on-tertiary-container hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
-          </div>
-        </aside>
 
       </div>{/* end 3-col body */}
 

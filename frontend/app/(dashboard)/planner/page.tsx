@@ -67,6 +67,7 @@ export default function PlannerPage() {
   const [showModal, setShowModal]   = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importLoading, setImportLoading] = useState(false)
+  const [importConfirming, setImportConfirming] = useState(false)
   const [importSessions, setImportSessions] = useState<any[]>([])
   const [pushEnabled, setPushEnabled] = useState(false)
 
@@ -224,7 +225,8 @@ export default function PlannerPage() {
   }
 
   const handleImportConfirm = async () => {
-    if (!importSessions.length) return
+    if (!importSessions.length || importConfirming) return
+    setImportConfirming(true)
     try {
       for (const s of importSessions) {
         await plannerApi.createSession({ ...s, is_ai_suggested: true })
@@ -236,6 +238,8 @@ export default function PlannerPage() {
       setImportSessions([])
     } catch {
       toast.error('Import failed. Please try again.')
+    } finally {
+      setImportConfirming(false)
     }
   }
 
@@ -582,8 +586,11 @@ export default function PlannerPage() {
 
                 <div className="flex gap-2 pt-3 shrink-0">
                   <button onClick={handleImportConfirm}
-                    className="flex-1 bg-primary-container text-on-primary-container font-bold py-3 rounded-[1rem] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all">
-                    Import {importSessions.length} Sessions 📅
+                    disabled={importConfirming}
+                    className="flex-1 bg-primary-container text-on-primary-container font-bold py-3 rounded-[1rem] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {importConfirming
+                      ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Importing…</>
+                      : `Import ${importSessions.length} Sessions 📅`}
                   </button>
                   <button onClick={() => { setShowImport(false); setImportSessions([]) }}
                     className="px-5 bg-surface-container-high text-on-surface-variant font-bold rounded-[1rem] hover:bg-surface-container-highest transition-all">
