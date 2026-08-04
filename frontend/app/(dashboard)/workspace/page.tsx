@@ -112,37 +112,6 @@ export default function WorkspacesPage() {
         </div>
       )}
 
-      {/* Daily focus challenge */}
-      <section className="mt-stack-lg">
-        <h2 className="text-[22px] font-bold text-on-surface mb-stack-md">Daily Focus Challenge</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
-          <div className="md:col-span-2 bg-gradient-to-br from-primary-container/20 to-surface-container rounded-[1.5rem] p-gutter relative overflow-hidden flex flex-col justify-between min-h-[200px] border-l-4 border-primary shadow-sm">
-            <div className="z-10">
-              <span className="inline-block bg-primary/20 text-primary text-[13px] font-bold px-base py-1 rounded-full mb-base">Live Now</span>
-              <h3 className="text-[22px] font-bold text-on-surface">The Great Library Quiet-Off</h3>
-              <p className="text-[15px] text-on-surface-variant max-w-md">Join students in a shared focus session. Earn double reward XP!</p>
-            </div>
-            <div className="mt-stack-md z-10">
-              <button className="bg-primary-container text-on-primary-container px-gutter py-stack-sm rounded-full font-bold shadow-[0_4px_0_0_#763300] btn-squishy text-[14px]">
-                Join Session
-              </button>
-            </div>
-            <div className="absolute -right-10 -bottom-10 w-48 h-48 opacity-10">
-              <span className="material-symbols-outlined text-[180px] text-primary">auto_stories</span>
-            </div>
-          </div>
-          <div className="bg-surface-container rounded-[1.5rem] p-gutter flex flex-col items-center justify-center text-center">
-            <div className="w-20 h-20 bg-tertiary-container/30 rounded-full flex items-center justify-center mb-stack-sm">
-              <span className="material-symbols-outlined text-[40px] text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
-            </div>
-            <h3 className="text-[16px] font-bold text-on-surface">Weekly Goal</h3>
-            <p className="text-[14px] text-on-surface-variant">{workspaces.length}/5 Workspaces joined</p>
-            <div className="w-full h-3 bg-surface-container-highest rounded-full mt-stack-sm overflow-hidden">
-              <div className="h-full bg-tertiary rounded-full shadow-[0_0_12px_rgba(212,187,255,0.4)]" style={{ width: `${Math.min(100, workspaces.length * 20)}%` }} />
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Create modal */}
       {showCreate && (
