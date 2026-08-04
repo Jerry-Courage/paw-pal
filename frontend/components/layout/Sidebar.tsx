@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
   { href: '/groups',      icon: 'bolt',            label: 'Quiz Battle' },
+  { href: '/marketplace', icon: 'storefront',      label: 'Marketplace' },
 ]
 
 export default function Sidebar() {

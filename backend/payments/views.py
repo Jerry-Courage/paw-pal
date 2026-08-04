@@ -15,8 +15,10 @@ from rest_framework.views import APIView
 logger = logging.getLogger('flowstate')
 
 PAYSTACK_SECRET = os.environ.get('PAYSTACK_SECRET_KEY', '')
-PLAN_PRICE_CENTS = 99   # $0.99 USD in cents
+PAYSTACK_SECRET = os.environ.get('PAYSTACK_SECRET_KEY', '')
+PLAN_PRICE_CENTS = 1500  # GH₵ 15.00 in pesewas (Paystack GHS)
 SUBSCRIPTION_DAYS = 30  # 1 month per payment
+SUPPORTED_CURRENCIES = {'GHS', 'USD', 'NGN', 'ZAR', 'KES', 'GBP', 'EUR'}
 
 
 def _paystack_headers():
@@ -76,7 +78,7 @@ class InitializePaymentView(APIView):
                     payload = {
                         'email': user.email,
                         'amount': discounted_cents,
-                        'currency': 'USD',
+                        'currency': 'GHS',
                         'callback_url': callback_url,
                         'metadata': {
                             'user_id': user.id,
@@ -97,7 +99,7 @@ class InitializePaymentView(APIView):
                             ref = data['data']['reference']
                             PaymentTransaction.objects.create(
                                 user=user, email=user.email, reference=ref,
-                                amount=str(discounted_cents / 100), currency='USD', status='pending',
+                                amount=str(discounted_cents / 100), currency='GHS', status='pending',
                             )
                             return Response({
                                 'authorization_url': data['data']['authorization_url'],
@@ -120,12 +122,11 @@ class InitializePaymentView(APIView):
             f"{os.environ.get('FRONTEND_URL', 'https://flowstate-frontend-7irq.onrender.com')}/dashboard?payment=success"
         )
 
-        # Support geo-based currency from frontend
-        req_currency = request.data.get('currency', 'USD').upper()
+        # Support geo-based currency from frontend (default GHS for Ghana Paystack)
+        req_currency = request.data.get('currency', 'GHS').upper()
         req_amount = request.data.get('amount')
-        SUPPORTED_CURRENCIES = {'USD', 'GHS', 'NGN', 'ZAR', 'KES', 'GBP', 'EUR'}
         if req_currency not in SUPPORTED_CURRENCIES:
-            req_currency = 'USD'
+            req_currency = 'GHS'
 
         if req_amount:
             try:
@@ -254,18 +255,26 @@ class PaystackWebhookView(APIView):
             reference = data.get('reference', '')
             metadata = data.get('metadata', {})
             user_id = metadata.get('user_id')
+            payment_type = metadata.get('type')
 
             if user_id:
                 from django.contrib.auth import get_user_model
                 User = get_user_model()
                 try:
                     user = User.objects.get(id=user_id)
-                    _activate_premium(user)
+                    if payment_type == 'xp_pack':
+                        xp_amount = int(metadata.get('xp_amount', 0))
+                        obs = user.onboarding_status or {}
+                        obs['bonus_xp'] = obs.get('bonus_xp', 0) + xp_amount
+                        user.onboarding_status = obs
+                        user.save(update_fields=['onboarding_status'])
+                        logger.info(f"[Paystack Webhook] Added {xp_amount} bonus XP for user {user_id}")
+                    else:
+                        _activate_premium(user)
                     PaymentTransaction.objects.filter(reference=reference).update(
                         status='success',
                         paystack_data=data,
                     )
-                    logger.info(f"[Paystack Webhook] Premium activated for user {user_id}")
                 except User.DoesNotExist:
                     logger.error(f"[Paystack Webhook] User {user_id} not found")
 
@@ -389,3 +398,196 @@ def send_expiry_reminders():
             logger.info(f"[Payments] Expiry reminder sent to {user.email}")
         except Exception as e:
             logger.error(f"[Payments] Reminder failed for {user.email}: {e}")
+
+
+# ── MARKETPLACE & POWER-UPS ──────────────────────────────────────────────────
+
+POWERUP_PRICES = {
+    'clue_5050':    {'name': '50/50 Clue',       'cost_xp': 250, 'icon': 'tips_and_updates', 'desc': 'Eliminates 2 wrong options in a Quiz Battle'},
+    'time_extend':  {'name': 'Time Extension',   'cost_xp': 300, 'icon': 'hourglass_top',    'desc': 'Adds +10 seconds to your question timer'},
+    'streak_guard': {'name': 'Streak Guard',     'cost_xp': 500, 'icon': 'shield',           'desc': 'Saves your streak on 1 wrong answer'},
+    'double_xp':    {'name': '2x XP Boost',      'cost_xp': 400, 'icon': 'bolt', font_symbol: 'bolt', 'desc': 'Earn double XP for your next 3 Quiz Battles'},
+    'hint':         {'name': 'AI Clue / Poll',   'cost_xp': 350, 'icon': 'visibility',       'desc': 'Shows AI answer probability breakdown'},
+}
+
+XP_PACKS = {
+    'pack_500':  {'xp': 500,  'price_ghs': 10.00, 'amount_cents': 1000, 'label': 'Starter Pack'},
+    'pack_1500': {'xp': 1500, 'price_ghs': 25.00, 'amount_cents': 2500, 'label': 'Pro Pack'},
+    'pack_5000': {'xp': 5000, 'price_ghs': 70.00, 'amount_cents': 7000, 'label': 'Mega Pack'},
+}
+
+
+class MarketplaceInventoryView(APIView):
+    """GET /api/payments/marketplace/inventory/ — Returns user XP balance & power-up inventory."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        obs = user.onboarding_status or {}
+
+        # Sum earned XP from study resources
+        from library.models import ResourceProgress
+        from django.db.models import Sum
+        earned_xp = ResourceProgress.objects.filter(user=user).aggregate(
+            total=Sum('xp_earned')
+        )['total'] or 0
+
+        bonus_xp = int(obs.get('bonus_xp', 0))
+        spent_xp = int(obs.get('spent_xp', 0))
+        net_xp = max(0, earned_xp + bonus_xp - spent_xp)
+
+        inventory = obs.get('inventory', {
+            'clue_5050': 0, 'time_extend': 0, 'streak_guard': 0, 'double_xp': 0, 'hint': 0
+        })
+
+        return Response({
+            'total_xp': net_xp,
+            'earned_xp': earned_xp,
+            'bonus_xp': bonus_xp,
+            'spent_xp': spent_xp,
+            'inventory': inventory,
+            'catalog': POWERUP_PRICES,
+            'xp_packs': XP_PACKS,
+        })
+
+
+class MarketplaceBuyPowerupView(APIView):
+    """POST /api/payments/marketplace/buy-powerup/ — Spend XP to buy a Quiz Battle power-up."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        item_id = request.data.get('item_id')
+        if item_id not in POWERUP_PRICES:
+            return Response({'error': 'Invalid power-up item.'}, status=400)
+
+        item = POWERUP_PRICES[item_id]
+        cost = item['cost_xp']
+
+        user = request.user
+        obs = user.onboarding_status or {}
+
+        from library.models import ResourceProgress
+        from django.db.models import Sum
+        earned_xp = ResourceProgress.objects.filter(user=user).aggregate(
+            total=Sum('xp_earned')
+        )['total'] or 0
+
+        bonus_xp = int(obs.get('bonus_xp', 0))
+        spent_xp = int(obs.get('spent_xp', 0))
+        available_xp = max(0, earned_xp + bonus_xp - spent_xp)
+
+        if available_xp < cost:
+            return Response({
+                'error': f"Not enough XP! You need {cost} XP but only have {available_xp} XP.",
+                'required': cost,
+                'available': available_xp,
+            }, status=400)
+
+        # Deduct XP and add to inventory
+        obs['spent_xp'] = spent_xp + cost
+        inventory = obs.get('inventory', {
+            'clue_5050': 0, 'time_extend': 0, 'streak_guard': 0, 'double_xp': 0, 'hint': 0
+        })
+        inventory[item_id] = inventory.get(item_id, 0) + 1
+        obs['inventory'] = inventory
+
+        user.onboarding_status = obs
+        user.save(update_fields=['onboarding_status'])
+
+        new_balance = max(0, earned_xp + bonus_xp - obs['spent_xp'])
+
+        return Response({
+            'success': True,
+            'message': f"🎉 Purchased {item['name']}!",
+            'total_xp': new_balance,
+            'inventory': inventory,
+            'purchased': item_id,
+        })
+
+
+class MarketplaceUsePowerupView(APIView):
+    """POST /api/payments/marketplace/use-powerup/ — Use 1 charge of a power-up during a battle."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        item_id = request.data.get('item_id')
+        user = request.user
+        obs = user.onboarding_status or {}
+        inventory = obs.get('inventory', {})
+
+        count = inventory.get(item_id, 0)
+        if count <= 0:
+            return Response({'error': 'You do not own this power-up! Buy it from the Marketplace.'}, status=400)
+
+        inventory[item_id] = count - 1
+        obs['inventory'] = inventory
+        user.onboarding_status = obs
+        user.save(update_fields=['onboarding_status'])
+
+        return Response({
+            'success': True,
+            'item_id': item_id,
+            'remaining': inventory[item_id],
+        })
+
+
+class MarketplaceBuyXPView(APIView):
+    """POST /api/payments/marketplace/buy-xp/ — Buy an XP pack using Paystack in GHS."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .models import PaymentTransaction
+        pack_id = request.data.get('pack_id')
+        if pack_id not in XP_PACKS:
+            return Response({'error': 'Invalid XP pack selected.'}, status=400)
+
+        pack = XP_PACKS[pack_id]
+        user = request.user
+
+        callback_url = request.data.get(
+            'callback_url',
+            f"{os.environ.get('FRONTEND_URL', 'https://flowstate-frontend-7irq.onrender.com')}/marketplace?payment=success"
+        )
+
+        payload = {
+            'email': user.email,
+            'amount': pack['amount_cents'],
+            'currency': 'GHS',
+            'callback_url': callback_url,
+            'metadata': {
+                'user_id': user.id,
+                'username': user.username,
+                'type': 'xp_pack',
+                'pack_id': pack_id,
+                'xp_amount': pack['xp'],
+            },
+        }
+
+        try:
+            resp = requests.post(
+                'https://api.paystack.co/transaction/initialize',
+                headers=_paystack_headers(),
+                json=payload,
+                timeout=10,
+            )
+            data = resp.json()
+            if data.get('status'):
+                ref = data['data']['reference']
+                PaymentTransaction.objects.create(
+                    user=user,
+                    email=user.email,
+                    reference=ref,
+                    amount=str(pack['price_ghs']),
+                    currency='GHS',
+                    status='pending',
+                )
+                return Response({
+                    'authorization_url': data['data']['authorization_url'],
+                    'access_code': data['data']['access_code'],
+                    'reference': ref,
+                    'xp_amount': pack['xp'],
+                })
+            return Response({'error': data.get('message', 'Payment init failed')}, status=502)
+        except Exception as e:
+            logger.error(f"[Paystack] XP buy error: {e}")
+            return Response({'error': 'Payment service unavailable'}, status=503)

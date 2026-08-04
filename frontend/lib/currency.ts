@@ -58,8 +58,8 @@ const COUNTRY_PRICE_MAP: Record<string, { currency: string; symbol: string; amou
   // Asia-Pacific
   IN: { currency: 'INR', symbol: '₹',   amount: 79    },
   AU: { currency: 'AUD', symbol: 'A$',  amount: 1.49  },
-  // Default fallback
-  DEFAULT: { currency: 'USD', symbol: '$', amount: 0.99 },
+  // Default fallback (Ghanaian Cedis GH₵ for Paystack)
+  DEFAULT: { currency: 'GHS', symbol: 'GH₵', amount: 15.00 },
 }
 
 // Paystack only accepts certain currencies natively
@@ -114,7 +114,7 @@ async function detectCountry(): Promise<string> {
     }
   } catch {}
 
-  return 'US'
+  return 'GH'
 }
 
 export async function getPriceInfo(): Promise<PriceInfo> {
@@ -134,10 +134,10 @@ export async function getPriceInfo(): Promise<PriceInfo> {
   const countryCode = await detectCountry()
   const config = COUNTRY_PRICE_MAP[countryCode] ?? COUNTRY_PRICE_MAP['DEFAULT']
 
-  // If Paystack doesn't support the currency natively, fall back to USD
-  const paystackCurrency = PAYSTACK_SUPPORTED.has(config.currency) ? config.currency : 'USD'
-  const paystackAmount = paystackCurrency === config.currency ? config.amount : 0.99
-  const paystackSymbol = paystackCurrency === config.currency ? config.symbol : '$'
+  // If Paystack doesn't support the currency natively, fall back to GHS
+  const paystackCurrency = PAYSTACK_SUPPORTED.has(config.currency) ? config.currency : 'GHS'
+  const paystackAmount = paystackCurrency === config.currency ? config.amount : 15.00
+  const paystackSymbol = paystackCurrency === config.currency ? config.symbol : 'GH₵'
 
   const info: PriceInfo = {
     amount: paystackAmount,
@@ -158,7 +158,7 @@ export async function getPriceInfo(): Promise<PriceInfo> {
   return info
 }
 
-/** Synchronous version — returns cached value or USD default while async resolves */
+/** Synchronous version — returns cached value or GHS default while async resolves */
 export function getPriceInfoSync(): PriceInfo {
   if (typeof window !== 'undefined') {
     try {
@@ -172,12 +172,12 @@ export function getPriceInfoSync(): PriceInfo {
     } catch {}
   }
   return {
-    amount: 0.99,
-    currency: 'USD',
-    symbol: '$',
-    display: '$0.99',
-    displayShort: '$0.99/mo',
-    paystackCurrency: 'USD',
-    countryCode: 'US',
+    amount: 15.00,
+    currency: 'GHS',
+    symbol: 'GH₵',
+    display: 'GH₵15.00',
+    displayShort: 'GH₵15.00/mo',
+    paystackCurrency: 'GHS',
+    countryCode: 'GH',
   }
 }

@@ -377,13 +377,18 @@ export const workspaceApi = {
   updateBlock: (id: number, data: any) => api.patch(`/workspace/workspaces/${id}/blocks/${data.block_id || data.id}/`, data),
 }
 
-// Payments
+// Payments & Marketplace
 export const paymentsApi = {
   getStatus: () => api.get('/payments/status/'),
   initialize: (callback_url?: string, promo_code?: string, currency?: string, amount?: number) =>
     api.post('/payments/initialize/', { callback_url, promo_code, currency, amount }),
   verify: (reference: string) => api.get(`/payments/verify/?reference=${reference}`),
   applyPromo: (code: string) => api.post('/payments/promo/', { code }),
+  getMarketplaceInventory: () => api.get('/payments/marketplace/inventory/'),
+  buyPowerup: (itemId: string) => api.post('/payments/marketplace/buy-powerup/', { item_id: itemId }),
+  usePowerup: (itemId: string) => api.post('/payments/marketplace/use-powerup/', { item_id: itemId }),
+  buyXpPack: (packId: string, callbackUrl?: string) =>
+    api.post('/payments/marketplace/buy-xp/', { pack_id: packId, callback_url: callbackUrl }),
 }
 
 export const spacedRepetitionApi = {

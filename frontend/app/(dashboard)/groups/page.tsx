@@ -273,7 +273,7 @@ export default function QuizBattlePage() {
           {screen === 'create'      && <CreateScreen   key="create"   onBack={() => setScreen('home')} onCreated={async (roomPin, host) => { setPin(roomPin); setIsHost(host); await connect(roomPin); setScreen('lobby') }} />}
           {screen === 'lobby'       && <LobbyScreen    key="lobby"    pin={pin} players={players} isHost={isHost} onStart={handleStartGame} onLeave={goHome} isConnecting={isConnecting} isStarting={isStarting} me={me} />}
           {screen === 'countdown'   && <CountdownScreen key="countdown" count={countNum} />}
-          {screen === 'question'    && question && <QuestionScreen key={`q-${question.idx}`} question={question} timeLeft={timeLeft} answered={answered} onAnswer={handleAnswer} />}
+          {screen === 'question'    && question && <QuestionScreen key={`q-${question.idx}`} question={question} timeLeft={timeLeft} setTimeLeft={setTimeLeft} answered={answered} onAnswer={handleAnswer} />}
           {screen === 'round_result' && roundResult && <RoundResultScreen key="result" result={roundResult} answered={answered} me={me} isHost={isHost} />}
           {screen === 'leaderboard' && <LeaderboardScreen key="lb" leaderboard={leaderboard} me={me} />}
           {screen === 'game_over'   && <GameOverScreen  key="gameover" leaderboard={leaderboard} me={me} onPlayAgain={goHome} />}
@@ -600,10 +600,52 @@ function CountdownScreen({ count }: { count: number }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // SCREEN: Question
 // ══════════════════════════════════════════════════════════════════════════════
-function QuestionScreen({ question, timeLeft, answered, onAnswer }: { question: Question; timeLeft: number; answered: string | null; onAnswer: (c: string) => void }) {
+// ══════════════════════════════════════════════════════════════════════════════
+// SCREEN: Question
+// ══════════════════════════════════════════════════════════════════════════════
+function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer }: { question: Question; timeLeft: number; setTimeLeft?: React.Dispatch<React.SetStateAction<number>>; answered: string | null; onAnswer: (c: string) => void }) {
+  const [disabledKeys, setDisabledKeys] = useState<string[]>([])
+  const [powerupUsed, setPowerupUsed] = useState<Record<string, boolean>>({})
+
   const pct = (timeLeft / question.time_limit) * 100
   const timerColor = pct > 50 ? 'bg-emerald-500' : pct > 25 ? 'bg-amber-500' : 'bg-rose-500'
   const opts = [question.opt_a, question.opt_b, question.opt_c, question.opt_d]
+
+  // Power-up 1: 50/50 Clue
+  const handleUse5050 = async () => {
+    if (powerupUsed.clue_5050 || answered) return
+    try {
+      const { paymentsApi } = await import('@/lib/api')
+      const res = await paymentsApi.usePowerup('clue_5050')
+      if (res.data.success) {
+        // Disable 2 keys (e.g. B and D or A and C)
+        const keys = ['A', 'B', 'C', 'D']
+        // Randomly pick 2 keys to hide
+        const shuffled = [...keys].sort(() => 0.5 - Math.random())
+        setDisabledKeys(shuffled.slice(0, 2))
+        setPowerupUsed(p => ({ ...p, clue_5050: true }))
+        toast.success('💡 50/50 Clue activated! 2 wrong choices eliminated.')
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'You need to buy 50/50 Clues in the Marketplace first!')
+    }
+  }
+
+  // Power-up 2: Time Extension
+  const handleUseTimeExtend = async () => {
+    if (powerupUsed.time_extend || answered) return
+    try {
+      const { paymentsApi } = await import('@/lib/api')
+      const res = await paymentsApi.usePowerup('time_extend')
+      if (res.data.success) {
+        if (setTimeLeft) setTimeLeft(t => t + 10)
+        setPowerupUsed(p => ({ ...p, time_extend: true }))
+        toast.success('⏱️ +10 Seconds added to timer!')
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'You need to buy Time Extensions in the Marketplace first!')
+    }
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -613,6 +655,40 @@ function QuestionScreen({ question, timeLeft, answered, onAnswer }: { question: 
       <div>
         <div className="flex items-center justify-between pb-2">
           <span className="text-[13px] text-white/50 font-black">Question {question.idx + 1} of {question.total}</span>
+
+          {/* Power-Ups Action Strip */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleUse5050}
+              disabled={powerupUsed.clue_5050 || !!answered}
+              title="Use 50/50 Clue"
+              className={cn(
+                'px-3 py-1.5 rounded-full border text-[11px] font-black uppercase tracking-wider flex items-center gap-1 transition-all',
+                powerupUsed.clue_5050
+                  ? 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed'
+                  : 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 active:scale-95'
+              )}
+            >
+              <span className="material-symbols-outlined text-[15px]">tips_and_updates</span>
+              50/50 Clue
+            </button>
+
+            <button
+              onClick={handleUseTimeExtend}
+              disabled={powerupUsed.time_extend || !!answered}
+              title="Use +10s Extension"
+              className={cn(
+                'px-3 py-1.5 rounded-full border text-[11px] font-black uppercase tracking-wider flex items-center gap-1 transition-all',
+                powerupUsed.time_extend
+                  ? 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed'
+                  : 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 active:scale-95'
+              )}
+            >
+              <span className="material-symbols-outlined text-[15px]">hourglass_top</span>
+              +10s
+            </button>
+          </div>
+
           <motion.div key={timeLeft} initial={{ scale: 1.2 }} animate={{ scale: 1 }}
             className={cn('w-12 h-12 rounded-full border-2 flex items-center justify-center text-[20px] font-black tabular-nums',
               timeLeft <= 5 ? 'border-rose-500 text-rose-500 animate-pulse' : 'border-white/20 text-white')}>
@@ -636,11 +712,22 @@ function QuestionScreen({ question, timeLeft, answered, onAnswer }: { question: 
         </div>
       </div>
 
-      {/* Answer Options Grid (Mobile 1 column, Desktop 2 columns) */}
+      {/* Answer Options Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-2">
         {opts.map((opt, i) => {
           const key = OPTION_KEYS[i]
           const isSelected = answered === key
+          const isDisabled = disabledKeys.includes(key)
+
+          if (isDisabled) {
+            return (
+              <div key={key} className="rounded-2xl p-4 sm:p-5 flex items-center gap-4 bg-white/5 border border-white/5 text-white/20 cursor-not-allowed opacity-30 select-none">
+                <OptionShape index={i} className="w-7 h-7 sm:w-8 sm:h-8 fill-current shrink-0 text-white/20" />
+                <span className="leading-tight flex-1 line-through">Option eliminated</span>
+              </div>
+            )
+          }
+
           return (
             <motion.button key={key} whileHover={!answered ? { scale: 1.02 } : {}} whileTap={!answered ? { scale: 0.98 } : {}}
               onClick={() => onAnswer(key)} disabled={!!answered}
