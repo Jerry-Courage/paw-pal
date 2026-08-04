@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
-  { href: '/groups',      icon: 'group',           label: 'Study Groups' },
+  { href: '/groups',      icon: 'bolt',            label: 'Quiz Battle' },
 ]
 
 export default function Sidebar() {

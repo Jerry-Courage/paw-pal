@@ -72,7 +72,7 @@ class QuizConsumer(AsyncWebsocketConsumer):
         t    = data.get('type')
 
         if t == 'start_game':
-            await self._handle_start_game()
+            asyncio.create_task(self._handle_start_game())
         elif t == 'submit_answer':
             await self._handle_answer(data)
         elif t == 'kick_player':

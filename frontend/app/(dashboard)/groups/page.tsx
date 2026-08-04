@@ -14,9 +14,40 @@ interface Player   { username: string; score: number; streak: number; rank?: num
 interface Question { id: number; text: string; opt_a: string; opt_b: string; opt_c: string; opt_d: string; time_limit: number; idx: number; total: number }
 interface RoundResult { correct: string; results: { username: string; choice: string; is_correct: boolean; points: number; time_taken: number }[]; leaderboard: Player[] }
 
-const OPTION_COLORS = ['bg-[#e21b3c]', 'bg-[#1368ce]', 'bg-[#26890c]', 'bg-[#ffa602]']
-const OPTION_ICONS  = ['triangle', 'diamond', 'circle', 'square']
+const OPTION_COLORS = ['bg-[#e21b3c]', 'bg-[#1368ce]', 'bg-[#d89e00]', 'bg-[#26890c]']
 const OPTION_KEYS   = ['A', 'B', 'C', 'D'] as const
+
+// Inline Kahoot-style SVG shape icons
+function OptionShape({ index, className = "w-6 h-6 fill-current shrink-0" }: { index: number; className?: string }) {
+  switch (index) {
+    case 0: // Triangle (A - Red)
+      return (
+        <svg viewBox="0 0 24 24" className={className}>
+          <polygon points="12,3 2,21 22,21" />
+        </svg>
+      )
+    case 1: // Diamond (B - Blue)
+      return (
+        <svg viewBox="0 0 24 24" className={className}>
+          <polygon points="12,2 22,12 12,22 2,12" />
+        </svg>
+      )
+    case 2: // Circle (C - Yellow)
+      return (
+        <svg viewBox="0 0 24 24" className={className}>
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+      )
+    case 3: // Square (D - Green)
+      return (
+        <svg viewBox="0 0 24 24" className={className}>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
 
 // ── Sound engine (Web Audio API — no external deps) ──────────────────────────
 function useSound() {
@@ -58,7 +89,7 @@ function Confetti() {
         <motion.div key={p.id} className="absolute rounded-sm"
           style={{ left: `${p.x}%`, top: -20, width: p.size, height: p.size * 0.6, backgroundColor: p.color }}
           initial={{ y: -20, rotate: 0, opacity: 1 }}
-          animate={{ y: window.innerHeight + 40, rotate: 720, opacity: 0 }}
+          animate={{ y: typeof window !== 'undefined' ? window.innerHeight + 40 : 800, rotate: 720, opacity: 0 }}
           transition={{ duration: 2.5 + Math.random(), delay: p.delay, ease: 'easeIn' }}
         />
       ))}
@@ -87,6 +118,7 @@ export default function QuizBattlePage() {
   const [showConfetti, setShowConfetti]   = useState(false)
   const [isHost, setIsHost]               = useState(false)
   const [isConnecting, setIsConnecting]   = useState(false)
+  const [isStarting, setIsStarting]       = useState(false)
 
   const wsRef        = useRef<WebSocket | null>(null)
   const qStartRef    = useRef<number>(0)
@@ -133,12 +165,14 @@ export default function QuizBattlePage() {
         break
 
       case 'game_countdown':
+        setIsStarting(false)
         setScreen('countdown')
         setCountNum(msg.count)
         snd.countdown()
         break
 
       case 'show_question':
+        setIsStarting(false)
         setQuestion({ id: msg.id, text: msg.text, opt_a: msg.opt_a, opt_b: msg.opt_b, opt_c: msg.opt_c, opt_d: msg.opt_d, time_limit: msg.time_limit, idx: msg.idx, total: msg.total })
         setTimeLeft(msg.time_limit)
         setAnswered(null)
@@ -196,6 +230,8 @@ export default function QuizBattlePage() {
   }
 
   const handleStartGame = () => {
+    if (isStarting) return
+    setIsStarting(true)
     wsRef.current?.send(JSON.stringify({ type: 'start_game' }))
   }
 
@@ -205,11 +241,10 @@ export default function QuizBattlePage() {
     setAnswered(choice)
     setAnswerTime(elapsed)
     wsRef.current?.send(JSON.stringify({ type: 'submit_answer', choice, time_taken: elapsed }))
-    const correct = roundResult?.correct  // not available yet, sound after result
     snd.tick()
   }
 
-  const goHome = () => { disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false) }
+  const goHome = () => { disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false) }
 
   // ── Play correct/wrong sound when round result arrives ─────────────────────
   useEffect(() => {
@@ -220,24 +255,24 @@ export default function QuizBattlePage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#0a0a1a] text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#0d091b] text-white relative overflow-x-hidden selection:bg-primary selection:text-white">
       {showConfetti && <Confetti />}
 
-      {/* Animated background blobs */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-primary/10 blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-tertiary/10 blur-[100px]" />
+      {/* Animated background glowing blobs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-15%] left-[-10%] w-[70vw] h-[70vw] max-w-[600px] max-h-[600px] rounded-full bg-primary/15 blur-[120px]" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[60vw] h-[60vw] max-w-[500px] max-h-[500px] rounded-full bg-[#a855f7]/15 blur-[100px]" />
       </div>
 
-      <div className="relative z-10">
+      <div className="relative z-10 min-h-screen flex flex-col justify-between">
         <AnimatePresence mode="wait">
           {screen === 'home'        && <HomeScreen     key="home"     onCreate={() => setScreen('create')} onJoin={handleJoinRoom} joinPin={joinPinInput} setJoinPin={setJoinPinInput} />}
           {screen === 'create'      && <CreateScreen   key="create"   onBack={() => setScreen('home')} onCreated={async (roomPin, host) => { setPin(roomPin); setIsHost(host); await connect(roomPin); setScreen('lobby') }} />}
-          {screen === 'lobby'       && <LobbyScreen    key="lobby"    pin={pin} players={players} isHost={isHost} onStart={handleStartGame} onLeave={goHome} isConnecting={isConnecting} />}
+          {screen === 'lobby'       && <LobbyScreen    key="lobby"    pin={pin} players={players} isHost={isHost} onStart={handleStartGame} onLeave={goHome} isConnecting={isConnecting} isStarting={isStarting} me={me} />}
           {screen === 'countdown'   && <CountdownScreen key="countdown" count={countNum} />}
           {screen === 'question'    && question && <QuestionScreen key={`q-${question.idx}`} question={question} timeLeft={timeLeft} answered={answered} onAnswer={handleAnswer} />}
-          {screen === 'round_result' && roundResult && <RoundResultScreen key="result" result={roundResult} answered={answered} me={me} onContinue={() => setScreen('leaderboard')} isHost={isHost} />}
-          {screen === 'leaderboard' && <LeaderboardScreen key="lb" leaderboard={leaderboard} me={me} onContinue={isHost ? undefined : undefined} />}
+          {screen === 'round_result' && roundResult && <RoundResultScreen key="result" result={roundResult} answered={answered} me={me} isHost={isHost} />}
+          {screen === 'leaderboard' && <LeaderboardScreen key="lb" leaderboard={leaderboard} me={me} />}
           {screen === 'game_over'   && <GameOverScreen  key="gameover" leaderboard={leaderboard} me={me} onPlayAgain={goHome} />}
         </AnimatePresence>
       </div>
@@ -250,38 +285,47 @@ export default function QuizBattlePage() {
 // ══════════════════════════════════════════════════════════════════════════════
 function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () => void; onJoin: () => void; joinPin: string; setJoinPin: (v: string) => void }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-16 gap-10">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12 gap-8 md:gap-10 max-w-4xl mx-auto">
 
-      {/* Logo / Hero */}
+      {/* Hero Header */}
       <div className="text-center space-y-3">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.1 }}
-          className="text-[64px] mb-2 select-none">⚡</motion.div>
-        <h1 className="text-[42px] md:text-[56px] font-black tracking-tight bg-gradient-to-r from-primary via-[#a855f7] to-[#ec4899] bg-clip-text text-transparent">
-          Quiz Battle
+          className="w-20 h-20 md:w-24 md:h-24 bg-gradient-to-tr from-primary via-[#a855f7] to-[#ec4899] rounded-[2rem] flex items-center justify-center text-[40px] md:text-[50px] shadow-[0_0_40px_rgba(168,85,247,0.4)] mx-auto mb-4 select-none">
+          ⚡
+        </motion.div>
+        <h1 className="text-[36px] sm:text-[48px] md:text-[60px] font-black tracking-tight leading-none bg-gradient-to-r from-white via-slate-100 to-white/70 bg-clip-text text-transparent">
+          Quiz <span className="bg-gradient-to-r from-primary via-[#a855f7] to-[#ec4899] bg-clip-text text-transparent">Battle</span>
         </h1>
-        <p className="text-[16px] text-white/50 max-w-sm mx-auto">Real-time multiplayer quiz battles — create a room or join a friend's!</p>
+        <p className="text-[14px] sm:text-[16px] text-slate-400 max-w-md mx-auto font-medium">Real-time multiplayer quiz games. Host a room or join a live battle!</p>
       </div>
 
-      {/* Cards */}
+      {/* Action Cards */}
       <div className="flex flex-col sm:flex-row gap-5 w-full max-w-lg">
-        {/* Create */}
-        <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} onClick={onCreate}
-          className="flex-1 flex flex-col items-center gap-3 py-8 px-6 bg-gradient-to-br from-primary/80 to-[#a855f7]/80 rounded-[1.75rem] border border-primary/40 shadow-[0_8px_32px_rgba(var(--color-primary),0.3)] cursor-pointer">
-          <span className="material-symbols-outlined text-[40px]" style={{ fontVariationSettings: "'FILL' 1" }}>add_circle</span>
-          <span className="text-[20px] font-black">Create Room</span>
-          <span className="text-[12px] text-white/60">Build your own quiz</span>
+        {/* Create Card */}
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={onCreate}
+          className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-6 sm:p-8 bg-gradient-to-br from-primary/90 to-[#a855f7]/90 rounded-[2rem] border border-white/20 shadow-[0_12px_40px_rgba(var(--color-primary),0.35)] cursor-pointer group">
+          <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="material-symbols-outlined text-[32px] text-white" style={{ fontVariationSettings: "'FILL' 1" }}>add_circle</span>
+          </div>
+          <div>
+            <span className="text-[20px] font-black block">Create Room</span>
+            <span className="text-[12px] text-white/70 font-medium">AI builds quiz from your notes</span>
+          </div>
         </motion.button>
 
-        {/* Join */}
-        <div className="flex-1 flex flex-col items-center gap-3 py-8 px-6 bg-surface-container-high/60 rounded-[1.75rem] border border-outline-variant/30 backdrop-blur-md">
-          <span className="material-symbols-outlined text-[40px] text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>qr_code</span>
+        {/* Join Card */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-6 sm:p-8 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+          <div className="w-14 h-14 rounded-2xl bg-tertiary/20 flex items-center justify-center">
+            <span className="material-symbols-outlined text-[32px] text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>style</span>
+          </div>
           <span className="text-[20px] font-black">Join Room</span>
           <input value={joinPin} onChange={e => setJoinPin(e.target.value.replace(/\D/g,'').slice(0,6))}
-            placeholder="Enter PIN"
-            className="w-full bg-black/30 border border-outline-variant/50 rounded-xl px-4 py-2.5 text-[18px] font-black text-center tracking-[0.3em] focus:outline-none focus:border-tertiary transition-all placeholder:text-white/20 placeholder:tracking-normal" />
+            placeholder="6-Digit PIN"
+            maxLength={6}
+            className="w-full bg-black/40 border border-white/20 rounded-xl px-4 py-3 text-[20px] font-black text-center tracking-[0.25em] focus:outline-none focus:border-tertiary transition-all placeholder:text-white/20 placeholder:tracking-normal text-tertiary" />
           <motion.button whileTap={{ scale: 0.95 }} onClick={onJoin} disabled={joinPin.length !== 6}
-            className="w-full py-2.5 bg-tertiary text-black font-black rounded-xl text-[14px] disabled:opacity-40 transition-all hover:brightness-110">
+            className="w-full py-3 bg-tertiary text-black font-black rounded-xl text-[14px] disabled:opacity-40 transition-all hover:brightness-110 shadow-lg shadow-tertiary/20">
             Join Now
           </motion.button>
         </div>
@@ -317,7 +361,6 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
     setLoading(true)
     try {
       let resourceId = selected?.id
-      // If they uploaded a new file, upload it to library first then use it
       if (uploadFile && !selected) {
         const { libraryApi } = require('@/lib/api')
         const fd = new FormData()
@@ -339,101 +382,102 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
   }
 
   return (
-    <motion.div initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }}
-      className="min-h-screen px-4 py-8 max-w-lg mx-auto flex flex-col gap-6">
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
+      className="min-h-screen px-4 py-8 max-w-lg mx-auto flex flex-col justify-between gap-6">
 
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all">
-          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-        </button>
-        <div>
-          <h2 className="text-[24px] font-black">Create Quiz Battle</h2>
-          <p className="text-[12px] text-white/40">AI generates questions from your resource</p>
-        </div>
-      </div>
-
-      {/* Optional title */}
-      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Quiz title (optional — AI will name it)"
-        className="w-full bg-white/8 border border-white/15 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:border-primary/60 transition-all placeholder:text-white/25" />
-
-      {/* Settings row */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] text-white/40 uppercase tracking-widest">Questions</span>
-          <div className="flex gap-1.5">
-            {[5, 10, 15, 20].map(n => (
-              <button key={n} onClick={() => setCount(n)}
-                className={cn('px-3 py-1.5 rounded-lg text-[13px] font-black transition-all', count === n ? 'bg-primary text-white' : 'bg-white/10 text-white/50 hover:bg-white/15')}>
-                {n}
-              </button>
-            ))}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 transition-all">
+            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          </button>
+          <div>
+            <h2 className="text-[22px] sm:text-[26px] font-black">Create Quiz Battle</h2>
+            <p className="text-[12px] text-white/50 font-medium">AI extracts questions directly from your materials</p>
           </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] text-white/40 uppercase tracking-widest">Secs / question</span>
-          <div className="flex gap-1.5">
-            {[10, 15, 20, 30].map(t => (
-              <button key={t} onClick={() => setTimePerQ(t)}
-                className={cn('px-3 py-1.5 rounded-lg text-[13px] font-black transition-all', timePerQ === t ? 'bg-[#ffa602] text-black' : 'bg-white/10 text-white/50 hover:bg-white/15')}>
-                {t}s
-              </button>
-            ))}
+
+        {/* Title Input */}
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Quiz Title (optional)"
+          className="w-full bg-white/5 border border-white/15 rounded-2xl px-5 py-3.5 text-[15px] focus:outline-none focus:border-primary transition-all placeholder:text-white/30" />
+
+        {/* Options Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <span className="text-[11px] text-white/40 font-bold uppercase tracking-wider ml-1">Questions</span>
+            <div className="grid grid-cols-4 gap-1.5 bg-white/5 p-1.5 rounded-xl border border-white/10">
+              {[5, 10, 15, 20].map(n => (
+                <button key={n} onClick={() => setCount(n)}
+                  className={cn('py-1.5 rounded-lg text-[13px] font-black transition-all', count === n ? 'bg-primary text-white shadow-md' : 'text-white/60 hover:text-white')}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <span className="text-[11px] text-white/40 font-bold uppercase tracking-wider ml-1">Timer / Question</span>
+            <div className="grid grid-cols-4 gap-1.5 bg-white/5 p-1.5 rounded-xl border border-white/10">
+              {[10, 15, 20, 30].map(t => (
+                <button key={t} onClick={() => setTimePerQ(t)}
+                  className={cn('py-1.5 rounded-lg text-[13px] font-black transition-all', timePerQ === t ? 'bg-[#ffa602] text-black shadow-md' : 'text-white/60 hover:text-white')}>
+                  {t}s
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Resource picker */}
-      <div className="flex-1 flex flex-col gap-3">
-        <p className="text-[13px] font-bold text-white/60">Pick from your library</p>
-        {fetching ? (
-          <div className="flex items-center justify-center py-10 gap-3 text-white/30">
-            <span className="material-symbols-outlined animate-spin text-[24px]">autorenew</span>
-            <span className="text-[13px]">Loading library…</span>
-          </div>
-        ) : resources.length === 0 ? (
-          <div className="text-center py-8 text-white/30 text-[13px]">No resources found — upload a file below.</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
-            {resources.map((r: any) => (
-              <button key={r.id} onClick={() => { setSelected(r); setUploadFile(null) }}
-                className={cn('flex items-center gap-3 px-4 py-3 rounded-[1rem] border text-left transition-all',
-                  selected?.id === r.id ? 'bg-primary/25 border-primary/60 shadow-[0_0_16px_rgba(var(--color-primary),0.2)]' : 'bg-white/5 border-white/10 hover:bg-white/10')}>
-                <span className="material-symbols-outlined text-[20px] shrink-0 text-white/50"
-                  style={{ fontVariationSettings: "'FILL' 1" }}>
-                  {r.resource_type === 'pdf' ? 'picture_as_pdf' : r.resource_type === 'video' ? 'smart_display' : 'description'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-bold truncate">{r.title}</p>
-                  <p className="text-[11px] text-white/40 capitalize">{r.resource_type || 'note'}</p>
-                </div>
-                {selected?.id === r.id && <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Resource Selection */}
+        <div className="space-y-3">
+          <p className="text-[13px] font-bold text-white/70">Select Study Material</p>
+          {fetching ? (
+            <div className="flex items-center justify-center py-10 gap-3 text-white/40">
+              <span className="material-symbols-outlined animate-spin text-[24px]">autorenew</span>
+              <span className="text-[13px]">Fetching library materials…</span>
+            </div>
+          ) : resources.length === 0 ? (
+            <div className="text-center py-6 text-white/40 text-[13px]">No library resources found. Upload a file below.</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2.5 max-h-56 overflow-y-auto pr-1">
+              {resources.map((r: any) => (
+                <button key={r.id} onClick={() => { setSelected(r); setUploadFile(null) }}
+                  className={cn('flex items-center gap-3.5 px-4 py-3 rounded-2xl border text-left transition-all',
+                    selected?.id === r.id ? 'bg-primary/20 border-primary shadow-[0_0_16px_rgba(var(--color-primary),0.3)]' : 'bg-white/5 border-white/10 hover:bg-white/10')}>
+                  <span className="material-symbols-outlined text-[22px] shrink-0 text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    {r.resource_type === 'pdf' ? 'picture_as_pdf' : r.resource_type === 'video' ? 'smart_display' : 'description'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold truncate text-white">{r.title}</p>
+                    <p className="text-[11px] text-white/40 capitalize">{r.resource_type || 'note'}</p>
+                  </div>
+                  {selected?.id === r.id && <span className="material-symbols-outlined text-primary text-[20px]">check_circle</span>}
+                </button>
+              ))}
+            </div>
+          )}
 
-        {/* Or upload */}
-        <div className="flex items-center gap-3 mt-1">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-[11px] text-white/30 uppercase tracking-widest">or upload</span>
-          <div className="flex-1 h-px bg-white/10" />
+          <div className="flex items-center gap-3 my-2">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[11px] text-white/30 font-bold uppercase tracking-widest">or upload</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          <input ref={fileRef} type="file" accept=".pdf,image/*,.txt,.docx" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setSelected(null) }; e.target.value = '' }} />
+          <button onClick={() => fileRef.current?.click()}
+            className={cn('w-full py-3.5 border-2 border-dashed rounded-2xl text-[13px] font-bold transition-all flex items-center justify-center gap-2',
+              uploadFile ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400' : 'border-white/20 text-white/50 hover:border-white/40 hover:text-white/80')}>
+            <span className="material-symbols-outlined text-[20px]">upload_file</span>
+            <span className="truncate">{uploadFile ? uploadFile.name : 'Upload PDF, Image, or Doc'}</span>
+          </button>
         </div>
-        <input ref={fileRef} type="file" accept=".pdf,image/*,.txt,.docx" className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setSelected(null) }; e.target.value = '' }} />
-        <button onClick={() => fileRef.current?.click()}
-          className={cn('w-full py-3 border-2 border-dashed rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2',
-            uploadFile ? 'border-[#26890c]/60 bg-[#26890c]/10 text-[#4ade80]' : 'border-white/20 text-white/40 hover:border-white/40 hover:text-white/60')}>
-          <span className="material-symbols-outlined text-[18px]">upload_file</span>
-          {uploadFile ? uploadFile.name : 'Upload PDF / image / text'}
-        </button>
       </div>
 
       <motion.button whileTap={{ scale: 0.97 }} onClick={handleGenerate}
         disabled={loading || (!selected && !uploadFile)}
-        className="w-full py-4 bg-gradient-to-r from-primary to-[#a855f7] rounded-xl font-black text-[16px] shadow-[0_6px_0_0_rgba(0,0,0,0.4)] active:translate-y-1 active:shadow-none transition-all disabled:opacity-40 flex items-center justify-center gap-2">
+        className="w-full py-4 bg-gradient-to-r from-primary to-[#a855f7] rounded-2xl font-black text-[16px] shadow-[0_8px_24px_rgba(var(--color-primary),0.35)] active:translate-y-0.5 transition-all disabled:opacity-40 flex items-center justify-center gap-2 mt-4">
         {loading
-          ? <><span className="material-symbols-outlined animate-spin text-[20px]">autorenew</span> AI is building your quiz…</>
-          : <><span className="material-symbols-outlined text-[20px]">bolt</span> Generate &amp; Launch Room</>}
+          ? <><span className="material-symbols-outlined animate-spin text-[20px]">autorenew</span> Building Battle Room…</>
+          : <><span className="material-symbols-outlined text-[20px]">bolt</span> Generate &amp; Launch</>}
       </motion.button>
     </motion.div>
   )
@@ -442,58 +486,81 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
 // ══════════════════════════════════════════════════════════════════════════════
 // SCREEN: Lobby
 // ══════════════════════════════════════════════════════════════════════════════
-function LobbyScreen({ pin, players, isHost, onStart, onLeave, isConnecting }: { pin: string; players: Player[]; isHost: boolean; onStart: () => void; onLeave: () => void; isConnecting: boolean }) {
+function LobbyScreen({ pin, players, isHost, onStart, onLeave, isConnecting, isStarting, me }: { pin: string; players: Player[]; isHost: boolean; onStart: () => void; onLeave: () => void; isConnecting: boolean; isStarting: boolean; me: string }) {
   const AVATAR_COLORS = ['bg-[#e21b3c]','bg-[#1368ce]','bg-[#26890c]','bg-[#ffa602]','bg-[#a855f7]','bg-[#ec4899]','bg-[#0891b2]','bg-[#d97706]']
+
+  const copyPin = () => {
+    navigator.clipboard.writeText(pin)
+    toast.success('Room PIN copied to clipboard!')
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-12 gap-8">
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-8 max-w-2xl mx-auto gap-8">
 
-      {/* PIN display */}
-      <div className="text-center">
-        <p className="text-[13px] font-bold text-white/40 uppercase tracking-widest mb-2">Room PIN</p>
+      {/* PIN Card */}
+      <div className="text-center w-full">
+        <p className="text-[12px] font-bold text-white/40 uppercase tracking-widest mb-2">Room PIN</p>
         <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: 'spring' }}
-          className="text-[56px] md:text-[72px] font-black tracking-[0.2em] text-white drop-shadow-[0_0_24px_rgba(255,255,255,0.3)]">
-          {pin}
+          onClick={copyPin}
+          title="Click to copy"
+          className="inline-flex items-center gap-3 px-8 py-4 bg-white/5 border border-white/15 rounded-3xl cursor-pointer hover:bg-white/10 transition-all group shadow-[0_0_50px_rgba(255,255,255,0.08)]">
+          <span className="text-[44px] xs:text-[56px] sm:text-[68px] font-black tracking-[0.2em] text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
+            {pin}
+          </span>
+          <span className="material-symbols-outlined text-[24px] text-white/40 group-hover:text-white transition-colors">content_copy</span>
         </motion.div>
-        <p className="text-[13px] text-white/40 mt-1">Share this code with friends to join</p>
+        <p className="text-[13px] text-white/40 mt-2 font-medium">Click to copy PIN &amp; share with friends</p>
       </div>
 
       {/* Players grid */}
-      <div className="w-full max-w-lg">
-        <p className="text-[13px] text-white/50 text-center mb-4">{players.length} player{players.length !== 1 ? 's' : ''} joined</p>
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4 px-2">
+          <span className="text-[13px] font-bold text-white/60">Players ({players.length})</span>
+          <span className="text-[11px] bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            Lobby Active
+          </span>
+        </div>
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto p-1">
           <AnimatePresence>
-            {players.map((p, i) => (
-              <motion.div key={p.username} initial={{ scale: 0, rotate: -15 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                className={cn('rounded-2xl p-3 flex flex-col items-center gap-1.5', AVATAR_COLORS[i % AVATAR_COLORS.length])}>
-                <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center text-[18px] font-black">
-                  {(p.username || '?')[0].toUpperCase()}
-                </div>
-                <span className="text-[11px] font-bold text-white truncate max-w-full px-1">{p.username}</span>
-              </motion.div>
-            ))}
+            {players.map((p, i) => {
+              const isUserHost = p.username === me && isHost
+              return (
+                <motion.div key={p.username} initial={{ scale: 0, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                  className={cn('rounded-2xl p-3 flex flex-col items-center gap-2 shadow-lg relative overflow-hidden', AVATAR_COLORS[i % AVATAR_COLORS.length])}>
+                  <div className="w-11 h-11 rounded-full bg-black/25 flex items-center justify-center text-[20px] font-black shadow-inner">
+                    {(p.username || '?')[0].toUpperCase()}
+                  </div>
+                  <span className="text-[12px] font-black text-white truncate max-w-full px-1">{p.username}</span>
+                  {isUserHost && (
+                    <span className="text-[9px] bg-black/40 text-yellow-300 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Host</span>
+                  )}
+                </motion.div>
+              )
+            })}
           </AnimatePresence>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="flex gap-3">
-        <button onClick={onLeave} className="px-5 py-3 bg-white/10 rounded-xl font-bold text-[14px] hover:bg-white/15 transition-all">
-          Leave
+      <div className="flex flex-wrap items-center justify-center gap-4 w-full pt-2">
+        <button onClick={onLeave} className="px-6 py-3.5 bg-white/10 rounded-2xl font-bold text-[14px] hover:bg-white/15 transition-all">
+          Leave Room
         </button>
         {isHost && (
-          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={onStart}
-            disabled={players.length < 1 || isConnecting}
-            className="px-8 py-3 bg-gradient-to-r from-[#26890c] to-[#22c55e] rounded-xl font-black text-[16px] shadow-[0_6px_0_0_#14532d] active:translate-y-1 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-            <span className="material-symbols-outlined text-[20px]">play_arrow</span>
-            {isConnecting ? 'Connecting…' : 'Start Game!'}
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={onStart}
+            disabled={players.length < 1 || isConnecting || isStarting}
+            className="px-10 py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 rounded-2xl font-black text-[16px] shadow-[0_8px_24px_rgba(34,197,94,0.35)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            <span className="material-symbols-outlined text-[22px]">play_arrow</span>
+            {isStarting ? 'Starting Match…' : isConnecting ? 'Connecting…' : 'Start Match!'}
           </motion.button>
         )}
         {!isHost && (
-          <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-[14px] text-white/50 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            Waiting for host…
+          <div className="px-6 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-[14px] text-white/60 font-bold flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            Waiting for Host to start…
           </div>
         )}
       </div>
@@ -508,12 +575,12 @@ function CountdownScreen({ count }: { count: number }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="min-h-screen flex flex-col items-center justify-center gap-4">
-      <p className="text-[14px] text-white/40 uppercase tracking-widest font-bold">Get ready!</p>
+      <p className="text-[14px] text-white/50 uppercase tracking-widest font-black">Get Ready!</p>
       <AnimatePresence mode="wait">
         <motion.div key={count}
           initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="text-[140px] font-black bg-gradient-to-b from-white to-white/40 bg-clip-text text-transparent leading-none">
+          className="text-[120px] sm:text-[160px] font-black bg-gradient-to-b from-white via-slate-100 to-white/40 bg-clip-text text-transparent leading-none select-none drop-shadow-[0_0_40px_rgba(255,255,255,0.3)]">
           {count}
         </motion.div>
       </AnimatePresence>
@@ -526,56 +593,64 @@ function CountdownScreen({ count }: { count: number }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function QuestionScreen({ question, timeLeft, answered, onAnswer }: { question: Question; timeLeft: number; answered: string | null; onAnswer: (c: string) => void }) {
   const pct = (timeLeft / question.time_limit) * 100
-  const timerColor = pct > 50 ? 'bg-[#26890c]' : pct > 25 ? 'bg-[#ffa602]' : 'bg-[#e21b3c]'
+  const timerColor = pct > 50 ? 'bg-emerald-500' : pct > 25 ? 'bg-amber-500' : 'bg-rose-500'
   const opts = [question.opt_a, question.opt_b, question.opt_c, question.opt_d]
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col">
-      {/* Top bar */}
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <span className="text-[12px] text-white/40 font-bold">Q{question.idx + 1} / {question.total}</span>
-        <motion.span key={timeLeft} initial={{ scale: 1.3 }} animate={{ scale: 1 }}
-          className={cn('text-[28px] font-black tabular-nums', timeLeft <= 5 ? 'text-[#e21b3c]' : 'text-white')}>
-          {timeLeft}
-        </motion.span>
-      </div>
-
-      {/* Timer bar */}
-      <div className="h-2 bg-white/10 mx-4 rounded-full overflow-hidden">
-        <motion.div className={cn('h-full rounded-full transition-colors', timerColor)}
-          animate={{ width: `${pct}%` }} transition={{ duration: 0.9, ease: 'linear' }} />
-      </div>
-
-      {/* Question text */}
-      <div className="flex-1 flex flex-col px-4 pb-4 gap-4 mt-4">
-        <div className="bg-white/8 border border-white/10 rounded-[1.5rem] px-6 py-6 text-center flex items-center justify-center min-h-[120px]">
-          <p className="text-[20px] md:text-[24px] font-black leading-snug">{question.text}</p>
+      className="min-h-screen flex flex-col max-w-4xl mx-auto px-4 py-4 justify-between gap-4">
+      
+      {/* Top Header */}
+      <div>
+        <div className="flex items-center justify-between pb-2">
+          <span className="text-[13px] text-white/50 font-black">Question {question.idx + 1} of {question.total}</span>
+          <motion.div key={timeLeft} initial={{ scale: 1.2 }} animate={{ scale: 1 }}
+            className={cn('w-12 h-12 rounded-full border-2 flex items-center justify-center text-[20px] font-black tabular-nums',
+              timeLeft <= 5 ? 'border-rose-500 text-rose-500 animate-pulse' : 'border-white/20 text-white')}>
+            {timeLeft}
+          </motion.div>
         </div>
 
-        {/* Answer grid */}
-        <div className="grid grid-cols-2 gap-3 flex-1">
-          {opts.map((opt, i) => {
-            const key = OPTION_KEYS[i]
-            const isSelected = answered === key
-            return (
-              <motion.button key={key} whileHover={!answered ? { scale: 1.02 } : {}} whileTap={!answered ? { scale: 0.97 } : {}}
-                onClick={() => onAnswer(key)} disabled={!!answered}
-                className={cn(
-                  'rounded-[1.25rem] p-4 flex items-center gap-3 font-black text-[15px] text-left transition-all relative overflow-hidden',
-                  OPTION_COLORS[i],
-                  isSelected ? 'ring-4 ring-white shadow-[0_0_24px_rgba(255,255,255,0.3)]' : 'opacity-90 hover:opacity-100',
-                  answered && !isSelected ? 'opacity-40' : ''
-                )}>
-                <span className="material-symbols-outlined text-[22px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>{OPTION_ICONS[i]}</span>
-                <span className="leading-tight">{opt}</span>
-                {isSelected && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-2 right-2 w-6 h-6 bg-white/30 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[14px]">check</span>
-                </motion.div>}
-              </motion.button>
-            )
-          })}
+        {/* Timer Bar */}
+        <div className="h-3 bg-white/10 rounded-full overflow-hidden p-0.5 border border-white/10">
+          <motion.div className={cn('h-full rounded-full transition-colors', timerColor)}
+            animate={{ width: `${pct}%` }} transition={{ duration: 0.9, ease: 'linear' }} />
         </div>
+      </div>
+
+      {/* Question Prompt */}
+      <div className="flex-1 flex items-center justify-center my-4">
+        <div className="w-full bg-white/5 border border-white/15 rounded-[2rem] p-6 sm:p-10 text-center shadow-2xl backdrop-blur-xl">
+          <p className="text-[20px] sm:text-[26px] md:text-[30px] font-black leading-snug text-white">
+            {question.text}
+          </p>
+        </div>
+      </div>
+
+      {/* Answer Options Grid (Mobile 1 column, Desktop 2 columns) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-2">
+        {opts.map((opt, i) => {
+          const key = OPTION_KEYS[i]
+          const isSelected = answered === key
+          return (
+            <motion.button key={key} whileHover={!answered ? { scale: 1.02 } : {}} whileTap={!answered ? { scale: 0.98 } : {}}
+              onClick={() => onAnswer(key)} disabled={!!answered}
+              className={cn(
+                'rounded-2xl p-4 sm:p-5 flex items-center gap-4 font-black text-[15px] sm:text-[17px] text-left transition-all relative overflow-hidden shadow-lg border border-white/10',
+                OPTION_COLORS[i],
+                isSelected ? 'ring-4 ring-white shadow-[0_0_30px_rgba(255,255,255,0.4)]' : 'opacity-95 hover:opacity-100',
+                answered && !isSelected ? 'opacity-35 grayscale-[30%]' : ''
+              )}>
+              <OptionShape index={i} className="w-7 h-7 sm:w-8 sm:h-8 fill-current shrink-0 text-white/90" />
+              <span className="leading-tight flex-1">{opt}</span>
+              {isSelected && (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-7 h-7 bg-white text-black rounded-full flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[18px]">check</span>
+                </motion.div>
+              )}
+            </motion.button>
+          )
+        })}
       </div>
     </motion.div>
   )
@@ -594,75 +669,53 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-8 gap-5">
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-8 max-w-lg mx-auto gap-6">
 
-      {/* Big correct/wrong + rank */}
-      <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-        <motion.div initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', delay: 0.1 }}
-          className={cn('w-full flex flex-col items-center gap-1 px-8 py-6 rounded-[2rem]',
-            isCorrect ? 'bg-[#26890c]/30 border border-[#26890c]/50' : 'bg-[#e21b3c]/20 border border-[#e21b3c]/40')}>
-          <span className="material-symbols-outlined text-[52px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-            {isCorrect ? 'check_circle' : 'cancel'}
+      {/* Correct / Incorrect Banner */}
+      <motion.div initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring' }}
+        className={cn('w-full flex flex-col items-center gap-2 p-6 rounded-[2rem] border text-center shadow-xl',
+          isCorrect ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/20 border-rose-500/40 text-rose-400')}>
+        <span className="material-symbols-outlined text-[56px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+          {isCorrect ? 'check_circle' : 'cancel'}
+        </span>
+        <span className="text-[28px] font-black">{isCorrect ? 'Correct!' : 'Incorrect'}</span>
+        <span className={cn('text-[32px] font-black tabular-nums', isCorrect ? 'text-emerald-400' : 'text-white/30')}>
+          {isCorrect ? `+${myResult?.points ?? 0} pts` : '+0'}
+        </span>
+        {isSpeedBonus && (
+          <span className="text-[12px] bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full font-bold flex items-center gap-1">
+            ⚡ Speed Bonus Included!
           </span>
-          <span className="text-[26px] font-black">{isCorrect ? '🎉 Correct!' : '😬 Wrong!'}</span>
-          {/* Points earned */}
-          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.3 }}
-            className={cn('text-[32px] font-black tabular-nums', isCorrect ? 'text-[#4ade80]' : 'text-white/30')}>
-            {isCorrect ? `+${myResult?.points ?? 0}` : '+0'}
-          </motion.span>
-          {isSpeedBonus && (
-            <motion.span initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-              className="text-[12px] bg-[#ffa602]/20 text-[#ffa602] px-3 py-1 rounded-full font-bold">
-              ⚡ Speed bonus!
-            </motion.span>
-          )}
-        </motion.div>
-
-        {/* Your rank */}
-        {myRank > 0 && (
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.4 }}
-            className="flex items-center gap-3 px-6 py-3 bg-white/8 border border-white/15 rounded-2xl">
-            <span className="text-[28px]">{MEDALS[myRank - 1] || `#${myRank}`}</span>
-            <div>
-              <p className="text-[11px] text-white/40 uppercase tracking-widest">Your rank</p>
-              <p className="text-[20px] font-black">{myRank === 1 ? '1st Place 🔥' : myRank === 2 ? '2nd Place' : myRank === 3 ? '3rd Place' : `${myRank}th Place`}</p>
-            </div>
-            <div className="ml-2 text-right">
-              <p className="text-[11px] text-white/40 uppercase tracking-widest">Total</p>
-              <p className="text-[18px] font-black text-primary">{result.leaderboard[myRank - 1]?.score.toLocaleString()}</p>
-            </div>
-          </motion.div>
         )}
-      </div>
+      </motion.div>
 
-      {/* Correct answer reveal */}
-      <div className="w-full max-w-sm">
-        <p className="text-[11px] text-white/40 text-center mb-2 uppercase tracking-widest">Correct answer</p>
-        <div className={cn('rounded-xl px-4 py-3 flex items-center gap-3 font-black text-[15px]', OPTION_COLORS[correctIdx])}>
-          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>{OPTION_ICONS[correctIdx]}</span>
+      {/* Correct Option Reveal */}
+      <div className="w-full">
+        <p className="text-[11px] text-white/40 uppercase tracking-widest text-center mb-2 font-bold">Correct Answer</p>
+        <div className={cn('rounded-2xl p-4 flex items-center gap-3 font-black text-[16px]', OPTION_COLORS[correctIdx])}>
+          <OptionShape index={correctIdx} className="w-6 h-6 fill-current shrink-0" />
           <span>{result.correct}</span>
         </div>
       </div>
 
-      {/* Full leaderboard */}
-      <div className="w-full max-w-sm space-y-1.5">
-        <p className="text-[11px] text-white/40 text-center uppercase tracking-widest mb-2">Standings</p>
-        {result.leaderboard.map((p, i) => (
-          <motion.div key={p.username} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.06 * i }}
-            className={cn('flex items-center gap-3 px-4 py-2.5 rounded-xl',
-              p.username === me ? 'bg-primary/20 border border-primary/40' : 'bg-white/5')}>
-            <span className="text-[16px] w-6 text-center shrink-0">{MEDALS[i] || `${i + 1}`}</span>
-            <span className="flex-1 text-[13px] font-bold truncate">{p.username}</span>
-            {p.streak >= 3 && <span className="text-[10px] text-[#ffa602] font-bold">🔥{p.streak}</span>}
-            {/* Points from this round */}
-            {(() => { const r = result.results.find(x => x.username === p.username); return r?.is_correct ? <span className="text-[11px] text-[#4ade80] font-bold shrink-0">+{r.points}</span> : <span className="text-[11px] text-white/25 shrink-0">+0</span> })()}
-            <span className="font-black text-[14px] tabular-nums shrink-0">{p.score.toLocaleString()}</span>
-          </motion.div>
-        ))}
+      {/* Leaderboard Standings */}
+      <div className="w-full">
+        <p className="text-[11px] text-white/40 uppercase tracking-widest text-center mb-2 font-bold">Current Standings</p>
+        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+          {result.leaderboard.map((p, i) => (
+            <motion.div key={p.username} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.05 * i }}
+              className={cn('flex items-center gap-3 px-4 py-3 rounded-xl border',
+                p.username === me ? 'bg-primary/25 border-primary/50' : 'bg-white/5 border-white/10')}>
+              <span className="text-[16px] w-6 text-center shrink-0">{MEDALS[i] || `#${i + 1}`}</span>
+              <span className="flex-1 text-[14px] font-bold truncate text-white">{p.username}</span>
+              {p.streak >= 3 && <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">🔥{p.streak}</span>}
+              <span className="font-black text-[15px] tabular-nums text-white">{p.score.toLocaleString()}</span>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
-      <p className="text-[11px] text-white/25 animate-pulse">Next question coming up…</p>
+      <p className="text-[12px] text-white/30 animate-pulse font-medium">Next question loading…</p>
     </motion.div>
   )
 }
@@ -670,79 +723,104 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
 // ══════════════════════════════════════════════════════════════════════════════
 // SCREEN: Leaderboard (between rounds)
 // ══════════════════════════════════════════════════════════════════════════════
-function LeaderboardScreen({ leaderboard, me, onContinue }: { leaderboard: Player[]; me: string; onContinue?: () => void }) {
+function LeaderboardScreen({ leaderboard, me }: { leaderboard: Player[]; me: string }) {
   const MEDALS = ['🥇','🥈','🥉']
   return (
-    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 gap-5">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 max-w-lg mx-auto gap-6">
       <h2 className="text-[28px] font-black">Leaderboard</h2>
-      <div className="w-full max-w-sm space-y-2">
+      <div className="w-full space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
         {leaderboard.map((p, i) => (
-          <motion.div key={p.username} initial={{ x: 60, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: i * 0.07, type: 'spring' }}
-            className={cn('flex items-center gap-3 px-4 py-3.5 rounded-[1.25rem] border transition-all',
-              p.username === me ? 'bg-primary/25 border-primary/50 shadow-[0_0_20px_rgba(var(--color-primary),0.2)]' : 'bg-white/5 border-white/10')}>
-            <span className="text-[22px] w-8 text-center shrink-0">{MEDALS[i] || `#${i+1}`}</span>
-            <span className="flex-1 font-bold text-[14px]">{p.username}</span>
-            {p.streak >= 3 && <span className="text-[11px] bg-[#ffa602]/20 text-[#ffa602] px-2 py-0.5 rounded-full font-bold">🔥{p.streak}</span>}
-            <span className="font-black text-[16px] tabular-nums">{p.score.toLocaleString()}</span>
+          <motion.div key={p.username} initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: i * 0.06 }}
+            className={cn('flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-all',
+              p.username === me ? 'bg-primary/25 border-primary shadow-[0_0_20px_rgba(var(--color-primary),0.2)]' : 'bg-white/5 border-white/10')}>
+            <span className="text-[20px] w-8 text-center shrink-0">{MEDALS[i] || `#${i+1}`}</span>
+            <span className="flex-1 font-bold text-[14px] truncate text-white">{p.username}</span>
+            {p.streak >= 3 && <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">🔥{p.streak}</span>}
+            <span className="font-black text-[16px] tabular-nums text-white">{p.score.toLocaleString()}</span>
           </motion.div>
         ))}
       </div>
-      <p className="text-[12px] text-white/30 animate-pulse mt-2">Next question loading…</p>
+      <p className="text-[12px] text-white/30 animate-pulse font-medium">Next question loading…</p>
     </motion.div>
   )
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SCREEN: Game Over
+// SCREEN: Game Over (Podium)
 // ══════════════════════════════════════════════════════════════════════════════
 function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[]; me: string; onPlayAgain: () => void }) {
   const MEDALS   = ['🥇','🥈','🥉']
+  const top3     = leaderboard.slice(0, 3)
   const myRank   = leaderboard.findIndex(p => p.username === me) + 1
-  const winner   = leaderboard[0]
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 gap-6">
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 max-w-lg mx-auto gap-8">
 
-      {/* Winner podium */}
-      {winner && (
-        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.2 }}
-          className="flex flex-col items-center gap-2 text-center">
-          <span className="text-[64px]">🏆</span>
-          <p className="text-[13px] text-white/40 uppercase tracking-widest">Winner</p>
-          <p className="text-[32px] font-black">{winner.username}</p>
-          <p className="text-[20px] font-bold text-[#ffa602]">{winner.score.toLocaleString()} pts</p>
-        </motion.div>
-      )}
-
-      {/* Your result */}
-      {myRank > 0 && (
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}
-          className="px-8 py-4 bg-primary/20 border border-primary/40 rounded-2xl text-center">
-          <p className="text-[13px] text-white/50">Your position</p>
-          <p className="text-[28px] font-black">{MEDALS[myRank-1] || `#${myRank}`}</p>
-          <p className="text-[14px] text-white/60">{leaderboard[myRank-1]?.score.toLocaleString()} pts</p>
-        </motion.div>
-      )}
-
-      {/* Full leaderboard */}
-      <div className="w-full max-w-sm space-y-2">
-        {leaderboard.map((p, i) => (
-          <motion.div key={p.username} initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.05 * i }}
-            className={cn('flex items-center gap-3 px-4 py-3 rounded-xl',
-              p.username === me ? 'bg-primary/20 border border-primary/40' : 'bg-white/5')}>
-            <span className="text-[18px] w-7 text-center">{MEDALS[i] || `${i+1}`}</span>
-            <span className="flex-1 font-bold text-[13px]">{p.username}</span>
-            <span className="font-black text-[15px]">{p.score.toLocaleString()}</span>
-          </motion.div>
-        ))}
+      <div className="text-center space-y-1">
+        <h2 className="text-[32px] font-black bg-gradient-to-r from-amber-300 via-amber-400 to-amber-200 bg-clip-text text-transparent">
+          Battle Complete!
+        </h2>
+        <p className="text-[13px] text-white/50 font-medium">Final Rankings &amp; Winner Podium</p>
       </div>
 
-      <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} onClick={onPlayAgain}
-        className="px-10 py-3.5 bg-gradient-to-r from-primary to-[#a855f7] rounded-full font-black text-[16px] shadow-[0_6px_0_0_rgba(0,0,0,0.4)] active:translate-y-1 active:shadow-none transition-all">
-        Play Again
+      {/* Winner Podium (2nd - 1st - 3rd) */}
+      {top3.length > 0 && (
+        <div className="flex items-end justify-center gap-3 sm:gap-4 w-full h-[220px] pt-6">
+          {/* 2nd Place */}
+          {top3[1] && (
+            <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}
+              className="flex-1 flex flex-col items-center">
+              <span className="text-[28px] mb-1">🥈</span>
+              <span className="text-[12px] font-black text-white truncate max-w-[80px]">{top3[1].username}</span>
+              <span className="text-[11px] text-white/50 mb-2">{top3[1].score} pts</span>
+              <div className="w-full h-[100px] bg-slate-400/20 border-t-4 border-slate-300 rounded-t-2xl flex items-center justify-center font-black text-[24px] text-slate-300 shadow-lg">
+                2
+              </div>
+            </motion.div>
+          )}
+
+          {/* 1st Place */}
+          {top3[0] && (
+            <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}
+              className="flex-1 flex flex-col items-center">
+              <span className="text-[36px] mb-1">🏆</span>
+              <span className="text-[14px] font-black text-amber-300 truncate max-w-[90px]">{top3[0].username}</span>
+              <span className="text-[12px] text-amber-400/80 mb-2 font-bold">{top3[0].score} pts</span>
+              <div className="w-full h-[140px] bg-amber-500/25 border-t-4 border-amber-400 rounded-t-2xl flex items-center justify-center font-black text-[32px] text-amber-300 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+                1
+              </div>
+            </motion.div>
+          )}
+
+          {/* 3rd Place */}
+          {top3[2] && (
+            <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
+              className="flex-1 flex flex-col items-center">
+              <span className="text-[28px] mb-1">🥉</span>
+              <span className="text-[12px] font-black text-white truncate max-w-[80px]">{top3[2].username}</span>
+              <span className="text-[11px] text-white/50 mb-2">{top3[2].score} pts</span>
+              <div className="w-full h-[70px] bg-amber-700/20 border-t-4 border-amber-600 rounded-t-2xl flex items-center justify-center font-black text-[20px] text-amber-600 shadow-lg">
+                3
+              </div>
+            </motion.div>
+          )}
+        </div>
+      )}
+
+      {/* Your Rank Banner */}
+      {myRank > 0 && (
+        <div className="w-full px-6 py-3.5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+          <span className="text-[13px] text-white/60 font-bold">Your Position</span>
+          <span className="text-[16px] font-black text-primary">{MEDALS[myRank-1] || `#${myRank}`} ({leaderboard[myRank-1]?.score.toLocaleString()} pts)</span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={onPlayAgain}
+        className="w-full py-4 bg-gradient-to-r from-primary to-[#a855f7] rounded-2xl font-black text-[16px] shadow-[0_8px_24px_rgba(var(--color-primary),0.35)] transition-all">
+        Back to Lobby
       </motion.button>
     </motion.div>
   )
