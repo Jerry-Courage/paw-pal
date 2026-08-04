@@ -258,6 +258,9 @@ export default function QuizBattlePage() {
     <div className="min-h-screen bg-[#0d091b] text-white relative overflow-x-hidden selection:bg-primary selection:text-white">
       {showConfetti && <Confetti />}
 
+      {/* Safe-area top spacer — pushes content below iPhone notch/Dynamic Island */}
+      <div className="tool-header-safe" />
+
       {/* Animated background glowing blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-15%] left-[-10%] w-[70vw] h-[70vw] max-w-[600px] max-h-[600px] rounded-full bg-primary/15 blur-[120px]" />
@@ -287,6 +290,12 @@ function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () =>
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
       className="min-h-screen flex flex-col items-center justify-center px-4 py-12 gap-8 md:gap-10 max-w-4xl mx-auto">
+
+      {/* Back to Dashboard */}
+      <a href="/dashboard" className="self-start flex items-center gap-1.5 text-white/40 hover:text-white/70 transition-colors text-[13px] font-semibold -mb-4">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+        Dashboard
+      </a>
 
       {/* Hero Header */}
       <div className="text-center space-y-3">

@@ -238,6 +238,9 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     isSpeakingTimeoutRef.current = setTimeout(() => {
       setIsAiSpeaking(false)
       isAiSpeakingRef.current = false
+      // Reset so onaudioprocess isSpeaking check doesn't get stuck
+      // when AudioContext suspends (iOS Safari freezes currentTime when idle)
+      nextPlayTimeRef.current = 0
     }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
   }, [])
 
@@ -390,9 +393,9 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         if (isMicMutedRef.current) return
         
-        // Mute mic if the AI is playing audio (or finished playing < 500ms ago)
-        const isSpeaking = playAudioCtxRef.current && (nextPlayTimeRef.current > playAudioCtxRef.current.currentTime - 0.5)
-        if (isSpeaking) return
+        // Block mic while AI is speaking (use ref flag — time comparison
+        // breaks on iOS because AudioContext.currentTime freezes when suspended)
+        if (isAiSpeakingRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         // Inline int16 conversion — avoids async resampling which can stall

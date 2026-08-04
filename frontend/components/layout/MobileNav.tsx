@@ -25,7 +25,7 @@ const DRAWER_ITEMS = [
   { href: '/upgrade',     icon: 'workspace_premium', label: 'Upgrade' },
 ]
 
-const FULL_VIEWPORT_PREFIXES = ['/workspace/', '/library/']
+const FULL_VIEWPORT_PREFIXES = ['/workspace/', '/library/', '/groups']
 
 export default function MobileNav() {
   const pathname = usePathname()
@@ -33,6 +33,8 @@ export default function MobileNav() {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const isFullViewport =
+    pathname === '/groups' ||
+    pathname.startsWith('/groups/') ||
     (FULL_VIEWPORT_PREFIXES.some(prefix => pathname.startsWith(prefix)) &&
     pathname.split('/').length > 3) ||
     /^\/workspace\/[^/]+$/.test(pathname) ||

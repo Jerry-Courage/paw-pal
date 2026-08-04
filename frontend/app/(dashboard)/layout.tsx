@@ -16,6 +16,7 @@ const OnboardingWizard = dynamic(() => import('@/components/onboarding/Onboardin
 const FULL_VIEWPORT_PREFIXES = [
   '/workspace/',
   '/library/',   // sub-tools: /library/[id]/mindmap, /vr, etc.
+  '/groups',     // Quiz Battle — full-screen Kahoot-style experience
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -52,8 +53,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <SplashScreen />
   }
 
-  // Check if this is a full-viewport page (e.g. assignment detail, workspace doc, mindmap, VR)
+  // Check if this is a full-viewport page (e.g. assignment detail, workspace doc, mindmap, VR, Quiz Battle)
   const isFullViewport =
+    pathname === '/groups' ||
+    pathname.startsWith('/groups/') ||
     (FULL_VIEWPORT_PREFIXES.some(prefix => pathname.startsWith(prefix)) &&
     pathname.split('/').length > 3) ||
     // workspace/[id] pages (exactly 3 segments: /workspace/id)
