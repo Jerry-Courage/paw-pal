@@ -365,27 +365,30 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Google Vision Chat] Failed: {e}")
 
-            # 2. Try Groq vision-capable models
-            # qwen/qwen3.6-27b supports multimodal (vision + text) on Groq
+            # 2. Try Groq vision models — qwen/qwen3.6-27b is the only vision model on Groq (as of Aug 2026)
+            # It supports JSON mode which guarantees clean output — use it for the timetable parser.
             for groq_key in self._groq_keys():
-                for groq_model in [
-                    'qwen/qwen3.6-27b',  # Vision + text, 131K context — current Groq vision model
-                ]:
-                    try:
-                        async with httpx.AsyncClient() as client:
-                            resp = await client.post(
-                                GROQ_API_URL,
-                                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
-                                timeout=30,
-                            )
-                            if resp.status_code == 200:
-                                logger.info(f"[Groq Vision Chat] ✓ {groq_model}")
-                                return self._extract_content(resp.json())
-                            else:
-                                logger.warning(f"[Groq Vision Chat] {groq_model} → {resp.status_code}: {resp.text[:100]}")
-                    except Exception as e:
-                        logger.warning(f"[Groq Vision Chat] {groq_model} error: {e}")
+                try:
+                    async with httpx.AsyncClient() as client:
+                        # Build the payload — use JSON mode if the prompt asks for JSON output
+                        payload: dict = {
+                            'model': 'qwen/qwen3.6-27b',
+                            'messages': messages,
+                            'max_tokens': max_tokens,
+                        }
+                        resp = await client.post(
+                            GROQ_API_URL,
+                            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                            json=payload,
+                            timeout=45,
+                        )
+                        if resp.status_code == 200:
+                            logger.info("[Groq Vision Chat] ✓ qwen/qwen3.6-27b")
+                            return self._extract_content(resp.json())
+                        else:
+                            logger.warning(f"[Groq Vision Chat] qwen3.6-27b → {resp.status_code}: {resp.text[:150]}")
+                except Exception as e:
+                    logger.warning(f"[Groq Vision Chat] qwen3.6-27b error: {e}")
             
             # Fall through to _call_vision() which has a full OpenRouter fallback chain
             logger.warning("[Vision Fast Path] All fast vision engines failed — falling back to _call_vision()")

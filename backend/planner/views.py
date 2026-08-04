@@ -402,8 +402,7 @@ Days: Mo/Mon=0, Tu/Tue=1, We/Wed=2, Th/Thu=3, Fr/Fri=4, Sa/Sat=5, Su/Sun=6
 
 Extract EVERY class cell visible. Each cell may contain a course code, group label, lecturer name, and room code. Create one session object per cell.
 
-YOUR ENTIRE RESPONSE MUST BE ONLY a raw JSON array — nothing before [, nothing after ].
-No markdown, no code fences, no explanation text whatsoever.
+Return a JSON object with a single key "sessions" whose value is an array of session objects.
 Each session object must have exactly these keys:
   "title": course code + group label if present (e.g. "CSM 258 Group 1"),
   "session_type": "class",
@@ -411,16 +410,52 @@ Each session object must have exactly these keys:
   "day_of_week": integer 0-6 (0=Monday),
   "start_time": "HH:MM" 24-hour — taken directly from the column header time range,
   "end_time": "HH:MM" 24-hour — taken directly from the column header time range,
-  "location": room/venue code or empty string
-Begin your response with [ and end with ]. No other text."""
+  "location": room/venue code or empty string"""
         ai = AIService()
         try:
             content_parts = [
                 {'type': 'text', 'text': system_prompt},
                 {'type': 'image_url', 'image_url': {'url': image_data}},
             ]
-            # Use 8192 tokens — timetables can have many sessions and 4096 truncates them
-            result = ai.chat_sync([{'role': 'user', 'content': content_parts}], max_tokens=8192)
+            messages = [{'role': 'user', 'content': content_parts}]
+
+            # Try Groq qwen3.6-27b with JSON mode first — guarantees clean parseable output
+            import os as _os, httpx as _httpx
+            result = None
+            groq_key = _os.getenv('GROQ_API_KEY', '')
+            if groq_key:
+                try:
+                    import asyncio as _asyncio
+                    async def _groq_vision():
+                        async with _httpx.AsyncClient() as c:
+                            r = await c.post(
+                                'https://api.groq.com/openai/v1/chat/completions',
+                                headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                                json={
+                                    'model': 'qwen/qwen3.6-27b',
+                                    'messages': messages,
+                                    'max_tokens': 8192,
+                                    'response_format': {'type': 'json_object'},
+                                },
+                                timeout=45,
+                            )
+                            return r
+                    try:
+                        resp = _asyncio.run(_groq_vision())
+                    except RuntimeError:
+                        from asgiref.sync import async_to_sync
+                        resp = async_to_sync(_groq_vision)()
+                    if resp.status_code == 200:
+                        result = resp.json()['choices'][0]['message']['content']
+                        logger.info('[ParseTimetable] ✓ Groq qwen3.6-27b (JSON mode)')
+                    else:
+                        logger.warning(f'[ParseTimetable] Groq JSON mode failed {resp.status_code}: {resp.text[:150]}')
+                except Exception as ge:
+                    logger.warning(f'[ParseTimetable] Groq direct call error: {ge}')
+
+            # Fall back to generic AIService if Groq didn't work
+            if not result:
+                result = ai.chat_sync(messages, max_tokens=8192)
 
             logger.info(f'[ParseTimetable] AI raw response (first 500): {result[:500] if result else "EMPTY"}')
 
