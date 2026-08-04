@@ -174,12 +174,12 @@ export default function QuizPage({ params }: { params: { id: string } }) {
         </header>
 
         {/* Body */}
-        <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
-          <div className="w-full max-w-sm space-y-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
+          <div className="w-full max-w-sm mx-auto my-auto space-y-6 sm:space-y-8 py-4">
 
             {/* Icon + title */}
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="w-20 h-20 bg-primary/10 border border-primary/20 rounded-[1.5rem] flex items-center justify-center">
+              <div className="w-20 h-20 bg-primary/10 border border-primary/20 rounded-[1.5rem] flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-primary text-[40px]" style={{ fontVariationSettings: "'FILL' 1" }}>quiz</span>
               </div>
               <div>
@@ -247,8 +247,8 @@ export default function QuizPage({ params }: { params: { id: string } }) {
         <div className="w-9" />
       </header>
 
-      <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
-        <div className="w-full max-w-sm space-y-8 text-center">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
+        <div className="w-full max-w-sm mx-auto my-auto space-y-6 sm:space-y-8 text-center py-4">
 
           {/* Score ring */}
           <div className="relative w-36 h-36 mx-auto">
@@ -452,12 +452,12 @@ export default function QuizPage({ params }: { params: { id: string } }) {
           )}
 
           {/* Spacer so content doesn't hide behind footer */}
-          <div className="h-24" />
+          <div className="h-28" />
         </div>
       </div>
 
-      {/* ── Footer action ─────────────────────────────────────────────── */}
-      <div className="px-5 pb-6 pt-3 shrink-0 max-w-2xl mx-auto w-full">
+      {/* ── Footer action with mobile safe-area bottom ────────────────── */}
+      <div className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] shrink-0 max-w-2xl mx-auto w-full bg-background/95 backdrop-blur border-t border-outline-variant/10">
         {!isRevealed ? (
           <button onClick={handleReveal} disabled={!chosenAnswer}
             className="w-full py-4 rounded-full bg-primary-container text-on-primary-container font-bold text-[16px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-30 disabled:pointer-events-none">
@@ -474,7 +474,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
           </button>
         )}
         {/* Keyboard hint */}
-        <p className="text-center text-[11px] text-on-surface-variant/30 mt-3 font-medium">
+        <p className="text-center text-[11px] text-on-surface-variant/30 mt-3 font-medium hidden sm:block">
           {!isRevealed
             ? <><kbd className="px-1.5 py-0.5 bg-surface-container-high rounded text-[10px]">1–4</kbd> to select · <kbd className="px-1.5 py-0.5 bg-surface-container-high rounded text-[10px]">Enter</kbd> to confirm</>
             : <><kbd className="px-1.5 py-0.5 bg-surface-container-high rounded text-[10px]">Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-surface-container-high rounded text-[10px]">→</kbd> for next</>

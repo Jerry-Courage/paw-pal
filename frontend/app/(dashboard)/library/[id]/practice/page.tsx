@@ -153,8 +153,8 @@ export default function PracticePage({ params }: { params: { id: string } }) {
         <p className="text-[12px] font-bold text-on-surface-variant uppercase tracking-widest">Practice</p>
         <div className="w-9" />
       </header>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-6 text-center max-w-xs px-6">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+        <div className="flex flex-col items-center gap-6 text-center max-w-xs mx-auto my-auto px-4 py-4">
           <span className="material-symbols-outlined text-error text-[48px]">error</span>
           <div>
             <h2 className="text-[20px] font-bold text-on-surface">Couldn't load questions</h2>

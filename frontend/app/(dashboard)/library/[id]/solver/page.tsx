@@ -215,7 +215,7 @@ export default function SolverPage({ params }: { params: { id: string } }) {
         <div className="w-9" />
       </header>
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 overflow-y-auto scrollbar-hide pb-28">
         <div className="max-w-2xl mx-auto px-5 py-6 space-y-6">
 
           {!solution ? (

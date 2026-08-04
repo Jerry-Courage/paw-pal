@@ -154,8 +154,8 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
           <div className="w-9" />
         </header>
 
-        <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
-          <div className="w-full max-w-sm space-y-8 text-center">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
+          <div className="w-full max-w-sm mx-auto my-auto space-y-6 sm:space-y-8 text-center py-4">
             {/* Score ring */}
             <div className="relative w-36 h-36 mx-auto">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
