@@ -338,70 +338,69 @@ def process_resource_task(res_id):
                 logger.error(f'[Task Queue] YouTube processing failed for {res.id}: {e}')
 
         # ─── VECTORIZATION & AI PROCESSING ───
-        if text or res.resource_type == 'video':
-            logger.info(f"[Task Queue] Processing Study Kit for Resource {res.id} (Context size: {len(text) if text else 'TITLE-ONLY'})")
-            
-            if text:
-                existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
-                res.ai_concepts = existing_concepts + [{'extracted_text': text[:300000]}]
-                res.status_text = "Vectorizing content for RAG..."
-                res.processing_progress = 30
-                res.save()
-
-                # Trigger Vectorization for RAG (non-blocking — embedding failures don't stop kit generation)
-                res.status = 'vectorizing'
-                res.save()
-                try:
-                    create_vector_embeddings(res, text)
-                except Exception as embed_err:
-                    logger.warning(f"[RAG] Embedding failed for {res.id}, skipping: {embed_err}")
-                
-                # Save after vectorization
-                res.processing_progress = 40
-                res.status_text = "🧠 Content vectorized. Starting AI synthesis..."
-                res.save()
-            else:
-                # Skip vectorization but still mark progress for topic-based generation
-                res.processing_progress = 40
-                res.status_text = "🧠 Topic analysis complete. Starting AI synthesis..."
-                res.save()
-
-            # Generate Study Kit
-            res.status = 'generating'
+        logger.info(f"[Task Queue] Processing Study Kit for Resource {res.id} (Context size: {len(text) if text else 'TITLE-ONLY'})")
+        
+        if text:
+            existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
+            res.ai_concepts = existing_concepts + [{'extracted_text': text[:300000]}]
+            res.status_text = "Vectorizing content for RAG..."
+            res.processing_progress = 30
             res.save()
-            
-            ai = AIService()
+
+            # Trigger Vectorization for RAG (non-blocking — embedding failures don't stop kit generation)
+            res.status = 'vectorizing'
+            res.save()
             try:
+                create_vector_embeddings(res, text)
+            except Exception as embed_err:
+                logger.warning(f"[RAG] Embedding failed for {res.id}, skipping: {embed_err}")
+            
+            # Save after vectorization
+            res.processing_progress = 40
+            res.status_text = "🧠 Content vectorized. Starting AI synthesis..."
+            res.save()
+        else:
+            # Skip vectorization but still mark progress for topic/vision-based generation
+            res.processing_progress = 40
+            res.status_text = "🧠 Topic & Visual analysis complete. Starting AI synthesis..."
+            res.save()
+
+        # Generate Study Kit
+        res.status = 'generating'
+        res.save()
+        
+        ai = AIService()
+        try:
+            kit = ai.generate_study_kit(
+                res,
+                context=text if text else f"Topic: {res.title}",
+                page_image_map=page_image_map if page_image_map else None,
+                vision_data=vision_data,
+                page_count=total_pages
+            )
+            
+            # SELF-HEALING RETRY: If sections are empty but text is substantial, retry once
+            if not kit.get('sections') and len(text) > 1000:
+                logger.warning(f'[Task Queue] Empty sections detected for {res.id}. Retrying once with Recovery Signal...')
                 kit = ai.generate_study_kit(
                     res,
-                    context=text,
+                    context=text + "\n\nCRITICAL FIX: Your previous JSON response for this material was malformed or empty. Please ensure you return a valid JSON object with detailed 'sections'.",
                     page_image_map=page_image_map if page_image_map else None,
-                    vision_data=vision_data,
-                    page_count=total_pages
+                    vision_data=vision_data
                 )
-                
-                # SELF-HEALING RETRY: If sections are empty but text is substantial, retry once
-                if not kit.get('sections') and len(text) > 1000:
-                    logger.warning(f'[Task Queue] Empty sections detected for {res.id}. Retrying once with Recovery Signal...')
-                    kit = ai.generate_study_kit(
-                        res,
-                        context=text + "\n\nCRITICAL FIX: Your previous JSON response for this material was malformed or empty. Please ensure you return a valid JSON object with detailed 'sections'.",
-                        page_image_map=page_image_map if page_image_map else None,
-                        vision_data=vision_data
-                    )
 
-                res.ai_notes_json = kit
-                res.has_study_kit = True
-                res.processing_progress = 100
-                res.status_text = "Polishing complete!"
-                if not res.ai_summary:
-                    res.ai_summary = kit.get('overview', {}).get('summary', '')[:1000]
-            except Exception as e:
-                logger.exception(f'[Task Queue] AI Study kit failed for {res.id}: {e}')
-                res.status = 'failed'
-                res.status_text = f"❌ Generation Failed: {str(e)[:120]}"
-                res.save()
-                return
+            res.ai_notes_json = kit
+            res.has_study_kit = True
+            res.processing_progress = 100
+            res.status_text = "Polishing complete!"
+            if not res.ai_summary:
+                res.ai_summary = kit.get('overview', {}).get('summary', '')[:1000]
+        except Exception as e:
+            logger.exception(f'[Task Queue] AI Study kit failed for {res.id}: {e}')
+            res.status = 'failed'
+            res.status_text = f"❌ Generation Failed: {str(e)[:120]}"
+            res.save()
+            return
 
         res.status = 'ready'
         res.save()
@@ -445,6 +444,20 @@ def process_resource_task(res_id):
                 res.status_text = f"❌ Failed: {error_msg[:100]}"
             res.save()
         except:
+            pass
+    finally:
+        try:
+            r_final = Resource.objects.get(id=res_id)
+            if r_final.status in ('processing', 'vectorizing', 'generating'):
+                if r_final.has_study_kit or r_final.ai_notes_json:
+                    r_final.status = 'ready'
+                    r_final.status_text = 'Study Kit Ready'
+                else:
+                    r_final.status = 'failed'
+                    r_final.status_text = '❌ Processing Incomplete'
+                r_final.processing_progress = 100
+                r_final.save(update_fields=['status', 'status_text', 'processing_progress'])
+        except Exception:
             pass
 
 def heartbeat_task():

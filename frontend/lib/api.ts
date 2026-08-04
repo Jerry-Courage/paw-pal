@@ -86,13 +86,10 @@ export const libraryApi = {
   updateResourceCover: (id: number, file: File) => {
     const fd = new FormData()
     fd.append('cover_image', file)
-    return api.patch(`/library/resources/${id}/`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    return api.patch(`/library/resources/${id}/`, fd)
   },
   uploadResource: (data: FormData, onUploadProgress?: (progressEvent: any) => void) =>
     api.post('/library/resources/', data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress
     }),
   deleteResource: (id: number) => api.delete(`/library/resources/${id}/`),

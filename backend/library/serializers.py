@@ -144,7 +144,18 @@ class ResourceListSerializer(serializers.ModelSerializer):
 class ResourceUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource
-        fields = ('title', 'resource_type', 'file', 'url', 'subject')
+        fields = (
+            'id', 'title', 'resource_type', 'file', 'url', 'subject',
+            'status', 'processing_progress', 'status_text', 'has_study_kit', 'created_at'
+        )
+        read_only_fields = ('id', 'status', 'processing_progress', 'status_text', 'has_study_kit', 'created_at')
+        extra_kwargs = {
+            'title': {'required': False, 'allow_blank': True},
+            'resource_type': {'required': False},
+            'file': {'required': False},
+            'url': {'required': False, 'allow_blank': True},
+            'subject': {'required': False, 'allow_blank': True},
+        }
 
 
 class DeckSerializer(serializers.ModelSerializer):

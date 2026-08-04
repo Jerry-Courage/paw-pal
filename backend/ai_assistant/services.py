@@ -1007,8 +1007,8 @@ class AIService:
                                             except Exception as e2:
                                                 err2 = str(e2)
                                                 if '429' in err2 or 'RESOURCE_EXHAUSTED' in err2:
-                                                    logger.warning(f"[RAG Cloud] Key2 also rate-limited — sleeping 65s")
-                                                    _time.sleep(65)
+                                                    logger.warning(f"[RAG Cloud] Key2 also rate-limited — sleeping 1.5s")
+                                                    _time.sleep(1.5)
                                                     try:
                                                         r2 = self.google_client2.models.embed_content(
                                                             model=model_id,
@@ -1044,8 +1044,8 @@ class AIService:
                                                 if '429' in err2 or 'RESOURCE_EXHAUSTED' in err2:
                                                     rpm_exhausted_clients.add(id(other_client))
                                         # Both RPM-limited — sleep and retry
-                                        logger.warning(f"[RAG Cloud] All keys RPM-limited — sleeping 65s")
-                                        _time.sleep(65)
+                                        logger.warning(f"[RAG Cloud] All keys RPM-limited — sleeping 1.5s")
+                                        _time.sleep(1.5)
                                         rpm_exhausted_clients.clear()
                                         try:
                                             active = self.google_client2 if key1_daily_exhausted else self.google_client_v1
