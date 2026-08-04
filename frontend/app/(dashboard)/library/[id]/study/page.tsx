@@ -91,6 +91,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const masteryPcRef = useRef<RTCPeerConnection | null>(null)
   const masteryStreamRef = useRef<MediaStream | null>(null)
   const masteryScrollRef = useRef<HTMLDivElement>(null)
+  const [sectionDrawerOpen, setSectionDrawerOpen] = useState(false)
 
   useEffect(() => {
     if (!timerRunning) return
@@ -387,25 +388,89 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   return (
     <div className="fixed inset-0 flex flex-col bg-background text-on-surface overflow-hidden">
 
+      {/* ── Mobile Section Drawer (Sheet) ── */}
+      {sectionDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSectionDrawerOpen(false)} />
+          {/* Sheet */}
+          <div className="relative bg-surface-container-low rounded-t-3xl border-t border-outline-variant/30 max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-surface-container-low px-5 pt-5 pb-3 border-b border-outline-variant/20 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-black text-primary uppercase tracking-widest">Sections</p>
+                <p className="text-[14px] font-bold text-on-surface line-clamp-1 mt-0.5">{resource?.title}</p>
+              </div>
+              <button onClick={() => setSectionDrawerOpen(false)} className="p-2 rounded-xl bg-surface-container-high text-on-surface-variant">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            {/* Progress bar */}
+            <div className="px-5 py-3 flex items-center gap-3">
+              <span className="text-[12px] text-on-surface-variant font-medium whitespace-nowrap">{progress}% Complete</span>
+              <div className="flex-1 h-2 bg-surface-container-high rounded-full overflow-hidden">
+                <div className="h-full bg-primary-container rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+            <nav className="flex flex-col gap-1.5 px-4 pb-4">
+              {sections.map((sec, i) => {
+                const isDone = completed.has(i)
+                const isActive = i === sectionIndex && phase !== 'mastery' && phase !== 'mastery_complete'
+                const isLocked = !isDone && i !== sectionIndex
+                const canClick = isDone || i === sectionIndex
+                return (
+                  <button key={i} onClick={() => { if (canClick) { goToSection(i); setSectionDrawerOpen(false) } }} disabled={!canClick}
+                    className={cn('flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[13px] font-semibold transition-all',
+                      isDone ? 'bg-primary-container text-on-primary-container' :
+                      isActive ? 'bg-surface-container-high border-2 border-primary text-on-surface' :
+                      isLocked ? 'text-on-surface-variant/30 cursor-not-allowed' :
+                      'text-on-surface-variant hover:bg-surface-container-high'
+                    )}>
+                    <span className="text-[16px] shrink-0">{isDone ? '✅' : isActive ? '▶️' : sec.icon || '🔒'}</span>
+                    <span className="truncate">{sec.title || `Section ${i + 1}`}</span>
+                  </button>
+                )
+              })}
+              <div className={cn('flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[13px] font-semibold mt-2 border-t border-outline-variant/20 pt-4',
+                phase === 'mastery' || phase === 'mastery_complete' ? 'bg-tertiary-container/20 border border-tertiary/30 text-tertiary' :
+                completed.size === total && total > 0 ? 'text-tertiary hover:bg-tertiary/10 cursor-pointer' :
+                'text-on-surface-variant/30'
+              )} onClick={() => { if (completed.size === total && total > 0) { setPhase('mastery'); setSectionDrawerOpen(false) } }}>
+                <span className="text-[16px]">{phase === 'mastery_complete' ? '🏆' : '🎓'}</span>
+                <div className="min-w-0">
+                  <p className="truncate">Mastery Challenge</p>
+                  <p className="text-[10px] opacity-70 truncate">{completed.size === total && total > 0 ? 'Unlocked — Feynman voice' : `${total - completed.size} sections left`}</p>
+                </div>
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* ── Top bar ── */}
-      <header className="h-16 flex items-center gap-4 px-6 border-b border-outline-variant/25 bg-surface-container-low shrink-0 z-20">
+      <header className="h-14 sm:h-16 flex items-center gap-3 px-4 sm:px-6 border-b border-outline-variant/25 bg-surface-container-low shrink-0 z-20">
         <Link href={`/library/${resourceId}`} className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors shrink-0">
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-          <span className="text-sm font-semibold hidden sm:block">Exit Study Mode</span>
+          <span className="text-sm font-semibold hidden sm:block">Exit</span>
         </Link>
-        <div className="flex-1 hidden md:flex items-center gap-3 mx-4">
+        {/* Mobile: section picker button */}
+        <button onClick={() => setSectionDrawerOpen(true)}
+          className="flex lg:hidden items-center gap-1.5 px-3 py-1.5 bg-surface-container rounded-xl border border-outline-variant/30 text-on-surface text-[12px] font-bold shrink-0">
+          <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>menu_book</span>
+          <span className="max-w-[100px] truncate">{phase === 'mastery' || phase === 'mastery_complete' ? 'Mastery' : (sections[sectionIndex]?.title || `§${sectionIndex + 1}`)}</span>
+          <span className="material-symbols-outlined text-[14px] text-on-surface-variant">expand_more</span>
+        </button>
+        <div className="flex-1 hidden lg:flex items-center gap-3 mx-4">
           <span className="text-[12px] text-on-surface-variant font-medium whitespace-nowrap">{progress}% Complete</span>
           <div className="flex-1 h-2.5 bg-surface-container-high rounded-full overflow-hidden">
             <div className="h-full bg-primary-container rounded-full transition-all duration-700" style={{ width: `${progress}%`, boxShadow: '0 0 12px rgba(255,138,61,0.4)' }} />
           </div>
           <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
         </div>
-        <div className="flex items-center gap-3 ml-auto shrink-0">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl">
-            <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-            <span className="text-[13px] font-black text-primary">{totalXP} XP</span>
+        <div className="flex items-center gap-2 ml-auto shrink-0">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 border border-primary/20 rounded-xl">
+            <span className="material-symbols-outlined text-primary text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+            <span className="text-[12px] sm:text-[13px] font-black text-primary">{totalXP} XP</span>
           </div>
-          {/* Reset progress */}
           {(sectionIndex > 0 || completed.size > 0) && (
             <button
               onClick={() => { if (window.confirm('Reset all study progress for this resource?')) resetProgress() }}
@@ -477,39 +542,39 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
         {/* CENTER: content */}
         <main className="flex-1 overflow-y-auto scrollbar-hide">
-          <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+          <div className="max-w-3xl mx-auto px-3 sm:px-6 py-5 sm:py-10 space-y-6 sm:space-y-8">
 
             {/* READING */}
             {phase === 'reading' && current && (
               <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
                 {/* Header */}
-                <div className="px-8 pt-8 pb-0">
+                <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-0">
                   <div className="flex items-center gap-3 mb-3">
-                    {current.icon && <span className="text-[28px]">{current.icon}</span>}
+                    {current.icon && <span className="text-[24px] sm:text-[28px]">{current.icon}</span>}
                     <span className="text-[11px] font-black text-primary-container uppercase tracking-widest">Section {sectionIndex + 1} of {total}</span>
                   </div>
-                  <h2 className="text-[26px] font-bold text-on-surface leading-tight">{current.title}</h2>
+                  <h2 className="text-[20px] sm:text-[26px] font-bold text-on-surface leading-tight">{current.title}</h2>
                 </div>
 
                 {/* Key Question */}
                 {current.key_question && (
-                  <div className="mx-8 mt-7 p-4 bg-secondary/10 border border-secondary/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-secondary/10 border border-secondary/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="material-symbols-outlined text-secondary text-[16px]">help_outline</span>
                       <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Key Question</span>
                     </div>
-                    <p className="text-[16px] font-bold text-on-surface">{current.key_question}</p>
+                    <p className="text-[14px] sm:text-[16px] font-bold text-on-surface">{current.key_question}</p>
                   </div>
                 )}
 
                 {/* Plain English */}
                 {current.plain_english && (
-                  <div className="mx-8 mt-7">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
                       <span className="text-[10px] font-black text-primary uppercase tracking-widest">Simple Analogy / Plain English</span>
                     </div>
-                    <div className="prose prose-invert max-w-none text-[15px] leading-relaxed text-on-surface/90">
+                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed text-on-surface/90">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{current.plain_english}</ReactMarkdown>
                     </div>
                   </div>
@@ -517,12 +582,12 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Deep Dive */}
                 {current.deep_dive && (
-                  <div className="mx-8 mt-7">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="material-symbols-outlined text-tertiary text-[16px]">school</span>
                       <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">Deep Dive</span>
                     </div>
-                    <div className="prose prose-invert max-w-none text-[15px] leading-relaxed">
+                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{current.deep_dive}</ReactMarkdown>
                     </div>
                   </div>
@@ -530,18 +595,18 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Memory Trick */}
                 {current.memory_trick && (
-                  <div className="mx-8 mt-7 p-4 bg-tertiary/10 border border-tertiary/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-tertiary/10 border border-tertiary/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="material-symbols-outlined text-tertiary text-[16px]">psychology</span>
                       <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">Memory Trick</span>
                     </div>
-                    <p className="text-[15px] text-on-surface italic">{current.memory_trick}</p>
+                    <p className="text-[14px] sm:text-[15px] text-on-surface italic">{current.memory_trick}</p>
                   </div>
                 )}
 
                 {/* Quick Summary */}
                 {current.quick_summary && (
-                  <div className="mx-8 mt-7 p-4 bg-primary/5 border border-primary/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-primary/5 border border-primary/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="material-symbols-outlined text-primary text-[16px]">summarize</span>
                       <span className="text-[10px] font-black text-primary uppercase tracking-widest">Quick Summary</span>
@@ -566,20 +631,20 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 )}
 
                 {/* Action bar */}
-                <div className="px-8 py-6 mt-4 border-t border-outline-variant/20 flex items-center justify-between gap-4">
-                    <button onClick={() => sectionIndex > 0 && goToSection(sectionIndex - 1)} disabled={sectionIndex === 0}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-outline-variant/40 text-on-surface-variant text-[13px] font-bold hover:border-outline-variant hover:text-on-surface disabled:opacity-30 disabled:pointer-events-none transition-all">
-                      <span className="material-symbols-outlined text-[18px]">arrow_back</span> Previous
-                    </button>
-                  <div className="flex items-center gap-3">
+                <div className="px-3 sm:px-8 py-4 sm:py-6 mt-4 border-t border-outline-variant/20 flex flex-wrap items-center justify-between gap-3">
+                  <button onClick={() => sectionIndex > 0 && goToSection(sectionIndex - 1)} disabled={sectionIndex === 0}
+                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-outline-variant/40 text-on-surface-variant text-[12px] sm:text-[13px] font-bold hover:border-outline-variant hover:text-on-surface disabled:opacity-30 disabled:pointer-events-none transition-all">
+                    <span className="material-symbols-outlined text-[16px] sm:text-[18px]">arrow_back</span> Prev
+                  </button>
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <button onClick={readAloud}
-                      className={cn('flex items-center gap-2 px-4 py-2.5 rounded-full border text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
-                      <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
+                      className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
                       {isReading ? 'Stop' : 'Listen'}
                     </button>
                     <button onClick={handleNext} disabled={loadingQuiz}
-                      className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary-container text-on-primary-container font-bold text-[14px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-60">
-                      {loadingQuiz ? <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Generating…</> : <>Next: Quick Test <span className="material-symbols-outlined text-[18px]">arrow_forward</span></>}
+                      className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-primary-container text-on-primary-container font-bold text-[12px] sm:text-[14px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-60">
+                      {loadingQuiz ? <><span className="material-symbols-outlined text-[14px] sm:text-[16px] animate-spin">autorenew</span> <span className="hidden sm:inline">Generating…</span><span className="sm:hidden">Loading</span></> : <>Next <span className="hidden sm:inline">: Quick Test</span><span className="material-symbols-outlined text-[16px] sm:text-[18px]">arrow_forward</span></>}
                     </button>
                   </div>
                 </div>

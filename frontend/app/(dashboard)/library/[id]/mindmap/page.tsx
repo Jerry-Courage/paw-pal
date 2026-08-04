@@ -86,33 +86,33 @@ export default function MindMapPage({ params }: { params: { id: string } }) {
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
 
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-5 py-3">
+      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-3 sm:px-5 py-2 sm:py-3">
         {/* Left: back + title */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link href={`/library/${resourceId}`}
-            className="p-2 rounded-[1rem] bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high transition-all">
+            className="p-2 rounded-[1rem] bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high transition-all shrink-0">
             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           </Link>
-          <div className="bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 rounded-[1rem] px-4 py-2">
-            <p className="text-[13px] font-bold text-on-surface leading-tight">{resource?.title || '…'}</p>
-            <p className="text-[11px] text-on-surface-variant">AI-Generated Mind Map</p>
+          <div className="bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 rounded-[1rem] px-3 sm:px-4 py-2 min-w-0">
+            <p className="text-[12px] sm:text-[13px] font-bold text-on-surface leading-tight truncate max-w-[120px] sm:max-w-[240px]">{resource?.title || '…'}</p>
+            <p className="text-[10px] sm:text-[11px] text-on-surface-variant">AI-Generated Mind Map</p>
           </div>
         </div>
 
         {/* Right: regenerate + share */}
         <div className="flex items-center gap-2">
           <button onClick={handleRegenerate} disabled={regenerating}
-            className="flex items-center gap-2 px-4 py-2 bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 rounded-full text-on-surface text-[13px] font-bold hover:bg-surface-container-high transition-all disabled:opacity-50">
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-surface-container-low/90 backdrop-blur-sm border border-outline-variant/30 rounded-full text-on-surface text-[12px] sm:text-[13px] font-bold hover:bg-surface-container-high transition-all disabled:opacity-50">
             <span className={`material-symbols-outlined text-[16px] ${regenerating ? 'animate-spin' : ''}`} style={{ fontVariationSettings: "'FILL' 1" }}>
               {regenerating ? 'autorenew' : 'auto_fix_high'}
             </span>
-            {regenerating ? 'Generating…' : 'Regenerate'}
+            <span className="hidden sm:inline">{regenerating ? 'Generating…' : 'Regenerate'}</span>
           </button>
           <button
             onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!') }}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary-container text-on-secondary-container rounded-full text-[13px] font-bold hover:brightness-110 transition-all">
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-secondary-container text-on-secondary-container rounded-full text-[12px] sm:text-[13px] font-bold hover:brightness-110 transition-all">
             <span className="material-symbols-outlined text-[16px]">share</span>
-            Share Map
+            <span className="hidden sm:inline">Share Map</span>
           </button>
         </div>
       </header>

@@ -25,10 +25,20 @@ const DRAWER_ITEMS = [
   { href: '/upgrade',     icon: 'workspace_premium', label: 'Upgrade' },
 ]
 
+const FULL_VIEWPORT_PREFIXES = ['/workspace/', '/library/']
+
 export default function MobileNav() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const isFullViewport =
+    (FULL_VIEWPORT_PREFIXES.some(prefix => pathname.startsWith(prefix)) &&
+    pathname.split('/').length > 3) ||
+    /^\/workspace\/[^/]+$/.test(pathname) ||
+    (pathname.includes('/assignments/') && !pathname.endsWith('/new'))
+
+  if (isFullViewport) return null
 
   return (
     <>

@@ -264,7 +264,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* ── Card area ────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-4 gap-6 overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-5 py-3 sm:py-4 gap-4 sm:gap-6 overflow-hidden">
 
         {/* Flip card */}
         <div
@@ -277,7 +277,7 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
             style={{
               transformStyle: 'preserve-3d',
               transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              minHeight: '340px',
+              minHeight: 'clamp(260px, 45vh, 340px)',
             }}
           >
             {/* ── Front face ── */}

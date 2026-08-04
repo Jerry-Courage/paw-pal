@@ -196,7 +196,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
               )}
             </div>
 
-            <h1 className="text-[28px] md:text-[32px] font-bold text-on-surface leading-tight mb-1">
+            <h1 className="text-[22px] sm:text-[28px] md:text-[32px] font-bold text-on-surface leading-tight mb-1">
               {resource.title}
             </h1>
 
@@ -206,7 +206,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
             </p>
           </div>
 
-          {/* Action buttons */}
+          {/* Action buttons — icon only on mobile, full on desktop */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => {
@@ -218,27 +218,27 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                   }).catch(() => toast.error('Rename failed.'))
                 }
               }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-surface-container-high border border-outline-variant rounded-[1rem] text-[13px] font-semibold text-on-surface hover:bg-surface-container-highest transition-all"
+              className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 bg-surface-container-high border border-outline-variant rounded-[1rem] text-[13px] font-semibold text-on-surface hover:bg-surface-container-highest transition-all"
             >
               <span className="material-symbols-outlined text-[16px]">edit</span>
-              Rename
+              <span className="hidden sm:inline">Rename</span>
             </button>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href)
                 toast.success('Link copied!')
               }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-surface-container-high border border-outline-variant rounded-[1rem] text-[13px] font-semibold text-on-surface hover:bg-surface-container-highest transition-all"
+              className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 bg-surface-container-high border border-outline-variant rounded-[1rem] text-[13px] font-semibold text-on-surface hover:bg-surface-container-highest transition-all"
             >
               <span className="material-symbols-outlined text-[16px]">share</span>
-              Share
+              <span className="hidden sm:inline">Share</span>
             </button>
             <button
               onClick={() => setShowConfirmDelete(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-error-container/20 border border-error/30 rounded-[1rem] text-[13px] font-semibold text-error hover:bg-error-container/30 transition-all"
+              className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 bg-error-container/20 border border-error/30 rounded-[1rem] text-[13px] font-semibold text-error hover:bg-error-container/30 transition-all"
             >
               <span className="material-symbols-outlined text-[16px]">delete</span>
-              Delete
+              <span className="hidden sm:inline">Delete</span>
             </button>
           </div>
         </div>
