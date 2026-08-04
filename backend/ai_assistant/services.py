@@ -365,24 +365,39 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Google Vision Chat] Failed: {e}")
 
-            # 2. Try Groq (Llama 4 Maverick / Scout — 2026 High-Speed Vision)
+            # 2. Try Groq vision-capable models
+            # qwen/qwen3.6-27b supports multimodal (vision + text) on Groq
             for groq_key in self._groq_keys():
-                for groq_model in ['meta-llama/llama-4-scout-17b-16e-instruct', 'groq/compound', 'llama-3.3-70b-versatile']:
+                for groq_model in [
+                    'qwen/qwen3.6-27b',  # Vision + text, 131K context — current Groq vision model
+                ]:
                     try:
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
                                 GROQ_API_URL,
                                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
                                 json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
-                                timeout=15,
+                                timeout=30,
                             )
                             if resp.status_code == 200:
                                 logger.info(f"[Groq Vision Chat] ✓ {groq_model}")
                                 return self._extract_content(resp.json())
+                            else:
+                                logger.warning(f"[Groq Vision Chat] {groq_model} → {resp.status_code}: {resp.text[:100]}")
                     except Exception as e:
                         logger.warning(f"[Groq Vision Chat] {groq_model} error: {e}")
             
-            # Fall through to OpenRouter vision fallback below
+            # Fall through to _call_vision() which has a full OpenRouter fallback chain
+            logger.warning("[Vision Fast Path] All fast vision engines failed — falling back to _call_vision()")
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: self._call_vision(messages)
+                )
+                if result and 'temporarily overloaded' not in result and 'error' not in result.lower()[:40]:
+                    return result
+            except Exception as e:
+                logger.warning(f"[_call_vision fallback] Failed: {e}")
+            return "Flow AI is temporarily overloaded. Please try again in a moment."
             
         # ── STAGE 0: GROQ (all keys) — fastest inference on the planet ─────
         groq_keys = self._groq_keys()
@@ -2027,7 +2042,7 @@ class AIService:
             'strengths': [], 'improvements': [], 'tip': ''
         })
 
-    def _call_vision(self, messages: list) -> str:
+    def _call_vision(self, messages: list, max_tokens: int = 8192) -> str:
         """
         Vision-heavy method. Priority:
         1. Direct Google AI Studio (Try 1.5 Flash first for reliability, then 2.0)
@@ -2086,7 +2101,7 @@ class AIService:
         import time
         for model in vision_models:
             try:
-                response = self._call(msgs_with_sys, model, max_tokens=2048)
+                response = self._call(msgs_with_sys, model, max_tokens=max_tokens)
                 
                 if response.status_code == 200:
                     content = self._extract_content(response.json())
@@ -2111,8 +2126,7 @@ class AIService:
 
     def _call_groq_vision(self, messages: list, api_key: str) -> str:
         """
-        Groq vision — llama-3.2-11b-vision-preview.
-        Free: 30 RPM, 500k tokens/day. OpenAI-compatible.
+        Groq vision — qwen/qwen3.6-27b (multimodal, 131K context).
         Only called from _call_vision().
         """
         import requests as req
@@ -2124,18 +2138,18 @@ class AIService:
         response = req.post(
             'https://api.groq.com/openai/v1/chat/completions',
             headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
-            json={'model': 'meta-llama/llama-4-scout-17b-16e-instruct', 'messages': msgs, 'max_tokens': 2048},
+            json={'model': 'qwen/qwen3.6-27b', 'messages': msgs, 'max_tokens': 8192},
             timeout=60,
         )
         if response.status_code == 200:
             try:
                 content = response.json()['choices'][0]['message']['content']
-                logger.info('Vision handled by Groq llama-3.2-11b-vision')
+                logger.info('[_call_groq_vision] ✓ qwen/qwen3.6-27b')
                 return content or ''
             except (KeyError, IndexError):
                 return ''
         else:
-            logger.warning(f'Groq vision error {response.status_code}: {response.text[:200]}')
+            logger.warning(f'[_call_groq_vision] qwen3.6-27b error {response.status_code}: {response.text[:200]}')
             return ''
 
     def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-2.0-flash', client=None) -> str:
