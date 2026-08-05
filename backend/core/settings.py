@@ -126,7 +126,6 @@ USE_CLOUDINARY = os.getenv('CLOUDINARY_URL', '') != ''
 
 if USE_CLOUDINARY:
     import cloudinary
-    import cloudinary.config as _cld_config_module
 
     # Let the Cloudinary SDK parse CLOUDINARY_URL — it handles all edge cases
     cloudinary.config(cloudinary_url=os.getenv('CLOUDINARY_URL'), secure=True)
