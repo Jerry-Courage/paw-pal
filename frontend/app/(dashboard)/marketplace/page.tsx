@@ -159,6 +159,7 @@ export default function MarketplacePage() {
               <p className="text-[28px] font-black text-on-surface leading-none mt-0.5">
                 {isLoading ? '...' : totalXp.toLocaleString()} <span className="text-[14px] font-bold text-primary">XP</span>
               </p>
+              <p className="text-[10px] text-on-surface-variant/50 mt-0.5">Spending balance — your rank is never affected</p>
             </div>
           </motion.div>
         </div>

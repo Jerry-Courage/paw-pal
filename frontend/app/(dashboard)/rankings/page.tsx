@@ -217,7 +217,7 @@ export default function RankingsPage() {
                 </span>
               )}
             </div>
-            <p className="text-[12px] text-on-surface-variant">{myEarnedXp.toLocaleString()} Study XP earned</p>
+            <p className="text-[12px] text-on-surface-variant">{myEarnedXp.toLocaleString()} Study XP earned · <span className="text-on-surface-variant/50">spending never affects rank</span></p>
             {nextTier ? (
               <div className="mt-2">
                 <div className="flex justify-between text-[10px] text-on-surface-variant mb-1">
