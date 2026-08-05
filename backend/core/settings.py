@@ -125,38 +125,23 @@ USE_S3 = os.getenv('USE_S3', 'False') == 'True'
 USE_CLOUDINARY = os.getenv('CLOUDINARY_URL', '') != ''
 
 if USE_CLOUDINARY:
-    # Cloudinary — set CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
-    # Parse the URL manually so both the cloudinary SDK AND django-cloudinary-storage
-    # get the credentials — cloudinary_storage reads CLOUDINARY_STORAGE dict, not
-    # cloudinary.config(), so we must set both.
-    _cloudinary_url = os.getenv('CLOUDINARY_URL', '')
-    _cloud_name = ''
-    _api_key = ''
-    _api_secret = ''
-    if _cloudinary_url.startswith('cloudinary://'):
-        try:
-            _parts = _cloudinary_url.replace('cloudinary://', '')
-            _key_secret, _cloud = _parts.rsplit('@', 1)
-            _key, _secret = _key_secret.split(':', 1)
-            _cloud_name = _cloud
-            _api_key = _key
-            _api_secret = _secret
-        except Exception:
-            pass
-
     import cloudinary
-    cloudinary.config(
-        cloud_name=_cloud_name,
-        api_key=_api_key,
-        api_secret=_api_secret,
-        secure=True,
-    )
+    import cloudinary.config as _cld_config_module
 
+    # Let the Cloudinary SDK parse CLOUDINARY_URL — it handles all edge cases
+    cloudinary.config(cloudinary_url=os.getenv('CLOUDINARY_URL'), secure=True)
+
+    # Read back what was parsed — needed for django-cloudinary-storage which
+    # reads CLOUDINARY_STORAGE dict and does NOT auto-read from cloudinary.config()
+    _cfg = cloudinary.config()
     CLOUDINARY_STORAGE = {
-        'CLOUD_NAME': _cloud_name,
-        'API_KEY':    _api_key,
-        'API_SECRET': _api_secret,
+        'CLOUD_NAME': _cfg.cloud_name or '',
+        'API_KEY':    _cfg.api_key or '',
+        'API_SECRET': _cfg.api_secret or '',
     }
+
+    import sys
+    print(f"[Cloudinary] cloud={_cfg.cloud_name!r} key={'set' if _cfg.api_key else 'MISSING'} secret={'set' if _cfg.api_secret else 'MISSING'}", file=sys.stderr)
 
     STORAGES = {
         "default": {
