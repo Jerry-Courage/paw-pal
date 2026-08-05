@@ -134,20 +134,11 @@ if USE_CLOUDINARY:
     )
     STORAGES = {
         "default": {
-            "BACKEND": "cloudinary_storage.storage.RawMediaCloudinaryStorage",
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
-    }
-    # RawMediaCloudinaryStorage stores ALL files as resource_type='raw' so PDFs,
-    # DOCX, PPTX etc. are stored and fetched correctly — MediaCloudinaryStorage
-    # defaults to resource_type='image' which causes 401s when reading back PDFs.
-    CLOUDINARY_STORAGE = {
-        'CLOUD_NAME':  os.getenv('CLOUDINARY_CLOUD_NAME', ''),
-        'API_KEY':     os.getenv('CLOUDINARY_API_KEY', ''),
-        'API_SECRET':  os.getenv('CLOUDINARY_API_SECRET', ''),
-        'RESOURCE_TYPE': 'raw',
     }
     MEDIA_URL = '/media/'
 
