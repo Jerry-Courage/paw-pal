@@ -99,39 +99,58 @@ def process_resource_task(res_id):
             ext = os.path.splitext(res.file.name)[1].lower()
             
             try:
-                # Read the file bytes. For Cloudinary storage, res.file.open('rb') calls
-                # the SDK which can fail with wrong resource_type. We always use a direct
-                # HTTP download from the public URL instead — simpler and more reliable.
+                # Read the file bytes via HTTP — avoids all Cloudinary SDK auth issues.
+                # Try multiple resource_type paths since the file may have been uploaded
+                # under a different type depending on when/how it was stored.
+                import requests as _req
                 file_bytes = None
+
+                # Build candidate URLs to try
+                candidate_urls = []
                 try:
-                    # First try: direct HTTP download from the storage URL
-                    import requests as _req
-                    file_url = None
+                    base_url = res.file.url  # SDK-generated URL
+                    if base_url and base_url.startswith('http'):
+                        candidate_urls.append(base_url)
+                except Exception:
+                    pass
+
+                # Always try all three Cloudinary resource_type paths
+                raw_name = res.file.name if res.file else ''
+                if raw_name:
+                    cloud = 'dn1gq0sjc'  # from CLOUDINARY_URL
                     try:
-                        # res.file.url triggers cloudinary URL generation via the SDK
-                        file_url = res.file.url
+                        import cloudinary
+                        cfg = cloudinary.config()
+                        if cfg.cloud_name:
+                            cloud = cfg.cloud_name
                     except Exception:
                         pass
+                    for rtype in ('image', 'raw', 'video'):
+                        u = f'https://res.cloudinary.com/{cloud}/{rtype}/upload/v1/{raw_name}'
+                        if u not in candidate_urls:
+                            candidate_urls.append(u)
 
-                    if file_url and file_url.startswith('http'):
-                        # Cloudinary stores PDFs under /image/upload/ but serves them fine
-                        # Try both resource_type paths if one fails
-                        http_resp = _req.get(file_url, timeout=60)
-                        if http_resp.status_code == 401 or http_resp.status_code == 403:
-                            # Try raw/upload path instead of image/upload
-                            raw_url = file_url.replace('/image/upload/', '/raw/upload/')
-                            http_resp = _req.get(raw_url, timeout=60)
-                        http_resp.raise_for_status()
-                        file_bytes = http_resp.content
-                        logger.info(f'[Task Queue] File downloaded via HTTP for {res.id} ({len(file_bytes)} bytes)')
-                    else:
-                        # Fallback: try Django storage open
+                for url in candidate_urls:
+                    try:
+                        r = _req.get(url, timeout=60)
+                        if r.status_code == 200:
+                            file_bytes = r.content
+                            logger.info(f'[Task Queue] File downloaded from {url} ({len(file_bytes)} bytes)')
+                            break
+                        else:
+                            logger.debug(f'[Task Queue] {r.status_code} for {url}')
+                    except Exception as e:
+                        logger.debug(f'[Task Queue] Failed to fetch {url}: {e}')
+
+                if not file_bytes:
+                    # Last resort: Django storage open
+                    try:
                         res.file.open('rb')
                         file_bytes = res.file.read()
                         res.file.close()
-                except Exception as fetch_err:
-                    logger.error(f'[Task Queue] Document extract failed for {res.id}: {fetch_err}')
-                    file_bytes = None
+                        logger.info(f'[Task Queue] File read via storage.open() for {res.id}')
+                    except Exception as e:
+                        logger.error(f'[Task Queue] Document extract failed for {res.id}: {e}')
 
                 if not file_bytes:
                     raise Exception(f'Could not read file for resource {res.id}')
