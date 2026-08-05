@@ -37,7 +37,9 @@ export default function LibraryPage() {
     // updates automatically without the user needing to refresh the page.
     refetchInterval: (data: any) => {
       const items = data?.results || (Array.isArray(data) ? data : [])
-      const hasProcessing = items.some((r: any) => r.status === 'processing' || r.status === 'generating')
+      const hasProcessing = items.some((r: any) =>
+        r.status === 'processing' || r.status === 'generating' || r.status === 'vectorizing'
+      )
       return hasProcessing ? 3000 : false
     },
   })
@@ -272,18 +274,23 @@ export default function LibraryPage() {
                     >
                       {typeIcon}
                     </span>
-                    {/* Kit ready badge top-right */}
+                    {/* Status badge top-right */}
                     {r.has_study_kit && (
                       <div className="absolute top-3 right-3 flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
                         <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
                         Kit Ready
                       </div>
                     )}
-                    {/* Processing indicator */}
-                    {r.status === 'processing' && (
+                    {!r.has_study_kit && r.status === 'processing' && (
                       <div className="absolute top-3 right-3 flex items-center gap-1 bg-secondary/15 text-secondary border border-secondary/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
                         <span className="material-symbols-outlined text-[12px] animate-spin">autorenew</span>
                         Processing
+                      </div>
+                    )}
+                    {!r.has_study_kit && r.status === 'failed' && (
+                      <div className="absolute top-3 right-3 flex items-center gap-1 bg-error/15 text-error border border-error/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <span className="material-symbols-outlined text-[12px]">error</span>
+                        Failed
                       </div>
                     )}
                   </div>
@@ -305,6 +312,30 @@ export default function LibraryPage() {
                       <p className="text-[12px] text-on-surface-variant line-clamp-2 leading-relaxed">
                         {r.ai_summary}
                       </p>
+                    )}
+                    {/* Processing status text */}
+                    {!r.has_study_kit && r.status === 'processing' && r.status_text && (
+                      <p className="text-[11px] text-secondary/80 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px] animate-spin">autorenew</span>
+                        {r.status_text}
+                      </p>
+                    )}
+                    {/* Failed state — reprocess button */}
+                    {r.status === 'failed' && !r.has_study_kit && (
+                      <button
+                        onClick={async (e) => {
+                          e.preventDefault()
+                          try {
+                            await libraryApi.reprocessResource(r.id)
+                            toast.success('Reprocessing started!')
+                            queryClient.invalidateQueries({ queryKey: ['resources'] })
+                          } catch { toast.error('Could not start reprocessing.') }
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                      >
+                        <span className="material-symbols-outlined text-[12px]">refresh</span>
+                        Reprocess
+                      </button>
                     )}
 
                     {/* Footer */}

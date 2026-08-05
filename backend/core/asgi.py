@@ -26,6 +26,39 @@ try:
 except Exception as e:
     print(f"Core ASGI Integrity/Migration Check Skipped: {e}")
 
+# ── Rescue resources stuck in processing from a previous dyno ─────────────────
+# When Render kills a dyno mid-task the background thread dies without running
+# the finally block, leaving resources stuck at status='processing' forever.
+# On every startup, scan for those and either mark them ready (if they have
+# content) or failed (if they have nothing), so the user can reprocess.
+try:
+    from library.models import Resource
+    from django.utils import timezone
+    import datetime
+
+    # Only rescue resources that have been processing for > 5 minutes
+    # (fresh uploads that just started should be left alone)
+    cutoff = timezone.now() - datetime.timedelta(minutes=5)
+    stuck = Resource.objects.filter(
+        status__in=['processing', 'generating', 'vectorizing'],
+        updated_at__lt=cutoff,
+    )
+    rescued = 0
+    for r in stuck:
+        if r.has_study_kit or r.ai_notes_json:
+            r.status = 'ready'
+            r.status_text = 'Study Kit Ready'
+        else:
+            r.status = 'failed'
+            r.status_text = '❌ Processing interrupted — click Reprocess to retry'
+        r.processing_progress = 100
+        r.save(update_fields=['status', 'status_text', 'processing_progress'])
+        rescued += 1
+    if rescued:
+        print(f"Core ASGI: Rescued {rescued} stuck resource(s) from previous dyno.")
+except Exception as e:
+    print(f"Core ASGI: Stuck resource rescue skipped: {e}")
+
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
