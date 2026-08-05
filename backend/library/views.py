@@ -121,8 +121,12 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         import threading
         import json
 
-        resource = serializer.save(owner=self.request.user)
-        resource.file_size = resource.file.size if resource.file else 0
+        # Calculate file_size BEFORE the INSERT so the NOT NULL column is satisfied
+        # on the initial serializer.save() — setting it after causes a null violation.
+        file_size = self.request.FILES.get('file', None)
+        file_size_bytes = file_size.size if file_size else 0
+
+        resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
         resource.status_text = "🧬 Synthesis Engine Initializing..."
 
         # Increment lifetime counter — never decremented on delete
@@ -145,7 +149,9 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         except Exception:
             features = []
         resource.selected_features = features if isinstance(features, list) else []
-        resource.save()
+        # Use update_fields to avoid the NOT NULL violation on file_size — the initial
+        # serializer.save() inserts the row before file_size is set on the Python object.
+        resource.save(update_fields=['file_size', 'status_text', 'resource_type', 'selected_features'])
 
         # Run synthesis in a background thread on the same process (shares filesystem)
         def run():
