@@ -284,20 +284,36 @@ class GlobalConfigView(APIView):
         })
 
 
+
 class RankingsView(APIView):
     """
     GET /api/auth/rankings/
-    Returns the global XP leaderboard — top 100 users ranked by total XP.
-    Also includes the current user's rank, even if outside top 100.
+    Returns three leaderboards:
+      - earned:  Ranked by XP earned purely through studying (fair board)
+      - total:   Ranked by total XP including purchased packs (all-time)
+      - streak:  Ranked by current study streak (days)
+    Each board includes top-100 + the current user's row (if outside top 100),
+    plus the current user's rank on that board.
     """
     permission_classes = [permissions.IsAuthenticated]
+
+    def _build_board(self, scored_list, sort_key, me_id, top_n=100):
+        """Sort a list of dicts by sort_key desc, assign ranks, return top_n + me."""
+        scored_list.sort(key=lambda x: (-x[sort_key], x['name']))
+        for i, entry in enumerate(scored_list):
+            entry[f'rank_{sort_key}'] = i + 1
+        me_entry = next((e for e in scored_list if e['is_me']), None)
+        top = scored_list[:top_n]
+        if me_entry and me_entry[f'rank_{sort_key}'] > top_n:
+            top.append(me_entry)
+        return top, me_entry
 
     def get(self, request):
         from django.db.models import Sum
         from library.models import ResourceProgress
         from .models import UserObservation
 
-        # Aggregate earned XP per user from ResourceProgress
+        # ── 1. Aggregate earned XP (study only) per user ──────────────────
         earned_qs = (
             ResourceProgress.objects
             .values('user_id')
@@ -305,8 +321,8 @@ class RankingsView(APIView):
         )
         earned_map = {row['user_id']: row['earned'] or 0 for row in earned_qs}
 
-        # Get all observation records (bonus + spent XP adjustments)
-        obs_qs = UserObservation.objects.filter(key__in=['bonus_xp', 'spent_xp']).select_related('user')
+        # ── 2. Get bonus_xp and spent_xp from UserObservation ────────────
+        obs_qs = UserObservation.objects.filter(key__in=['bonus_xp', 'spent_xp'])
         obs_map: dict = {}
         for obs in obs_qs:
             uid = obs.user_id
@@ -317,43 +333,66 @@ class RankingsView(APIView):
             except (ValueError, TypeError):
                 pass
 
-        # Build combined user list
+        # ── 3. Build combined per-user list ───────────────────────────────
         all_users = User.objects.only('id', 'email', 'first_name', 'last_name', 'study_streak')
-        user_scores = []
+        base_list = []
         for u in all_users:
             earned = earned_map.get(u.id, 0)
             bonus  = obs_map.get(u.id, {}).get('bonus_xp', 0)
             spent  = obs_map.get(u.id, {}).get('spent_xp', 0)
+            # total_xp includes purchased packs (bonus_xp), minus spent on power-ups
             total  = max(0, earned + bonus - spent)
             display_name = u.get_full_name().strip() or u.email.split('@')[0]
-            user_scores.append({
-                'user_id':  u.id,
-                'name':     display_name,
-                'initials': (display_name[:2]).upper(),
-                'streak':   u.study_streak or 0,
-                'total_xp': total,
-                'is_me':    (u.id == request.user.id),
+            base_list.append({
+                'user_id':   u.id,
+                'name':      display_name,
+                'initials':  (display_name[:2]).upper(),
+                'streak':    u.study_streak or 0,
+                'earned_xp': earned,          # study-only XP (fair board)
+                'total_xp':  total,           # earned + purchased - spent
+                'bonus_xp':  bonus,           # XP bought from marketplace
+                'is_me':     (u.id == request.user.id),
             })
 
-        # Sort descending by XP, then by name as tiebreaker
-        user_scores.sort(key=lambda x: (-x['total_xp'], x['name']))
+        import copy
+        me_id = request.user.id
 
-        # Assign ranks (1-based)
-        for i, entry in enumerate(user_scores):
-            entry['rank'] = i + 1
+        # ── 4. Board A — Earned XP (fair / study-only) ───────────────────
+        earned_board, me_earned = self._build_board(
+            copy.deepcopy(base_list), 'earned_xp', me_id
+        )
 
-        # Find current user's entry
-        me_entry = next((e for e in user_scores if e['is_me']), None)
+        # ── 5. Board B — Total XP (includes purchased) ───────────────────
+        total_board, me_total = self._build_board(
+            copy.deepcopy(base_list), 'total_xp', me_id
+        )
 
-        # Return top 100 + current user (if outside top 100)
-        top_100 = user_scores[:100]
-        if me_entry and me_entry['rank'] > 100:
-            top_100.append(me_entry)
+        # ── 6. Board C — Streak (consecutive study days) ─────────────────
+        streak_board, me_streak = self._build_board(
+            copy.deepcopy(base_list), 'streak', me_id
+        )
+
+        total_users = len(base_list)
 
         return Response({
-            'leaderboard': top_100,
-            'my_rank':     me_entry['rank'] if me_entry else None,
-            'my_xp':       me_entry['total_xp'] if me_entry else 0,
-            'total_users': len(user_scores),
+            'total_users': total_users,
+            # Board A
+            'earned': {
+                'board':   earned_board,
+                'my_rank': me_earned[f'rank_earned_xp'] if me_earned else None,
+                'my_xp':   me_earned['earned_xp'] if me_earned else 0,
+            },
+            # Board B
+            'total': {
+                'board':   total_board,
+                'my_rank': me_total[f'rank_total_xp'] if me_total else None,
+                'my_xp':   me_total['total_xp'] if me_total else 0,
+            },
+            # Board C
+            'streak': {
+                'board':    streak_board,
+                'my_rank':  me_streak[f'rank_streak'] if me_streak else None,
+                'my_streak': me_streak['streak'] if me_streak else 0,
+            },
         })
 
