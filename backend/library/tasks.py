@@ -99,51 +99,44 @@ def process_resource_task(res_id):
             ext = os.path.splitext(res.file.name)[1].lower()
             
             try:
-                # Read the file bytes via HTTP — avoids all Cloudinary SDK auth issues.
-                # Try multiple resource_type paths since the file may have been uploaded
-                # under a different type depending on when/how it was stored.
+                # Download file bytes from Cloudinary.
+                # Use the Cloudinary SDK's private_download_url which generates
+                # a signed, time-limited download URL — works regardless of whether
+                # the account has strict delivery (unsigned 401) enabled.
                 import requests as _req
                 file_bytes = None
 
-                # Build candidate URLs to try
-                candidate_urls = []
                 try:
-                    base_url = res.file.url  # SDK-generated URL
-                    if base_url and base_url.startswith('http'):
-                        candidate_urls.append(base_url)
-                except Exception:
-                    pass
+                    import cloudinary
+                    import cloudinary.utils
+                    cfg = cloudinary.config()
+                    raw_name = res.file.name or ''
 
-                # Always try all three Cloudinary resource_type paths
-                raw_name = res.file.name if res.file else ''
-                if raw_name:
-                    cloud = 'dn1gq0sjc'  # from CLOUDINARY_URL
-                    try:
-                        import cloudinary
-                        cfg = cloudinary.config()
-                        if cfg.cloud_name:
-                            cloud = cfg.cloud_name
-                    except Exception:
-                        pass
-                    for rtype in ('image', 'raw', 'video'):
-                        u = f'https://res.cloudinary.com/{cloud}/{rtype}/upload/v1/{raw_name}'
-                        if u not in candidate_urls:
-                            candidate_urls.append(u)
+                    if cfg.api_key and cfg.api_secret and cfg.cloud_name and raw_name:
+                        import re as _re
+                        # public_id is the file name without extension
+                        pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
+                        file_ext = _re.search(r'\.([^.]+)$', raw_name)
+                        fmt = file_ext.group(1) if file_ext else 'pdf'
 
-                for url in candidate_urls:
-                    try:
-                        r = _req.get(url, timeout=60)
-                        if r.status_code == 200:
-                            file_bytes = r.content
-                            logger.info(f'[Task Queue] File downloaded from {url} ({len(file_bytes)} bytes)')
-                            break
+                        # Generate a short-lived signed download URL (1 min)
+                        signed_url = cloudinary.utils.private_download_url(
+                            pub_id,
+                            fmt,
+                            resource_type='image',
+                            type='upload',
+                        )
+                        resp = _req.get(signed_url, timeout=60)
+                        if resp.status_code == 200:
+                            file_bytes = resp.content
+                            logger.info(f'[Task Queue] Downloaded via signed URL: {res.id} ({len(file_bytes)} bytes)')
                         else:
-                            logger.debug(f'[Task Queue] {r.status_code} for {url}')
-                    except Exception as e:
-                        logger.debug(f'[Task Queue] Failed to fetch {url}: {e}')
+                            logger.warning(f'[Task Queue] Signed download {resp.status_code} for {res.id}')
+                except Exception as sdk_err:
+                    logger.warning(f'[Task Queue] Signed download failed for {res.id}: {sdk_err}')
 
+                # Fallback: try raw/authenticated storage open
                 if not file_bytes:
-                    # Last resort: Django storage open
                     try:
                         res.file.open('rb')
                         file_bytes = res.file.read()
