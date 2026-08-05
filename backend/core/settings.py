@@ -126,12 +126,38 @@ USE_CLOUDINARY = os.getenv('CLOUDINARY_URL', '') != ''
 
 if USE_CLOUDINARY:
     # Cloudinary — set CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
-    # on Render (or any env). django-cloudinary-storage picks it up automatically.
+    # Parse the URL manually so both the cloudinary SDK AND django-cloudinary-storage
+    # get the credentials — cloudinary_storage reads CLOUDINARY_STORAGE dict, not
+    # cloudinary.config(), so we must set both.
+    _cloudinary_url = os.getenv('CLOUDINARY_URL', '')
+    _cloud_name = ''
+    _api_key = ''
+    _api_secret = ''
+    if _cloudinary_url.startswith('cloudinary://'):
+        try:
+            _parts = _cloudinary_url.replace('cloudinary://', '')
+            _key_secret, _cloud = _parts.rsplit('@', 1)
+            _key, _secret = _key_secret.split(':', 1)
+            _cloud_name = _cloud
+            _api_key = _key
+            _api_secret = _secret
+        except Exception:
+            pass
+
     import cloudinary
     cloudinary.config(
-        cloudinary_url=os.getenv('CLOUDINARY_URL'),
+        cloud_name=_cloud_name,
+        api_key=_api_key,
+        api_secret=_api_secret,
         secure=True,
     )
+
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': _cloud_name,
+        'API_KEY':    _api_key,
+        'API_SECRET': _api_secret,
+    }
+
     STORAGES = {
         "default": {
             "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
