@@ -122,6 +122,8 @@ export default function QuizBattlePage() {
 
   const wsRef        = useRef<WebSocket | null>(null)
   const qStartRef    = useRef<number>(0)
+  // Ref keeps handleServerMsg always current inside the WS callback (avoids stale closure)
+  const msgHandlerRef = useRef<(msg: any) => void>(() => {})
 
   // ── WebSocket connection ────────────────────────────────────────────────────
   const connect = useCallback(async (roomPin: string) => {
@@ -141,7 +143,7 @@ export default function QuizBattlePage() {
 
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data)
-      handleServerMsg(msg)
+      msgHandlerRef.current(msg)
     }
   }, [])
 
@@ -208,10 +210,13 @@ export default function QuizBattlePage() {
     }
   }, [me, snd])
 
+  // Keep ref current so WS callback always calls latest handler
+  useEffect(() => { msgHandlerRef.current = handleServerMsg }, [handleServerMsg])
+
   // Re-wire handler when it updates (avoids stale closure)
   useEffect(() => {
     if (!wsRef.current) return
-    wsRef.current.onmessage = (ev) => handleServerMsg(JSON.parse(ev.data))
+    wsRef.current.onmessage = (ev) => msgHandlerRef.current(JSON.parse(ev.data))
   }, [handleServerMsg])
 
   // ── Actions ────────────────────────────────────────────────────────────────

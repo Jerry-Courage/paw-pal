@@ -105,6 +105,9 @@ class QuizConsumer(AsyncWebsocketConsumer):
             await self._set_q_idx(idx)
             await self._set_status('question')
 
+            # Re-fetch room so time_per_q is always fresh
+            room = await self._get_room()
+
             # Send question (no correct answer)
             await self.channel_layer.group_send(self.group, {
                 'type':       'show_question',
@@ -127,9 +130,12 @@ class QuizConsumer(AsyncWebsocketConsumer):
                     'remaining': remaining - 1,
                 })
 
+            # Grace period — let last-second answers arrive before computing results
+            await asyncio.sleep(1)
+
             # Show results for this round
             await self._set_status('results')
-            results = await self._calc_round_results(q['id'], q['correct'])
+            results     = await self._calc_round_results(q['id'], q['correct'])
             leaderboard = await self._get_leaderboard()
 
             await self.channel_layer.group_send(self.group, {
@@ -139,7 +145,7 @@ class QuizConsumer(AsyncWebsocketConsumer):
                 'leaderboard': leaderboard,
             })
 
-            # Pause between rounds
+            # Pause on round result screen before next question
             await asyncio.sleep(5)
 
         # Game over
@@ -219,8 +225,9 @@ class QuizConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _save_answer(self, q_id, correct, choice, time_taken, time_limit):
         from .models import QuizPlayer, QuizQuestion, QuizAnswer
+        from django.db.models import F
         try:
-            player = QuizPlayer.objects.get(room__pin=self.pin, user=self.user)
+            player   = QuizPlayer.objects.get(room__pin=self.pin, user=self.user)
             question = QuizQuestion.objects.get(id=q_id)
         except Exception:
             return
@@ -230,25 +237,29 @@ class QuizConsumer(AsyncWebsocketConsumer):
             return
 
         is_correct = (choice == correct)
-        # Speed bonus: full marks if answered in first half of time, scaling down
+
         if is_correct:
-            speed_ratio = max(0, 1 - (time_taken / time_limit))
+            # Speed bonus: 1000 pts max, scales down to 500 based on time taken
+            speed_ratio = max(0.0, 1.0 - (time_taken / max(time_limit, 1)))
             points = int(500 + 500 * speed_ratio)
-            player.streak += 1
-            # Streak bonus
-            if player.streak >= 3:
+            # Streak bonus (+20% if 3+ in a row) — read streak FIRST then update
+            current_streak = player.streak
+            if current_streak >= 2:          # 3rd correct in a row
                 points = int(points * 1.2)
+            # Use F() to avoid race condition when multiple players answer simultaneously
+            QuizPlayer.objects.filter(pk=player.pk).update(
+                score=F('score') + points,
+                streak=F('streak') + 1,
+            )
         else:
             points = 0
-            player.streak = 0
+            QuizPlayer.objects.filter(pk=player.pk).update(streak=0)
 
         QuizAnswer.objects.create(
             player=player, question=question,
             choice=choice, is_correct=is_correct,
             time_taken=time_taken, points=points,
         )
-        player.score += points
-        player.save()
 
     @database_sync_to_async
     def _calc_round_results(self, q_id, correct):

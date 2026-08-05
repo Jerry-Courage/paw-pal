@@ -67,19 +67,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const shouldFullViewport = isFullViewport || isAssignmentDetail
 
+  // Hide sidebar + mobile nav entirely on the Quiz Battle page — it needs full screen
+  const hideNav = pathname === '/groups' || pathname.startsWith('/groups/')
+
   return (
     <div className="min-h-screen bg-background text-on-surface font-sans">
-      {/* Desktop sidebar */}
-      <Sidebar />
+      {!hideNav && <Sidebar />}
+      {!hideNav && <MobileNav />}
 
-      {/* Mobile top bar + bottom nav */}
-      <MobileNav />
-
-      {/* Main content area */}
       <main
         className={cn(
-          'md:ml-[68px]',
-          shouldFullViewport
+          !hideNav && 'md:ml-[68px]',
+          hideNav
+            ? 'fixed inset-0'
+            : shouldFullViewport
             ? 'fixed inset-0 md:left-[68px] overflow-hidden z-30'
             : 'min-h-screen main-safe-top md:pt-6 [padding-bottom:calc(7rem+env(safe-area-inset-bottom))] md:pb-8'
         )}
