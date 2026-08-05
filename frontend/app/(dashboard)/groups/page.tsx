@@ -272,7 +272,7 @@ export default function QuizBattlePage() {
         <div className="absolute bottom-[-15%] right-[-10%] w-[60vw] h-[60vw] max-w-[500px] max-h-[500px] rounded-full bg-[#a855f7]/15 blur-[100px]" />
       </div>
 
-      <div className="relative z-10 min-h-screen flex flex-col justify-between">
+      <div className="relative z-10 h-[100dvh] flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
           {screen === 'home'        && <HomeScreen     key="home"     onCreate={() => setScreen('create')} onJoin={handleJoinRoom} joinPin={joinPinInput} setJoinPin={setJoinPinInput} />}
           {screen === 'create'      && <CreateScreen   key="create"   onBack={() => setScreen('home')} onCreated={async (roomPin, host) => { setPin(roomPin); setIsHost(host); await connect(roomPin); setScreen('lobby') }} />}
@@ -294,7 +294,8 @@ export default function QuizBattlePage() {
 function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () => void; onJoin: () => void; joinPin: string; setJoinPin: (v: string) => void }) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-12 gap-8 md:gap-10 max-w-4xl mx-auto">
+      className="h-[100dvh] flex flex-col items-center justify-center px-4 py-8 gap-8 max-w-4xl mx-auto overflow-y-auto"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 24px)' }}>
 
       {/* Back to Dashboard */}
       <a href="/dashboard" className="self-start flex items-center gap-1.5 text-white/40 hover:text-white/70 transition-colors text-[13px] font-semibold -mb-4">
@@ -397,7 +398,8 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
 
   return (
     <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
-      className="min-h-screen px-4 py-8 max-w-lg mx-auto flex flex-col justify-between gap-6">
+      className="h-[100dvh] px-4 pt-6 pb-safe max-w-lg mx-auto flex flex-col gap-5 overflow-y-auto"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
 
       <div className="space-y-6">
         <div className="flex items-center gap-3">
@@ -510,7 +512,8 @@ function LobbyScreen({ pin, players, isHost, onStart, onLeave, isConnecting, isS
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-8 max-w-2xl mx-auto gap-8">
+      className="h-[100dvh] flex flex-col items-center justify-center px-4 py-8 max-w-2xl mx-auto gap-6 overflow-y-auto"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 24px)' }}>
 
       {/* PIN Card */}
       <div className="text-center w-full">

@@ -33,6 +33,13 @@ export default function LibraryPage() {
   const { data: resourcesData, isLoading } = useQuery({
     queryKey: ['resources'],
     queryFn: () => libraryApi.getResources().then(r => r.data),
+    // Poll every 3s while any resource is still processing so the card
+    // updates automatically without the user needing to refresh the page.
+    refetchInterval: (data: any) => {
+      const items = data?.results || (Array.isArray(data) ? data : [])
+      const hasProcessing = items.some((r: any) => r.status === 'processing' || r.status === 'generating')
+      return hasProcessing ? 3000 : false
+    },
   })
 
   const { data: subStatus, refetch: refetchSub } = useQuery({
@@ -67,7 +74,22 @@ export default function LibraryPage() {
       toast.success('Material uploaded! AI is processing…')
       queryClient.invalidateQueries({ queryKey: ['resources'] })
       refetchSub()
-    } catch { toast.error('Upload failed. Please try again.') }
+    } catch (err: any) {
+      const status = err?.response?.status
+      const data   = err?.response?.data
+      if (status === 402 || data?.error === 'free_limit_reached') {
+        setShowPaywall(true)
+      } else if (status === 413 || data?.error?.toLowerCase?.()?.includes('too large')) {
+        toast.error('File is too large. Maximum size is 50 MB.')
+      } else if (!status) {
+        // No response — likely a network timeout after the upload already completed on the server
+        // Refresh the list rather than showing a false error
+        toast.info('Upload may have completed — refreshing your library…')
+        queryClient.invalidateQueries({ queryKey: ['resources'] })
+      } else {
+        toast.error(data?.error || data?.detail || 'Upload failed. Please try again.')
+      }
+    }
     finally { setUploading(false); setUploadProgress(0) }
   }, [subStatus, queryClient, refetchSub])
 

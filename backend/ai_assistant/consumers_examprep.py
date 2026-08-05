@@ -110,25 +110,25 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
 
         elif msg_type == 'text_message':
             # User typed a message instead of speaking.
-            # If the live voice session is slow or unavailable, fall back to a fast text reply.
             text = msg.get('text', '').strip()
-            if text and self.session_active:
-                self.transcript_log.append(('user', text))
-                await self._send({'type': 'transcript_user', 'text': text})
+            if not text:
+                return
 
-                if self.text_fallback_mode or not self.gemini_ws:
+            self.transcript_log.append(('user', text))
+            await self._send({'type': 'transcript_user', 'text': text})
+
+            if not self.session_active:
+                # Session not yet active — reply via text fallback immediately
+                await self._reply_with_text_fallback(text)
+            elif self.text_fallback_mode or not self.gemini_ws:
+                await self._reply_with_text_fallback(text)
+            else:
+                try:
+                    realtime_msg = {'realtimeInput': {'text': text}}
+                    await self.gemini_ws.send(json.dumps(realtime_msg))
+                except Exception as e:
+                    logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
                     await self._reply_with_text_fallback(text)
-                else:
-                    try:
-                        realtime_msg = {
-                            'realtimeInput': {
-                                'text': text
-                            }
-                        }
-                        await self.gemini_ws.send(json.dumps(realtime_msg))
-                    except Exception as e:
-                        logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
-                        await self._reply_with_text_fallback(text)
 
         elif msg_type == 'end_session':
             await self._end_session()
