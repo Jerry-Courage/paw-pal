@@ -99,8 +99,44 @@ def process_resource_task(res_id):
             ext = os.path.splitext(res.file.name)[1].lower()
             
             try:
-                res.file.open('rb')
-                file_bytes = res.file.read()
+                # Try reading via Django storage first; if that fails (e.g. Cloudinary 401),
+                # fall back to a direct HTTP download of the public URL.
+                file_bytes = None
+                try:
+                    res.file.open('rb')
+                    file_bytes = res.file.read()
+                    res.file.close()
+                except Exception as storage_err:
+                    logger.warning(f'[Task Queue] Storage read failed for {res.id} ({storage_err}), trying HTTP fallback')
+                    try:
+                        import requests as _req
+                        # Build the full public URL — works for Cloudinary, S3, and local
+                        file_url = None
+                        if hasattr(res.file, 'url'):
+                            raw = res.file.url
+                            if raw.startswith('http'):
+                                file_url = raw
+                            else:
+                                # Try Cloudinary SDK to get authenticated URL
+                                try:
+                                    import cloudinary
+                                    import cloudinary.utils
+                                    file_url, _ = cloudinary.utils.cloudinary_url(
+                                        res.file.name,
+                                        resource_type='raw',
+                                        secure=True
+                                    )
+                                except Exception:
+                                    pass
+                        if not file_url:
+                            raise ValueError('No accessible URL for file')
+                        http_resp = _req.get(file_url, timeout=60)
+                        http_resp.raise_for_status()
+                        file_bytes = http_resp.content
+                        logger.info(f'[Task Queue] HTTP fallback succeeded for {res.id} ({len(file_bytes)} bytes)')
+                    except Exception as http_err:
+                        raise Exception(f'Document extract failed for {res.id}: {http_err}')
+
                 extraction = extract_text_from_bytes(file_bytes, ext)
                 
                 if extraction['status'] == 'success':
