@@ -311,9 +311,8 @@ class RankingsView(APIView):
     def get(self, request):
         from django.db.models import Sum
         from library.models import ResourceProgress
-        from .models import UserObservation
 
-        # ── 1. Aggregate earned XP (study only) per user ──────────────────
+        # ── Aggregate earned XP per user ──────────────────────────
         earned_qs = (
             ResourceProgress.objects
             .values('user_id')
@@ -321,53 +320,32 @@ class RankingsView(APIView):
         )
         earned_map = {row['user_id']: row['earned'] or 0 for row in earned_qs}
 
-        # ── 2. Get bonus_xp and spent_xp from UserObservation ────────────
-        obs_qs = UserObservation.objects.filter(key__in=['bonus_xp', 'spent_xp'])
-        obs_map: dict = {}
-        for obs in obs_qs:
-            uid = obs.user_id
-            if uid not in obs_map:
-                obs_map[uid] = {'bonus_xp': 0, 'spent_xp': 0}
-            try:
-                obs_map[uid][obs.key] = int(obs.value)
-            except (ValueError, TypeError):
-                pass
-
-        # ── 3. Build combined per-user list ───────────────────────────────
+        # ── Build per-user list ────────────────────────────────────
         all_users = User.objects.only('id', 'email', 'first_name', 'last_name', 'study_streak')
         base_list = []
         for u in all_users:
             earned = earned_map.get(u.id, 0)
-            bonus  = obs_map.get(u.id, {}).get('bonus_xp', 0)
-            spent  = obs_map.get(u.id, {}).get('spent_xp', 0)
-            # total_xp includes purchased packs (bonus_xp), minus spent on power-ups
-            total  = max(0, earned + bonus - spent)
             display_name = u.get_full_name().strip() or u.email.split('@')[0]
             base_list.append({
                 'user_id':   u.id,
                 'name':      display_name,
                 'initials':  (display_name[:2]).upper(),
                 'streak':    u.study_streak or 0,
-                'earned_xp': earned,          # study-only XP (fair board)
-                'total_xp':  total,           # earned + purchased - spent
-                'bonus_xp':  bonus,           # XP bought from marketplace
+                'earned_xp': earned,
+                'total_xp':  earned,   # same as earned — no separate purchase tracking
+                'bonus_xp':  0,
                 'is_me':     (u.id == request.user.id),
             })
 
         import copy
         me_id = request.user.id
 
-        # ── 4. Board A — Earned XP (fair / study-only) ───────────────────
+        # ── Board A — Earned XP ────────────────────────────────────
         earned_board, me_earned = self._build_board(
             copy.deepcopy(base_list), 'earned_xp', me_id
         )
 
-        # ── 5. Board B — Total XP (includes purchased) ───────────────────
-        total_board, me_total = self._build_board(
-            copy.deepcopy(base_list), 'total_xp', me_id
-        )
-
-        # ── 6. Board C — Streak (consecutive study days) ─────────────────
+        # ── Board B — Streak ───────────────────────────────────────
         streak_board, me_streak = self._build_board(
             copy.deepcopy(base_list), 'streak', me_id
         )
@@ -376,22 +354,19 @@ class RankingsView(APIView):
 
         return Response({
             'total_users': total_users,
-            # Board A
             'earned': {
                 'board':   earned_board,
-                'my_rank': me_earned[f'rank_earned_xp'] if me_earned else None,
+                'my_rank': me_earned['rank_earned_xp'] if me_earned else None,
                 'my_xp':   me_earned['earned_xp'] if me_earned else 0,
             },
-            # Board B
             'total': {
-                'board':   total_board,
-                'my_rank': me_total[f'rank_total_xp'] if me_total else None,
-                'my_xp':   me_total['total_xp'] if me_total else 0,
+                'board':   earned_board,  # same as earned
+                'my_rank': me_earned['rank_earned_xp'] if me_earned else None,
+                'my_xp':   me_earned['earned_xp'] if me_earned else 0,
             },
-            # Board C
             'streak': {
-                'board':    streak_board,
-                'my_rank':  me_streak[f'rank_streak'] if me_streak else None,
+                'board':     streak_board,
+                'my_rank':   me_streak['rank_streak'] if me_streak else None,
                 'my_streak': me_streak['streak'] if me_streak else 0,
             },
         })
