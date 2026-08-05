@@ -307,30 +307,33 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Study Friends leaderboard */}
+          {/* Rankings leaderboard mini */}
           <div className="bg-surface-container-low rounded-[2rem] p-stack-md border border-outline-variant/20">
             <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-widest mb-stack-md flex items-center gap-base">
               <span className="material-symbols-outlined text-[16px] text-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>emoji_events</span>
-              Study Friends
+              Rankings
             </h3>
-            <div className="space-y-stack-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-base">
-                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-on-secondary text-[11px] font-bold">M</div>
-                  <p className="text-[13px] text-on-surface">Maya R.</p>
-                </div>
-                <span className="text-[13px] font-bold text-primary">3,120 XP</span>
+            <div className="space-y-2">
+              {/* Rank #1 placeholder — golden */}
+              <div className="flex items-center gap-base px-base py-2 rounded-[1rem] bg-yellow-500/8 border border-yellow-500/20">
+                <span className="text-[13px] font-black text-yellow-400 w-5 shrink-0">1</span>
+                <div className="w-7 h-7 rounded-full bg-yellow-500/30 flex items-center justify-center text-yellow-300 text-[10px] font-bold shrink-0">🥇</div>
+                <p className="text-[13px] text-on-surface flex-1 truncate">Top Scholar</p>
+                <span className="text-[11px] font-bold text-yellow-400">—</span>
               </div>
-              <div className="flex items-center justify-between bg-surface-container rounded-[1rem] px-base py-2">
-                <div className="flex items-center gap-base">
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-[11px] font-bold">You</div>
-                  <p className="text-[13px] text-on-surface font-bold">You</p>
+              {/* Current user */}
+              <div className="flex items-center gap-base px-base py-2 rounded-[1rem] bg-primary/10 border border-primary/30">
+                <span className="text-[13px] font-black text-primary w-5 shrink-0">—</span>
+                <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-on-primary text-[10px] font-bold shrink-0">
+                  {name?.[0]?.toUpperCase() || 'Y'}
                 </div>
-                <span className="text-[13px] font-bold text-on-surface-variant">{totalXp.toLocaleString()} XP</span>
+                <p className="text-[13px] text-on-surface font-bold flex-1 truncate">You</p>
+                <span className="text-[11px] font-bold text-primary">{totalXp.toLocaleString()} XP</span>
               </div>
             </div>
-            <Link href="/groups" className="mt-stack-sm w-full flex items-center justify-center gap-base bg-surface-container-high text-on-surface font-bold text-[13px] py-2 rounded-[1rem] hover:bg-surface-container-highest transition-colors">
-              View Groups
+            <Link href="/rankings" className="mt-stack-sm w-full flex items-center justify-center gap-2 bg-primary-container text-on-primary-container font-bold text-[13px] py-2.5 rounded-[1rem] hover:brightness-110 transition-all btn-squishy">
+              <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>leaderboard</span>
+              View Rankings
             </Link>
           </div>
         </div>

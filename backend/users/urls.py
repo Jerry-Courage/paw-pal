@@ -3,7 +3,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     RegisterView, MeView, LogoutView, AnalyticsView, LogStudyView, 
     SetWeeklyGoalView, NotificationsView, NotificationDetailView, 
-    UpdateOnboardingView, PushSubscriptionView, GlobalConfigView, AwardXPView
+    UpdateOnboardingView, PushSubscriptionView, GlobalConfigView, AwardXPView,
+    RankingsView
 )
 from .oauth_views import GoogleOAuthView, GitHubOAuthView
 
@@ -23,6 +24,8 @@ urlpatterns = [
     path('onboarding/update/', UpdateOnboardingView.as_view(), name='update-onboarding'),
     # XP award endpoint
     path('award-xp/', AwardXPView.as_view(), name='award-xp'),
+    # Leaderboard / Rankings
+    path('rankings/', RankingsView.as_view(), name='rankings'),
     # OAuth social login
     path('oauth/google/', GoogleOAuthView.as_view(), name='oauth-google'),
     path('oauth/github/', GitHubOAuthView.as_view(), name='oauth-github'),

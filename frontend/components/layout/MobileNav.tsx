@@ -7,10 +7,11 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 const BOTTOM_ITEMS = [
-  { href: '/dashboard',   icon: 'home',       label: 'Home' },
-  { href: '/library',     icon: 'menu_book',  label: 'Library' },
+  { href: '/dashboard',   icon: 'home',           label: 'Home' },
+  { href: '/library',     icon: 'menu_book',      label: 'Library' },
+  { href: '/groups',      icon: 'bolt',           label: 'Quiz' },
+  { href: '/rankings',    icon: 'leaderboard',    label: 'Rankings' },
   { href: '/planner',     icon: 'calendar_today', label: 'Planner' },
-  { href: '/groups',      icon: 'bolt',       label: 'Quiz Battle' },
 ]
 
 const DRAWER_ITEMS = [
@@ -21,6 +22,7 @@ const DRAWER_ITEMS = [
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
   { href: '/groups',      icon: 'bolt',            label: 'Quiz Battle' },
+  { href: '/rankings',    icon: 'leaderboard',     label: 'Rankings' },
   { href: '/marketplace', icon: 'storefront',      label: 'Marketplace' },
   { href: '/settings',    icon: 'settings',        label: 'Settings' },
   { href: '/upgrade',     icon: 'workspace_premium', label: 'Upgrade' },

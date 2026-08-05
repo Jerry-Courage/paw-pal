@@ -64,6 +64,7 @@ export const authApi = {
   getConfig: () => api.get('/auth/config/'),
   awardXp: (amount: number, reason: string, resourceId?: number) =>
     api.post('/auth/award-xp/', { amount, reason, resource_id: resourceId }),
+  getRankings: () => api.get('/auth/rankings/'),
 }
 
 // TTS — Gemini Live voices

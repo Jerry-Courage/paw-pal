@@ -282,3 +282,78 @@ class GlobalConfigView(APIView):
             'is_tutorial_enabled': config.is_tutorial_enabled,
             'maintenance_mode': config.maintenance_mode,
         })
+
+
+class RankingsView(APIView):
+    """
+    GET /api/auth/rankings/
+    Returns the global XP leaderboard — top 100 users ranked by total XP.
+    Also includes the current user's rank, even if outside top 100.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Sum
+        from library.models import ResourceProgress
+        from .models import UserObservation
+
+        # Aggregate earned XP per user from ResourceProgress
+        earned_qs = (
+            ResourceProgress.objects
+            .values('user_id')
+            .annotate(earned=Sum('xp_earned'))
+        )
+        earned_map = {row['user_id']: row['earned'] or 0 for row in earned_qs}
+
+        # Get all observation records (bonus + spent XP adjustments)
+        obs_qs = UserObservation.objects.filter(key__in=['bonus_xp', 'spent_xp']).select_related('user')
+        obs_map: dict = {}
+        for obs in obs_qs:
+            uid = obs.user_id
+            if uid not in obs_map:
+                obs_map[uid] = {'bonus_xp': 0, 'spent_xp': 0}
+            try:
+                obs_map[uid][obs.key] = int(obs.value)
+            except (ValueError, TypeError):
+                pass
+
+        # Build combined user list
+        all_users = User.objects.only('id', 'email', 'first_name', 'last_name', 'study_streak')
+        user_scores = []
+        for u in all_users:
+            earned = earned_map.get(u.id, 0)
+            bonus  = obs_map.get(u.id, {}).get('bonus_xp', 0)
+            spent  = obs_map.get(u.id, {}).get('spent_xp', 0)
+            total  = max(0, earned + bonus - spent)
+            display_name = u.get_full_name().strip() or u.email.split('@')[0]
+            user_scores.append({
+                'user_id':  u.id,
+                'name':     display_name,
+                'initials': (display_name[:2]).upper(),
+                'streak':   u.study_streak or 0,
+                'total_xp': total,
+                'is_me':    (u.id == request.user.id),
+            })
+
+        # Sort descending by XP, then by name as tiebreaker
+        user_scores.sort(key=lambda x: (-x['total_xp'], x['name']))
+
+        # Assign ranks (1-based)
+        for i, entry in enumerate(user_scores):
+            entry['rank'] = i + 1
+
+        # Find current user's entry
+        me_entry = next((e for e in user_scores if e['is_me']), None)
+
+        # Return top 100 + current user (if outside top 100)
+        top_100 = user_scores[:100]
+        if me_entry and me_entry['rank'] > 100:
+            top_100.append(me_entry)
+
+        return Response({
+            'leaderboard': top_100,
+            'my_rank':     me_entry['rank'] if me_entry else None,
+            'my_xp':       me_entry['total_xp'] if me_entry else 0,
+            'total_users': len(user_scores),
+        })
+

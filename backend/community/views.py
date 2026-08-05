@@ -168,47 +168,71 @@ class RegisterEventView(APIView):
 
 
 class LeaderboardView(APIView):
-    """Weekly leaderboard — streak, study time, flashcards."""
+    """Global & Community Leaderboard — Ranked strictly by Earned Study XP and effort."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from django.contrib.auth import get_user_model
-        from django.db.models import F, ExpressionWrapper, FloatField
+        from library.models import ResourceProgress
+        from django.db.models import Sum, Coalesce
         User = get_user_model()
 
-        # Premium Ranking Logic: Combine streak consistency with total effort
         users = User.objects.filter(is_active=True).annotate(
-            nexus_score=ExpressionWrapper(
-                F('total_study_time') * 10 + F('study_streak') * 20,
-                output_field=FloatField()
-            )
-        ).order_by('-nexus_score')[:20]
+            earned_xp=Coalesce(Sum('resources__progress_records__xp_earned'), 0)
+        ).order_by('-earned_xp', '-study_streak', '-total_study_time')[:50]
 
         leaderboard = []
         for i, u in enumerate(users):
+            earned_xp = getattr(u, 'earned_xp', 0)
+            if earned_xp < 500:
+                level_name = 'Freshman'
+            elif earned_xp < 1500:
+                level_name = 'Sophomore'
+            elif earned_xp < 3500:
+                level_name = 'Junior'
+            elif earned_xp < 7000:
+                level_name = 'Senior'
+            else:
+                level_name = 'Graduate'
+
             leaderboard.append({
                 'rank': i + 1,
+                'user_id': u.id,
                 'username': u.username,
                 'full_name': u.get_full_name() or u.username,
+                'avatar_url': request.build_absolute_uri(u.avatar.url) if u.avatar else None,
+                'earned_xp': earned_xp,
                 'study_streak': u.study_streak,
                 'total_study_hours': round(u.total_study_time, 1),
+                'university': u.university or 'FlowState Scholar',
+                'level_name': level_name,
                 'is_me': u.id == request.user.id,
             })
 
-        # Find current user's rank if not in top 20
+        # Find current user's rank
         my_rank = next((l for l in leaderboard if l['is_me']), None)
         if not my_rank:
             all_users = list(User.objects.filter(is_active=True).order_by('-study_streak', '-total_study_time').values_list('id', flat=True))
             try:
                 rank = all_users.index(request.user.id) + 1
             except ValueError:
-                rank = None
+                rank = len(all_users)
+            
+            my_earned_xp = ResourceProgress.objects.filter(user=request.user).aggregate(
+                total=Sum('xp_earned')
+            )['total'] or 0
+
             my_rank = {
                 'rank': rank,
+                'user_id': request.user.id,
                 'username': request.user.username,
                 'full_name': request.user.get_full_name() or request.user.username,
+                'avatar_url': request.build_absolute_uri(request.user.avatar.url) if request.user.avatar else None,
+                'earned_xp': my_earned_xp,
                 'study_streak': request.user.study_streak,
                 'total_study_hours': round(request.user.total_study_time, 1),
+                'university': request.user.university or 'FlowState Scholar',
+                'level_name': 'Freshman',
                 'is_me': True,
             }
 
