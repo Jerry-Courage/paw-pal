@@ -4,15 +4,17 @@ import { useState, useEffect, Suspense } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles, Headphones, Brain, Layers, BookOpen } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles, Headphones, Brain, Layers, BookOpen, Boxes, Trophy } from 'lucide-react'
 import SplashScreen from '@/components/ui/SplashScreen'
 import { cn } from '@/lib/utils'
 
 const FEATURES = [
-  { icon: Brain,      color: 'text-primary bg-primary/10',     title: 'AI Tutor',       desc: 'Understands your exact materials' },
-  { icon: Layers,     color: 'text-secondary bg-secondary/10', title: 'Flashcards',     desc: 'Spaced repetition that adapts' },
-  { icon: Headphones, color: 'text-tertiary bg-tertiary/10',   title: 'Study Podcasts', desc: 'Audio deep-dives from any doc' },
-  { icon: BookOpen,   color: 'text-primary bg-primary/10',     title: 'Smart Notes',    desc: 'Structured notes in seconds' },
+  { icon: Boxes,     color: 'text-primary bg-primary/10',     title: 'VR Classroom',   desc: 'Immerse yourself inside any study topic' },
+  { icon: Brain,     color: 'text-secondary bg-secondary/10', title: 'Personalised AI', desc: 'Quizzes & lessons adapt to how you learn' },
+  { icon: Trophy,    color: 'text-tertiary bg-tertiary/10',   title: 'Quiz Battles',   desc: 'Earn XP, climb rankings & beat the leaderboard' },
+  { icon: Layers,    color: 'text-primary bg-primary/10',     title: 'Flashcards',     desc: 'Spaced repetition that adapts' },
+  { icon: Headphones,color: 'text-secondary bg-secondary/10', title: 'Study Podcasts', desc: 'Audio deep-dives from any doc' },
+  { icon: BookOpen,  color: 'text-tertiary bg-tertiary/10',   title: 'Smart Notes',    desc: 'Structured notes in seconds' },
 ]
 
 function LoginForm() {
@@ -226,11 +228,11 @@ function LoginForm() {
         <div className="space-y-stack-lg">
           <div>
             <h2 className="text-[42px] xl:text-[52px] font-bold text-on-surface leading-[1.1] tracking-tight mb-4">
-              Study smarter,<br />
-              <span className="text-primary">not harder.</span>
+              Learn in VR,<br />
+              <span className="text-primary">master with AI.</span>
             </h2>
             <p className="text-on-surface-variant text-[15px] leading-relaxed max-w-xs">
-              Upload any material — PDF, video, slides — and get a full study kit in seconds.
+              Step into a personalised VR classroom, face AI quizzes and battle for XP — all built from any material you upload.
             </p>
           </div>
 

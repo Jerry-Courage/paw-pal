@@ -634,18 +634,43 @@ class ResourceFileView(APIView):
                 return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
         else:
             file_data = None
+
+            # 1. Preferred: signed Cloudinary download URL (401-proof, works with
+            #    strict delivery accounts that reject unsigned URLs). Mirrors tasks.py.
             try:
-                # 1. Try Django default_storage (natively handles Cloudinary, S3, or Local)
-                from django.core.files.storage import default_storage
-                if default_storage.exists(resource.file.name):
-                    with default_storage.open(resource.file.name, 'rb') as f:
-                        file_data = f.read()
+                import requests as _req
+                import cloudinary.utils
+                import re as _re
+                cfg = cloudinary.config()
+                raw_name = resource.file.name or ''
+                if cfg.api_key and cfg.api_secret and cfg.cloud_name and raw_name:
+                    pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
+                    m = _re.search(r'\.([^.]+)$', raw_name)
+                    fmt = m.group(1) if m else 'pdf'
+                    signed_url = cloudinary.utils.private_download_url(
+                        pub_id, fmt, resource_type='image', type='upload'
+                    )
+                    resp = _req.get(signed_url, timeout=60)
+                    if resp.status_code == 200:
+                        file_data = resp.content
+                    else:
+                        logger.warning(f"[ResourceFileView] Signed download {resp.status_code} for {resource.file.name}")
             except Exception as e:
-                logger.warning(f"[ResourceFileView] default_storage failed for {resource.file.name}: {e}")
+                logger.warning(f"[ResourceFileView] Signed download failed for {resource.file.name}: {e}")
+
+            # 2. Fallback: Django default_storage (Cloudinary/S3/Local)
+            if not file_data:
+                try:
+                    from django.core.files.storage import default_storage
+                    if default_storage.exists(resource.file.name):
+                        with default_storage.open(resource.file.name, 'rb') as f:
+                            file_data = f.read()
+                except Exception as e:
+                    logger.warning(f"[ResourceFileView] default_storage failed for {resource.file.name}: {e}")
 
             if not file_data:
                 try:
-                    # 2. Try fetching via resource.file.url
+                    # 3. Fallback: resource.file.url via requests
                     if hasattr(resource.file, 'url') and resource.file.url:
                         import requests
                         resp = requests.get(resource.file.url, timeout=20)

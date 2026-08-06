@@ -3,21 +3,24 @@
 import Link from 'next/link'
 
 const FEATURES = [
+  { icon: 'view_in_ar', label: 'VR Classroom', desc: 'Step inside your study material in immersive virtual reality', color: 'text-primary' },
+  { icon: 'smart_toy', label: 'AI Tutor', desc: 'Personalised voice tutor that adapts to how you learn', color: 'text-secondary' },
+  { icon: 'quiz', label: 'Quiz Battles', desc: 'Adaptive quizzes + live multiplayer battles & XP', color: 'text-tertiary' },
   { icon: 'style', label: 'Flashcards', desc: 'AI-generated spaced repetition cards', color: 'text-primary' },
-  { icon: 'quiz', label: 'Quizzes', desc: 'Adaptive multiple choice tests', color: 'text-secondary' },
-  { icon: 'hub', label: 'Mind Maps', desc: 'Visual concept mapping', color: 'text-tertiary' },
-  { icon: 'podcasts', label: 'Podcast', desc: 'AI dual-host audio lessons', color: 'text-primary' },
-  { icon: 'history_edu', label: 'Exam Prep', desc: 'Voice-based AI tutoring', color: 'text-secondary' },
-  { icon: 'calculate', label: 'Solver', desc: 'Step-by-step problem solving', color: 'text-tertiary' },
+  { icon: 'hub', label: 'Mind Maps', desc: 'Visual concept mapping', color: 'text-secondary' },
+  { icon: 'podcasts', label: 'Podcast', desc: 'AI dual-host audio lessons', color: 'text-tertiary' },
+  { icon: 'history_edu', label: 'Exam Prep', desc: 'Voice-based AI tutoring for exams', color: 'text-primary' },
+  { icon: 'calculate', label: 'Solver', desc: 'Step-by-step problem solving', color: 'text-secondary' },
+  { icon: 'leaderboard', label: 'Rankings & XP', desc: 'Climb the leaderboard and earn points as you learn', color: 'text-tertiary' },
   { icon: 'calendar_today', label: 'Planner', desc: 'Smart scheduling & deadlines', color: 'text-primary' },
   { icon: 'group_work', label: 'Collab', desc: 'Real-time collaborative spaces', color: 'text-secondary' },
-  { icon: 'smart_toy', label: 'AI Tutor', desc: 'Personalised voice tutor', color: 'text-tertiary' },
+  { icon: 'auto_awesome', label: 'Personalised', desc: 'Every kit adapts to your level & learning style', color: 'text-tertiary' },
 ]
 
 const STEPS = [
-  { num: '1', icon: 'upload_file', label: 'Upload Material', desc: 'PDF, slides, YouTube links, or just paste text.', color: 'bg-primary-container text-on-primary-container' },
-  { num: '2', icon: 'auto_awesome', label: 'AI Generates', desc: 'Study kits, flashcards, quizzes & more — instantly.', color: 'bg-secondary-container text-on-secondary-container' },
-  { num: '3', icon: 'military_tech', label: 'Study & Master', desc: 'Track mastery, earn XP, and crush your exams.', color: 'bg-tertiary-container text-on-tertiary-container' },
+  { num: '1', icon: 'upload_file', label: 'Upload or Paste', desc: 'Drop a PDF, slide, YouTube link — or type a topic you want to master.', color: 'bg-primary-container text-on-primary-container' },
+  { num: '2', icon: 'auto_awesome', label: 'AI Personalises', desc: 'FlowState generates VR scenes, quizzes & study kits tailored to your level.', color: 'bg-secondary-container text-on-secondary-container' },
+  { num: '3', icon: 'military_tech', label: 'Study, Battle & Master', desc: 'Quiz battles, XP & rankings turn revision into a game you win.', color: 'bg-tertiary-container text-on-tertiary-container' },
 ]
 
 export default function LandingPage() {
@@ -52,11 +55,11 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center gap-stack-lg max-w-6xl mx-auto">
             <div className="flex-1 text-center md:text-left">
               <h1 className="text-[40px] md:text-[56px] font-bold text-on-surface leading-tight mb-stack-sm tracking-tight">
-                Master any subject with{' '}
-                <span className="text-primary sparkle-text">Super Focus!</span>
+                Learn in{' '}
+                <span className="text-primary sparkle-text">VR. Master with AI.</span>
               </h1>
               <p className="text-on-surface-variant text-body-lg max-w-xl mb-stack-md mx-auto md:mx-0">
-                Join thousands of students who turn study time into results. Upload any material and let AI build your personalised study kit in seconds.
+                FlowState turns any material into a personalised study kit — immersive VR classrooms, AI quizzes and game-like battles that adapt to how you learn. Upload a PDF, drop a link, or just type a topic.
               </p>
               <div className="flex flex-col sm:flex-row gap-stack-sm justify-center md:justify-start">
                 <Link
@@ -139,8 +142,8 @@ export default function LandingPage() {
         {/* ── How It Works ──────────────────────────────────── */}
         <section id="how-it-works" className="px-margin-mobile md:px-margin-desktop py-stack-lg">
           <div className="text-center mb-stack-lg">
-            <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">3 Easy Steps to Success</h2>
-            <p className="text-on-surface-variant mt-base text-body-lg">Learning has never been this fast.</p>
+            <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">3 Steps to Your FlowState</h2>
+            <p className="text-on-surface-variant mt-base text-body-lg">Upload → AI personalises → then learn in VR, quizzes and battle.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter max-w-5xl mx-auto">
             {STEPS.map((s) => (
@@ -160,7 +163,7 @@ export default function LandingPage() {
         <section id="features" className="px-margin-mobile md:px-margin-desktop py-stack-lg bg-surface-container-lowest">
           <div className="text-center mb-stack-lg">
             <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">Everything You Need to Ace It</h2>
-            <p className="text-on-surface-variant mt-base text-body-lg">9 AI-powered tools, one platform.</p>
+            <p className="text-on-surface-variant mt-base text-body-lg">12 AI-powered tools for VR, quizzes &amp; personalised study — one platform.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter max-w-5xl mx-auto">
             {FEATURES.map((f) => (
