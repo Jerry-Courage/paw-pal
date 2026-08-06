@@ -26,6 +26,7 @@ export default function SettingsPage() {
   const [bio, setBio] = useState('')
   const [university, setUniversity] = useState('')
   const [weeklyGoal, setWeeklyGoal] = useState(10)
+  const [educationLevel, setEducationLevel] = useState('tertiary')
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -37,6 +38,7 @@ export default function SettingsPage() {
       setBio((profileData as any).bio || '')
       setUniversity((profileData as any).university || '')
       setWeeklyGoal((profileData as any).weekly_goal_hours || 10)
+      setEducationLevel((profileData as any).education_level || 'tertiary')
     }
   }, [profileData])
 
@@ -53,7 +55,7 @@ export default function SettingsPage() {
   })
 
   const handleSave = () => {
-    updateMutation.mutate({ bio, university })
+    updateMutation.mutate({ bio, university, education_level: educationLevel })
     goalMutation.mutate(weeklyGoal)
   }
 
