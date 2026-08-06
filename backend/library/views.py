@@ -541,32 +541,109 @@ class CloneResourceView(APIView):
 
         return Response(ResourceSerializer(cloned, context={'request': request}).data)
 
+def generate_fallback_pdf(resource) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    import io
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#1e293b'),
+        spaceAfter=6
+    )
+    subtitle_style = ParagraphStyle(
+        'DocSubtitle',
+        parent=styles['Normal'],
+        fontSize=11,
+        leading=14,
+        textColor=colors.HexColor('#64748b'),
+        spaceAfter=12
+    )
+    heading_style = ParagraphStyle(
+        'SectionHeading',
+        parent=styles['Heading2'],
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor('#f97316'),
+        spaceBefore=12,
+        spaceAfter=4
+    )
+    body_style = ParagraphStyle(
+        'DocBody',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#334155'),
+        spaceAfter=8
+    )
+
+    story = []
+    story.append(Paragraph(resource.title, title_style))
+    if resource.subject:
+        story.append(Paragraph(f"Subject: {resource.subject}", subtitle_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e2e8f0'), spaceAfter=12))
+
+    if resource.ai_summary:
+        story.append(Paragraph("AI Summary", heading_style))
+        story.append(Paragraph(resource.ai_summary, body_style))
+        story.append(Spacer(1, 8))
+
+    notes = resource.ai_notes_json
+    if isinstance(notes, dict) and notes.get('sections'):
+        story.append(Paragraph("Study Notes & Sections", heading_style))
+        for idx, sec in enumerate(notes.get('sections', [])):
+            sec_title = f"{idx + 1}. {sec.get('title', 'Section')}"
+            story.append(Paragraph(sec_title, ParagraphStyle('SecTitle', parent=heading_style, fontSize=11, leading=14, textColor=colors.HexColor('#0f172a'), spaceBefore=8, spaceAfter=2)))
+            if sec.get('key_question'):
+                story.append(Paragraph(f"<b>Key Question:</b> {sec.get('key_question')}", body_style))
+            if sec.get('plain_english'):
+                story.append(Paragraph(sec.get('plain_english'), body_style))
+            if sec.get('deep_dive'):
+                story.append(Paragraph(sec.get('deep_dive'), body_style))
+            story.append(Spacer(1, 4))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.read()
+
+
 class ResourceFileView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, resource_id):
         resource = get_object_or_404(Resource, id=resource_id)
 
-        if not resource.file:
-            return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
+        file_data = None
+        if resource.file:
+            try:
+                with resource.file.open('rb') as f:
+                    file_data = f.read()
+            except Exception:
+                pass
 
-        try:
-            import base64
-            # Read via storage API — works for both local and cloud backends
-            with resource.file.open('rb') as f:
-                file_data = f.read()
-            base64_data = base64.b64encode(file_data).decode('utf-8')
-            return Response({
-                'data': base64_data,
-                'file_name': resource.file.name,
-                'size': len(file_data)
-            })
-        except (FileNotFoundError, IOError, OSError):
-            return Response({'error': 'File no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"[ResourceFileView] Error reading file for resource {resource_id}: {e}")
-            # Return 404 so the PDF viewer shows a friendly message rather than a crash
-            return Response({'error': 'File could not be read. It may have been cleared or is stored remotely.'}, status=status.HTTP_404_NOT_FOUND)
+        if not file_data:
+            try:
+                file_data = generate_fallback_pdf(resource)
+            except Exception as e:
+                logger.error(f"[ResourceFileView] Error generating fallback PDF for resource {resource_id}: {e}")
+                return Response({'error': 'File not available and could not generate fallback PDF.'}, status=status.HTTP_404_NOT_FOUND)
+
+        import base64
+        base64_data = base64.b64encode(file_data).decode('utf-8')
+        return Response({
+            'data': base64_data,
+            'file_name': f"{resource.title.replace(' ', '_')}.pdf",
+            'size': len(file_data)
+        })
 
 class ReprocessResourceView(APIView):
     """

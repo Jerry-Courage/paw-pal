@@ -48,22 +48,8 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         request = self.context.get('request')
-        if not obj.file:
+        if not obj.file and not obj.ai_summary and not obj.ai_notes_json:
             return None
-        try:
-            # For local filesystem: check the file actually exists on disk
-            # (Render ephemeral disk wipes on redeploy). Skip this check for
-            # cloud storage backends (Cloudinary, S3) which don't use local paths.
-            from django.core.files.storage import default_storage
-            from django.conf import settings as django_settings
-            backend = getattr(django_settings, 'STORAGES', {}).get('default', {}).get('BACKEND', '')
-            is_local = 'FileSystemStorage' in backend or backend == ''
-            if is_local:
-                import os
-                if not os.path.exists(obj.file.path):
-                    return None
-        except Exception:
-            pass
         if request:
             from django.urls import reverse
             return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
@@ -110,17 +96,8 @@ class ResourceListSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         request = self.context.get('request')
-        if not obj.file:
+        if not obj.file and not obj.ai_summary and not obj.ai_notes_json:
             return None
-        try:
-            from django.conf import settings as _s
-            backend = getattr(_s, 'STORAGES', {}).get('default', {}).get('BACKEND', '')
-            if 'FileSystemStorage' in backend or backend == '':
-                import os
-                if not os.path.exists(obj.file.path):
-                    return None
-        except Exception:
-            pass
         if request:
             from django.urls import reverse
             return request.build_absolute_uri(reverse('resource-file', kwargs={'resource_id': obj.id}))
