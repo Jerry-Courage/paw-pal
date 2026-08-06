@@ -112,8 +112,14 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['resources'] })
       const id = res.data?.id
-      if (id) { setResourceId(id); setStage('building') }
-      else { toast.success('Resource uploaded!'); onClose() }
+      if (id) {
+        setResourceId(id)
+        setStage('building')
+        toast.success("Upload successful! This will take a while to process. Check back in after a while — we will send you a reminder when your study kit is ready!", { duration: 6000 })
+      } else {
+        toast.success('Resource uploaded!')
+        onClose()
+      }
     },
     onError: (err: any) => {
       setStage('idle')
@@ -276,7 +282,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
               {stage === 'uploading' ? 'Uploading...' : stage === 'building' ? 'Building Your Kit' : 'All Ready!'}
             </h3>
             <p className="text-slate-500 italic">
-              {stage === 'uploading' ? `Uploading ${title}...` : processingStatus.text}
+              {stage === 'uploading' ? `Uploading ${title}...` : `${processingStatus.text} (This will take a while — check back in after a while and we will send you a reminder!)`}
             </p>
           </div>
           <div className="space-y-3">

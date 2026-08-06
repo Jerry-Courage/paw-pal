@@ -190,7 +190,7 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
 
           <div className="text-center">
             <h2 className="text-2xl font-black text-white tracking-tight">Building Your Study Kit</h2>
-            <p className="text-slate-500 mt-1 text-sm">This takes about 5–8 minutes. You can leave and come back.</p>
+            <p className="text-slate-500 mt-1 text-sm">This takes a while. Check back in after a while — we will send you a reminder when your study kit is ready!</p>
           </div>
         </div>
 

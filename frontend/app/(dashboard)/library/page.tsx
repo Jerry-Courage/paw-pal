@@ -73,7 +73,7 @@ export default function LibraryPage() {
           if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100))
         })
       }
-      toast.success('Material uploaded! AI is processing…')
+      toast.success("Upload successful! This will take a while to process. Check back in after a while — we will send you a reminder when your study kit is ready!", { duration: 6000 })
       queryClient.invalidateQueries({ queryKey: ['resources'] })
       refetchSub()
     } catch (err: any) {
