@@ -10,8 +10,6 @@ import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 
-const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
-const PDFViewerErrorBoundary = dynamic(() => import('@/components/library/PDFViewerErrorBoundary'), { ssr: false })
 const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGeneratorModal'), { ssr: false })
 const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
@@ -254,35 +252,33 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
               <div className="flex items-center justify-between px-5 py-3 border-b border-outline-variant/20">
                 <div className="flex items-center gap-2 text-[12px] text-on-surface-variant font-semibold uppercase tracking-widest">
                   <span className="material-symbols-outlined text-[16px]">preview</span>
-                  Preview: {resource.title}
-                </div>
-                <div className="flex items-center gap-2">
-                  {resource.resource_type === 'pdf' && resource.file_url && (
-                    <a
-                      href={resource.file_url.includes('?') ? `${resource.file_url}&raw=1` : `${resource.file_url}?raw=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
-                      title="Open in new tab"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                    </a>
-                  )}
+                  {isProcessing ? 'Processing…' : resource.title}
                 </div>
               </div>
 
               {/* Preview content */}
               <div className="h-[480px] overflow-hidden">
-                {resource.resource_type === 'pdf' && resource.file_url ? (
-                  <PDFViewerErrorBoundary fileUrl={resource.file_url}>
-                    <PDFViewer fileUrl={resource.file_url} title={resource.title} />
-                  </PDFViewerErrorBoundary>
-                ) : resource.resource_type === 'pdf' && !resource.file_url ? (
+                {resource.resource_type === 'video' && resource.url ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${
+                      resource.url.includes('v=')
+                        ? resource.url.split('v=')[1]?.split('&')[0]
+                        : resource.url.split('youtu.be/')[1]?.split('?')[0]
+                    }`}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : isProcessing ? (
+                  <div className="h-full">
+                    <ProcessingView resource={resource} onDelete={() => setShowConfirmDelete(true)} />
+                  </div>
+                ) : (
                   <div className="h-full flex flex-col p-6 overflow-y-auto text-left space-y-4">
-                    <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl shrink-0">
-                      <span className="material-symbols-outlined text-amber-400 text-[24px] shrink-0">info</span>
+                    <div className="flex items-center gap-3 bg-primary/10 border border-primary/20 p-3 rounded-2xl shrink-0">
+                      <span className="material-symbols-outlined text-primary text-[24px] shrink-0">description</span>
                       <div className="text-[12px] text-on-surface-variant">
-                        <span className="font-bold text-on-surface">Original PDF file cleared after server restart.</span> Your AI study kit is fully intact!
+                        <span className="font-bold text-on-surface">Your AI study kit is ready!</span> Use the tools below to study, quiz, and master this material.
                       </div>
                     </div>
                     {resource.ai_summary && (
@@ -302,26 +298,6 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                         ))}
                       </div>
                     )}
-                  </div>
-                ) : resource.resource_type === 'video' && resource.url ? (
-                  <iframe
-                    src={`https://www.youtube.com/embed/${
-                      resource.url.includes('v=')
-                        ? resource.url.split('v=')[1]?.split('&')[0]
-                        : resource.url.split('youtu.be/')[1]?.split('?')[0]
-                    }`}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                ) : isProcessing ? (
-                  <div className="h-full">
-                    <ProcessingView resource={resource} onDelete={() => setShowConfirmDelete(true)} />
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 text-on-surface-variant/40">
-                    <span className="material-symbols-outlined text-[48px]">description</span>
-                    <p className="text-sm">No preview available</p>
                   </div>
                 )}
               </div>
