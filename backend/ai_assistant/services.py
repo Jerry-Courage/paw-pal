@@ -1524,9 +1524,9 @@ class AIService:
         resource.save(update_fields=['processing_progress', 'status_text'])
 
         # ─── MACRO-CHUNKING (Hyper-Speed Mode) ───
-        # 15K chunks — balances context quality vs token budget for response
-        chunk_size = 15000
-        overlap = 500
+        # 6K chunks — keeps each chunk within Groq's token limits (413 on larger chunks)
+        chunk_size = 6000
+        overlap = 300
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         # Multi-Modal Vision Context — send page images for BOTH videos AND PDFs/slides
