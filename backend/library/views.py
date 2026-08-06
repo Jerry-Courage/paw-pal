@@ -548,6 +548,10 @@ def generate_fallback_pdf(resource) -> bytes:
     from reportlab.lib import colors
     import io
 
+    title_str = str(resource.title[0] if isinstance(resource.title, list) else (resource.title or 'Document'))
+    subject_str = str(resource.subject[0] if isinstance(resource.subject, list) else (resource.subject or ''))
+    summary_str = str(resource.ai_summary[0] if isinstance(resource.ai_summary, list) else (resource.ai_summary or ''))
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     styles = getSampleStyleSheet()
@@ -587,28 +591,28 @@ def generate_fallback_pdf(resource) -> bytes:
     )
 
     story = []
-    story.append(Paragraph(resource.title, title_style))
-    if resource.subject:
-        story.append(Paragraph(f"Subject: {resource.subject}", subtitle_style))
+    story.append(Paragraph(title_str, title_style))
+    if subject_str:
+        story.append(Paragraph(f"Subject: {subject_str}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e2e8f0'), spaceAfter=12))
 
-    if resource.ai_summary:
+    if summary_str:
         story.append(Paragraph("AI Summary", heading_style))
-        story.append(Paragraph(resource.ai_summary, body_style))
+        story.append(Paragraph(summary_str, body_style))
         story.append(Spacer(1, 8))
 
     notes = resource.ai_notes_json
     if isinstance(notes, dict) and notes.get('sections'):
         story.append(Paragraph("Study Notes & Sections", heading_style))
         for idx, sec in enumerate(notes.get('sections', [])):
-            sec_title = f"{idx + 1}. {sec.get('title', 'Section')}"
+            sec_title = f"{idx + 1}. {str(sec.get('title', 'Section'))}"
             story.append(Paragraph(sec_title, ParagraphStyle('SecTitle', parent=heading_style, fontSize=11, leading=14, textColor=colors.HexColor('#0f172a'), spaceBefore=8, spaceAfter=2)))
             if sec.get('key_question'):
-                story.append(Paragraph(f"<b>Key Question:</b> {sec.get('key_question')}", body_style))
+                story.append(Paragraph(f"<b>Key Question:</b> {str(sec.get('key_question'))}", body_style))
             if sec.get('plain_english'):
-                story.append(Paragraph(sec.get('plain_english'), body_style))
+                story.append(Paragraph(str(sec.get('plain_english')), body_style))
             if sec.get('deep_dive'):
-                story.append(Paragraph(sec.get('deep_dive'), body_style))
+                story.append(Paragraph(str(sec.get('deep_dive')), body_style))
             story.append(Spacer(1, 4))
 
     doc.build(story)
@@ -651,9 +655,10 @@ class ResourceFileView(APIView):
 
         import base64
         base64_data = base64.b64encode(file_data).decode('utf-8')
+        title_str = str(resource.title[0] if isinstance(resource.title, list) else (resource.title or 'Document'))
         return Response({
             'data': base64_data,
-            'file_name': f"{resource.title.replace(' ', '_')}.pdf",
+            'file_name': f"{title_str.replace(' ', '_')}.pdf",
             'size': len(file_data)
         })
 
