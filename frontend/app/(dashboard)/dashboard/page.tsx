@@ -96,7 +96,7 @@ export default function DashboardPage() {
             <p className="text-[14px] font-bold text-on-surface">
               {notesRemaining === 0 ? "You've used all your free kits" : `${notesRemaining} free kit${notesRemaining !== 1 ? 's' : ''} remaining`}
             </p>
-            <p className="text-[12px] text-on-surface-variant">Unlock unlimited kits for just {priceInfo?.displayShort || '$0.99/mo'}</p>
+            <p className="text-[12px] text-on-surface-variant">Unlock unlimited kits for just {priceInfo?.displayShort || 'GH₵14.99/mo'}</p>
           </div>
           <button onClick={() => setShowPaywall(true)} className="shrink-0 bg-primary text-on-primary text-[13px] font-bold px-stack-sm py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
             Upgrade

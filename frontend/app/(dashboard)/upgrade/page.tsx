@@ -139,7 +139,7 @@ export default function UpgradePage() {
               <span className="bg-primary text-on-primary px-stack-md py-1 rounded-full text-[13px] font-bold mb-stack-md">MOST POPULAR</span>
               <h2 className="text-[28px] font-bold text-on-surface mb-base">FlowState Premium</h2>
               <div className="flex items-baseline gap-base mb-stack-md">
-                <span className="text-[48px] font-bold text-on-surface">{isAnnual ? '$79' : priceInfo?.displayPrice || '$0.99'}</span>
+                <span className="text-[48px] font-bold text-on-surface">{isAnnual ? 'GH₵699' : priceInfo?.displayPrice || 'GH₵14.99'}</span>
                 <span className="text-[18px] text-on-surface-variant">{isAnnual ? '/year' : '/mo'}</span>
               </div>
 
