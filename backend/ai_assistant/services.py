@@ -365,14 +365,12 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Google Vision Chat] Failed: {e}")
 
-            # 2. Try Groq vision models — qwen/qwen3.6-27b is the only vision model on Groq (as of Aug 2026)
-            # It supports JSON mode which guarantees clean output — use it for the timetable parser.
+            # 2. Try Groq vision models
             for groq_key in self._groq_keys():
                 try:
                     async with httpx.AsyncClient() as client:
-                        # Build the payload — use JSON mode if the prompt asks for JSON output
                         payload: dict = {
-                            'model': 'qwen/qwen3.6-27b',
+                            'model': 'llama-3.2-90b-vision-preview',
                             'messages': messages,
                             'max_tokens': max_tokens,
                         }
@@ -411,9 +409,9 @@ class AIService:
                 ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),   # 1000 t/s — fastest
                 ('llama-3.1-8b-instant', 4 if is_tutor_mode else 6), # 560 t/s — fast
             ] if is_tutor_mode else [
-                ('qwen/qwen3.6-27b', 8),              # 500 t/s — smart reasoning
-                ('openai/gpt-oss-20b', 6),             # 1000 t/s — absolute fastest
-                ('llama-3.1-8b-instant', 6),           # 560 t/s  — reliable fast
+                ('openai/gpt-oss-120b', 8),          # 500 t/s — smart
+                ('openai/gpt-oss-20b', 6),            # 1000 t/s — fastest
+                ('llama-3.1-8b-instant', 6),          # 560 t/s — reliable
             ]
             
             for key in groq_keys:
@@ -466,8 +464,8 @@ class AIService:
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key and not has_images:
             for cerebras_model, cerebras_timeout in [
-                ('llama3.1-8b', 8),                       # 14.4K RPD — fast
-                ('qwen-3-235b-a22b-instruct-2507', 15),   # 14.4K RPD — smart
+                ('gpt-oss-120b', 8),            # ~3000 t/s — fastest production
+                ('gemma-4-31b', 15),            # ~1850 t/s — smart preview
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -542,8 +540,8 @@ class AIService:
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key:
             for cerebras_model, cerebras_timeout in [
-                ('qwen-3-235b-a22b-instruct-2507', 120),  # 14.4K RPD — 235B, best quality
-                # llama3.1-8b removed — generates invalid JSON for complex kit prompts
+                ('gpt-oss-120b', 120),          # ~3000 t/s — best quality + speed
+                ('gemma-4-31b', 120),           # ~1850 t/s — smart fallback
             ]:
                 try:
                     async with httpx.AsyncClient() as client:
@@ -594,9 +592,9 @@ class AIService:
         if groq_keys:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
-                    ('qwen/qwen3.6-27b', 60),             # 500 t/s — smart reasoning
-                    ('llama-3.3-70b-versatile', 60),       # most capable on Groq
-                    ('openai/gpt-oss-120b', 60),           # smart
+                    ('openai/gpt-oss-120b', 60),            # 500 t/s — smart
+                    ('llama-3.3-70b-versatile', 60),         # most capable on Groq
+                    ('openai/gpt-oss-20b', 60),              # 1000 t/s — fast
                 ]:
                     try:
                         async with httpx.AsyncClient() as client:

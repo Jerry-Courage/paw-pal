@@ -45,10 +45,13 @@ class PushService:
                 )
                 success_count += 1
             except WebPushException as ex:
-                logger.error(f"Push failed for sub {sub.id}: {ex}")
-                # If the subscription is expired or invalid, delete it
-                if ex.response and ex.response.status_code in [404, 410]:
+                status = getattr(ex.response, 'status_code', None) if ex.response else None
+                if status in [404, 410]:
+                    # Subscription expired or unsubscribed — silently remove
                     sub.delete()
+                    logger.info(f"Push sub {sub.id} expired (HTTP {status}), removed.")
+                else:
+                    logger.warning(f"Push failed for sub {sub.id}: {ex}")
             except Exception as e:
                 logger.error(f"Unexpected push error: {e}")
 
