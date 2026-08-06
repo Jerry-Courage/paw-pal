@@ -627,29 +627,40 @@ class ResourceFileView(APIView):
         resource = get_object_or_404(Resource, id=resource_id)
 
         if not resource.file:
-            return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
-
-        file_data = None
-        try:
-            # 1. Try pulling directly from Cloudinary / storage URL via requests
-            if hasattr(resource.file, 'url') and resource.file.url:
-                import requests
-                resp = requests.get(resource.file.url, timeout=20)
-                if resp.ok:
-                    file_data = resp.content
-        except Exception as e:
-            logger.warning(f"[ResourceFileView] Failed to fetch via requests from URL: {e}")
-
-        if not file_data:
+            # If no file attached, fallback to generated study PDF
             try:
-                # 2. Try default storage open
-                with resource.file.open('rb') as f:
-                    file_data = f.read()
+                file_data = generate_fallback_pdf(resource)
+            except Exception:
+                return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            file_data = None
+            try:
+                # 1. Try Django default_storage (natively handles Cloudinary, S3, or Local)
+                from django.core.files.storage import default_storage
+                if default_storage.exists(resource.file.name):
+                    with default_storage.open(resource.file.name, 'rb') as f:
+                        file_data = f.read()
             except Exception as e:
-                logger.warning(f"[ResourceFileView] Failed to open via storage: {e}")
+                logger.warning(f"[ResourceFileView] default_storage failed for {resource.file.name}: {e}")
 
-        if not file_data:
-            return Response({'error': 'Original file no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
+            if not file_data:
+                try:
+                    # 2. Try fetching via resource.file.url
+                    if hasattr(resource.file, 'url') and resource.file.url:
+                        import requests
+                        resp = requests.get(resource.file.url, timeout=20)
+                        if resp.ok:
+                            file_data = resp.content
+                except Exception as e:
+                    logger.warning(f"[ResourceFileView] requests.get failed for URL: {e}")
+
+            # If cloud/local retrieval failed, fallback to generated study PDF so viewer never breaks
+            if not file_data:
+                try:
+                    file_data = generate_fallback_pdf(resource)
+                except Exception as e:
+                    logger.error(f"[ResourceFileView] Fallback PDF generation failed: {e}")
+                    return Response({'error': 'Original file not available.'}, status=status.HTTP_404_NOT_FOUND)
 
         if request.GET.get('raw') == '1':
             from django.http import HttpResponse
