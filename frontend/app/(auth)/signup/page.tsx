@@ -89,20 +89,21 @@ export default function SignupPage() {
         router.push('/login')
       }
     } catch (err: any) {
+      console.error('Registration error:', err.response?.data)
       const data = err.response?.data
       if (typeof data === 'object' && data !== null) {
         const fieldErrors: Record<string, string> = {}
+        let errorMsg = ''
         Object.entries(data).forEach(([k, v]) => {
-          fieldErrors[k] = Array.isArray(v) ? v[0] : String(v)
+          const msg = Array.isArray(v) ? v[0] : String(v)
+          fieldErrors[k] = msg
+          if (!errorMsg) errorMsg = `${k}: ${msg}`
         })
         setErrors(fieldErrors)
         if (fieldErrors.email || fieldErrors.password || fieldErrors.username) setStep(0)
-        else {
-          const firstErr = Object.values(fieldErrors)[0] || 'Registration failed. Please check your inputs.'
-          toast.error(firstErr)
-        }
+        toast.error(errorMsg || 'Registration failed. Please check your inputs.')
       } else {
-        toast.error('Registration failed. Please try again.')
+        toast.error(err.message || 'Registration failed. Please try again.')
       }
     } finally {
       setLoading(false)
