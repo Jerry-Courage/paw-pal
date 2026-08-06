@@ -653,6 +653,13 @@ class ResourceFileView(APIView):
                 logger.error(f"[ResourceFileView] Error generating fallback PDF for resource {resource_id}: {e}")
                 return Response({'error': 'File not available.'}, status=status.HTTP_404_NOT_FOUND)
 
+        if request.GET.get('raw') == '1':
+            from django.http import HttpResponse
+            title_str = str(resource.title[0] if isinstance(resource.title, list) else (resource.title or 'Document'))
+            response = HttpResponse(file_data, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{title_str.replace(" ", "_")}.pdf"'
+            return response
+
         import base64
         base64_data = base64.b64encode(file_data).decode('utf-8')
         title_str = str(resource.title[0] if isinstance(resource.title, list) else (resource.title or 'Document'))

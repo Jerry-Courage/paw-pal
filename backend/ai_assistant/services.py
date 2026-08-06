@@ -1929,6 +1929,7 @@ class AIService:
                 resource.status_text = f"🖼️ Scanning bundle {current_count}/{total}..."
                 resource.save(update_fields=['processing_progress', 'status_text'])
 
+        results = []
         # Sequential processing with delay to stay within Gemini's 5 RPM free tier limit
         with ThreadPoolExecutor(max_workers=1) as executor:
             futures = []

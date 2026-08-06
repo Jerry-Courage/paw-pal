@@ -258,7 +258,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2">
                   {resource.resource_type === 'pdf' && resource.file_url && (
                     <a
-                      href={resource.file_url}
+                      href={resource.file_url.includes('?') ? `${resource.file_url}&raw=1` : `${resource.file_url}?raw=1`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"

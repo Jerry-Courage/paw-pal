@@ -109,7 +109,7 @@ export default function PDFViewer({ fileUrl, title }: Props) {
           </button>
         </div>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-        <button onClick={() => window.open(fileUrl, '_blank')} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400" title="Open original">
+        <button onClick={() => window.open(fileUrl.includes('?') ? `${fileUrl}&raw=1` : `${fileUrl}?raw=1`, '_blank')} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400" title="Open original">
           <Maximize2 className="w-4 h-4" />
         </button>
         {title && (
@@ -125,7 +125,7 @@ export default function PDFViewer({ fileUrl, title }: Props) {
             <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Could not load PDF</p>
             <p className="text-xs text-gray-400 mb-4">{error}</p>
             <a
-              href={fileUrl}
+              href={fileUrl.includes('?') ? `${fileUrl}&raw=1` : `${fileUrl}?raw=1`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 bg-slate-700 text-white rounded-xl text-xs hover:bg-slate-600 transition-colors"
