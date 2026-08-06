@@ -411,9 +411,9 @@ class AIService:
                 ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),   # 1000 t/s — fastest
                 ('llama-3.1-8b-instant', 4 if is_tutor_mode else 6), # 560 t/s — fast
             ] if is_tutor_mode else [
-                ('groq/compound', 8),              # 2026 MoE Flagship
-                ('openai/gpt-oss-20b', 6),         # 1000 t/s — absolute fastest
-                ('llama-3.1-8b-instant', 6),       # 560 t/s  — reliable fast
+                ('qwen/qwen3.6-27b', 8),              # 500 t/s — smart reasoning
+                ('openai/gpt-oss-20b', 6),             # 1000 t/s — absolute fastest
+                ('llama-3.1-8b-instant', 6),           # 560 t/s  — reliable fast
             ]
             
             for key in groq_keys:
@@ -594,9 +594,9 @@ class AIService:
         if groq_keys:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
-                    ('groq/compound', 60),             # 2026 Flagship
-                    ('llama-3.3-70b-versatile', 60),   # most capable on Groq
-                    ('openai/gpt-oss-120b', 60),       # smart
+                    ('qwen/qwen3.6-27b', 60),             # 500 t/s — smart reasoning
+                    ('llama-3.3-70b-versatile', 60),       # most capable on Groq
+                    ('openai/gpt-oss-120b', 60),           # smart
                 ]:
                     try:
                         async with httpx.AsyncClient() as client:

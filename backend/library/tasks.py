@@ -29,66 +29,67 @@ def get_fallback_study_kit(resource, text: str) -> dict:
         },
         'sections': sections
     }
+
+
+def create_vector_embeddings(resource, text: str):
+    """
+    Split text into chunks, generate 384-dim embeddings via AIService,
+    and store as DocumentChunk rows for RAG search.
+    """
     if not text or len(text.strip()) < 50:
         return
-    try:
-        try:
-            from langchain_text_splitters import RecursiveCharacterTextSplitter
-        except ImportError:
-            import sys
-            logger.error(f"[RAG Task Critical] Missing Splitting package: {sys.modules.get('langchain_text_splitters')}")
-            return
-        
-        from library.models import DocumentChunk
-        from ai_assistant.services import AIService
-        
-        logger.info(f'[RAG] Initializing Cloud Engine for Resource {resource.id}...')
-        ai = AIService()
-        
-        logger.info(f'[RAG] Splitting {len(text)} chars for {resource.id}...')
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-        chunks = text_splitter.split_text(text)
-        
-        logger.info(f'[RAG] Generating {len(chunks)} vectors via Cloud Engine...')
-        # Batch in groups of 50 to respect API limits
-        BATCH_SIZE = 50
-        all_vectors = []
-        for batch_start in range(0, len(chunks), BATCH_SIZE):
-            batch = chunks[batch_start:batch_start + BATCH_SIZE]
-            batch_vectors = ai.embed_text_cloud(batch, is_query=False)
-            if not batch_vectors:
-                logger.error(f"[RAG Error] Batch {batch_start}-{batch_start+len(batch)} failed for {resource.id}")
-                # Pad with None so indices stay aligned with chunks
-                all_vectors.extend([None] * len(batch))
-                continue
-            # Pad with None if fewer vectors returned than chunks (partial failure)
-            if len(batch_vectors) < len(batch):
-                batch_vectors = list(batch_vectors) + [None] * (len(batch) - len(batch_vectors))
-            all_vectors.extend(batch_vectors)
-            valid_count = sum(1 for v in all_vectors if v is not None)
-            logger.info(f'[RAG] Embedded {valid_count}/{len(all_vectors)} chunks...')
-        if not any(v is not None for v in all_vectors):
-            logger.error(f"[RAG Error] Failed to generate cloud vectors for {resource.id}")
-            return
 
-        # Build doc_chunks — skip any chunk whose vector is None
-        doc_chunks = []
-        for chunk_text, vec in zip(chunks, all_vectors):
-            if vec is not None:
-                doc_chunks.append(DocumentChunk(
-                    resource=resource,
-                    text_content=chunk_text,
-                    embedding=vec
-                ))
-            
-        DocumentChunk.objects.bulk_create(doc_chunks)
-        logger.info(f'[RAG] Successfully saved {len(doc_chunks)} cloud vectors to Database.')
-    except Exception as e:
-        logger.error(f'[RAG Error] Failed to generate vectors for {resource.id}: {str(e)}')
+    try:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+    except ImportError:
+        logger.error("[RAG] langchain_text_splitters not installed — skipping embedding")
+        return
+
+    from library.models import DocumentChunk
+    from ai_assistant.services import AIService
+
+    logger.info(f'[RAG] Initializing Cloud Engine for Resource {resource.id}...')
+    ai = AIService()
+
+    logger.info(f'[RAG] Splitting {len(text)} chars for {resource.id}...')
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        length_function=len
+    )
+    chunks = text_splitter.split_text(text)
+
+    logger.info(f'[RAG] Generating {len(chunks)} vectors via Cloud Engine...')
+    BATCH_SIZE = 50
+    all_vectors = []
+    for batch_start in range(0, len(chunks), BATCH_SIZE):
+        batch = chunks[batch_start:batch_start + BATCH_SIZE]
+        batch_vectors = ai.embed_text_cloud(batch, is_query=False)
+        if not batch_vectors:
+            logger.error(f"[RAG Error] Batch {batch_start}-{batch_start+len(batch)} failed for {resource.id}")
+            all_vectors.extend([None] * len(batch))
+            continue
+        if len(batch_vectors) < len(batch):
+            batch_vectors = list(batch_vectors) + [None] * (len(batch) - len(batch_vectors))
+        all_vectors.extend(batch_vectors)
+        valid_count = sum(1 for v in all_vectors if v is not None)
+        logger.info(f'[RAG] Embedded {valid_count}/{len(all_vectors)} chunks...')
+
+    if not any(v is not None for v in all_vectors):
+        logger.error(f"[RAG Error] Failed to generate cloud vectors for {resource.id}")
+        return
+
+    doc_chunks = []
+    for chunk_text, vec in zip(chunks, all_vectors):
+        if vec is not None:
+            doc_chunks.append(DocumentChunk(
+                resource=resource,
+                text_content=chunk_text,
+                embedding=vec
+            ))
+
+    DocumentChunk.objects.bulk_create(doc_chunks)
+    logger.info(f'[RAG] Successfully saved {len(doc_chunks)} cloud vectors to Database.')
 
 
 def process_resource_task(res_id):
