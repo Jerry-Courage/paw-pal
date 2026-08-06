@@ -275,12 +275,30 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
                 {resource.resource_type === 'pdf' && resource.file_url ? (
                   <PDFViewer fileUrl={resource.file_url} title={resource.title} />
                 ) : resource.resource_type === 'pdf' && !resource.file_url ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
-                    <span className="material-symbols-outlined text-on-surface-variant/30 text-[48px]">cloud_off</span>
-                    <p className="text-[14px] font-bold text-on-surface-variant">File not available</p>
-                    <p className="text-[12px] text-on-surface-variant/60 max-w-xs leading-relaxed">
-                      The file was cleared after a server restart. Your AI study kit is still intact — all tools work normally.
-                    </p>
+                  <div className="h-full flex flex-col p-6 overflow-y-auto text-left space-y-4">
+                    <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl shrink-0">
+                      <span className="material-symbols-outlined text-amber-400 text-[24px] shrink-0">info</span>
+                      <div className="text-[12px] text-on-surface-variant">
+                        <span className="font-bold text-on-surface">Original PDF file cleared after server restart.</span> Your AI study kit is fully intact!
+                      </div>
+                    </div>
+                    {resource.ai_summary && (
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-black text-primary uppercase tracking-wider">AI Summary</p>
+                        <p className="text-[13px] text-on-surface leading-relaxed">{resource.ai_summary}</p>
+                      </div>
+                    )}
+                    {resource.ai_notes_json?.sections?.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-primary uppercase tracking-wider">Study Notes Sections</p>
+                        {resource.ai_notes_json.sections.map((sec: any, idx: number) => (
+                          <div key={idx} className="bg-surface-container-high p-3 rounded-xl border border-outline-variant/20">
+                            <p className="text-[13px] font-bold text-on-surface">{idx + 1}. {sec.title}</p>
+                            {sec.plain_english && <p className="text-[12px] text-on-surface-variant mt-1 line-clamp-2">{sec.plain_english}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : resource.resource_type === 'video' && resource.url ? (
                   <iframe
