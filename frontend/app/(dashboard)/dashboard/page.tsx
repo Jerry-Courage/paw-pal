@@ -88,6 +88,27 @@ export default function DashboardPage() {
   return (
     <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto space-y-stack-md">
 
+      {/* Switch to Ghana SHS Curriculum banner */}
+      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🇬🇭</span>
+          <div>
+            <p className="text-sm font-bold text-on-surface">Are you a Ghanaian Senior High School (SHS) student?</p>
+            <p className="text-xs text-on-surface-variant">Switch to the official NaCCA Curriculum &amp; WASSCE dashboard instantly.</p>
+          </div>
+        </div>
+        <button
+          onClick={async () => {
+            await authApi.updateProfile({ education_level: 'secondary' })
+            queryClient.invalidateQueries({ queryKey: ['profile'] })
+            toast.success("Switched to Ghana SHS Curriculum Hub!")
+          }}
+          className="px-4 py-2 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-xs font-black shadow-md transition-all shrink-0"
+        >
+          Switch to SHS Hub
+        </button>
+      </div>
+
       {/* ── Upgrade nudge ─────────────────────────────────── */}
       {showUpgradeNudge && (
         <div className="relative flex items-center gap-stack-md px-stack-md py-stack-sm rounded-[1rem] bg-secondary-container/20 border border-secondary-container/30">
