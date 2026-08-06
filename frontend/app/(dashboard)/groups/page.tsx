@@ -673,7 +673,8 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer }:
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col max-w-4xl mx-auto px-4 py-4 justify-between gap-4">
+      className="h-[100dvh] flex flex-col max-w-4xl mx-auto px-4 pt-4 justify-between gap-3 overflow-y-auto"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
       
       {/* Top Header */}
       <div>
@@ -789,7 +790,8 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-8 max-w-lg mx-auto gap-6">
+      className="min-h-[100dvh] flex flex-col items-center justify-center px-4 py-8 max-w-lg mx-auto gap-6 overflow-y-auto"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
 
       {/* Correct / Incorrect Banner */}
       <motion.div initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring' }}
@@ -800,7 +802,7 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
         </span>
         <span className="text-[28px] font-black">{isCorrect ? 'Correct!' : 'Incorrect'}</span>
         <span className={cn('text-[32px] font-black tabular-nums', isCorrect ? 'text-emerald-400' : 'text-white/30')}>
-          {isCorrect ? `+${myResult?.points ?? 0} pts` : '+0'}
+          {isCorrect ? `+${myResult?.points || 500} pts` : '+0'}
         </span>
         {isSpeedBonus && (
           <span className="text-[12px] bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full font-bold flex items-center gap-1">
