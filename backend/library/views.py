@@ -626,32 +626,30 @@ class ResourceFileView(APIView):
     def get(self, request, resource_id):
         resource = get_object_or_404(Resource, id=resource_id)
 
-        file_data = None
-        if resource.file:
-            try:
-                # 1. Try pulling directly from Cloudinary / storage URL via requests
-                if hasattr(resource.file, 'url') and resource.file.url:
-                    import requests
-                    resp = requests.get(resource.file.url, timeout=15)
-                    if resp.ok:
-                        file_data = resp.content
-            except Exception:
-                pass
+        if not resource.file:
+            return Response({'error': 'No file attached to this resource.'}, status=status.HTTP_404_NOT_FOUND)
 
-            if not file_data:
-                try:
-                    # 2. Try default storage open
-                    with resource.file.open('rb') as f:
-                        file_data = f.read()
-                except Exception:
-                    pass
+        file_data = None
+        try:
+            # 1. Try pulling directly from Cloudinary / storage URL via requests
+            if hasattr(resource.file, 'url') and resource.file.url:
+                import requests
+                resp = requests.get(resource.file.url, timeout=20)
+                if resp.ok:
+                    file_data = resp.content
+        except Exception as e:
+            logger.warning(f"[ResourceFileView] Failed to fetch via requests from URL: {e}")
 
         if not file_data:
             try:
-                file_data = generate_fallback_pdf(resource)
+                # 2. Try default storage open
+                with resource.file.open('rb') as f:
+                    file_data = f.read()
             except Exception as e:
-                logger.error(f"[ResourceFileView] Error generating fallback PDF for resource {resource_id}: {e}")
-                return Response({'error': 'File not available.'}, status=status.HTTP_404_NOT_FOUND)
+                logger.warning(f"[ResourceFileView] Failed to open via storage: {e}")
+
+        if not file_data:
+            return Response({'error': 'Original file no longer available. Please re-upload.'}, status=status.HTTP_404_NOT_FOUND)
 
         if request.GET.get('raw') == '1':
             from django.http import HttpResponse
