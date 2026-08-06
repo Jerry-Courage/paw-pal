@@ -20,8 +20,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop('password2')
+        validated_data.pop('password2', None)
+        education_level = validated_data.pop('education_level', 'tertiary')
+        university = validated_data.pop('university', '')
+        
         user = User.objects.create_user(**validated_data)
+        try:
+            user.education_level = education_level
+            if university:
+                user.university = university
+            user.save()
+        except Exception:
+            pass
         return user
 
 
