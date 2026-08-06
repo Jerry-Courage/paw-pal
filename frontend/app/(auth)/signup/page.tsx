@@ -31,7 +31,7 @@ export default function SignupPage() {
   const [errors, setErrors]   = useState<Record<string, string>>({})
   const [form, setForm] = useState({
     email: '', username: '', first_name: '', last_name: '',
-    password: '', password2: '', university: '',
+    password: '', password2: '', university: '', education_level: 'tertiary' as 'secondary' | 'tertiary',
   })
 
   useEffect(() => {
@@ -73,6 +73,8 @@ export default function SignupPage() {
         last_name: form.last_name.trim(),
         password: form.password,
         password2: form.password2,
+        university: form.university.trim(),
+        education_level: form.education_level,
       })
       const res = await signIn('credentials', {
         email: form.email.trim().toLowerCase(),
@@ -88,13 +90,17 @@ export default function SignupPage() {
       }
     } catch (err: any) {
       const data = err.response?.data
-      if (typeof data === 'object') {
+      if (typeof data === 'object' && data !== null) {
         const fieldErrors: Record<string, string> = {}
         Object.entries(data).forEach(([k, v]) => {
           fieldErrors[k] = Array.isArray(v) ? v[0] : String(v)
         })
         setErrors(fieldErrors)
-        if (fieldErrors.email || fieldErrors.password) setStep(0)
+        if (fieldErrors.email || fieldErrors.password || fieldErrors.username) setStep(0)
+        else {
+          const firstErr = Object.values(fieldErrors)[0] || 'Registration failed. Please check your inputs.'
+          toast.error(firstErr)
+        }
       } else {
         toast.error('Registration failed. Please try again.')
       }
@@ -258,6 +264,37 @@ export default function SignupPage() {
                   {errors.username && <p className="text-[13px] text-error mt-1.5 pl-1">{errors.username}</p>}
                 </div>
                 <input placeholder="University / Institution (optional)" value={form.university} onChange={set('university')} className={inputCls()} />
+
+                {/* Education Level */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block pl-1">Curriculum Level</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, education_level: 'secondary' }))}
+                      className={cn('p-3 rounded-[1rem] text-left border transition-all',
+                        form.education_level === 'secondary'
+                          ? 'bg-primary-container border-primary text-on-primary-container shadow-sm'
+                          : 'bg-surface-container-high border-outline-variant text-on-surface-variant hover:border-outline-variant/80'
+                      )}
+                    >
+                      <p className="font-bold text-[13px]">🇬🇭 Secondary / SHS</p>
+                      <p className="text-[10px] opacity-70 mt-0.5">NaCCA & WASSCE</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, education_level: 'tertiary' }))}
+                      className={cn('p-3 rounded-[1rem] text-left border transition-all',
+                        form.education_level === 'tertiary'
+                          ? 'bg-primary-container border-primary text-on-primary-container shadow-sm'
+                          : 'bg-surface-container-high border-outline-variant text-on-surface-variant hover:border-outline-variant/80'
+                      )}
+                    >
+                      <p className="font-bold text-[13px]">🎓 Tertiary / Univ.</p>
+                      <p className="text-[10px] opacity-70 mt-0.5">Degree & Higher Ed</p>
+                    </button>
+                  </div>
+                </div>
                 {errors.email && (
                   <div className="px-4 py-3 bg-error-container/20 border border-error/30 rounded-[1rem] text-[14px] text-error">{errors.email}</div>
                 )}
