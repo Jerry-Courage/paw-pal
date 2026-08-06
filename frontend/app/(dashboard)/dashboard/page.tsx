@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
 import { usePricing } from '@/hooks/usePricing'
+import SecondaryDashboard from '@/components/dashboard/SecondaryDashboard'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
@@ -267,7 +268,15 @@ export default function DashboardPage() {
               <div className="flex items-end gap-base h-16">
                 {analyticsData.daily_study.map((d: any, i: number) => {
                   const maxMins = Math.max(...analyticsData.daily_study.map((x: any) => x.minutes), 1)
-                  return (
+  if (profileData?.education_level === 'secondary') {
+    return (
+      <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto space-y-stack-md">
+        <SecondaryDashboard profileData={profileData} />
+      </div>
+    )
+  }
+
+  return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1">
                       <div className="w-full flex justify-center items-end h-12">
                         <div
