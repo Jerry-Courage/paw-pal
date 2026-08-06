@@ -49,10 +49,19 @@ function OptionShape({ index, className = "w-6 h-6 fill-current shrink-0" }: { i
   }
 }
 
-// ── Sound engine (Web Audio API — no external deps) ──────────────────────────
+// ── Sound engine (Web Audio API — mobile / PWA optimized) ─────────────────────
 function useSound() {
   const ctx = useRef<AudioContext | null>(null)
-  const ensure = () => { if (!ctx.current) ctx.current = new (window.AudioContext || (window as any).webkitAudioContext)(); return ctx.current }
+  const ensure = () => {
+    if (!ctx.current) {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      if (AudioContextClass) ctx.current = new AudioContextClass()
+    }
+    if (ctx.current && ctx.current.state === 'suspended') {
+      ctx.current.resume().catch(() => {})
+    }
+    return ctx.current
+  }
 
   const play = useCallback((freq: number, type: OscillatorType, dur: number, vol = 0.18) => {
     try {
@@ -65,13 +74,13 @@ function useSound() {
   }, [])
 
   return {
-    correct:     () => { play(523, 'sine', 0.15); setTimeout(() => play(659, 'sine', 0.15), 120); setTimeout(() => play(784, 'sine', 0.25), 240) },
-    wrong:       () => { play(220, 'sawtooth', 0.3, 0.12) },
+    correct:     () => { play(523, 'sine', 0.15); setTimeout(() => play(659, 'sine', 0.15), 120); setTimeout(() => play(784, 'sine', 0.25), 240); setTimeout(() => play(1046, 'sine', 0.3), 360) },
+    wrong:       () => { play(220, 'sawtooth', 0.3, 0.12); setTimeout(() => play(185, 'sawtooth', 0.3, 0.12), 150) },
     tick:        () => play(880, 'square', 0.05, 0.06),
     urgentTick:  () => { play(1046, 'square', 0.08, 0.1); play(1046, 'square', 0.08, 0.1) },
     countdown:   () => play(440, 'sine', 0.3, 0.2),
     go:          () => { play(523, 'sine', 0.1); setTimeout(() => play(659, 'sine', 0.1), 80); setTimeout(() => play(784, 'sine', 0.1), 160); setTimeout(() => play(1046, 'sine', 0.35), 240) },
-    join:        () => play(660, 'sine', 0.2, 0.15),
+    join:        () => { play(660, 'sine', 0.15, 0.15); setTimeout(() => play(880, 'sine', 0.2, 0.15), 100) },
     gameOver:    () => { [523,659,784,1046,1318].forEach((f,i) => setTimeout(() => play(f,'sine',0.3,0.2), i*120)) },
   }
 }
@@ -124,6 +133,27 @@ export default function QuizBattlePage() {
   const qStartRef    = useRef<number>(0)
   // Ref keeps handleServerMsg always current inside the WS callback (avoids stale closure)
   const msgHandlerRef = useRef<(msg: any) => void>(() => {})
+
+  // Unlock audio context on mobile/PWA on first user interaction
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        if (AudioCtx) {
+          const t = new AudioCtx()
+          if (t.state === 'suspended') t.resume()
+        }
+      } catch {}
+      window.removeEventListener('click', unlock)
+      window.removeEventListener('touchstart', unlock)
+    }
+    window.addEventListener('click', unlock)
+    window.addEventListener('touchstart', unlock)
+    return () => {
+      window.removeEventListener('click', unlock)
+      window.removeEventListener('touchstart', unlock)
+    }
+  }, [])
 
   // ── WebSocket connection ────────────────────────────────────────────────────
   const connect = useCallback(async (roomPin: string) => {

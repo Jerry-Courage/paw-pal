@@ -625,17 +625,29 @@ class ResourceFileView(APIView):
         file_data = None
         if resource.file:
             try:
-                with resource.file.open('rb') as f:
-                    file_data = f.read()
+                # 1. Try pulling directly from Cloudinary / storage URL via requests
+                if hasattr(resource.file, 'url') and resource.file.url:
+                    import requests
+                    resp = requests.get(resource.file.url, timeout=15)
+                    if resp.ok:
+                        file_data = resp.content
             except Exception:
                 pass
+
+            if not file_data:
+                try:
+                    # 2. Try default storage open
+                    with resource.file.open('rb') as f:
+                        file_data = f.read()
+                except Exception:
+                    pass
 
         if not file_data:
             try:
                 file_data = generate_fallback_pdf(resource)
             except Exception as e:
                 logger.error(f"[ResourceFileView] Error generating fallback PDF for resource {resource_id}: {e}")
-                return Response({'error': 'File not available and could not generate fallback PDF.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'File not available.'}, status=status.HTTP_404_NOT_FOUND)
 
         import base64
         base64_data = base64.b64encode(file_data).decode('utf-8')
