@@ -239,7 +239,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                       {GOALS.map((g, i) => (
                         <motion.button 
                           key={g.id} 
-                          initial={{ opacity: 0, x: i % 2 === 0 - 10 : 10 }}
+                          initial={{ opacity: 0, x: i % 2 === 0 ? -10 : 10 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: i * 0.08 }}
                           onClick={() => toggleGoal(g.id)}
