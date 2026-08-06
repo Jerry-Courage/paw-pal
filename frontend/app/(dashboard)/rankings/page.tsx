@@ -59,40 +59,46 @@ const MEDALS = [
 // ── Podium ────────────────────────────────────────────────────────────────────
 function Podium({ top3, xpKey, unit }: { top3: any[]; xpKey: string; unit: string }) {
   if (!top3 || top3.length < 1) return null
-  // order: 2nd  1st  3rd
-  const order = [top3[1], top3[0], top3[2]].filter(Boolean)
-  const podiumH = ['h-16', 'h-24', 'h-10']
+
+  const first  = top3[0]
+  const second = top3[1]
+  const third  = top3[2]
+
+  const displayOrder = [
+    { entry: second, medal: { label: '2nd', crown: false, ring: '#94a3b8' }, height: 'h-24' },
+    { entry: first,  medal: { label: '1st', crown: true,  ring: '#fbbf24' }, height: 'h-32' },
+    { entry: third,  medal: { label: '3rd', crown: false, ring: '#d97706' }, height: 'h-16' },
+  ].filter(x => x.entry)
 
   return (
-    <div className="flex items-end justify-center gap-4 mb-6 px-2">
-      {order.map((entry, i) => {
-        const medal = MEDALS[i]
+    <div className="flex items-end justify-center gap-3 sm:gap-4 mb-6 px-2">
+      {displayOrder.map(({ entry, medal, height }) => {
         const tier  = getTier(entry.earned_xp ?? 0)
         return (
-          <div key={entry.user_id} className="flex flex-col items-center gap-1 flex-1 max-w-[100px]">
+          <div key={entry.user_id} className="flex flex-col items-center gap-1 flex-1 max-w-[110px]">
             {/* Crown */}
             {medal.crown && (
-              <span className="text-[20px] mb-0.5">👑</span>
+              <span className="text-[22px] mb-0.5 animate-bounce">👑</span>
             )}
             {/* Avatar */}
-            <div className="w-12 h-12 rounded-full border-2 flex items-center justify-center text-[15px] font-black"
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 flex items-center justify-center text-[15px] font-black shadow-lg"
               style={{ borderColor: medal.ring, background: medal.ring + '22', color: medal.ring }}>
               {entry.initials}
             </div>
             {/* Name */}
-            <p className="text-[11px] font-bold truncate w-full text-center text-on-surface">
+            <p className="text-[12px] font-bold truncate w-full text-center text-on-surface mt-1">
               {entry.name.split(' ')[0]}
             </p>
             {/* Value */}
-            <p className="text-[10px] text-on-surface-variant">
+            <p className="text-[11px] font-black text-primary tabular-nums">
               {(entry[xpKey] ?? 0).toLocaleString()} {unit}
             </p>
             {/* Tier dot */}
-            <div className="w-2 h-2 rounded-full mb-1" style={{ background: tier.color }} />
+            <div className="w-2.5 h-2.5 rounded-full mb-1" style={{ background: tier.color }} />
             {/* Podium block */}
-            <div className={cn('w-full rounded-t-[0.5rem] flex items-center justify-center', podiumH[i])}
-              style={{ background: medal.ring + '18', borderTop: `2px solid ${medal.ring}44` }}>
-              <span className="text-[11px] font-black" style={{ color: medal.ring }}>{medal.label}</span>
+            <div className={cn('w-full rounded-t-[0.75rem] flex items-center justify-center shadow-md', height)}
+              style={{ background: medal.ring + '20', borderTop: `2px solid ${medal.ring}66` }}>
+              <span className="text-[12px] font-black" style={{ color: medal.ring }}>{medal.label}</span>
             </div>
           </div>
         )

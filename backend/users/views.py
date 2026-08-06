@@ -299,7 +299,7 @@ class RankingsView(APIView):
 
     def _build_board(self, scored_list, sort_key, me_id, top_n=100):
         """Sort a list of dicts by sort_key desc, assign ranks, return top_n + me."""
-        scored_list.sort(key=lambda x: (-x[sort_key], x['name']))
+        scored_list.sort(key=lambda x: (-int(x[sort_key] or 0), x['name']))
         for i, entry in enumerate(scored_list):
             entry[f'rank_{sort_key}'] = i + 1
         me_entry = next((e for e in scored_list if e['is_me']), None)
@@ -318,19 +318,19 @@ class RankingsView(APIView):
             .values('user_id')
             .annotate(earned=Sum('xp_earned'))
         )
-        earned_map = {row['user_id']: row['earned'] or 0 for row in earned_qs}
+        earned_map = {row['user_id']: int(row['earned'] or 0) for row in earned_qs}
 
         # ── Build per-user list ────────────────────────────────────
         all_users = User.objects.only('id', 'email', 'first_name', 'last_name', 'study_streak')
         base_list = []
         for u in all_users:
-            earned = earned_map.get(u.id, 0)
+            earned = int(earned_map.get(u.id, 0))
             display_name = u.get_full_name().strip() or u.email.split('@')[0]
             base_list.append({
                 'user_id':   u.id,
                 'name':      display_name,
                 'initials':  (display_name[:2]).upper(),
-                'streak':    u.study_streak or 0,
+                'streak':    int(u.study_streak or 0),
                 'earned_xp': earned,
                 'total_xp':  earned,   # same as earned — no separate purchase tracking
                 'bonus_xp':  0,
