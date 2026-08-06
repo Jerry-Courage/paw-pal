@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
+const PDFViewerErrorBoundary = dynamic(() => import('@/components/library/PDFViewerErrorBoundary'), { ssr: false })
 const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGeneratorModal'), { ssr: false })
 const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
@@ -273,7 +274,9 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
               {/* Preview content */}
               <div className="h-[480px] overflow-hidden">
                 {resource.resource_type === 'pdf' && resource.file_url ? (
-                  <PDFViewer fileUrl={resource.file_url} title={resource.title} />
+                  <PDFViewerErrorBoundary fileUrl={resource.file_url}>
+                    <PDFViewer fileUrl={resource.file_url} title={resource.title} />
+                  </PDFViewerErrorBoundary>
                 ) : resource.resource_type === 'pdf' && !resource.file_url ? (
                   <div className="h-full flex flex-col p-6 overflow-y-auto text-left space-y-4">
                     <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl shrink-0">
