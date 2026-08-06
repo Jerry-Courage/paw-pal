@@ -16,7 +16,7 @@ api.interceptors.request.use(async (config) => {
   if ((session as any)?.error === 'RefreshAccessTokenError') {
     if (typeof window !== 'undefined' && !(window as any)._isRedirecting) {
       (window as any)._isRedirecting = true
-      await signOut({ callbackUrl: '/login', redirect: true })
+      await signOut({ callbackUrl: '/login?loggedOut=true', redirect: true })
     }
   }
   if (session?.accessToken) {
@@ -34,7 +34,7 @@ api.interceptors.response.use(
         if (!(window as any)._isRedirecting) {
             (window as any)._isRedirecting = true
             // signOut handles the session clear and redirect to login
-            await signOut({ callbackUrl: '/login', redirect: true })
+            await signOut({ callbackUrl: '/login?loggedOut=true', redirect: true })
         }
       }
     }

@@ -202,7 +202,7 @@ export default function Sidebar() {
             </span>
           </Link>
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={() => signOut({ callbackUrl: '/login?loggedOut=true' })}
             className="p-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high hover:text-error transition-all shrink-0"
             title="Log out"
           >

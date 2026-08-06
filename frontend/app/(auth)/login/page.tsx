@@ -25,7 +25,12 @@ function LoginForm() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  useEffect(() => { if (status === 'authenticated') router.push('/dashboard') }, [status, router])
+  const isLoggedOut = searchParams.get('loggedOut') === 'true'
+  useEffect(() => {
+    if (status === 'authenticated' && !isLoggedOut) {
+      router.push('/dashboard')
+    }
+  }, [status, router, isLoggedOut])
   useEffect(() => { if (searchParams.get('error')) setError('Invalid email or password.') }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
