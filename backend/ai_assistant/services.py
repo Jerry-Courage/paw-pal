@@ -1314,6 +1314,19 @@ class AIService:
         )
         return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
 
+    def generate_quiz_from_topic(self, topic: str, fmt: str, level: str, count: int) -> list:
+        fmt = fmt.replace('multiple_choice', 'mcq').replace('multiple-choice', 'mcq')
+        prompt = (
+            f"Generate {count} multiple choice questions about the topic: '{topic}' at {level} level.\n"
+            "Return ONLY a JSON array. Each object MUST have exactly these keys:\n"
+            '  \"question\": the question text,\n'
+            '  \"options\": array of exactly 4 answer strings,\n'
+            '  \"correct_answer\": the exact string from options that is correct,\n'
+            '  \"explanation\": brief explanation of why the answer is correct.\n'
+            "Use LaTeX for all math/chemistry. No markdown, just the raw JSON array."
+        )
+        return self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
+
     def generate_study_nudge(self, user, recent_topics: list) -> str:
         topics = ', '.join(recent_topics) if recent_topics else 'general studies'
         name = user.first_name or user.username or 'there'

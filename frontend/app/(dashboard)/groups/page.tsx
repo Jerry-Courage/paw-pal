@@ -355,6 +355,7 @@ function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () =>
 function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (pin: string, isHost: boolean) => void }) {
   const [resources, setResources]     = useState<any[]>([])
   const [selected, setSelected]       = useState<any>(null)
+  const [topic, setTopic]             = useState('')
   const [title, setTitle]             = useState('')
   const [count, setCount]             = useState(10)
   const [timePerQ, setTimePerQ]       = useState(20)
@@ -372,7 +373,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
   }, [])
 
   const handleGenerate = async () => {
-    if (!selected && !uploadFile) return toast.error('Pick a resource or upload a file.')
+    if (!topic.trim() && !selected && !uploadFile) return toast.error('Enter a topic, pick a resource, or upload a file.')
     setLoading(true)
     try {
       let resourceId = selected?.id
@@ -385,6 +386,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
         resourceId = upRes.data.id
       }
       const res = await groupsApi.generateQuiz({
+        topic: topic.trim() || undefined,
         resource_id: resourceId,
         title: title.trim() || undefined,
         count,
@@ -392,7 +394,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
       })
       onCreated(res.data.pin, true)
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'Could not generate quiz. Try a different resource.')
+      toast.error(e?.response?.data?.error || 'Could not generate quiz. Try a different topic or resource.')
     } finally { setLoading(false) }
   }
 
@@ -409,6 +411,20 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
           <div>
             <h2 className="text-[22px] sm:text-[26px] font-black">Create Quiz Battle</h2>
             <p className="text-[12px] text-white/50 font-medium">AI extracts questions directly from your materials</p>
+          </div>
+        </div>
+
+        {/* Topic Input */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider ml-1">Generate From Topic</label>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary text-[20px]">psychology</span>
+            <input
+              value={topic}
+              onChange={e => { setTopic(e.target.value); if (e.target.value) { setSelected(null); setUploadFile(null) } }}
+              placeholder="e.g. Quiz on anime, Python, Black holes..."
+              className="w-full bg-white/5 border border-white/15 rounded-2xl pl-12 pr-4 py-3.5 text-[15px] focus:outline-none focus:border-primary transition-all placeholder:text-white/30 text-white"
+            />
           </div>
         </div>
 
@@ -444,7 +460,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
 
         {/* Resource Selection */}
         <div className="space-y-3">
-          <p className="text-[13px] font-bold text-white/70">Select Study Material</p>
+          <p className="text-[13px] font-bold text-white/70">Or Select Study Material / File</p>
           {fetching ? (
             <div className="flex items-center justify-center py-10 gap-3 text-white/40">
               <span className="material-symbols-outlined animate-spin text-[24px]">autorenew</span>
@@ -455,7 +471,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
           ) : (
             <div className="grid grid-cols-1 gap-2.5 max-h-56 overflow-y-auto pr-1">
               {resources.map((r: any) => (
-                <button key={r.id} onClick={() => { setSelected(r); setUploadFile(null) }}
+                <button key={r.id} onClick={() => { setSelected(r); setUploadFile(null); setTopic('') }}
                   className={cn('flex items-center gap-3.5 px-4 py-3 rounded-2xl border text-left transition-all',
                     selected?.id === r.id ? 'bg-primary/20 border-primary shadow-[0_0_16px_rgba(var(--color-primary),0.3)]' : 'bg-white/5 border-white/10 hover:bg-white/10')}>
                   <span className="material-symbols-outlined text-[22px] shrink-0 text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -478,7 +494,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
           </div>
 
           <input ref={fileRef} type="file" accept=".pdf,image/*,.txt,.docx" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setSelected(null) }; e.target.value = '' }} />
+            onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setSelected(null); setTopic('') }; e.target.value = '' }} />
           <button onClick={() => fileRef.current?.click()}
             className={cn('w-full py-3.5 border-2 border-dashed rounded-2xl text-[13px] font-bold transition-all flex items-center justify-center gap-2',
               uploadFile ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400' : 'border-white/20 text-white/50 hover:border-white/40 hover:text-white/80')}>
@@ -489,7 +505,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
       </div>
 
       <motion.button whileTap={{ scale: 0.97 }} onClick={handleGenerate}
-        disabled={loading || (!selected && !uploadFile)}
+        disabled={loading || (!topic.trim() && !selected && !uploadFile)}
         className="w-full py-4 bg-gradient-to-r from-primary to-[#a855f7] rounded-2xl font-black text-[16px] shadow-[0_8px_24px_rgba(var(--color-primary),0.35)] active:translate-y-0.5 transition-all disabled:opacity-40 flex items-center justify-center gap-2 mt-4">
         {loading
           ? <><span className="material-symbols-outlined animate-spin text-[20px]">autorenew</span> Building Battle Room…</>

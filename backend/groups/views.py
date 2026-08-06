@@ -236,26 +236,30 @@ class QuizGenerateView(APIView):
         from django.db.models import Q
 
         resource_id = request.data.get('resource_id')
+        topic       = request.data.get('topic', '').strip()
         count       = int(request.data.get('count', 10))
         time_per_q  = int(request.data.get('time_per_q', 20))
         title       = request.data.get('title', '').strip()
 
-        if not resource_id:
-            return Response({'error': 'resource_id is required.'}, status=400)
-
-        resource = get_object_or_404(
-            Resource,
-            Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True))
-        )
-
-        if not title:
-            title = f'{resource.title} — Quiz Battle'
+        if not resource_id and not topic:
+            return Response({'error': 'Please select a resource, upload a file, or enter a topic.'}, status=400)
 
         ai = AIService()
-        raw_questions = ai.generate_quiz(resource, fmt='mcq', level='undergrad', count=count)
+        if topic:
+            if not title:
+                title = f'{topic} — Quiz Battle'
+            raw_questions = ai.generate_quiz_from_topic(topic, fmt='mcq', level='undergrad', count=count)
+        else:
+            resource = get_object_or_404(
+                Resource,
+                Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True))
+            )
+            if not title:
+                title = f'{resource.title} — Quiz Battle'
+            raw_questions = ai.generate_quiz(resource, fmt='mcq', level='undergrad', count=count)
 
         if not raw_questions:
-            return Response({'error': 'AI could not generate questions. Try a different resource.'}, status=500)
+            return Response({'error': 'AI could not generate questions. Try a different topic or resource.'}, status=500)
 
         room = QuizRoom.objects.create(title=title, host=request.user, time_per_q=time_per_q)
         QuizPlayer.objects.create(room=room, user=request.user)
