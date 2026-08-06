@@ -38,16 +38,6 @@ export default function SecondaryDashboard({ profileData }: { profileData: any }
             <p className="text-white/80 text-sm max-w-xl font-medium">
               Aligned with the National Council for Curriculum and Assessment (NaCCA) & WASSCE standards.
             </p>
-            <button
-              onClick={async () => {
-                const { authApi } = await import('@/lib/api')
-                await authApi.updateProfile({ education_level: 'tertiary' })
-                window.location.reload()
-              }}
-              className="text-[11px] text-amber-300 hover:text-white underline font-bold mt-2 inline-block cursor-pointer"
-            >
-              Switch to University / Tertiary Dashboard ↗
-            </button>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <div className="bg-black/25 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
