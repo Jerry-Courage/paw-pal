@@ -1916,14 +1916,13 @@ class AIService:
                 resource.status_text = f"🖼️ Scanning bundle {current_count}/{total}..."
                 resource.save(update_fields=['processing_progress', 'status_text'])
 
-        results = []
-        # Use single worker and sleep delay for vision scanning to avoid 429 Exhausted errors
+        # Sequential processing with delay to stay within Gemini's 5 RPM free tier limit
         with ThreadPoolExecutor(max_workers=1) as executor:
             futures = []
             for i, b in enumerate(bundles):
                 if i > 0:
                     import time
-                    time.sleep(3) # Heavy vision requests need longer buffers
+                    time.sleep(13)  # 13s gap → safely under 5 RPM
                 futures.append(executor.submit(process_vision_bundle, i, b))
             
             for future in futures:

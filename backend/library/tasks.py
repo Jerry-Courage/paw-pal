@@ -221,11 +221,14 @@ def process_resource_task(res_id):
                                     return ""
                             return ""
 
-                        # Parallelize descriptions to save time
+                        # Sequential descriptions with delay to stay within Gemini's 5 RPM free tier limit
                         try:
-                            with ThreadPoolExecutor(max_workers=5) as executor:
-                                # Use enumerate to track progress count
-                                list(executor.map(get_desc, enumerate(image_objs)))
+                            import time as _time
+                            with ThreadPoolExecutor(max_workers=1) as executor:
+                                for i, item in enumerate(image_objs):
+                                    if i > 0:
+                                        _time.sleep(13)  # 13s gap → ~4.5 calls/min, safely under 5 RPM
+                                    executor.submit(get_desc, (i, item)).result()
                         except RuntimeError:
                             # Catch interpreter shutdown errors during reloads
                             logger.info("[Task Queue] Parallel execution interrupted by shutdown.")
