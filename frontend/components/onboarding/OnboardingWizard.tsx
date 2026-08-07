@@ -235,16 +235,46 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 )}
 
                 {/* ── WELCOME (Step 1) ── */}
-                {step === 0 && (
+                {step === 1 && (
                   <div className="text-center space-y-6">
-                    {/* Circular 3D Robot Mascot Frame */}
-                    <div className="relative mx-auto w-44 h-44 sm:w-52 sm:h-52 rounded-full border-2 border-orange-500/30 p-2 bg-[#1a1a1e] shadow-2xl flex items-center justify-center overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/15 via-transparent to-amber-500/15 animate-pulse" />
-                      <img
-                        src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop"
-                        alt="Study Buddy Robot"
-                        className="w-full h-full object-cover rounded-full scale-105 hover:scale-110 transition-transform duration-500"
-                      />
+                    {/* Custom FlowState mascot — dark SVG matching system theme */}
+                    <div className="relative mx-auto w-40 h-40 sm:w-48 sm:h-48">
+                      <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-amber-500/10 to-orange-600/20 rounded-full blur-2xl animate-pulse" />
+                      <svg viewBox="0 0 200 200" className="relative w-full h-full drop-shadow-2xl" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="100" cy="100" r="90" fill="none" stroke="url(#ringGrad)" strokeWidth="2" opacity="0.4" />
+                        <rect x="55" y="60" width="90" height="80" rx="24" fill="#1a1a1e" stroke="#ff8a3d" strokeWidth="2" />
+                        <rect x="65" y="72" width="70" height="40" rx="12" fill="#2a2a2e" />
+                        <circle cx="82" cy="92" r="6" fill="#ff8a3d">
+                          <animate attributeName="opacity" values="1;0.4;1" dur="3s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="118" cy="92" r="6" fill="#ff8a3d">
+                          <animate attributeName="opacity" values="1;0.4;1" dur="3s" repeatCount="indefinite" begin="0.5s" />
+                        </circle>
+                        <path d="M85 102 Q100 112 115 102" fill="none" stroke="#ff8a3d" strokeWidth="2.5" strokeLinecap="round" />
+                        <line x1="100" y1="60" x2="100" y2="42" stroke="#ff8a3d" strokeWidth="2.5" strokeLinecap="round" />
+                        <circle cx="100" cy="38" r="5" fill="#ff8a3d">
+                          <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite" />
+                        </circle>
+                        <rect x="38" y="80" width="17" height="8" rx="4" fill="#1a1a1e" stroke="#ff8a3d" strokeWidth="1.5" />
+                        <rect x="145" y="80" width="17" height="8" rx="4" fill="#1a1a1e" stroke="#ff8a3d" strokeWidth="1.5" />
+                        <rect x="68" y="140" width="22" height="10" rx="5" fill="#1a1a1e" stroke="#ff8a3d" strokeWidth="1.5" />
+                        <rect x="110" y="140" width="22" height="10" rx="5" fill="#1a1a1e" stroke="#ff8a3d" strokeWidth="1.5" />
+                        <circle cx="30" cy="50" r="2" fill="#ff8a3d" opacity="0.5">
+                          <animate attributeName="cy" values="50;40;50" dur="4s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="170" cy="60" r="1.5" fill="#ffb366" opacity="0.4">
+                          <animate attributeName="cy" values="60;48;60" dur="3.5s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="45" cy="130" r="1.5" fill="#ff8a3d" opacity="0.3">
+                          <animate attributeName="cy" values="130;120;130" dur="5s" repeatCount="indefinite" />
+                        </circle>
+                        <defs>
+                          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#ff8a3d" />
+                            <stop offset="100%" stopColor="#ffb366" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
                     </div>
                     
                     <div className="space-y-2">
