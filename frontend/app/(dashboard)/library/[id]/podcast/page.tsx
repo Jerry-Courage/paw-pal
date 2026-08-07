@@ -41,6 +41,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
 
+  const [mobileTab, setMobileTab] = useState<'player' | 'transcript'>('player')
   // Live Q&A state
   const [liveMode, setLiveMode] = useState<'off' | 'connecting' | 'active'>('off')
   const [liveAiSpeaking, setLiveAiSpeaking] = useState(false)
@@ -321,7 +322,11 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
       startPodcast(resourceId, resObj.data.title, res.data.session_id, res.data.script)
       setStatus('ready')
       if (res.data.status === 'ready') setTimeout(() => globalResume(), 300)
-    } catch { toast.error('Failed to start podcast'); setStatus('error') }
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to start podcast'
+      toast.error(msg)
+      setStatus('error')
+    }
   }
 
   const togglePlay = () => audio.isPlaying ? globalPause() : globalResume()
@@ -465,13 +470,20 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         </Link>
       </div>
       <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-5 text-center">
+        <div className="flex flex-col items-center gap-5 text-center px-6">
           <XCircle className="w-12 h-12 text-red-500" />
-          <h2 className="text-xl font-black text-white">Connection Failed</h2>
-          <button onClick={handleStart}
-            className="px-6 py-3 bg-orange-500 text-white font-black text-sm rounded-2xl hover:bg-orange-400 transition-all">
-            Retry
-          </button>
+          <h2 className="text-xl font-black text-white">Generation Failed</h2>
+          <p className="text-sm text-slate-500 max-w-xs">The podcast script couldn't be generated. This can happen if the material is still being processed or if the AI service is temporarily unavailable.</p>
+          <div className="flex gap-3">
+            <button onClick={() => setStatus('idle')}
+              className="px-6 py-3 bg-white/5 border border-white/10 text-white font-black text-sm rounded-2xl hover:bg-white/10 transition-all">
+              Back to Setup
+            </button>
+            <button onClick={handleStart}
+              className="px-6 py-3 bg-orange-500 text-white font-black text-sm rounded-2xl hover:bg-orange-400 transition-all">
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -500,11 +512,23 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
         </div>
       </header>
 
-      {/* ── MAIN BODY ─────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden pt-[68px] pb-[140px]">
+      {/* ── MOBILE TAB BAR ─────────────────────────────────────────── */}
+      <div className="flex lg:hidden pt-[68px] border-b border-white/5 shrink-0 bg-[#0d0d0d]">
+        {(['player', 'transcript'] as const).map(tab => (
+          <button key={tab} onClick={() => setMobileTab(tab)}
+            className={cn('flex-1 py-3 text-[12px] font-black uppercase tracking-widest transition-all',
+              mobileTab === tab ? 'text-orange-400 border-b-2 border-orange-500' : 'text-slate-600')}>
+            {tab === 'player' ? 'Player' : 'Transcript'}
+          </button>
+        ))}
+      </div>
 
-        {/* LEFT COLUMN — album art card */}
-        <div className="w-full lg:w-[42%] shrink-0 flex flex-col items-center justify-center p-6 lg:p-8 gap-5">
+      {/* ── MAIN BODY ─────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden lg:pt-[68px] pb-[140px]">
+
+        {/* LEFT COLUMN — album art card (always visible on lg, tab-gated on mobile) */}
+        <div className={cn('lg:w-[42%] shrink-0 flex flex-col items-center justify-center p-6 lg:p-8 gap-5',
+          'lg:flex', mobileTab === 'player' ? 'flex' : 'hidden')}>
 
           {/* Album art */}
           <div
@@ -585,8 +609,9 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* RIGHT COLUMN — live transcript */}
-        <div className="flex-1 flex flex-col min-h-0 lg:border-l border-white/5 overflow-hidden">
+        {/* RIGHT COLUMN — live transcript (always visible on lg, tab-gated on mobile) */}
+        <div className={cn('flex-1 flex flex-col min-h-0 lg:border-l border-white/5 overflow-hidden',
+          'lg:flex', mobileTab === 'transcript' ? 'flex' : 'hidden')}>
           {/* Transcript header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-2.5">
