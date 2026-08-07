@@ -327,11 +327,11 @@ export default function PersonalisedLearningPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0a0014] via-[#050508] to-[#0a0014] text-white">
+    <div className="fixed inset-0 bg-gradient-to-b from-[#0a0014] via-[#050508] to-[#0a0014] text-white flex flex-col overflow-hidden select-none">
 
       {/* ── SETUP PHASE ── */}
       {phase === 'setup' && (
-        <div className="min-h-screen flex flex-col">
+        <div className="flex-1 flex flex-col overflow-y-auto">
           <div className="flex-1 flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full">
 
             {/* Back link */}
@@ -425,7 +425,7 @@ export default function PersonalisedLearningPage() {
 
       {/* ── SESSION PHASE ── */}
       {phase === 'session' && (
-        <div className="min-h-screen flex flex-col relative">
+        <div className="flex-1 flex flex-col relative overflow-hidden">
 
           {/* Top bar */}
           <div className="flex items-center justify-between px-4 py-3 safe-area-top">
@@ -594,7 +594,7 @@ export default function PersonalisedLearningPage() {
 
       {/* ── REPORT PHASE ── */}
       {phase === 'report' && report && (
-        <div className="min-h-screen flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full">
+        <div className="flex-1 flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full overflow-y-auto">
           <div className="text-center mb-8">
             <Award className="w-14 h-14 text-violet-400 mx-auto mb-4 animate-bounce" />
             <h1 className="text-2xl font-black tracking-tight mb-1">Session Complete</h1>
