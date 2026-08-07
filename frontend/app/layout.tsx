@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'Flow State — New Intelligence Tech Era',
-  description: 'Transform PDFs, YouTube videos, and class notes into interactive lessons with the power of Flow State AI.',
+  description: 'We transform your actual school material into an interactive learning world — AI study kits, voice tutors, quizzes, and VR classrooms.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
