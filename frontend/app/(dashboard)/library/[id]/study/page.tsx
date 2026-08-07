@@ -96,6 +96,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const masteryStreamRef = useRef<MediaStream | null>(null)
   const masteryScrollRef = useRef<HTMLDivElement>(null)
   const [sectionDrawerOpen, setSectionDrawerOpen] = useState(false)
+  const [mobileStudyOpen, setMobileStudyOpen] = useState(false)
 
   // Mystery box state
   const [showMysteryBox, setShowMysteryBox] = useState(false)
@@ -504,7 +505,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       </header>
 
       {/* ── 3-col body ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden pb-20 xl:pb-0">
 
         {/* LEFT: section nav */}
         <aside className="hidden lg:flex flex-col w-72 shrink-0 bg-surface-container-low border-r border-outline-variant/20 overflow-y-auto">
@@ -1012,6 +1013,85 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
           </div>
         </aside>
       </div>
+
+      {/* ── Mobile Study Bar (xl:hidden) ── */}
+      <div
+        className="xl:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-container-low border-t border-outline-variant/30"
+        style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom, 0px))' }}
+      >
+        {/* Collapsed bar */}
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          {/* Timer mini */}
+          <button
+            onClick={() => setMobileStudyOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/20 active:scale-95 transition-transform"
+          >
+            <span className="material-symbols-outlined text-primary text-[16px]">timer</span>
+            <span className="text-[13px] font-bold text-on-surface font-mono">{formatTime(timerSeconds)}</span>
+          </button>
+
+          {/* XP pill */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
+            <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+            <span className="text-[12px] font-black text-primary">{totalXP}</span>
+          </div>
+
+          {/* Focus time */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/20">
+            <span className="material-symbols-outlined text-blue-500 text-[14px]">schedule</span>
+            <span className="text-[12px] font-bold text-on-surface">{focusMinutes}m</span>
+          </div>
+
+          {/* Sections */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/20">
+            <span className="text-[12px] font-bold text-emerald-500">{completed.size}/{total}</span>
+          </div>
+
+          {/* Expand button */}
+          <button
+            onClick={() => setMobileStudyOpen(true)}
+            className="ml-auto px-3 py-2 rounded-xl bg-primary text-on-primary text-[12px] font-bold active:scale-95 transition-transform"
+          >
+            Stats
+          </button>
+        </div>
+      </div>
+
+      {/* ── Mobile Study Drawer (expanded) ── */}
+      {mobileStudyOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end xl:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileStudyOpen(false)} />
+          <div className="relative bg-surface-container-low rounded-t-3xl border-t border-outline-variant/30 max-h-[85vh] overflow-y-auto">
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-on-surface-variant/30" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-4 border-b border-outline-variant/20">
+              <div>
+                <p className="text-[11px] font-black text-primary uppercase tracking-widest">Study Session</p>
+                <p className="text-[14px] font-bold text-on-surface line-clamp-1 mt-0.5">{resource?.title}</p>
+              </div>
+              <button onClick={() => setMobileStudyOpen(false)} className="p-2 rounded-xl bg-surface-container-high text-on-surface-variant">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <StudyTimer />
+              <SessionStats
+                totalXP={totalXP}
+                sectionsCompleted={completed.size}
+                totalSections={total}
+                focusMinutes={focusMinutes}
+                streak={0}
+                sessionXP={sessionXP}
+              />
+              <AmbientPlayer compact />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mystery Box */}
       {showMysteryBox && (
