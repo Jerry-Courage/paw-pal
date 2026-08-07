@@ -183,8 +183,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       setSessionXP(s => s + XP_PER_SECTION)
       setCompleted(newCompleted)
       toast.success(`+${XP_PER_SECTION} XP! 🎉`, { duration: 2000 })
-      // Award XP on backend so it aggregates to dashboard total
-      authApi.awardXp(XP_PER_SECTION, `Study Mode: Section ${sectionIndex + 1} of ${resource?.title}`, resourceId).catch(() => {})
+      // completeStep handles XP via ResourceProgress — no need for separate awardXp call
       libraryApi.completeStep(resourceId, 'notes', Math.round(newCompleted.size / total * 100)).catch(() => {})
       qc.invalidateQueries({ queryKey: ['progress', resourceId] })
       qc.invalidateQueries({ queryKey: ['profile'] })
@@ -324,7 +323,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               setTotalXP(masteryXP)
               setSessionXP(s => s + XP_MASTERY)
               toast.success(`🏆 Mastery complete! +${XP_MASTERY} XP!`, { duration: 3000 })
-              authApi.awardXp(XP_MASTERY, `Study Mode: Mastery Challenge — ${resource?.title}`, resourceId).catch(() => {})
+              // completeStep handles XP via ResourceProgress — no need for separate awardXp call
               libraryApi.completeStep(resourceId, 'examprep', msg.score || 75).catch(() => {})
               qc.invalidateQueries({ queryKey: ['progress', resourceId] })
               qc.invalidateQueries({ queryKey: ['profile'] })
