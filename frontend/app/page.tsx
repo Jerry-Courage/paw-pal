@@ -55,8 +55,8 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center gap-stack-lg max-w-6xl mx-auto">
             <div className="flex-1 text-center md:text-left">
               <h1 className="text-[40px] md:text-[56px] font-bold text-on-surface leading-tight mb-stack-sm tracking-tight">
-                Your School Material.{' '}
-                <span className="text-primary sparkle-text">Reimagined.</span>
+                Learn in{' '}
+                <span className="text-primary sparkle-text">VR. Master with AI.</span>
               </h1>
               <p className="text-on-surface-variant text-body-lg max-w-xl mb-stack-md mx-auto md:mx-0">
                 We transform your actual school material into an interactive learning world — AI study kits, voice tutors, quizzes, VR classrooms, and game-like battles that adapt to how you learn.
