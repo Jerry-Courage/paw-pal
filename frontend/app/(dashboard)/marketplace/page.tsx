@@ -11,7 +11,7 @@ const POWERUPS = [
   {
     id: 'clue_5050',
     name: '50/50 Clue',
-    cost: 250,
+    cost: 500,
     icon: 'tips_and_updates',
     color: 'from-amber-500 to-orange-500',
     badge: 'Quiz Battle',
@@ -20,7 +20,7 @@ const POWERUPS = [
   {
     id: 'time_extend',
     name: 'Time Extension',
-    cost: 300,
+    cost: 600,
     icon: 'hourglass_top',
     color: 'from-cyan-500 to-blue-500',
     badge: 'Quiz Battle',
@@ -29,7 +29,7 @@ const POWERUPS = [
   {
     id: 'streak_guard',
     name: 'Streak Guard',
-    cost: 500,
+    cost: 1000,
     icon: 'shield',
     color: 'from-emerald-500 to-teal-500',
     badge: 'Study Streak',
@@ -38,7 +38,7 @@ const POWERUPS = [
   {
     id: 'double_xp',
     name: '2x XP Boost',
-    cost: 400,
+    cost: 800,
     icon: 'bolt',
     color: 'from-violet-500 to-purple-500',
     badge: 'Multiplier',
@@ -47,7 +47,7 @@ const POWERUPS = [
   {
     id: 'hint',
     name: 'AI Hint / Poll',
-    cost: 350,
+    cost: 700,
     icon: 'visibility',
     color: 'from-pink-500 to-rose-500',
     badge: 'Quiz Battle',
