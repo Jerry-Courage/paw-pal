@@ -40,6 +40,7 @@ const GOALS = [
 const STUDY_HOURS = ['< 2 hours', '2-4 hours', '4-6 hours', '6+ hours']
 
 const STEPS = [
+  { id: 'education' },
   { id: 'welcome' },
   { id: 'profile' },
   { id: 'subjects' },
@@ -57,7 +58,9 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     queryFn: () => authApi.me().then(r => r.data),
   })
 
-  const isSHS = profileData?.education_level === 'secondary'
+  const [educationLevel, setEducationLevel] = useState<string | null>(null)
+  const resolvedLevel = educationLevel || profileData?.education_level || 'tertiary'
+  const isSHS = resolvedLevel === 'secondary'
   const SUBJECTS = isSHS ? [...SHS_CORE_SUBJECTS, ...SHS_ELECTIVE_SUBJECTS] : UNIVERSITY_SUBJECTS
 
   const [data, setData] = useState({
@@ -72,7 +75,12 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     mutationFn: () => authApi.updateProfile({
       university: data.university,
       weekly_goal_hours: data.weekly_goal_hours,
+      education_level: resolvedLevel,
     }),
+  })
+
+  const saveEducationLevel = useMutation({
+    mutationFn: (level: string) => authApi.updateProfile({ education_level: level }),
   })
 
   const toggleSubject = (s: string) =>
@@ -82,6 +90,9 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     setData(d => ({ ...d, goals: d.goals.includes(g) ? d.goals.filter(x => x !== g) : [...d.goals, g] }))
 
   const next = () => {
+    if (step === 0 && educationLevel) {
+      saveEducationLevel.mutateAsync(educationLevel).catch(() => {})
+    }
     if (step === STEPS.length - 2) {
       updateProfile.mutateAsync().catch(() => {})
     }
@@ -160,7 +171,70 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 className="flex flex-col py-2"
               >
 
-                {/* ── WELCOME (Step 0) ── */}
+                {/* ── EDUCATION LEVEL (Step 0) ── */}
+                {step === 0 && (
+                  <div className="space-y-6">
+                    <StepHeader icon={GraduationCap} title="I am a..." subtitle="Choose your education level" />
+                    
+                    <div className="grid grid-cols-1 gap-4">
+                      <button
+                        onClick={() => setEducationLevel('secondary')}
+                        className={cn(
+                          'p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden group active:scale-[0.98]',
+                          resolvedLevel === 'secondary'
+                            ? 'border-orange-500 bg-orange-500/10'
+                            : 'border-white/5 bg-white/3 hover:border-white/10'
+                        )}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-transform group-hover:scale-110",
+                            resolvedLevel === 'secondary' ? 'bg-orange-500/20' : 'bg-white/5'
+                          )}>🏫</div>
+                          <div className="flex-1">
+                            <p className={cn("text-base font-black", resolvedLevel === 'secondary' ? 'text-white' : 'text-slate-400')}>SHS Student</p>
+                            <p className="text-xs text-slate-500 font-bold mt-0.5">NaCCA curriculum & WASSCE prep</p>
+                          </div>
+                          <div className={cn(
+                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                            resolvedLevel === 'secondary' ? 'bg-orange-500 border-orange-500' : 'border-white/10'
+                          )}>
+                            {resolvedLevel === 'secondary' && <Check className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => setEducationLevel('tertiary')}
+                        className={cn(
+                          'p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden group active:scale-[0.98]',
+                          resolvedLevel === 'tertiary'
+                            ? 'border-violet-500 bg-violet-500/10'
+                            : 'border-white/5 bg-white/3 hover:border-white/10'
+                        )}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-transform group-hover:scale-110",
+                            resolvedLevel === 'tertiary' ? 'bg-violet-500/20' : 'bg-white/5'
+                          )}>🎓</div>
+                          <div className="flex-1">
+                            <p className={cn("text-base font-black", resolvedLevel === 'tertiary' ? 'text-white' : 'text-slate-400')}>University Student</p>
+                            <p className="text-xs text-slate-500 font-bold mt-0.5">Degree & higher education</p>
+                          </div>
+                          <div className={cn(
+                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                            resolvedLevel === 'tertiary' ? 'bg-violet-500 border-violet-500' : 'border-white/10'
+                          )}>
+                            {resolvedLevel === 'tertiary' && <Check className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── WELCOME (Step 1) ── */}
                 {step === 0 && (
                   <div className="text-center space-y-6">
                     {/* Circular 3D Robot Mascot Frame */}
@@ -191,8 +265,8 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                   </div>
                 )}
 
-                {/* ── PROFILE (Step 1) ── */}
-                {step === 1 && (
+                {/* ── PROFILE (Step 2) ── */}
+                {step === 2 && (
                   <div className="space-y-6">
                     <StepHeader icon={GraduationCap} title="Set your foundation" subtitle={isSHS ? "Which school do you attend?" : "Where are you learning today?"} />
                     
@@ -233,8 +307,8 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                   </div>
                 )}
 
-                {/* ── SUBJECTS (Step 2) ── */}
-                {step === 2 && (
+                {/* ── SUBJECTS (Step 3) ── */}
+                {step === 3 && (
                   <div className="space-y-6">
                     <StepHeader icon={BookOpen} title="Select your focus" subtitle={isSHS ? "Pick your core & elective subjects" : "What subjects should we optimize for?"} />
                     
@@ -266,8 +340,8 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                   </div>
                 )}
 
-                {/* ── GOALS (Step 3) ── */}
-                {step === 3 && (
+                {/* ── GOALS (Step 4) ── */}
+                {step === 4 && (
                   <div className="space-y-6">
                     <StepHeader icon={Target} title="Define your mission" subtitle="What does success look like for you?" />
                     
@@ -306,7 +380,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                   </div>
                 )}
 
-                {/* ── DONE (Step 4) ── */}
+                {/* ── DONE (Step 5) ── */}
                 {isLast && (
                   <div className="text-center space-y-4">
                     <motion.div 
