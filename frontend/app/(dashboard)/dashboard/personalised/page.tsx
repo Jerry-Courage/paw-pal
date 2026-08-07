@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { authApi, libraryApi, getAuthToken, API_BASE } from '@/lib/api'
+import { authApi, libraryApi, paymentsApi, getAuthToken, API_BASE } from '@/lib/api'
 import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, MessageSquare, X } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
+import dynamic from 'next/dynamic'
+
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 const GEMINI_VOICES = [
   { id: 'Puck',   label: 'Puck',   desc: 'Playful & expressive' },
@@ -91,7 +94,14 @@ export default function PersonalisedLearningPage() {
     queryKey: ['resources'],
     queryFn: () => libraryApi.getResources().then(r => r.data),
   })
+  const { data: subStatus, refetch: refetchSub } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 60000,
+  })
+  const [showPaywall, setShowPaywall] = useState(false)
 
+  const isPremium = subStatus?.is_premium ?? false
   const resources = resourcesData?.results || []
   const totalXp = profile?.xp ?? 0
   const userLevel = profile?.level || { num: 1, name: 'Freshman' }
@@ -339,86 +349,120 @@ export default function PersonalisedLearningPage() {
               <ChevronLeft className="w-4 h-4" /> Dashboard
             </Link>
 
-            {/* Hero Banner — matches dashboard welcome card */}
-            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-6 sm:p-8 text-white shadow-2xl mb-8">
-              <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="relative z-10 flex flex-col items-center text-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-black/25 backdrop-blur-md flex items-center justify-center border border-white/10">
-                  <Headphones className="w-8 h-8" />
+            {!isPremium ? (
+              /* ── Premium Gate ── */
+              <div className="text-center space-y-6">
+                <div className="w-20 h-20 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto">
+                  <Headphones className="w-10 h-10 text-violet-400" />
                 </div>
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
-                  <p className="text-white/80 text-sm leading-relaxed max-w-xs mx-auto">
-                    Real-time voice conversations with an AI that knows your study history.
+                  <h1 className="text-2xl font-black tracking-tight mb-2">Personal Tutor</h1>
+                  <p className="text-sm text-white/50 leading-relaxed max-w-xs mx-auto">
+                    Real-time voice conversations with an AI that knows your study history and teaches you like a real tutor.
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                    <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Streak</p>
-                    <p className="text-sm font-black flex items-center gap-1">🔥 {studyStreak} Days</p>
-                  </div>
-                  <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                    <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">XP</p>
-                    <p className="text-sm font-black flex items-center gap-1">⚡ {totalXp.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                    <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Level</p>
-                    <p className="text-sm font-black flex items-center gap-1">🎓 {userLevel.num}</p>
+                <div className="space-y-3 text-left">
+                  {['Personalised to your curriculum & materials', 'Full conversation memory across sessions', 'Voice & text — study hands-free'].map((f, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                      <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
+                      <span className="text-xs text-white/60">{f}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowPaywall(true)}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all shadow-lg shadow-violet-500/25"
+                >
+                  Unlock Personal Tutor
+                </button>
+                <p className="text-[11px] text-white/30">Requires Premium subscription</p>
+              </div>
+            ) : (
+              <>
+                {/* Hero Banner */}
+                <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-6 sm:p-8 text-white shadow-2xl mb-8">
+                  <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="relative z-10 flex flex-col items-center text-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-black/25 backdrop-blur-md flex items-center justify-center border border-white/10">
+                      <Headphones className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
+                      <p className="text-white/80 text-sm leading-relaxed max-w-xs mx-auto">
+                        Real-time voice conversations with an AI that knows your study history.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                        <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Streak</p>
+                        <p className="text-sm font-black flex items-center gap-1">{studyStreak} Days</p>
+                      </div>
+                      <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                        <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">XP</p>
+                        <p className="text-sm font-black flex items-center gap-1">{totalXp.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                        <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Level</p>
+                        <p className="text-sm font-black flex items-center gap-1">{userLevel.num}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Voice Selector */}
-            <div className="mb-6">
-              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">Choose Voice</p>
-              <div className="grid grid-cols-3 gap-2">
-                {GEMINI_VOICES.map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => setVoice(v.id)}
-                    className={cn(
-                      "flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all text-center",
-                      voice === v.id
-                        ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
-                        : "bg-white/[0.02] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
-                    )}
-                  >
-                    <span className="text-xs font-bold">{v.label}</span>
-                    <span className="text-[9px] text-white/30">{v.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Context Preview */}
-            <div className="mb-8 space-y-2">
-              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">What I Know About You</p>
-              {[
-                { icon: '📚', text: `${resources.length} study materials loaded` },
-                { icon: '⚡', text: `${totalXp.toLocaleString()} XP · Level ${userLevel.num}` },
-                { icon: '🔥', text: `${studyStreak} day streak` },
-                { icon: '💬', text: 'Full conversation memory' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-outline-variant/30">
-                  <span className="text-sm">{item.icon}</span>
-                  <span className="text-xs text-white/60">{item.text}</span>
+                {/* Voice Selector */}
+                <div className="mb-6">
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">Choose Voice</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {GEMINI_VOICES.map(v => (
+                      <button
+                        key={v.id}
+                        onClick={() => setVoice(v.id)}
+                        className={cn(
+                          "flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all text-center",
+                          voice === v.id
+                            ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
+                            : "bg-white/[0.02] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                        )}
+                      >
+                        <span className="text-xs font-bold">{v.label}</span>
+                        <span className="text-[9px] text-white/30">{v.desc}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Start Button */}
-            <button
-              onClick={startSession}
-              disabled={isConnecting}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25"
-            >
-              {isConnecting ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
-              ) : (
-                <><Play className="w-5 h-5 fill-white" /> Start Session</>
-              )}
-            </button>
+                {/* Context Preview */}
+                <div className="mb-8 space-y-2">
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">What I Know About You</p>
+                  {[
+                    { icon: '📚', text: `${resources.length} study materials loaded` },
+                    { icon: '⚡', text: `${totalXp.toLocaleString()} XP · Level ${userLevel.num}` },
+                    { icon: '🔥', text: `${studyStreak} day streak` },
+                    { icon: '💬', text: 'Full conversation memory' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-outline-variant/30">
+                      <span className="text-sm">{item.icon}</span>
+                      <span className="text-xs text-white/60">{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Start Button (premium only) */}
+            {isPremium && (
+              <button
+                onClick={startSession}
+                disabled={isConnecting}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25"
+              >
+                {isConnecting ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
+                ) : (
+                  <><Play className="w-5 h-5 fill-white" /> Start Session</>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -671,6 +715,15 @@ export default function PersonalisedLearningPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {showPaywall && subStatus && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          notesUsed={subStatus.notes_used}
+          notesLimit={subStatus.notes_limit}
+          onSuccess={() => { refetchSub(); setShowPaywall(false) }}
+        />
+      )}
     </div>
   )
 }

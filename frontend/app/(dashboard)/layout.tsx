@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
@@ -8,9 +8,11 @@ import MobileNav from '@/components/layout/MobileNav'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
+import { getAuthToken, API_BASE } from '@/lib/api'
 
 import SplashScreen from '@/components/ui/SplashScreen'
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 // Pages that need full-viewport (no padding/scroll)
 const FULL_VIEWPORT_PREFIXES = [
@@ -24,6 +26,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showPostOnboardingPaywall, setShowPostOnboardingPaywall] = useState(false)
+  const [subStatus, setSubStatus] = useState<any>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login')
@@ -48,6 +52,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return () => clearTimeout(timer)
     }
   }, [status])
+
+  const handleOnboardingComplete = useCallback(async () => {
+    setShowOnboarding(false)
+    // Fetch subscription status and show paywall if not premium
+    try {
+      const token = await getAuthToken()
+      const res = await fetch(`${API_BASE}/api/payments/status/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setSubStatus(data)
+      if (!data.is_premium) {
+        setShowPostOnboardingPaywall(true)
+      }
+    } catch {
+      // If we can't check, still show paywall (safe default)
+      setShowPostOnboardingPaywall(true)
+    }
+  }, [])
 
   if (status === 'loading' || status === 'unauthenticated') {
     return <SplashScreen />
@@ -89,7 +112,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </main>
 
       {showOnboarding && (
-        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+        <OnboardingWizard onComplete={handleOnboardingComplete} />
+      )}
+
+      {showPostOnboardingPaywall && subStatus && (
+        <PaywallModal
+          onClose={() => setShowPostOnboardingPaywall(false)}
+          notesUsed={subStatus.notes_used}
+          notesLimit={subStatus.notes_limit}
+          onSuccess={() => {
+            setSubStatus((prev: any) => prev ? { ...prev, is_premium: true } : prev)
+            setShowPostOnboardingPaywall(false)
+          }}
+        />
       )}
     </div>
   )

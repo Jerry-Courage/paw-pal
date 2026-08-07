@@ -236,6 +236,13 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from .models import AssignmentSource
+        from rest_framework.exceptions import PermissionDenied
+        
+        user = self.request.user
+        
+        # Free tier: 3 assignments max unless premium
+        if not user.has_active_subscription and user.total_assignments_created >= user.FREE_ASSIGNMENTS_LIMIT:
+            raise PermissionDenied('Free limit reached. Upgrade to Premium for unlimited assignments.')
         
         # Check if any content is provided
         instructions = self.request.data.get('instructions', '').strip()
@@ -246,7 +253,11 @@ class AssignmentViewSet(viewsets.ModelViewSet):
              from rest_framework.exceptions import ValidationError
              raise ValidationError('Initialization failure: No textual, visual, or document sources provided.')
 
-        assignment = serializer.save(user=self.request.user)
+        assignment = serializer.save(user=user)
+        
+        # Increment assignment count
+        user.total_assignments_created += 1
+        user.save(update_fields=['total_assignments_created'])
         
         # Track main PDF as a source
         if assignment.file:

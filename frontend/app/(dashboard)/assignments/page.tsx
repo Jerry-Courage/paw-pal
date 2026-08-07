@@ -2,9 +2,12 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { assignmentsApi } from '@/lib/api'
+import { assignmentsApi, paymentsApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+
+const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
 const STATUS_STYLES: Record<string, { label: string; icon: string; badge: string; pulse?: boolean }> = {
   processing: { label: 'AI Working', icon: 'bolt', badge: 'bg-secondary-container text-on-secondary-container', pulse: true },
@@ -32,12 +35,23 @@ export default function AssignmentsPage() {
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [showPaywall, setShowPaywall] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['assignments'],
     queryFn: () => assignmentsApi.getAll().then(r => r.data),
     refetchInterval: 5000,
   })
+  const { data: subStatus, refetch: refetchSub } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+    staleTime: 60000,
+  })
+
+  const isPremium = subStatus?.is_premium ?? false
+  const assignmentsAtLimit = subStatus?.assignments_at_limit ?? false
+  const assignmentsUsed = subStatus?.assignments_used ?? 0
+  const assignmentsLimit = subStatus?.assignments_limit ?? 3
 
   const assignments = data?.results || data || []
   const processing = assignments.filter((a: any) => a.status === 'processing')
@@ -193,12 +207,39 @@ export default function AssignmentsPage() {
       )}
 
       {/* ── FAB ──────────────────────────────────────── */}
-      <Link
-        href="/assignments/new"
-        className="fixed bottom-24 md:bottom-margin-desktop right-margin-mobile md:right-margin-desktop w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_8px_30px_rgba(255,138,61,0.5)] btn-3d hover:brightness-110 transition-all z-50 group"
-      >
-        <span className="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform duration-300">add</span>
-      </Link>
+      {!assignmentsAtLimit || isPremium ? (
+        <Link
+          href="/assignments/new"
+          className="fixed bottom-24 md:bottom-margin-desktop right-margin-mobile md:right-margin-desktop w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_8px_30px_rgba(255,138,61,0.5)] btn-3d hover:brightness-110 transition-all z-50 group"
+        >
+          <span className="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform duration-300">add</span>
+        </Link>
+      ) : (
+        <button
+          onClick={() => setShowPaywall(true)}
+          className="fixed bottom-24 md:bottom-margin-desktop right-margin-mobile md:right-margin-desktop w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_8px_30px_rgba(255,138,61,0.5)] btn-3d hover:brightness-110 transition-all z-50 group"
+        >
+          <span className="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform duration-300">add</span>
+        </button>
+      )}
+
+      {/* Free trial counter */}
+      {!isPremium && (
+        <div className="fixed bottom-44 md:bottom-[calc(7rem+env(safe-area-inset-bottom))] right-margin-mobile md:right-margin-desktop z-50">
+          <div className="bg-surface-container-high border border-outline-variant/30 rounded-xl px-3 py-1.5 text-center shadow-lg">
+            <p className="text-[10px] font-bold text-on-surface-variant">{assignmentsUsed}/{assignmentsLimit} free</p>
+          </div>
+        </div>
+      )}
+
+      {showPaywall && subStatus && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          notesUsed={subStatus.notes_used}
+          notesLimit={subStatus.notes_limit}
+          onSuccess={() => { refetchSub(); setShowPaywall(false) }}
+        />
+      )}
     </div>
   )
 }

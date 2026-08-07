@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 logger = logging.getLogger('flowstate')
 
 PAYSTACK_SECRET = os.environ.get('PAYSTACK_SECRET_KEY', '')
-PLAN_PRICE_CENTS = 1500  # GH₵ 15.00 in pesewas (Paystack GHS)
+PLAN_PRICE_CENTS = 1000  # GH₵ 10.00 in pesewas (Paystack GHS)
 SUBSCRIPTION_DAYS = 30  # 1 month per payment
 SUPPORTED_CURRENCIES = {'GHS', 'USD', 'NGN', 'ZAR', 'KES', 'GBP', 'EUR'}
 
@@ -310,12 +310,17 @@ class SubscriptionStatusView(APIView):
     def get(self, request):
         user = request.user
         notes_used = user.total_resources_created
+        assignments_used = user.total_assignments_created
         return Response({
             'is_premium': user.has_active_subscription,
             'notes_used': notes_used,
             'notes_limit': user.FREE_NOTES_LIMIT,
             'notes_remaining': max(0, user.FREE_NOTES_LIMIT - notes_used),
             'at_limit': not user.has_active_subscription and notes_used >= user.FREE_NOTES_LIMIT,
+            'assignments_used': assignments_used,
+            'assignments_limit': user.FREE_ASSIGNMENTS_LIMIT,
+            'assignments_remaining': max(0, user.FREE_ASSIGNMENTS_LIMIT - assignments_used),
+            'assignments_at_limit': not user.has_active_subscription and assignments_used >= user.FREE_ASSIGNMENTS_LIMIT,
             'subscription_expires_at': (
                 user.subscription_expires_at.isoformat()
                 if user.subscription_expires_at else None

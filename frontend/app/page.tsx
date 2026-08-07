@@ -208,7 +208,7 @@ export default function LandingPage() {
                 <span className="bg-primary text-on-primary text-[11px] font-black px-3 py-1 rounded-full">POPULAR</span>
               </div>
               <h3 className="text-[24px] font-bold text-on-surface mb-base">Premium</h3>
-              <p className="text-[40px] font-bold text-primary mb-stack-md">GH₵14.99<span className="text-[16px] text-on-surface-variant">/mo</span></p>
+              <p className="text-[40px] font-bold text-primary mb-stack-md">GH₵10<span className="text-[16px] text-on-surface-variant">/mo</span></p>
               <ul className="space-y-base text-on-surface-variant text-[15px] mb-stack-lg">
                 {['Unlimited Study Kits', 'AI Voice Tutor', 'AI Podcast Generation', 'VR Classroom', 'Priority AI Processing', 'Advanced Analytics'].map(f => (
                   <li key={f} className="flex items-center gap-base">

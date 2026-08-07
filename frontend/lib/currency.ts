@@ -59,7 +59,7 @@ const COUNTRY_PRICE_MAP: Record<string, { currency: string; symbol: string; amou
   IN: { currency: 'INR', symbol: '₹',   amount: 79    },
   AU: { currency: 'AUD', symbol: 'A$',  amount: 1.49  },
   // Default fallback (Ghanaian Cedis GH₵ for Paystack)
-  DEFAULT: { currency: 'GHS', symbol: 'GH₵', amount: 15.00 },
+  DEFAULT: { currency: 'GHS', symbol: 'GH₵', amount: 10.00 },
 }
 
 // Paystack only accepts certain currencies natively

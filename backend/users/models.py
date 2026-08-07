@@ -29,6 +29,10 @@ class User(AbstractUser):
         default=0,
         help_text='Lifetime count of resources created. Never decremented on delete — used for free tier gating.'
     )
+    total_assignments_created = models.PositiveIntegerField(
+        default=0,
+        help_text='Lifetime count of assignments created. Used for free tier gating (3 free trials).'
+    )
     # ── Gamification ─────────────────────────────────────────
     # xp field intentionally removed — tracked via ResourceProgress.xp_earned sum
     # to avoid requiring a new DB migration on existing deployments
@@ -57,6 +61,7 @@ class User(AbstractUser):
         return self.total_resources_created
 
     FREE_NOTES_LIMIT = 5
+    FREE_ASSIGNMENTS_LIMIT = 3
 
     def validate_streak(self):
         """Reset streak if last study date is too old. Called on user login/fetch."""
