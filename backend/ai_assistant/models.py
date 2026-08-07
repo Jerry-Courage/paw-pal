@@ -7,6 +7,7 @@ class ChatSession(models.Model):
         ('global', 'Global'),
         ('resource', 'Resource'),
         ('group', 'Group'),
+        ('voice_tutor', 'Voice Tutor'),
     ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chat_sessions')
     context_type = models.CharField(max_length=20, choices=CONTEXT_CHOICES, default='global')

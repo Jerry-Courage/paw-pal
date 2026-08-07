@@ -27,9 +27,9 @@ GEMINI_LIVE_WS_URL = (
 @sync_to_async
 def _get_personalized_context(user):
     try:
-        # Get last 6 messages from global sessions for conversation memory
-        global_sessions = ChatSession.objects.filter(user=user, context_type='global')
-        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:6]
+        # Get last 8 messages from global + voice_tutor sessions for conversation memory
+        global_sessions = ChatSession.objects.filter(user=user, context_type__in=['global', 'voice_tutor'])
+        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:8]
         recent_messages = list(recent_messages)[::-1]  # chronological order
         
         history = []
@@ -427,6 +427,30 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 await self.gemini_ws.close()
             except Exception:
                 pass
+
+        # Persist the transcript so future sessions can recall it
+        if self.transcript_log:
+            try:
+                user = self.scope.get('user')
+                if user and user.is_authenticated:
+                    # Build a title from the first user message
+                    first_user_msg = next((text for role, text in self.transcript_log if role == 'user'), '')
+                    title = first_user_msg[:80] or 'Voice Tutor Session'
+                    session = ChatSession.objects.create(
+                        user=user,
+                        context_type='voice_tutor',
+                        title=title,
+                    )
+                    for role, text in self.transcript_log:
+                        ChatMessage.objects.create(
+                            session=session,
+                            role='assistant' if role == 'ai' else 'user',
+                            content=text,
+                        )
+                    logger.info(f'[PersonalisedVoice] Saved transcript: session={session.id}, msgs={len(self.transcript_log)}')
+            except Exception as e:
+                logger.error(f'[PersonalisedVoice] Failed to save transcript: {e}')
+
         report = await self._generate_report()
         await self._send({'type': 'session_report', 'report': report})
 
