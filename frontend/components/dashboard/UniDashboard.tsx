@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { libraryApi, aiApi, authApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { BookOpen, Upload, Brain, Trophy, ArrowRight, Flame, Zap, Target } from 'lucide-react'
+import { BookOpen, Upload, Brain, Trophy, ArrowRight, Flame, Zap, Target, Headphones } from 'lucide-react'
 
 const QUICK_ACTIONS = [
   { icon: Upload, label: 'Upload', desc: 'PDF, Video, Slides', href: '/library', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
@@ -90,6 +90,26 @@ export default function UniDashboard() {
         </div>
         <p className="text-[11px] text-on-surface-variant mt-2">{weeklyPct}% of weekly goal completed</p>
       </div>
+
+      {/* ── Personal Tutor CTA ── */}
+      <Link href="/dashboard/personalised"
+        className="block relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-rose-600 via-pink-600 to-fuchsia-600 p-6 sm:p-8 text-white shadow-2xl hover:shadow-rose-500/20 transition-all group">
+        <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-4 top-4 sm:right-8 sm:top-6">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform">
+            <Headphones className="w-7 h-7 sm:w-8 sm:h-8" />
+          </div>
+        </div>
+        <div className="relative z-10 max-w-[75%]">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md text-[10px] font-black uppercase tracking-wider mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> Live Voice Tutor
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black tracking-tight mb-1">Talk to Your Personal Tutor</h3>
+          <p className="text-white/80 text-sm font-medium leading-relaxed">
+            Real-time voice conversations. Remembers everything you've studied. Adapts to your level.
+          </p>
+        </div>
+      </Link>
 
       {/* ── Quick Actions ── */}
       <div className="space-y-4">
