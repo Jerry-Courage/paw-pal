@@ -27,19 +27,19 @@ GEMINI_LIVE_WS_URL = (
 @sync_to_async
 def _get_personalized_context(user):
     try:
-        # Get last 10 messages from global sessions for richer conversation memory
+        # Get last 6 messages from global sessions for conversation memory
         global_sessions = ChatSession.objects.filter(user=user, context_type='global')
-        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:10]
+        recent_messages = ChatMessage.objects.filter(session__in=global_sessions).order_by('-created_at')[:6]
         recent_messages = list(recent_messages)[::-1]  # chronological order
         
         history = []
         for msg in recent_messages:
             role_label = "Student" if msg.role == 'user' else "AI"
-            history.append(f"{role_label}: {msg.content[:120]}")
+            history.append(f"{role_label}: {msg.content[:80]}")
         history_str = "\n".join(history) if history else "No history."
         
-        # Get resources they are studying (top 5 for better context)
-        resources = Resource.objects.filter(owner=user).order_by('-created_at').values('title', 'subject')[:5]
+        # Get resources they are studying (top 3 for lean context)
+        resources = Resource.objects.filter(owner=user).order_by('-created_at').values('title', 'subject')[:3]
         materials = [f"- {r['title']} ({r['subject'] or 'General'})" for r in resources]
         materials_str = "\n".join(materials) if materials else "No materials."
         
@@ -183,20 +183,15 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
         ctx = await _get_personalized_context(self.scope['user'])
         system_prompt = (
-            f"You are a personal tutor for {ctx['username']}, a {ctx['level_name']} level student "
-            f"with {ctx['xp']} XP and a {ctx['streak']}-day study streak.\n\n"
-            f"EDUCATION: {ctx['education']}\n"
-            f"STUDY MATERIALS:\n{ctx['materials_str']}\n\n"
-            f"CONVERSATION HISTORY:\n{ctx['history_str']}\n\n"
-            "INSTRUCTIONS:\n"
-            "1. Greet the student by name when the session starts. Mention something from their history or materials.\n"
-            "2. Voice conversation — speak naturally, like a study buddy.\n"
-            "3. Keep responses under 3 sentences. Be concise.\n"
-            "4. Reference their specific materials and past conversations.\n"
-            "5. Be encouraging but honest. Use Socratic questions when appropriate.\n"
-            "6. If they mention a topic from their materials, dive deeper.\n"
-            "7. Wait for the student to finish speaking before responding.\n"
-            "8. Adapt your language to their level — simpler for beginners, more technical for advanced."
+            f"You are a personal tutor for {ctx['username']}, a {ctx['level_name']} student "
+            f"({ctx['xp']} XP, {ctx['streak']}-day streak). Education: {ctx['education']}.\n"
+            f"Materials: {ctx['materials_str']}\nHistory: {ctx['history_str']}\n\n"
+            "RULES:\n"
+            "1. Greet by name, reference their materials or history.\n"
+            "2. Speak naturally like a study buddy.\n"
+            "3. Keep replies to 1-2 short sentences max.\n"
+            "4. Be encouraging. Use Socratic questions.\n"
+            "5. Adapt to their level."
         )
 
         ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
@@ -225,8 +220,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         },
-                        'temperature': 0.8,
-                        'maxOutputTokens': 800,
+                        'temperature': 0.7,
+                        'maxOutputTokens': 400,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]

@@ -327,7 +327,7 @@ export default function PersonalisedLearningPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-[#0a0014] via-[#050508] to-[#0a0014] text-white flex flex-col overflow-hidden select-none">
+    <div className="fixed inset-0 bg-gradient-to-b from-[#0a0014] via-[#050508] to-[#0a0014] text-white flex flex-col overflow-hidden select-none" style={{ paddingTop: 'env(safe-area-inset-top, 20px)' }}>
 
       {/* ── SETUP PHASE ── */}
       {phase === 'setup' && (
@@ -428,7 +428,7 @@ export default function PersonalisedLearningPage() {
         <div className="flex-1 flex flex-col relative overflow-hidden">
 
           {/* Top bar */}
-          <div className="flex items-center justify-between px-4 py-3 safe-area-top">
+          <div className="flex items-center justify-between px-4 py-3 pt-8">
             <button onClick={endSession} className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>
@@ -594,7 +594,7 @@ export default function PersonalisedLearningPage() {
 
       {/* ── REPORT PHASE ── */}
       {phase === 'report' && report && (
-        <div className="flex-1 flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full overflow-y-auto">
+        <div className="flex-1 flex flex-col justify-center px-5 pt-12 pb-8 max-w-lg mx-auto w-full overflow-y-auto">
           <div className="text-center mb-8">
             <Award className="w-14 h-14 text-violet-400 mx-auto mb-4 animate-bounce" />
             <h1 className="text-2xl font-black tracking-tight mb-1">Session Complete</h1>
