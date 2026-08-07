@@ -2,13 +2,11 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { libraryApi, paymentsApi, authApi } from '@/lib/api'
+import { libraryApi, paymentsApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
-import { SHS_CURRICULUM } from '@/lib/curriculum'
-import type { SHSYear } from '@/lib/curriculum'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
@@ -51,15 +49,6 @@ export default function LibraryPage() {
     queryFn: () => paymentsApi.getStatus().then(r => r.data),
     staleTime: 60000,
   })
-
-  const { data: profileData } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => authApi.me().then(r => r.data),
-  })
-
-  const isSHS = profileData?.education_level === 'secondary'
-  const curriculumSubjects = SHS_CURRICULUM
-  const [yearFilter, setYearFilter] = useState<SHSYear | 'all'>('all')
 
   const resources = resourcesData?.results || []
   const filtered = resources.filter((r: any) =>
@@ -215,111 +204,6 @@ export default function LibraryPage() {
             </button>
           </div>
         </div>
-      )}
-
-      {/* Ghana SHS Curriculum — only for SHS students */}
-      {isSHS && (
-        <section className="mb-stack-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div>
-              <h3 className="text-[18px] font-black text-on-surface flex items-center gap-2">
-                🇬🇭 Ghana SHS Curriculum
-              </h3>
-              <p className="text-[13px] text-on-surface-variant mt-0.5">NaCCA-aligned subjects &amp; topics — tap to study</p>
-            </div>
-            {/* Year filter tabs */}
-            <div className="flex items-center gap-1 bg-surface-container rounded-full p-1">
-              {(['all', 'shs1', 'shs2', 'shs3'] as const).map((y) => (
-                <button
-                  key={y}
-                  onClick={() => setYearFilter(y)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-full text-[11px] font-bold transition-all',
-                    yearFilter === y
-                      ? 'bg-primary text-on-primary shadow-sm'
-                      : 'text-on-surface-variant hover:text-on-surface'
-                  )}
-                >
-                  {y === 'all' ? 'All Years' : y === 'shs1' ? 'SHS 1' : y === 'shs2' ? 'SHS 2' : 'SHS 3'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Core Subjects */}
-          <div className="mb-5">
-            <p className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 px-1">Core Subjects</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {curriculumSubjects.filter(s => s.category === 'core').map((subject) => {
-                const filteredTopics = yearFilter === 'all' ? subject.topics : subject.topics.filter(t => t.year === yearFilter)
-                if (filteredTopics.length === 0) return null
-                return (
-                  <Link
-                    key={subject.id}
-                    href={`/library/curriculum/${subject.id}${yearFilter !== 'all' ? `?year=${yearFilter}` : ''}`}
-                    className="group bg-surface-container rounded-2xl p-4 border border-outline-variant/30 hover:border-primary/40 transition-all shadow-sm"
-                  >
-                    <div className={cn("w-10 h-10 rounded-xl border flex items-center justify-center mb-3", subject.color)}>
-                      <span className="material-symbols-outlined text-[20px]">{subject.icon}</span>
-                    </div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">{subject.code}</p>
-                    <h4 className="text-[14px] font-black text-on-surface mt-0.5 group-hover:text-primary transition-colors">{subject.name}</h4>
-                    <p className="text-[11px] text-on-surface-variant mt-1 line-clamp-2 leading-relaxed">{subject.description}</p>
-                    <div className="mt-3 pt-2 border-t border-outline-variant/20 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-on-surface-variant">{filteredTopics.length} topics{yearFilter !== 'all' ? ` (${yearFilter === 'shs1' ? 'SHS 1' : yearFilter === 'shs2' ? 'SHS 2' : 'SHS 3'})` : ''}</span>
-                      <span className="text-[11px] font-black text-primary opacity-0 group-hover:opacity-100 transition-opacity">Open →</span>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Elective Programmes */}
-          {(['science', 'business', 'arts', 'agriculture'] as const).map((cat) => {
-            const subjects = curriculumSubjects.filter(s => s.category === cat)
-            if (subjects.length === 0) return null
-            const catLabel = { science: 'Science Programme', business: 'Business Programme', arts: 'General Arts', agriculture: 'Agricultural Science' }[cat]
-            return (
-              <div key={cat} className="mb-5">
-                <p className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-3 px-1">{catLabel}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {subjects.map((subject) => {
-                    const filteredTopics = yearFilter === 'all' ? subject.topics : subject.topics.filter(t => t.year === yearFilter)
-                    if (filteredTopics.length === 0) return null
-                    return (
-                      <Link
-                        key={subject.id}
-                        href={`/library/curriculum/${subject.id}${yearFilter !== 'all' ? `?year=${yearFilter}` : ''}`}
-                        className="group bg-surface-container rounded-2xl p-4 border border-outline-variant/30 hover:border-primary/40 transition-all shadow-sm"
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={cn("w-9 h-9 rounded-xl border flex items-center justify-center shrink-0", subject.color)}>
-                            <span className="material-symbols-outlined text-[18px]">{subject.icon}</span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">{subject.code}</p>
-                            <h4 className="text-[13px] font-black text-on-surface truncate group-hover:text-primary transition-colors">{subject.name}</h4>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {filteredTopics.slice(0, 3).map(t => (
-                            <span key={t.id} className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-surface-container-high text-on-surface-variant border border-outline-variant/20">
-                              {t.title}
-                            </span>
-                          ))}
-                          {filteredTopics.length > 3 && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold text-on-surface-variant">+{filteredTopics.length - 3}</span>
-                          )}
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </section>
       )}
 
       {/* Materials grid */}
