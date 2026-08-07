@@ -505,7 +505,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       </header>
 
       {/* ── 3-col body ── */}
-      <div className="flex flex-1 overflow-hidden pb-20 xl:pb-0">
+      <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT: section nav */}
         <aside className="hidden lg:flex flex-col w-72 shrink-0 bg-surface-container-low border-r border-outline-variant/20 overflow-y-auto">
@@ -1014,48 +1014,13 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
         </aside>
       </div>
 
-      {/* ── Mobile Study Bar (xl:hidden) ── */}
-      <div
-        className="xl:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-container-low border-t border-outline-variant/30"
-        style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom, 0px))' }}
+      {/* ── Mobile Study FAB (xl:hidden) ── */}
+      <button
+        onClick={() => setMobileStudyOpen(true)}
+        className="xl:hidden fixed bottom-5 right-5 z-40 w-12 h-12 rounded-full bg-primary text-on-primary shadow-lg shadow-primary/30 flex items-center justify-center active:scale-90 transition-transform"
       >
-        {/* Collapsed bar */}
-        <div className="flex items-center gap-2 px-3 py-2.5">
-          {/* Timer mini */}
-          <button
-            onClick={() => setMobileStudyOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/20 active:scale-95 transition-transform"
-          >
-            <span className="material-symbols-outlined text-primary text-[16px]">timer</span>
-            <span className="text-[13px] font-bold text-on-surface font-mono">{formatTime(timerSeconds)}</span>
-          </button>
-
-          {/* XP pill */}
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
-            <span className="material-symbols-outlined text-primary text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-            <span className="text-[12px] font-black text-primary">{totalXP}</span>
-          </div>
-
-          {/* Focus time */}
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/20">
-            <span className="material-symbols-outlined text-blue-500 text-[14px]">schedule</span>
-            <span className="text-[12px] font-bold text-on-surface">{focusMinutes}m</span>
-          </div>
-
-          {/* Sections */}
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/20">
-            <span className="text-[12px] font-bold text-emerald-500">{completed.size}/{total}</span>
-          </div>
-
-          {/* Expand button */}
-          <button
-            onClick={() => setMobileStudyOpen(true)}
-            className="ml-auto px-3 py-2 rounded-xl bg-primary text-on-primary text-[12px] font-bold active:scale-95 transition-transform"
-          >
-            Stats
-          </button>
-        </div>
-      </div>
+        <span className="material-symbols-outlined text-[22px]">timer</span>
+      </button>
 
       {/* ── Mobile Study Drawer (expanded) ── */}
       {mobileStudyOpen && (
@@ -1077,7 +1042,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="p-5 space-y-5" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}>
               <StudyTimer />
               <SessionStats
                 totalXP={totalXP}
