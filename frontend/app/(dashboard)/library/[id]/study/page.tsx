@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { libraryApi, aiApi, authApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useRouter } from 'next/navigation'
@@ -11,6 +11,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import StudyTimer from '@/components/study/StudyTimer'
+import SessionStats from '@/components/study/SessionStats'
+import AmbientPlayer from '@/components/study/AmbientPlayer'
+import MysteryBox from '@/components/study/MysteryBox'
 
 type QuizQuestion = { question: string; options: string[]; correct: string; explanation: string }
 type WrittenQuestion = { question: string; hint?: string; model_answer: string }
@@ -93,15 +97,28 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const masteryScrollRef = useRef<HTMLDivElement>(null)
   const [sectionDrawerOpen, setSectionDrawerOpen] = useState(false)
 
+  // Mystery box state
+  const [showMysteryBox, setShowMysteryBox] = useState(false)
+  const [sessionXP, setSessionXP] = useState(0)
+  const [mysteryBoxTimer, setMysteryBoxTimer] = useState<NodeJS.Timeout>()
+  const mysteryBoxIntervalRef = useRef(0)
+
   useEffect(() => {
     if (!timerRunning) return
     timerRef.current = setInterval(() => {
       setTimerSeconds(s => { if (s <= 0) { clearInterval(timerRef.current); setTimerRunning(false); return 0 } return s - 1 })
       tickRef.current += 1
       if (tickRef.current % 60 === 0) setFocusMinutes(m => m + 1)
+
+      // Mystery box: random chance every 3-5 minutes of focused study
+      mysteryBoxIntervalRef.current += 1
+      if (mysteryBoxIntervalRef.current > 180 && Math.random() < 0.005) { // ~0.5% chance per second after 3 min
+        mysteryBoxIntervalRef.current = 0
+        if (!showMysteryBox) setShowMysteryBox(true)
+      }
     }, 1000)
     return () => clearInterval(timerRef.current)
-  }, [timerRunning])
+  }, [timerRunning, showMysteryBox])
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
@@ -162,6 +179,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       const newCompleted = new Set(completed)
       newCompleted.add(sectionIndex)
       setTotalXP(newXP)
+      setSessionXP(s => s + XP_PER_SECTION)
       setCompleted(newCompleted)
       toast.success(`+${XP_PER_SECTION} XP! 🎉`, { duration: 2000 })
       // Award XP on backend so it aggregates to dashboard total
@@ -247,6 +265,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
         const bonus = Math.round(XP_PER_SECTION * 0.5)
         const newXP = totalXP + bonus
         setTotalXP(newXP)
+        setSessionXP(s => s + bonus)
         toast.success(`+${bonus} XP for written test! 📝`, { duration: 2000 })
         authApi.awardXp(bonus, `Study Mode: Written test Section ${sectionIndex + 1}`, resourceId).catch(() => {})
         qc.invalidateQueries({ queryKey: ['profile'] })
@@ -302,6 +321,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               setPhase('mastery_complete')
               const masteryXP = totalXP + XP_MASTERY
               setTotalXP(masteryXP)
+              setSessionXP(s => s + XP_MASTERY)
               toast.success(`🏆 Mastery complete! +${XP_MASTERY} XP!`, { duration: 3000 })
               authApi.awardXp(XP_MASTERY, `Study Mode: Mastery Challenge — ${resource?.title}`, resourceId).catch(() => {})
               libraryApi.completeStep(resourceId, 'examprep', msg.score || 75).catch(() => {})
@@ -974,44 +994,38 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            {/* Focus Timer */}
-            <div className="bg-surface-container-high rounded-[1.5rem] border border-outline-variant/20 p-5">
-              <h4 className="font-bold text-on-surface text-[14px] mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[18px]">timer</span>
-                Focus Timer
-              </h4>
-              <div className="text-[40px] font-bold text-center py-3 bg-background rounded-[1rem] text-primary mb-4 font-mono tracking-wider">
-                {formatTime(timerSeconds)}
-              </div>
-              <button onClick={() => setTimerRunning(r => !r)}
-                className="w-full py-3 rounded-[1rem] font-bold text-[13px] bg-surface-container hover:bg-primary-container hover:text-on-primary-container transition-all border border-outline-variant/30">
-                {timerRunning ? 'Pause Session' : 'Resume Session'}
-              </button>
-            </div>
+            {/* New Study Timer */}
+            <StudyTimer />
 
-            {/* Progress */}
-            <div className="bg-surface-container rounded-[1.5rem] border border-outline-variant/20 p-5">
-              <h4 className="font-bold text-on-surface text-[14px] mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[18px]">menu_book</span>
-                Progress
-              </h4>
-              <div className="space-y-3">
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-on-surface-variant">Sections done</span>
-                  <span className="text-primary font-bold">{completed.size}/{total}</span>
-                </div>
-                <div className="h-2.5 bg-surface-container-low rounded-full overflow-hidden">
-                  <div className="h-full bg-primary-container rounded-full transition-all" style={{ width: `${total > 0 ? (completed.size / total) * 100 : 0}%` }} />
-                </div>
-                <div className="flex justify-between text-[13px]">
-                  <span className="text-on-surface-variant">XP earned</span>
-                  <span className="text-primary font-bold">{totalXP}</span>
-                </div>
-              </div>
-            </div>
+            {/* Session Stats */}
+            <SessionStats
+              totalXP={totalXP}
+              sectionsCompleted={completed.size}
+              totalSections={total}
+              focusMinutes={focusMinutes}
+              streak={0}
+              sessionXP={sessionXP}
+            />
+
+            {/* Ambient Player */}
+            <AmbientPlayer compact />
           </div>
         </aside>
       </div>
+
+      {/* Mystery Box */}
+      {showMysteryBox && (
+        <MysteryBox
+          onClaim={(xp) => {
+            setTotalXP(t => t + xp)
+            setSessionXP(s => s + xp)
+            authApi.awardXp(xp, `Study Mode: Mystery Box Reward`, resourceId).catch(() => {})
+            qc.invalidateQueries({ queryKey: ['profile'] })
+            toast.success(`🎁 Mystery Box: +${xp} XP!`, { duration: 3000 })
+          }}
+          onClose={() => setShowMysteryBox(false)}
+        />
+      )}
     </div>
   )
 }
