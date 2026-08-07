@@ -173,6 +173,7 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
               <span className="text-4xl font-black text-white">{priceInfo.display}</span>
               <span className="text-slate-500 text-sm font-medium">/ month</span>
             </div>
+            <p className="text-xs text-slate-600 mt-2 italic">Come on bro, it's just {priceInfo.displayShort}... that's like a bottle of water 💀</p>
           </div>
 
           {/* Perks */}
