@@ -424,6 +424,58 @@ def process_resource_task(res_id):
             except Exception as e:
                 logger.error(f'[Task Queue] YouTube processing failed for {res.id}: {e}')
 
+        # ─── GENERIC URL EXTRACTION ───
+        elif res.url and not text:
+            try:
+                res.status_text = "🔗 Fetching web content..."
+                res.processing_progress = 10
+                res.save()
+
+                import requests as req
+                from bs4 import BeautifulSoup
+
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                resp = req.get(res.url, headers=headers, timeout=30)
+                resp.raise_for_status()
+
+                soup = BeautifulSoup(resp.text, 'html.parser')
+
+                # Remove script, style, nav, footer elements
+                for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside', 'iframe']):
+                    tag.decompose()
+
+                # Try to find main content area
+                main = soup.find('main') or soup.find('article') or soup.find('div', {'class': lambda c: c and ('content' in c.lower() or 'body' in c.lower())}) or soup.body
+
+                if main:
+                    text = main.get_text(separator='\n', strip=True)
+                else:
+                    text = soup.get_text(separator='\n', strip=True)
+
+                # Clean up excessive whitespace
+                import re
+                text = re.sub(r'\n{3,}', '\n\n', text)
+                text = re.sub(r' {2,}', ' ', text)
+
+                # Limit to reasonable size
+                if len(text) > 200000:
+                    text = text[:200000]
+
+                if text:
+                    res.status_text = f"📝 Extracted {len(text)} characters from web page..."
+                    res.processing_progress = 25
+                    res.save()
+                    logger.info(f"[Task Queue] URL extraction: {len(text)} chars from {res.url} for {res.id}")
+                else:
+                    res.status_text = "⚠️ Could not extract text from URL"
+                    res.save()
+                    logger.warning(f"[Task Queue] No text extracted from URL {res.url} for {res.id}")
+
+            except Exception as e:
+                logger.error(f'[Task Queue] URL extraction failed for {res.id}: {e}')
+
         # ─── VECTORIZATION & AI PROCESSING ───
         logger.info(f"[Task Queue] Processing Study Kit for Resource {res.id} (Context size: {len(text) if text else 'TITLE-ONLY'})")
         

@@ -1,21 +1,57 @@
 'use client'
 
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useState, useMemo } from 'react'
-import { getSubjectById, SHS_YEAR_LABELS } from '@/lib/curriculum'
+import { useState, useMemo, useEffect } from 'react'
+import { getSubjectById, SHS_YEAR_LABELS, getTopicKey } from '@/lib/curriculum'
 import type { SHSYear } from '@/lib/curriculum'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, ExternalLink, BookOpen, ChevronRight, X } from 'lucide-react'
+import { ArrowLeft, ExternalLink, BookOpen, ChevronRight, X, Sparkles, CheckCircle, Loader2 } from 'lucide-react'
+
+interface CurriculumResource {
+  id: number
+  title: string
+  curriculum_topic_id: string
+  status: string
+  has_study_kit: boolean
+}
 
 export default function CurriculumSubjectPage() {
   const params = useParams()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const subjectId = params.id as string
   const subject = getSubjectById(subjectId)
   const initialYear = (searchParams.get('year') as SHSYear | null) || null
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const [yearFilter, setYearFilter] = useState<SHSYear | 'all'>(initialYear || 'all')
+  const [existingKits, setExistingKits] = useState<Record<string, CurriculumResource>>({})
+  const [loadingKit, setLoadingKit] = useState<string | null>(null)
+
+  // Fetch existing resources for this subject
+  useEffect(() => {
+    if (!subject) return
+    const fetchKits = async () => {
+      try {
+        const res = await fetch(`/api/library/resources/?subject=${subjectId}&is_public=true&limit=200`)
+        if (res.ok) {
+          const data = await res.json()
+          const kits: Record<string, CurriculumResource> = {}
+          const resources = data.results || data || []
+          for (const r of resources) {
+            if (r.curriculum_topic_id) {
+              const key = getTopicKey(subjectId, r.curriculum_topic_id)
+              kits[key] = r
+            }
+          }
+          setExistingKits(kits)
+        }
+      } catch (err) {
+        console.error('Failed to fetch curriculum kits:', err)
+      }
+    }
+    fetchKits()
+  }, [subject, subjectId])
 
   const filteredTopics = useMemo(() => {
     if (!subject) return []
@@ -34,6 +70,8 @@ export default function CurriculumSubjectPage() {
   }
 
   const activeTopicData = subject.topics.find(t => t.id === activeTopic)
+  const activeTopicKey = activeTopic ? getTopicKey(subjectId, activeTopic) : null
+  const activeKit = activeTopicKey ? existingKits[activeTopicKey] : null
 
   return (
     <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
@@ -81,33 +119,46 @@ export default function CurriculumSubjectPage() {
           </div>
 
           <h3 className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-3 px-1">Topics ({filteredTopics.length})</h3>
-          {filteredTopics.map((topic) => (
-            <button
-              key={topic.id}
-              onClick={() => setActiveTopic(activeTopic === topic.id ? null : topic.id)}
-              className={cn(
-                "w-full text-left p-4 rounded-xl border transition-all",
-                activeTopic === topic.id
-                  ? "bg-primary/10 border-primary/30"
-                  : "bg-surface-container border-outline-variant/30 hover:border-outline-variant"
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className={cn("text-sm font-bold truncate", activeTopic === topic.id ? 'text-primary' : 'text-on-surface')}>
-                      {topic.title}
-                    </p>
-                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
-                      {SHS_YEAR_LABELS[topic.year]}
-                    </span>
+          {filteredTopics.map((topic) => {
+            const topicKey = getTopicKey(subjectId, topic.id)
+            const kit = existingKits[topicKey]
+            const hasKit = kit && (kit.has_study_kit || kit.status === 'ready')
+            const isProcessing = kit && kit.status === 'processing'
+
+            return (
+              <button
+                key={topic.id}
+                onClick={() => setActiveTopic(activeTopic === topic.id ? null : topic.id)}
+                className={cn(
+                  "w-full text-left p-4 rounded-xl border transition-all",
+                  activeTopic === topic.id
+                    ? "bg-primary/10 border-primary/30"
+                    : "bg-surface-container border-outline-variant/30 hover:border-outline-variant"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className={cn("text-sm font-bold truncate", activeTopic === topic.id ? 'text-primary' : 'text-on-surface')}>
+                        {topic.title}
+                      </p>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
+                        {SHS_YEAR_LABELS[topic.year]}
+                      </span>
+                      {hasKit && (
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      )}
+                      {isProcessing && (
+                        <Loader2 className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-spin" />
+                      )}
+                    </div>
+                    <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{topic.description}</p>
                   </div>
-                  <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{topic.description}</p>
+                  <ChevronRight className={cn("w-4 h-4 shrink-0 transition-transform", activeTopic === topic.id ? 'rotate-90 text-primary' : 'text-on-surface-variant')} />
                 </div>
-                <ChevronRight className={cn("w-4 h-4 shrink-0 transition-transform", activeTopic === topic.id ? 'rotate-90 text-primary' : 'text-on-surface-variant')} />
-              </div>
-            </button>
-          ))}
+              </button>
+            )
+          })}
         </div>
 
         {/* Content viewer */}
@@ -121,7 +172,18 @@ export default function CurriculumSubjectPage() {
                   <p className="text-xs text-on-surface-variant">{subject.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {activeTopicData.naccaUrl && (
+                  {activeKit && (activeKit.has_study_kit || activeKit.status === 'ready') ? (
+                    <Link
+                      href={`/library/${activeKit.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-primary px-3 py-1.5 rounded-full hover:bg-primary/80 transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3" /> Open Kit
+                    </Link>
+                  ) : activeKit && activeKit.status === 'processing' ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-500/10 px-3 py-1.5 rounded-full">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Generating...
+                    </span>
+                  ) : activeTopicData.naccaUrl ? (
                     <a
                       href={activeTopicData.naccaUrl}
                       target="_blank"
@@ -130,7 +192,7 @@ export default function CurriculumSubjectPage() {
                     >
                       <ExternalLink className="w-3 h-3" /> NaCCA Source
                     </a>
-                  )}
+                  ) : null}
                   <button
                     onClick={() => setActiveTopic(null)}
                     className="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
@@ -140,9 +202,29 @@ export default function CurriculumSubjectPage() {
                 </div>
               </div>
 
-              {/* Embedded viewer */}
+              {/* Embedded viewer or kit view */}
               <div className="relative bg-[#0a0a0c] min-h-[500px]">
-                {activeTopicData.naccaUrl ? (
+                {activeKit && (activeKit.has_study_kit || activeKit.status === 'ready') ? (
+                  <div className="flex flex-col items-center justify-center h-[500px] text-center px-8">
+                    <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mb-4">
+                      <Sparkles className="w-8 h-8 text-green-500" />
+                    </div>
+                    <p className="text-on-surface font-bold text-lg mb-1">Study Kit Ready</p>
+                    <p className="text-sm text-on-surface-variant/60 mb-4">This topic has a generated study kit with notes, flashcards, and quizzes.</p>
+                    <Link
+                      href={`/library/${activeKit.id}`}
+                      className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm hover:bg-primary/80 transition-colors"
+                    >
+                      <Sparkles className="w-4 h-4" /> Open Study Kit
+                    </Link>
+                  </div>
+                ) : activeKit && activeKit.status === 'processing' ? (
+                  <div className="flex flex-col items-center justify-center h-[500px] text-center px-8">
+                    <Loader2 className="w-12 h-12 text-amber-500 animate-spin mb-4" />
+                    <p className="text-on-surface font-bold text-lg mb-1">Generating Study Kit</p>
+                    <p className="text-sm text-on-surface-variant/60">This topic is being processed. Check back soon.</p>
+                  </div>
+                ) : activeTopicData.naccaUrl ? (
                   <iframe
                     src={activeTopicData.naccaUrl}
                     className="w-full h-[600px] border-0"

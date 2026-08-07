@@ -36,6 +36,9 @@ class Resource(models.Model):
     thumbnail_url = models.URLField(blank=True)
     is_public = models.BooleanField(default=False, db_index=True)
     author_name = models.CharField(max_length=200, default='Flow State Curator')
+    curriculum_topic_id = models.CharField(max_length=100, blank=True, db_index=True, help_text='Curriculum topic ID (e.g. bio-cell, algebra)')
+    curriculum_year = models.CharField(max_length=10, blank=True, help_text='SHS year: shs1, shs2, shs3')
+    curriculum_subject = models.CharField(max_length=100, blank=True, help_text='Curriculum subject ID (e.g. core-math, physics)')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

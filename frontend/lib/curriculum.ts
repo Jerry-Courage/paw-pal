@@ -284,3 +284,7 @@ export function getSubjectById(id: string): CurriculumSubject | undefined {
 export function getSubjectsByCategory(category: CurriculumSubject['category']): CurriculumSubject[] {
   return SHS_CURRICULUM.filter(s => s.category === category)
 }
+
+export function getTopicKey(subjectId: string, topicId: string): string {
+  return `${subjectId}__${topicId}`
+}
