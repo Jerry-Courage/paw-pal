@@ -594,55 +594,61 @@ export default function PersonalisedLearningPage() {
 
       {/* ── REPORT PHASE ── */}
       {phase === 'report' && report && (
-        <div className="flex-1 flex flex-col justify-center px-5 pt-12 pb-8 max-w-lg mx-auto w-full overflow-y-auto">
-          <div className="text-center mb-8">
-            <Award className="w-14 h-14 text-violet-400 mx-auto mb-4 animate-bounce" />
-            <h1 className="text-2xl font-black tracking-tight mb-1">Session Complete</h1>
-            <p className="text-xs text-white/40 uppercase tracking-widest">Evaluation & Next Steps</p>
+        <div className="flex-1 flex flex-col px-5 sm:px-8 pt-10 pb-10 max-w-2xl mx-auto w-full overflow-y-auto">
+          <div className="text-center mb-6">
+            <Award className="w-16 h-16 text-violet-400 mx-auto mb-3 animate-bounce" />
+            <h1 className="text-3xl font-black tracking-tight mb-1">Session Complete</h1>
+            <p className="text-[11px] text-white/40 uppercase tracking-widest">Evaluation & Next Steps</p>
           </div>
 
           {/* Score */}
-          <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-black text-white/40 uppercase tracking-wider">Focus Score</span>
-              <span className="text-2xl font-black text-violet-400">{report.score}/100</span>
+          <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-5">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-black text-white/50 uppercase tracking-wider">Focus Score</span>
+              <span className="text-3xl font-black text-violet-400">{report.score}/100</span>
             </div>
-            <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden mb-3">
+            <div className="w-full h-3 bg-white/[0.05] rounded-full overflow-hidden mb-4">
               <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" style={{ width: `${report.score}%` }} />
             </div>
-            <p className="text-xs text-white/50 leading-relaxed">{report.summary}</p>
+            <p className="text-[13px] text-white/50 leading-relaxed">{report.summary}</p>
           </div>
 
           {/* Strengths & Gaps */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-              <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Strengths
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+            <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+              <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Strengths
               </h4>
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {(report.strengths || []).map((s, i) => (
-                  <li key={i} className="text-[11px] text-white/50 leading-normal">• {s}</li>
+                  <li key={i} className="text-[13px] text-white/60 leading-relaxed flex gap-2">
+                    <span className="text-emerald-400 mt-0.5 shrink-0">•</span>
+                    <span>{s}</span>
+                  </li>
                 ))}
               </ul>
             </div>
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-              <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <ShieldAlert className="w-3 h-3" /> Gaps
+            <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+              <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4" /> Gaps
               </h4>
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {(report.gaps || []).map((g, i) => (
-                  <li key={i} className="text-[11px] text-white/50 leading-normal">• {g}</li>
+                  <li key={i} className="text-[13px] text-white/60 leading-relaxed flex gap-2">
+                    <span className="text-amber-400 mt-0.5 shrink-0">•</span>
+                    <span>{g}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           </div>
 
           {/* Advice */}
-          <div className="p-4 rounded-2xl bg-violet-500/[0.03] border border-violet-500/10 mb-6">
-            <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Tutor Advice
+          <div className="p-5 rounded-2xl bg-violet-500/[0.04] border border-violet-500/10 mb-8">
+            <h4 className="text-xs font-black text-violet-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4" /> Tutor Advice
             </h4>
-            <p className="text-xs text-white/50 leading-relaxed">{report.recommendation}</p>
+            <p className="text-[13px] text-white/60 leading-relaxed">{report.recommendation}</p>
           </div>
 
           <button
