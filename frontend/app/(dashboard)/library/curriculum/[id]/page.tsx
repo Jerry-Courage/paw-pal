@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { getSubjectById, SHS_YEAR_LABELS, getTopicKey } from '@/lib/curriculum'
 import type { SHSYear } from '@/lib/curriculum'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, ExternalLink, BookOpen, ChevronRight, X, Sparkles, CheckCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, ExternalLink, BookOpen, ChevronRight, X, Sparkles, CheckCircle, Loader2, Link2, Wand2 } from 'lucide-react'
 
 interface CurriculumResource {
   id: number
@@ -27,6 +27,12 @@ export default function CurriculumSubjectPage() {
   const [yearFilter, setYearFilter] = useState<SHSYear | 'all'>(initialYear || 'all')
   const [existingKits, setExistingKits] = useState<Record<string, CurriculumResource>>({})
   const [loadingKit, setLoadingKit] = useState<string | null>(null)
+
+  // URL input state
+  const [urlInput, setUrlInput] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [showUrlForm, setShowUrlForm] = useState(false)
 
   // Fetch existing resources for this subject
   useEffect(() => {
@@ -52,6 +58,104 @@ export default function CurriculumSubjectPage() {
     }
     fetchKits()
   }, [subject, subjectId])
+
+  // Reset URL form when topic changes
+  useEffect(() => {
+    setUrlInput('')
+    setGenerateError(null)
+    setShowUrlForm(false)
+  }, [activeTopic])
+
+  const handleGenerateKit = async (topicId: string, topicTitle: string, naccaUrl?: string) => {
+    const url = urlInput.trim() || naccaUrl
+    if (!url) {
+      setGenerateError('Please enter a URL')
+      return
+    }
+
+    setGenerating(true)
+    setGenerateError(null)
+
+    try {
+      const topicData = subject?.topics.find(t => t.id === topicId)
+      const features = ['notes', 'flashcards', 'quiz', 'practice']
+
+      const formData = new FormData()
+      formData.append('url', url)
+      formData.append('title', topicTitle)
+      formData.append('subject', subjectId)
+      formData.append('curriculum_topic_id', topicId)
+      formData.append('curriculum_year', topicData?.year || '')
+      formData.append('curriculum_subject', subjectId)
+      formData.append('selected_features', JSON.stringify(features))
+
+      const res = await fetch('/api/library/resources/', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        if (data.error === 'free_limit_reached') {
+          setGenerateError('Free limit reached. Upgrade to Premium for unlimited kits.')
+        } else {
+          setGenerateError(data.error || data.message || 'Failed to create kit')
+        }
+        return
+      }
+
+      const resource = await res.json()
+
+      // Add to existing kits immediately
+      const key = getTopicKey(subjectId, topicId)
+      setExistingKits(prev => ({
+        ...prev,
+        [key]: {
+          id: resource.id,
+          title: resource.title,
+          curriculum_topic_id: topicId,
+          status: 'processing',
+          has_study_kit: false,
+        }
+      }))
+
+      setShowUrlForm(false)
+      setUrlInput('')
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const checkRes = await fetch(`/api/library/resources/${resource.id}/`)
+          if (checkRes.ok) {
+            const updated = await checkRes.json()
+            if (updated.status === 'ready' || updated.has_study_kit) {
+              clearInterval(pollInterval)
+              setExistingKits(prev => ({
+                ...prev,
+                [key]: {
+                  id: updated.id,
+                  title: updated.title,
+                  curriculum_topic_id: topicId,
+                  status: updated.status,
+                  has_study_kit: updated.has_study_kit,
+                }
+              }))
+            }
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 3000)
+
+      // Stop polling after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 300000)
+
+    } catch (err) {
+      setGenerateError('Network error. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const filteredTopics = useMemo(() => {
     if (!subject) return []
@@ -184,15 +288,30 @@ export default function CurriculumSubjectPage() {
                       <Loader2 className="w-3 h-3 animate-spin" /> Generating...
                     </span>
                   ) : activeTopicData.naccaUrl ? (
-                    <a
-                      href={activeTopicData.naccaUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors"
+                    <>
+                      <a
+                        href={activeTopicData.naccaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" /> NaCCA Source
+                      </a>
+                      <button
+                        onClick={() => setShowUrlForm(true)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-primary px-3 py-1.5 rounded-full hover:bg-primary/80 transition-colors"
+                      >
+                        <Wand2 className="w-3 h-3" /> Generate Kit
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShowUrlForm(true)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-primary px-3 py-1.5 rounded-full hover:bg-primary/80 transition-colors"
                     >
-                      <ExternalLink className="w-3 h-3" /> NaCCA Source
-                    </a>
-                  ) : null}
+                      <Link2 className="w-3 h-3" /> Add URL
+                    </button>
+                  )}
                   <button
                     onClick={() => setActiveTopic(null)}
                     className="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
@@ -224,6 +343,71 @@ export default function CurriculumSubjectPage() {
                     <p className="text-on-surface font-bold text-lg mb-1">Generating Study Kit</p>
                     <p className="text-sm text-on-surface-variant/60">This topic is being processed. Check back soon.</p>
                   </div>
+                ) : showUrlForm ? (
+                  <div className="flex flex-col items-center justify-center h-[500px] px-8">
+                    <div className="w-full max-w-lg">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <Link2 className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-on-surface font-bold text-sm">Generate Study Kit</p>
+                            <p className="text-xs text-on-surface-variant">Paste a URL to {activeTopicData.title}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setShowUrlForm(false)}
+                          className="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <input
+                            type="url"
+                            value={urlInput}
+                            onChange={(e) => { setUrlInput(e.target.value); setGenerateError(null) }}
+                            placeholder={activeTopicData.naccaUrl ? activeTopicData.naccaUrl : "https://example.com/content-about-this-topic"}
+                            className="w-full px-4 py-3 bg-surface-container-high border border-outline-variant/30 rounded-xl text-on-surface text-sm placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                          />
+                        </div>
+
+                        {activeTopicData.naccaUrl && !urlInput && (
+                          <p className="text-xs text-on-surface-variant/60">
+                            Leave empty to use the NaCCA source URL
+                          </p>
+                        )}
+
+                        {generateError && (
+                          <p className="text-xs text-red-500 font-medium">{generateError}</p>
+                        )}
+
+                        <button
+                          onClick={() => handleGenerateKit(activeTopicData.id, activeTopicData.title, activeTopicData.naccaUrl)}
+                          disabled={generating}
+                          className={cn(
+                            "w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all",
+                            generating
+                              ? "bg-primary/20 text-primary/60 cursor-not-allowed"
+                              : "bg-primary text-on-primary hover:bg-primary/80"
+                          )}
+                        >
+                          {generating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" /> Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-4 h-4" /> Generate Study Kit
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 ) : activeTopicData.naccaUrl ? (
                   <iframe
                     src={activeTopicData.naccaUrl}
@@ -234,8 +418,14 @@ export default function CurriculumSubjectPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-[500px] text-center px-8">
                     <BookOpen className="w-12 h-12 text-on-surface-variant/30 mb-4" />
-                    <p className="text-on-surface-variant font-bold mb-1">Content coming soon</p>
-                    <p className="text-sm text-on-surface-variant/60">This topic will be available once we pull in the NaCCA curriculum content.</p>
+                    <p className="text-on-surface-variant font-bold mb-1">No content yet</p>
+                    <p className="text-sm text-on-surface-variant/60 mb-4">Paste a URL to generate a study kit for this topic.</p>
+                    <button
+                      onClick={() => setShowUrlForm(true)}
+                      className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm hover:bg-primary/80 transition-colors"
+                    >
+                      <Link2 className="w-4 h-4" /> Add Content URL
+                    </button>
                   </div>
                 )}
               </div>

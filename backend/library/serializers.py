@@ -119,11 +119,17 @@ class ResourceListSerializer(serializers.ModelSerializer):
 
 
 class ResourceUploadSerializer(serializers.ModelSerializer):
+    selected_features = serializers.JSONField(required=False, default=list)
+    curriculum_topic_id = serializers.CharField(required=False, allow_blank=True)
+    curriculum_year = serializers.CharField(required=False, allow_blank=True)
+    curriculum_subject = serializers.CharField(required=False, allow_blank=True)
+
     class Meta:
         model = Resource
         fields = (
             'id', 'title', 'resource_type', 'file', 'url', 'subject',
-            'status', 'processing_progress', 'status_text', 'has_study_kit', 'created_at'
+            'status', 'processing_progress', 'status_text', 'has_study_kit', 'created_at',
+            'selected_features', 'curriculum_topic_id', 'curriculum_year', 'curriculum_subject'
         )
         read_only_fields = ('id', 'status', 'processing_progress', 'status_text', 'has_study_kit', 'created_at')
         extra_kwargs = {
