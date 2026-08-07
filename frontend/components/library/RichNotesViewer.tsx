@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
@@ -204,14 +204,16 @@ export default function RichNotesViewer({
               Scroll Mode
             </button>
             
-            {/* Explore in VR */}
-            <Link
-              href={`/library/${resourceId}/vr`}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-500/20 to-pink-500/20 hover:from-rose-500/30 hover:to-pink-500/30 border border-rose-500/30 text-rose-400 text-[10px] font-black uppercase tracking-wider transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Explore in VR 🥽
-            </Link>
+            {/* Explore in VR — Coming Soon */}
+            <div className="relative group">
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-500/10 to-pink-500/10 border border-rose-500/20 text-rose-400/50 text-[10px] font-black uppercase tracking-wider cursor-not-allowed">
+                <Sparkles className="w-3.5 h-3.5" />
+                Explore in VR 🥽
+              </div>
+              <span className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-amber-500 text-white rounded-full shadow-lg">
+                Soon
+              </span>
+            </div>
           </div>
         </div>
       </div>
