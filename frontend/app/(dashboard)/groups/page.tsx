@@ -236,6 +236,11 @@ export default function QuizBattlePage() {
         setShowConfetti(true)
         snd.gameOver()
         setTimeout(() => setShowConfetti(false), 4000)
+        // Notify winner of XP reward
+        const winner = (msg.leaderboard || [])[0]
+        if (winner && winner.username === me) {
+          setTimeout(() => toast.success('Winner! +10 XP earned 🏆', { duration: 5000, icon: '⚡' }), 1500)
+        }
         break
     }
   }, [me, snd])

@@ -112,6 +112,12 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         self.session_active = False
+        if hasattr(self, 'audio_send_task') and self.audio_send_task:
+            self.audio_send_task.cancel()
+            try:
+                await self.audio_send_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if self.gemini_task:
             self.gemini_task.cancel()
             try:
@@ -143,8 +149,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         elif msg_type == 'audio':
             if self.gemini_ws and self.session_active:
                 audio_b64 = msg.get('data', '')
-                if audio_b64:
-                    await self._send_audio_to_gemini(audio_b64)
+                if audio_b64 and hasattr(self, 'audio_queue'):
+                    await self.audio_queue.put(audio_b64)
 
         elif msg_type == 'text_message':
             text = msg.get('text', '').strip()
@@ -219,9 +225,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         },
-                        # Performance optimizations for lower latency
-                        'temperature': 0.8,  # Slightly lower for faster, more focused responses
-                        'maxOutputTokens': 100,  # Limit token count for shorter responses
+                        'temperature': 0.8,
+                        'maxOutputTokens': 800,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -229,7 +234,9 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 800,  # 800ms gives natural word pauses without false cutoffs
+                            'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
+                            'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
+                            'silenceDurationMs': 250,
                         }
                     },
                 }
@@ -238,10 +245,36 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
             initial_instruction = f"Hi {ctx['username']}! Ready to study?"
 
-            # Start session and background receive task immediately
+            # Wait for setupComplete before marking session active
+            setup_ready = False
+            for _ in range(5):
+                try:
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
+                    setup_data = json.loads(setup_resp)
+                    if 'setupComplete' in setup_data:
+                        setup_ready = True
+                        break
+                except asyncio.TimeoutError:
+                    break
+
+            if not setup_ready:
+                self.session_active = True
+                self.text_fallback_mode = True
+                self.text_fallback_reason = 'live voice setup timed out'
+                logger.warning('[PersonalisedVoice] Live setup timed out; enabling fast text fallback')
+                await self._send({'type': 'ready'})
+                await self._send({'type': 'status', 'message': 'The live voice model is warming up. You can still chat and receive fast text replies.'})
+                await self._reply_with_text_fallback(initial_instruction)
+                return
+
+            # Initialise the audio queue and start the drain task immediately
+            # so audio chunks can be sent as fast as they arrive without blocking receive()
+            self.audio_queue = asyncio.Queue()
+            self.audio_send_task = asyncio.create_task(self._drain_audio_queue())
+
             self.session_active = True
             await self._send({'type': 'ready'})
-            logger.info(f'[PersonalisedVoice] Gemini Live connected: voice={voice_name}')
+            logger.info(f'[PersonalisedVoice] Gemini ready: voice={voice_name}')
 
             self.gemini_task = asyncio.create_task(self._receive_from_gemini())
             await self._send_text_to_gemini(initial_instruction)
@@ -276,6 +309,25 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             fallback = "I'm here. Let know what you want to study today."
             self.transcript_log.append(('ai', fallback))
             await self._send({'type': 'transcript_ai', 'text': fallback})
+
+    async def _drain_audio_queue(self):
+        """
+        Dedicated coroutine that drains the audio queue and forwards chunks to Gemini.
+        Running this separately from receive() means audio sends never block message handling,
+        giving much lower perceived latency.
+        """
+        try:
+            while self.session_active:
+                try:
+                    audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=1.0)
+                    await self._send_audio_to_gemini(audio_b64)
+                    self.audio_queue.task_done()
+                except asyncio.TimeoutError:
+                    continue
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f'[PersonalisedVoice] Audio drain task error: {e}')
 
     async def _send_audio_to_gemini(self, audio_b64: str):
         try:
@@ -363,6 +415,12 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
     async def _end_session(self):
         self.session_active = False
+        if hasattr(self, 'audio_send_task') and self.audio_send_task:
+            self.audio_send_task.cancel()
+            try:
+                await self.audio_send_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if self.gemini_task:
             self.gemini_task.cancel()
             try:

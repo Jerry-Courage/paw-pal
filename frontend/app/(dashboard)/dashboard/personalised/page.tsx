@@ -136,6 +136,7 @@ export default function PersonalisedLearningPage() {
     isSpeakingTimeoutRef.current = setTimeout(() => {
       setIsAiSpeaking(false)
       isAiSpeakingRef.current = false
+      nextPlayTimeRef.current = 0
     }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
   }, [])
 
@@ -251,8 +252,9 @@ export default function PersonalisedLearningPage() {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         if (isMicMutedRef.current) return
         
-        const isSpeaking = playAudioCtxRef.current && (nextPlayTimeRef.current > playAudioCtxRef.current.currentTime - 0.5)
-        if (isSpeaking) return
+        // Block mic while AI is speaking (use ref flag — time comparison
+        // breaks on iOS because AudioContext.currentTime freezes when suspended)
+        if (isAiSpeakingRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         const pcm16 = new Int16Array(float32.length)
@@ -330,7 +332,6 @@ export default function PersonalisedLearningPage() {
       {/* ── SETUP PHASE ── */}
       {phase === 'setup' && (
         <div className="min-h-screen flex flex-col">
-          {/* Mobile: full-screen setup */}
           <div className="flex-1 flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full">
 
             {/* Back link */}
@@ -338,15 +339,34 @@ export default function PersonalisedLearningPage() {
               <ChevronLeft className="w-4 h-4" /> Dashboard
             </Link>
 
-            {/* Hero */}
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-rose-500 to-pink-600 mx-auto mb-5 flex items-center justify-center shadow-2xl shadow-rose-500/30">
-                <Headphones className="w-10 h-10" />
+            {/* Hero Banner — matches dashboard welcome card */}
+            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-6 sm:p-8 text-white shadow-2xl mb-8">
+              <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-black/25 backdrop-blur-md flex items-center justify-center border border-white/10">
+                  <Headphones className="w-8 h-8" />
+                </div>
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
+                  <p className="text-white/80 text-sm leading-relaxed max-w-xs mx-auto">
+                    Real-time voice conversations with an AI that knows your study history.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                    <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Streak</p>
+                    <p className="text-sm font-black flex items-center gap-1">🔥 {studyStreak} Days</p>
+                  </div>
+                  <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                    <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">XP</p>
+                    <p className="text-sm font-black flex items-center gap-1">⚡ {totalXp.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                    <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Level</p>
+                    <p className="text-sm font-black flex items-center gap-1">🎓 {userLevel.num}</p>
+                  </div>
+                </div>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
-              <p className="text-sm text-white/50 leading-relaxed max-w-xs mx-auto">
-                Real-time voice conversations with an AI that knows your study history.
-              </p>
             </div>
 
             {/* Voice Selector */}
@@ -360,7 +380,7 @@ export default function PersonalisedLearningPage() {
                     className={cn(
                       "flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all text-center",
                       voice === v.id
-                        ? "bg-rose-500/15 border-rose-500/40 text-rose-300"
+                        ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
                         : "bg-white/[0.02] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
                     )}
                   >
@@ -380,7 +400,7 @@ export default function PersonalisedLearningPage() {
                 { icon: '🔥', text: `${studyStreak} day streak` },
                 { icon: '💬', text: 'Full conversation memory' },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-outline-variant/30">
                   <span className="text-sm">{item.icon}</span>
                   <span className="text-xs text-white/60">{item.text}</span>
                 </div>
@@ -391,7 +411,7 @@ export default function PersonalisedLearningPage() {
             <button
               onClick={startSession}
               disabled={isConnecting}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-rose-500/25"
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25"
             >
               {isConnecting ? (
                 <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
@@ -433,14 +453,14 @@ export default function PersonalisedLearningPage() {
                       animate={{ scale: 2, opacity: 0.15 }}
                       exit={{ opacity: 0 }}
                       transition={{ repeat: Infinity, duration: 2, ease: 'easeOut' }}
-                      className="absolute inset-0 w-40 h-40 rounded-full border-2 border-rose-500 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
+                      className="absolute inset-0 w-40 h-40 rounded-full border-2 border-violet-500 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
                     />
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 2.5, opacity: 0.05 }}
                       exit={{ opacity: 0 }}
                       transition={{ repeat: Infinity, duration: 2, ease: 'easeOut', delay: 0.5 }}
-                      className="absolute inset-0 w-40 h-40 rounded-full border border-rose-400 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
+                      className="absolute inset-0 w-40 h-40 rounded-full border border-violet-400 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
                     />
                   </>
                 )}
@@ -451,27 +471,27 @@ export default function PersonalisedLearningPage() {
                 animate={{
                   scale: isAiSpeaking ? [1, 1.1, 1] : isRecording && !isMicMuted ? [1, 1.04, 1] : 1,
                   boxShadow: isAiSpeaking
-                    ? '0 0 50px rgba(244,63,94,0.4), 0 0 100px rgba(244,63,94,0.15)'
+                    ? '0 0 50px rgba(139,92,246,0.4), 0 0 100px rgba(139,92,246,0.15)'
                     : isRecording && !isMicMuted
-                    ? '0 0 30px rgba(244,63,94,0.2)'
-                    : '0 0 20px rgba(244,63,94,0.05)',
+                    ? '0 0 30px rgba(139,92,246,0.2)'
+                    : '0 0 20px rgba(139,92,246,0.05)',
                 }}
                 transition={{ repeat: Infinity, duration: isAiSpeaking ? 1.2 : 2.5, ease: 'easeInOut' }}
                 className={cn(
                   "w-36 h-36 rounded-full flex items-center justify-center border-2 transition-all duration-500",
                   isAiSpeaking
-                    ? "bg-rose-500/15 border-rose-500/50"
+                    ? "bg-violet-500/15 border-violet-500/50"
                     : isRecording && !isMicMuted
-                    ? "bg-rose-500/8 border-rose-500/25"
+                    ? "bg-violet-500/8 border-violet-500/25"
                     : "bg-white/[0.03] border-white/[0.08]"
                 )}
               >
                 {isAiSpeaking ? (
-                  <Volume2 className="w-14 h-14 text-rose-400 animate-pulse" />
+                  <Volume2 className="w-14 h-14 text-violet-400 animate-pulse" />
                 ) : isMicMuted ? (
-                  <MicOff className="w-14 h-14 text-rose-500/40" />
+                  <MicOff className="w-14 h-14 text-violet-500/40" />
                 ) : (
-                  <Mic className="w-14 h-14 text-rose-400" />
+                  <Mic className="w-14 h-14 text-violet-400" />
                 )}
               </motion.div>
             </div>
@@ -492,7 +512,7 @@ export default function PersonalisedLearningPage() {
               className={cn(
                 "flex-1 py-4 rounded-2xl border-2 font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2",
                 isMicMuted
-                  ? "bg-rose-500/15 border-rose-500/40 text-rose-300"
+                  ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
                   : "bg-white/5 border-white/[0.08] text-white/70"
               )}
             >
@@ -527,7 +547,7 @@ export default function PersonalisedLearningPage() {
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
                   {transcript.length === 0 ? (
                     <div className="text-center py-12">
-                      <Sparkles className="w-8 h-8 text-rose-500/20 mx-auto mb-3 animate-pulse" />
+                      <Sparkles className="w-8 h-8 text-violet-500/20 mx-auto mb-3 animate-pulse" />
                       <p className="text-xs text-white/30">Waiting for conversation...</p>
                     </div>
                   ) : (
@@ -539,7 +559,7 @@ export default function PersonalisedLearningPage() {
                         <div className={cn(
                           "px-4 py-2.5 rounded-2xl text-xs max-w-[85%] leading-relaxed",
                           t.role === 'user'
-                            ? "bg-rose-500/15 border border-rose-500/20 text-rose-100"
+                            ? "bg-violet-500/15 border border-violet-500/20 text-violet-100"
                             : "bg-white/[0.03] border border-white/[0.06] text-white/70"
                         )}>
                           {t.text}
@@ -556,12 +576,12 @@ export default function PersonalisedLearningPage() {
                     onChange={e => setTextInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') sendTextMessage() }}
                     placeholder="Type a message..."
-                    className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-rose-500/30"
+                    className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/30"
                   />
                   <button
                     onClick={sendTextMessage}
                     disabled={!textInput.trim()}
-                    className="p-3 rounded-xl bg-rose-500 text-white disabled:opacity-20 disabled:pointer-events-none"
+                    className="p-3 rounded-xl bg-violet-500 text-white disabled:opacity-20 disabled:pointer-events-none"
                   >
                     <Send className="w-4 h-4" />
                   </button>
@@ -576,7 +596,7 @@ export default function PersonalisedLearningPage() {
       {phase === 'report' && report && (
         <div className="min-h-screen flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full">
           <div className="text-center mb-8">
-            <Award className="w-14 h-14 text-rose-400 mx-auto mb-4 animate-bounce" />
+            <Award className="w-14 h-14 text-violet-400 mx-auto mb-4 animate-bounce" />
             <h1 className="text-2xl font-black tracking-tight mb-1">Session Complete</h1>
             <p className="text-xs text-white/40 uppercase tracking-widest">Evaluation & Next Steps</p>
           </div>
@@ -585,10 +605,10 @@ export default function PersonalisedLearningPage() {
           <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-black text-white/40 uppercase tracking-wider">Focus Score</span>
-              <span className="text-2xl font-black text-rose-400">{report.score}/100</span>
+              <span className="text-2xl font-black text-violet-400">{report.score}/100</span>
             </div>
             <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden mb-3">
-              <div className="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full" style={{ width: `${report.score}%` }} />
+              <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" style={{ width: `${report.score}%` }} />
             </div>
             <p className="text-xs text-white/50 leading-relaxed">{report.summary}</p>
           </div>
@@ -618,8 +638,8 @@ export default function PersonalisedLearningPage() {
           </div>
 
           {/* Advice */}
-          <div className="p-4 rounded-2xl bg-rose-500/[0.03] border border-rose-500/10 mb-6">
-            <h4 className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+          <div className="p-4 rounded-2xl bg-violet-500/[0.03] border border-violet-500/10 mb-6">
+            <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
               <Sparkles className="w-3 h-3" /> Tutor Advice
             </h4>
             <p className="text-xs text-white/50 leading-relaxed">{report.recommendation}</p>
@@ -639,7 +659,7 @@ export default function PersonalisedLearningPage() {
         {isEndingSession && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
             <div className="text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-rose-500 animate-spin mx-auto" />
+              <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto" />
               <p className="text-xs font-bold text-white uppercase tracking-wider">Generating Report...</p>
             </div>
           </div>
