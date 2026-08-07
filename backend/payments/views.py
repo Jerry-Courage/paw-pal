@@ -15,7 +15,6 @@ from rest_framework.views import APIView
 logger = logging.getLogger('flowstate')
 
 PAYSTACK_SECRET = os.environ.get('PAYSTACK_SECRET_KEY', '')
-PAYSTACK_SECRET = os.environ.get('PAYSTACK_SECRET_KEY', '')
 PLAN_PRICE_CENTS = 1500  # GH₵ 15.00 in pesewas (Paystack GHS)
 SUBSCRIPTION_DAYS = 30  # 1 month per payment
 SUPPORTED_CURRENCIES = {'GHS', 'USD', 'NGN', 'ZAR', 'KES', 'GBP', 'EUR'}
@@ -201,6 +200,20 @@ class VerifyPaymentView(APIView):
             data = resp.json()
             if data.get('status') and data['data']['status'] == 'success':
                 user = request.user
+
+                # Idempotency: skip if this reference was already processed
+                already_processed = PaymentTransaction.objects.filter(
+                    reference=reference, status='success'
+                ).exists()
+                if already_processed:
+                    user.refresh_from_db()
+                    return Response({
+                        'success': True,
+                        'is_premium': True,
+                        'expires_at': user.subscription_expires_at.isoformat(),
+                        'message': 'Payment already confirmed.',
+                    })
+
                 _activate_premium(user)
                 # Update transaction record
                 PaymentTransaction.objects.filter(reference=reference).update(
@@ -260,6 +273,15 @@ class PaystackWebhookView(APIView):
             if user_id:
                 from django.contrib.auth import get_user_model
                 User = get_user_model()
+
+                # Idempotency: skip if this reference was already processed
+                existing_txn = PaymentTransaction.objects.filter(
+                    reference=reference, status='success'
+                ).exists()
+                if existing_txn:
+                    logger.info(f"[Paystack Webhook] Reference {reference} already processed — skipping")
+                    return Response({'status': 'ok'})
+
                 try:
                     user = User.objects.get(id=user_id)
                     if payment_type == 'xp_pack':
@@ -398,6 +420,46 @@ def send_expiry_reminders():
             logger.info(f"[Payments] Expiry reminder sent to {user.email}")
         except Exception as e:
             logger.error(f"[Payments] Reminder failed for {user.email}: {e}")
+
+
+def deactivate_expired_subscriptions():
+    """
+    Proactively deactivate all users whose premium has expired.
+    Called daily by management command or django-q schedule.
+    Returns the number of users deactivated.
+    """
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    now = timezone.now()
+
+    expired_users = User.objects.filter(
+        is_premium=True,
+        subscription_expires_at__lt=now,
+    )
+
+    count = 0
+    for user in expired_users:
+        user.is_premium = False
+        user.subscription_expires_at = None
+        user.save(update_fields=['is_premium', 'subscription_expires_at'])
+        count += 1
+
+        try:
+            from users.notifications import create_notification
+            create_notification(
+                user, 'system',
+                '🔒 Premium Expired',
+                'Your premium access has ended. Upgrade again to keep unlimited study kits and AI features.',
+                '/upgrade'
+            )
+        except Exception:
+            pass
+
+        logger.info(f"[Payments] Expired premium for {user.email}")
+
+    if count:
+        logger.info(f"[Payments] Deactivated {count} expired subscription(s)")
+    return count
 
 
 # ── MARKETPLACE & POWER-UPS ──────────────────────────────────────────────────

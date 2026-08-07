@@ -10,12 +10,23 @@ class PaymentsConfig(AppConfig):
         try:
             from django_q.models import Schedule
 
-            task_name = 'Premium Expiry Reminders'
-            if not Schedule.objects.filter(name=task_name).exists():
+            # Hourly expiry reminders (3-day warning)
+            reminder_name = 'Premium Expiry Reminders'
+            if not Schedule.objects.filter(name=reminder_name).exists():
                 Schedule.objects.create(
-                    name=task_name,
+                    name=reminder_name,
                     func='payments.views.send_expiry_reminders',
                     schedule_type=Schedule.HOURLY,
+                    repeats=-1,
+                )
+
+            # Daily deactivation of expired subscriptions
+            deactivation_name = 'Deactivate Expired Subscriptions'
+            if not Schedule.objects.filter(name=deactivation_name).exists():
+                Schedule.objects.create(
+                    name=deactivation_name,
+                    func='payments.views.deactivate_expired_subscriptions',
+                    schedule_type=Schedule.DAILY,
                     repeats=-1,
                 )
         except Exception:

@@ -54,6 +54,34 @@ services:
       - key: ALLOWED_HOSTS
         value: "*"
 
+  # ─── CRON: DAILY SUBSCRIPTION DEACTIVATION ──────────────────────────────────
+  - type: cron
+    name: paw-pal-cron
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    schedule: "0 0 * * *"
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: paw-pal-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: paw-pal-redis
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.12.1"
+      - key: ALLOWED_HOSTS
+        value: "*"
+    startCommand: "python manage.py deactivate_expired_subscriptions && python manage.py send_expiry_reminders"
+
   # ─── FRONTEND WEB SERVICE ───────────────────────────────────────────────────
   - type: web
     name: paw-pal-frontend

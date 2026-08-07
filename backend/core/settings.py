@@ -440,7 +440,13 @@ Q_SCHEDULES = [
         'name': 'Premium Expiry Reminders',
         'func': 'payments.views.send_expiry_reminders',
         'schedule_type': 'H',   # Hourly — the function itself checks the 3-day window
-        'repeats': -1,          # Run forever
+        'repeats': -1,
+    },
+    {
+        'name': 'Deactivate Expired Subscriptions',
+        'func': 'payments.views.deactivate_expired_subscriptions',
+        'schedule_type': 'D',   # Daily — proactively flips is_premium=False
+        'repeats': -1,
     },
 ]
 # Signal: Forced Reload 2026-04-07
