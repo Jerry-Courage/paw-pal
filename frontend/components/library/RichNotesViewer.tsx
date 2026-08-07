@@ -51,13 +51,6 @@ export default function RichNotesViewer({
 }: RichNotesViewerProps) {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const completeStepMutation = useMutation({
-    mutationFn: (step: string) => libraryApi.completeStep(resourceId!, step, 100),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
-      queryClient.invalidateQueries({ queryKey: ['progress', resourceId] })
-    }
-  })
 
   const [zoomedImage, setZoomedImage] = useState<string | null>(null)
   const [currentPart, setCurrentPart] = useState(0)
@@ -132,9 +125,6 @@ export default function RichNotesViewer({
         subtext: 'You finished every part of this study kit. Streak Badge unlocked!',
         xp: 50,
       })
-      if (resourceId) {
-        completeStepMutation.mutate('notes')
-      }
       return
     }
 
@@ -144,8 +134,8 @@ export default function RichNotesViewer({
       setUnlockedProgress(nextPart)
       setCelebration({
         title: 'Part complete!',
-        subtext: `You earned 25 XP for completing part ${currentPart + 1}.`,
-        xp: 25,
+        subtext: `You completed part ${currentPart + 1}. Keep going!`,
+        xp: 0,
       })
     }
   }
@@ -903,7 +893,7 @@ export default function RichNotesViewer({
                   UNDERSTAND BADGE UNLOCKED 🏆
                 </span>
                 <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
-                  Excellent work! You finished reading and understanding every single part of this study kit. You gained <strong className="text-white">+50 XP</strong>.
+                  Excellent work! You finished reading and understanding every single part of this study kit.
                 </p>
               </div>
 
@@ -949,9 +939,6 @@ export default function RichNotesViewer({
                 <p className="text-xs font-black text-white uppercase tracking-wider">{celebration.title}</p>
                 <p className="text-xs text-zinc-400 mt-0.5 leading-normal">{celebration.subtext}</p>
               </div>
-            </div>
-            <div className="shrink-0 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase">
-              +{celebration.xp} XP
             </div>
           </motion.div>
         )}

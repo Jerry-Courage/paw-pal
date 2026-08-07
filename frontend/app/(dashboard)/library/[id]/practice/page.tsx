@@ -52,15 +52,6 @@ export default function PracticePage({ params }: { params: { id: string } }) {
 
   const qc = useQueryClient()
 
-  // Save XP when practice session ends (results phase)
-  const savePracticeXp = useCallback(async (answeredCount: number, avgScore: number) => {
-    try {
-      await libraryApi.completeStep(resourceId, 'practice', avgScore)
-      qc.invalidateQueries({ queryKey: ['progress', resourceId] })
-      qc.invalidateQueries({ queryKey: ['profile'] })
-    } catch { /* silent — XP will sync next time */ }
-  }, [resourceId, qc])
-
   const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
@@ -101,13 +92,6 @@ export default function PracticePage({ params }: { params: { id: string } }) {
   const handleNext = () => {
     if (current < questions.length - 1) { setCurrent(c => c + 1); setShowHint(false) }
     else {
-      // Save XP before showing results
-      const answered = Object.keys(submitted).length + 1 // +1 for current
-      const allGrades = { ...grades }
-      if (grades[current]) {
-        const avg = Math.round(Object.values(allGrades).reduce((s, g) => s + (g.score || 0), 0) / Object.values(allGrades).length)
-        savePracticeXp(answered, avg)
-      }
       setPhase('results')
     }
   }

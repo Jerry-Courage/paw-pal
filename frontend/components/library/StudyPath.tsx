@@ -105,10 +105,6 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
       libraryApi.completeStep(resourceId, step, score),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['progress', resourceId] })
-      const xp = res.data.xp_gained
-      if (xp > 0) {
-        toast.success(`+${xp} XP earned! 🎉`, { duration: 2000 })
-      }
     },
   })
 
@@ -237,11 +233,6 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
                     {isDone && score !== undefined && (
                       <span className="text-[9px] text-emerald-500 font-bold">{score}%</span>
                     )}
-                    {!isDone && step.xp > 0 && (
-                      <span className="text-[9px] font-black text-slate-700 flex items-center gap-0.5">
-                        <Zap className="w-2.5 h-2.5" />{step.xp}
-                      </span>
-                    )}
                   </div>
                   <p className={cn(
                     'text-[10px] leading-relaxed',
@@ -331,11 +322,6 @@ export default function StudyPath({ resourceId, onStepClick }: Props) {
                 <Icon className="w-3.5 h-3.5" />
               </div>
               <span className="text-xs font-bold">{tool.label}</span>
-              {tool.xp > 0 && (
-                <span className="ml-auto text-[9px] text-slate-700 flex items-center gap-0.5 font-black">
-                  <Zap className="w-2.5 h-2.5" />{tool.xp} XP
-                </span>
-              )}
             </button>
           )
         })}

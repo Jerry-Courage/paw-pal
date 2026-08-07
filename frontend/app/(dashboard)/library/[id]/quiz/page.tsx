@@ -132,10 +132,6 @@ export default function QuizPage({ params }: { params: { id: string } }) {
     if (current < questions.length - 1) {
       setCurrent(c => c + 1)
     } else {
-      // Save XP on completion
-      const score = questions.length ? Math.round((questions.filter((q, i) => selected[i] === q.correct_answer).length / questions.length) * 100) : 0
-      libraryApi.completeStep(resourceId, 'quiz', score).catch(() => {})
-      qc.invalidateQueries({ queryKey: ['profile'] })
       setPhase('results')
     }
   }
