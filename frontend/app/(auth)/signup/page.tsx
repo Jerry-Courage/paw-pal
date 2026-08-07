@@ -267,32 +267,46 @@ export default function SignupPage() {
                 <input placeholder="University / Institution (optional)" value={form.university} onChange={set('university')} className={inputCls()} />
 
                 {/* Education Level */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block pl-1">Curriculum Level</label>
-                  <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block pl-1">I am a...</label>
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setForm(f => ({ ...f, education_level: 'secondary' }))}
-                      className={cn('p-3 rounded-[1rem] text-left border transition-all',
+                      className={cn(
+                        'relative p-4 rounded-[1.25rem] text-left border-2 transition-all duration-200',
                         form.education_level === 'secondary'
-                          ? 'bg-primary-container border-primary text-on-primary-container shadow-sm'
-                          : 'bg-surface-container-high border-outline-variant text-on-surface-variant hover:border-outline-variant/80'
+                          ? 'bg-primary-container border-primary shadow-lg shadow-primary/10'
+                          : 'bg-surface-container-high border-outline-variant/50 hover:border-outline-variant'
                       )}
                     >
-                      <p className="font-bold text-[13px]">🇬🇭 Secondary / SHS</p>
-                      <p className="text-[10px] opacity-70 mt-0.5">NaCCA & WASSCE</p>
+                      <div className="text-2xl mb-2">🏫</div>
+                      <p className="font-bold text-[14px] text-on-surface">SHS Student</p>
+                      <p className="text-[11px] text-on-surface-variant mt-0.5 leading-snug">NaCCA curriculum & WASSCE prep</p>
+                      {form.education_level === 'secondary' && (
+                        <div className="absolute top-3 right-3 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-on-primary" />
+                        </div>
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => setForm(f => ({ ...f, education_level: 'tertiary' }))}
-                      className={cn('p-3 rounded-[1rem] text-left border transition-all',
+                      className={cn(
+                        'relative p-4 rounded-[1.25rem] text-left border-2 transition-all duration-200',
                         form.education_level === 'tertiary'
-                          ? 'bg-primary-container border-primary text-on-primary-container shadow-sm'
-                          : 'bg-surface-container-high border-outline-variant text-on-surface-variant hover:border-outline-variant/80'
+                          ? 'bg-primary-container border-primary shadow-lg shadow-primary/10'
+                          : 'bg-surface-container-high border-outline-variant/50 hover:border-outline-variant'
                       )}
                     >
-                      <p className="font-bold text-[13px]">🎓 Tertiary / Univ.</p>
-                      <p className="text-[10px] opacity-70 mt-0.5">Degree & Higher Ed</p>
+                      <div className="text-2xl mb-2">🎓</div>
+                      <p className="font-bold text-[14px] text-on-surface">University Student</p>
+                      <p className="text-[11px] text-on-surface-variant mt-0.5 leading-snug">Degree & higher education</p>
+                      {form.education_level === 'tertiary' && (
+                        <div className="absolute top-3 right-3 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-on-primary" />
+                        </div>
+                      )}
                     </button>
                   </div>
                 </div>

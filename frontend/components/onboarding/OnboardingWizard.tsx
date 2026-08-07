@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { authApi } from '@/lib/api'
 import {
   Zap, BookOpen, Users, Sparkles,
@@ -13,10 +13,21 @@ import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import VideoTutorialModal from './VideoTutorialModal'
 
-const SUBJECTS = [
+const UNIVERSITY_SUBJECTS = [
   'Computer Science', 'Mathematics', 'Physics', 'Chemistry',
   'Biology', 'Economics', 'Psychology', 'History',
   'Literature', 'Engineering', 'Medicine', 'Law',
+]
+
+const SHS_CORE_SUBJECTS = [
+  'Core Mathematics', 'English Language', 'Integrated Science', 'Social Studies',
+]
+
+const SHS_ELECTIVE_SUBJECTS = [
+  'Physics', 'Chemistry', 'Biology', 'Elective Mathematics',
+  'Financial Accounting', 'Business Management', 'Economics',
+  'History', 'Geography', 'Government', 'Literature-in-English',
+  'General Agriculture', 'Crop Husbandry', 'Animal Husbandry',
 ]
 
 const GOALS = [
@@ -40,6 +51,15 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
   const router = useRouter()
   const [step, setStep] = useState(0)
   const [showTutorial, setShowTutorial] = useState(false)
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => authApi.me().then(r => r.data),
+  })
+
+  const isSHS = profileData?.education_level === 'secondary'
+  const SUBJECTS = isSHS ? [...SHS_CORE_SUBJECTS, ...SHS_ELECTIVE_SUBJECTS] : UNIVERSITY_SUBJECTS
+
   const [data, setData] = useState({
     university: '',
     weekly_goal_hours: 10,
@@ -155,11 +175,17 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                     
                     <div className="space-y-2">
                       <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
-                        Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400">FlowState Junior!</span>
+                        {isSHS ? (
+                          <>Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400">FlowState Junior!</span></>
+                        ) : (
+                          <>Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400">FlowState!</span></>
+                        )}
                       </h1>
                       
                       <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-sm mx-auto font-medium">
-                        I'm your new study buddy. Together, we'll turn homework time into a fun adventure and help you find your focus!
+                        {isSHS
+                          ? "I'm your SHS study buddy! Together, we'll prepare you for WASSCE and make learning your core & elective subjects fun."
+                          : "I'm your new study buddy. Together, we'll turn study time into results with AI-powered tools."}
                       </p>
                     </div>
                   </div>
@@ -168,16 +194,18 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 {/* ── PROFILE (Step 1) ── */}
                 {step === 1 && (
                   <div className="space-y-6">
-                    <StepHeader icon={GraduationCap} title="Set your foundation" subtitle="Where are you learning today?" />
+                    <StepHeader icon={GraduationCap} title="Set your foundation" subtitle={isSHS ? "Which school do you attend?" : "Where are you learning today?"} />
                     
                     <div className="space-y-5">
                       <div className="group">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 block px-1 group-focus-within:text-orange-500 transition-colors">University / Institution</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 block px-1 group-focus-within:text-orange-500 transition-colors">
+                          {isSHS ? 'School / Institution' : 'University / Institution'}
+                        </label>
                         <div className="relative">
                           <input
                             value={data.university}
                             onChange={e => setData(d => ({ ...d, university: e.target.value }))}
-                            placeholder="e.g. Stanford University"
+                            placeholder={isSHS ? "e.g. Accra Academy SHS" : "e.g. University of Ghana"}
                             className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-5 py-3.5 text-white placeholder-white/20 text-sm font-bold focus:outline-none focus:border-orange-500/50 focus:bg-white/[0.06] transition-all"
                           />
                           <div className="absolute right-4 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/5 rounded-lg flex items-center justify-center">
@@ -208,24 +236,32 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 {/* ── SUBJECTS (Step 2) ── */}
                 {step === 2 && (
                   <div className="space-y-6">
-                    <StepHeader icon={BookOpen} title="Select your focus" subtitle="What subjects should we optimize for?" />
+                    <StepHeader icon={BookOpen} title="Select your focus" subtitle={isSHS ? "Pick your core & elective subjects" : "What subjects should we optimize for?"} />
+                    
+                    {isSHS && (
+                      <p className="text-[11px] text-slate-500 font-bold -mt-2 px-1">Core subjects (Math, English, Science, Social Studies) are always included.</p>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-2.5 max-h-[280px] overflow-y-auto pr-1">
-                      {SUBJECTS.map(s => (
-                        <button key={s} onClick={() => toggleSubject(s)}
-                          className={cn('px-4 py-3 rounded-xl text-xs font-black border-2 transition-all flex items-center justify-between group active:scale-[0.97]',
-                            data.subjects.includes(s)
-                              ? 'border-violet-500 bg-violet-500/10 text-violet-400'
-                              : 'border-white/5 text-slate-500 bg-white/3 hover:bg-white/5'
-                          )}>
-                          <span className="truncate">{s}</span>
-                          <div className={cn("w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all", 
-                             data.subjects.includes(s) ? "bg-violet-500 border-violet-500" : "border-white/10"
-                          )}>
-                            {data.subjects.includes(s) && <Check className="w-2.5 h-2.5 text-white" />}
-                          </div>
-                        </button>
-                      ))}
+                      {SUBJECTS.map(s => {
+                        const isCore = isSHS && SHS_CORE_SUBJECTS.includes(s)
+                        return (
+                          <button key={s} onClick={() => !isCore && toggleSubject(s)}
+                            className={cn('px-4 py-3 rounded-xl text-xs font-black border-2 transition-all flex items-center justify-between group active:scale-[0.97]',
+                              isCore || data.subjects.includes(s)
+                                ? 'border-violet-500 bg-violet-500/10 text-violet-400'
+                                : 'border-white/5 text-slate-500 bg-white/3 hover:bg-white/5',
+                              isCore && 'opacity-80 cursor-default'
+                            )}>
+                            <span className="truncate">{s} {isCore && <span className="text-[9px] text-violet-300 font-bold">(Core)</span>}</span>
+                            <div className={cn("w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all", 
+                               isCore || data.subjects.includes(s) ? "bg-violet-500 border-violet-500" : "border-white/10"
+                            )}>
+                              {(isCore || data.subjects.includes(s)) && <Check className="w-2.5 h-2.5 text-white" />}
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
