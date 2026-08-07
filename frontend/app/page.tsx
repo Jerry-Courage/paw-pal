@@ -3,24 +3,24 @@
 import Link from 'next/link'
 
 const FEATURES = [
-  { icon: 'view_in_ar', label: 'VR Classroom', desc: 'Step inside your study material in immersive virtual reality', color: 'text-primary' },
-  { icon: 'smart_toy', label: 'AI Tutor', desc: 'Personalised voice tutor that adapts to how you learn', color: 'text-secondary' },
-  { icon: 'quiz', label: 'Quiz Battles', desc: 'Adaptive quizzes + live multiplayer battles & XP', color: 'text-tertiary' },
-  { icon: 'style', label: 'Flashcards', desc: 'AI-generated spaced repetition cards', color: 'text-primary' },
-  { icon: 'hub', label: 'Mind Maps', desc: 'Visual concept mapping', color: 'text-secondary' },
-  { icon: 'podcasts', label: 'Podcast', desc: 'AI dual-host audio lessons', color: 'text-tertiary' },
-  { icon: 'history_edu', label: 'Exam Prep', desc: 'Voice-based AI tutoring for exams', color: 'text-primary' },
-  { icon: 'calculate', label: 'Solver', desc: 'Step-by-step problem solving', color: 'text-secondary' },
-  { icon: 'leaderboard', label: 'Rankings & XP', desc: 'Climb the leaderboard and earn points as you learn', color: 'text-tertiary' },
-  { icon: 'calendar_today', label: 'Planner', desc: 'Smart scheduling & deadlines', color: 'text-primary' },
-  { icon: 'group_work', label: 'Collab', desc: 'Real-time collaborative spaces', color: 'text-secondary' },
-  { icon: 'auto_awesome', label: 'Personalised', desc: 'Every kit adapts to your level & learning style', color: 'text-tertiary' },
+  { icon: 'smart_toy', label: 'AI-Powered Everything', desc: 'Every tool adapts to your level, learning style, and curriculum', color: 'text-primary' },
+  { icon: 'view_in_ar', label: 'Immersive VR Classrooms', desc: 'Step inside your study material in virtual reality', color: 'text-secondary' },
+  { icon: 'quiz', label: 'Gamified Learning', desc: 'Quiz battles, XP, streaks & leaderboards — revision feels like a game', color: 'text-tertiary' },
+  { icon: 'public', label: 'Built for Africa', desc: 'NaCCA curriculum, WASSCE prep, Ghana Cedis pricing — designed for African students', color: 'text-primary' },
+  { icon: 'headphones', label: 'Voice Tutor', desc: 'Real-time voice conversations with an AI that teaches you like a real tutor', color: 'text-secondary' },
+  { icon: 'podcasts', label: 'AI Podcasts', desc: 'Dual-host audio lessons generated from your own materials', color: 'text-tertiary' },
+  { icon: 'history_edu', label: 'Exam Prep', desc: 'Voice-based tutoring modelled on real exam patterns', color: 'text-primary' },
+  { icon: 'style', label: 'Smart Flashcards', desc: 'AI-generated spaced repetition cards from your notes', color: 'text-secondary' },
+  { icon: 'hub', label: 'Mind Maps', desc: 'Visual concept mapping to connect ideas', color: 'text-tertiary' },
+  { icon: 'calculate', label: 'Step-by-Step Solver', desc: 'AI walks you through problems step by step', color: 'text-primary' },
+  { icon: 'leaderboard', label: 'XP & Rankings', desc: 'Earn points, climb ranks, compete with classmates', color: 'text-secondary' },
+  { icon: 'group_work', label: 'Collab Spaces', desc: 'Real-time study rooms with friends', color: 'text-tertiary' },
 ]
 
 const STEPS = [
-  { num: '1', icon: 'upload_file', label: 'Upload or Paste', desc: 'Drop a PDF, slide, YouTube link — or type a topic you want to master.', color: 'bg-primary-container text-on-primary-container' },
-  { num: '2', icon: 'auto_awesome', label: 'AI Personalises', desc: 'FlowState generates VR scenes, quizzes & study kits tailored to your level.', color: 'bg-secondary-container text-on-secondary-container' },
-  { num: '3', icon: 'military_tech', label: 'Study, Battle & Master', desc: 'Quiz battles, XP & rankings turn revision into a game you win.', color: 'bg-tertiary-container text-on-tertiary-container' },
+  { num: '1', icon: 'upload_file', label: 'Drop Your Material', desc: 'Upload a PDF, paste a link, or type a topic — we work with anything.', color: 'bg-primary-container text-on-primary-container' },
+  { num: '2', icon: 'auto_awesome', label: 'AI Transforms It', desc: 'VR scenes, quizzes, podcasts, flashcards — all generated from YOUR content.', color: 'bg-secondary-container text-on-secondary-container' },
+  { num: '3', icon: 'military_tech', label: 'Learn, Battle & Win', desc: 'Study with a voice tutor, battle classmates in quizzes, earn XP and climb ranks.', color: 'bg-tertiary-container text-on-tertiary-container' },
 ]
 
 export default function LandingPage() {
@@ -142,8 +142,8 @@ export default function LandingPage() {
         {/* ── How It Works ──────────────────────────────────── */}
         <section id="how-it-works" className="px-margin-mobile md:px-margin-desktop py-stack-lg">
           <div className="text-center mb-stack-lg">
-            <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">3 Steps to Your FlowState</h2>
-            <p className="text-on-surface-variant mt-base text-body-lg">Upload → AI personalises → then learn in VR, quizzes and battle.</p>
+            <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">How FlowState Works</h2>
+            <p className="text-on-surface-variant mt-base text-body-lg">Your school material in → interactive learning world out.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter max-w-5xl mx-auto">
             {STEPS.map((s) => (
@@ -162,8 +162,8 @@ export default function LandingPage() {
         {/* ── Features Grid ─────────────────────────────────── */}
         <section id="features" className="px-margin-mobile md:px-margin-desktop py-stack-lg bg-surface-container-lowest">
           <div className="text-center mb-stack-lg">
-            <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">Everything You Need to Ace It</h2>
-            <p className="text-on-surface-variant mt-base text-body-lg">12 AI-powered tools for VR, quizzes &amp; personalised study — one platform.</p>
+            <h2 className="text-[32px] md:text-[40px] font-bold text-on-surface">AI + Immersive + Gamified + African</h2>
+            <p className="text-on-surface-variant mt-base text-body-lg">The four pillars that make FlowState different from anything else out there.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter max-w-5xl mx-auto">
             {FEATURES.map((f) => (
