@@ -38,6 +38,7 @@ export default function MobileNav() {
   const isFullViewport =
     pathname === '/groups' ||
     pathname.startsWith('/groups/') ||
+    pathname === '/dashboard/personalised' ||
     (FULL_VIEWPORT_PREFIXES.some(prefix => pathname.startsWith(prefix)) &&
     pathname.split('/').length > 3) ||
     /^\/workspace\/[^/]+$/.test(pathname) ||

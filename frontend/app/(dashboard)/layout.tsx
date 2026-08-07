@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const shouldFullViewport = isFullViewport || isAssignmentDetail
 
   // Hide sidebar + mobile nav entirely on full-viewport pages (study, flashcards, quiz, workspace, quiz battle, etc.)
-  const hideNav = pathname === '/groups' || pathname.startsWith('/groups/') || shouldFullViewport
+  const hideNav = pathname === '/groups' || pathname.startsWith('/groups/') || pathname === '/dashboard/personalised' || shouldFullViewport
 
   return (
     <div className="min-h-screen bg-background text-on-surface font-sans">
