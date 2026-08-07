@@ -72,9 +72,11 @@ class UserSerializer(serializers.ModelSerializer):
     def get_xp(self, obj):
         try:
             from library.models import ResourceProgress
-            return ResourceProgress.objects.filter(user=obj).aggregate(
+            earned = ResourceProgress.objects.filter(user=obj).aggregate(
                 total=models.Sum('xp_earned')
             )['total'] or 0
+            quiz_xp = int((obj.onboarding_status or {}).get('quiz_xp', 0))
+            return earned + quiz_xp
         except Exception:
             return 0
 

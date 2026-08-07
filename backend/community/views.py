@@ -181,9 +181,17 @@ class LeaderboardView(APIView):
             earned_xp=Coalesce(Sum('resources__progress_records__xp_earned'), 0)
         ).order_by('-earned_xp', '-study_streak', '-total_study_time')[:50]
 
+        # Build quiz_xp map for top users
+        user_ids = [u.id for u in users]
+        quiz_xp_map = {}
+        for u in User.objects.filter(id__in=user_ids).only('id', 'onboarding_status'):
+            qxp = int((u.onboarding_status or {}).get('quiz_xp', 0))
+            if qxp > 0:
+                quiz_xp_map[u.id] = qxp
+
         leaderboard = []
         for i, u in enumerate(users):
-            earned_xp = getattr(u, 'earned_xp', 0)
+            earned_xp = getattr(u, 'earned_xp', 0) + int(quiz_xp_map.get(u.id, 0))
             if earned_xp < 500:
                 level_name = 'Freshman'
             elif earned_xp < 1500:
@@ -221,6 +229,7 @@ class LeaderboardView(APIView):
             my_earned_xp = ResourceProgress.objects.filter(user=request.user).aggregate(
                 total=Sum('xp_earned')
             )['total'] or 0
+            my_quiz_xp = int((request.user.onboarding_status or {}).get('quiz_xp', 0))
 
             my_rank = {
                 'rank': rank,
@@ -228,7 +237,7 @@ class LeaderboardView(APIView):
                 'username': request.user.username,
                 'full_name': request.user.get_full_name() or request.user.username,
                 'avatar_url': request.build_absolute_uri(request.user.avatar.url) if request.user.avatar else None,
-                'earned_xp': my_earned_xp,
+                'earned_xp': my_earned_xp + my_quiz_xp,
                 'study_streak': request.user.study_streak,
                 'total_study_hours': round(request.user.total_study_time, 1),
                 'university': request.user.university or 'FlowState Scholar',

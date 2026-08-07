@@ -151,6 +151,12 @@ class QuizConsumer(AsyncWebsocketConsumer):
         # Game over
         await self._set_status('finished')
         leaderboard = await self._get_leaderboard()
+
+        # Award 10 XP to the winner (rank 1)
+        if leaderboard and leaderboard[0].get('rank') == 1:
+            winner_username = leaderboard[0]['username']
+            await self._award_quiz_xp(winner_username, 10)
+
         await self.channel_layer.group_send(self.group, {
             'type':        'game_over',
             'leaderboard': leaderboard,
@@ -289,6 +295,20 @@ class QuizConsumer(AsyncWebsocketConsumer):
     def _remove_player(self, username):
         from .models import QuizPlayer
         QuizPlayer.objects.filter(room__pin=self.pin, user__username=username).delete()
+
+    @database_sync_to_async
+    def _award_quiz_xp(self, username, amount):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return
+        obs = user.onboarding_status or {}
+        current = int(obs.get('quiz_xp', 0))
+        obs['quiz_xp'] = current + amount
+        user.onboarding_status = obs
+        user.save(update_fields=['onboarding_status'])
 
     def send_json(self, data):
         import asyncio

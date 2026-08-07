@@ -47,6 +47,7 @@ def _get_personalized_context(user):
         # Quick XP level check without full calculation
         from library.models import ResourceProgress
         xp = ResourceProgress.objects.filter(user=user).aggregate(total=models.Sum('xp_earned'))['total'] or 0
+        xp += int((user.onboarding_status or {}).get('quiz_xp', 0))
         
         # Simplified level name
         if xp < 1000:

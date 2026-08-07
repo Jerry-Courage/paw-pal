@@ -58,6 +58,7 @@ class AwardXPView(APIView):
             total = ResourceProgress.objects.filter(user=request.user).aggregate(
                 total=Sum('xp_earned')
             )['total'] or 0
+            total += int((request.user.onboarding_status or {}).get('quiz_xp', 0))
 
             return Response({'xp_awarded': amount, 'total_xp': total, 'reason': reason})
         except Exception as e:
@@ -320,11 +321,19 @@ class RankingsView(APIView):
         )
         earned_map = {row['user_id']: int(row['earned'] or 0) for row in earned_qs}
 
+        # ── Aggregate quiz XP per user ─────────────────────────────
+        quiz_users = User.objects.exclude(onboarding_status={}).only('id', 'onboarding_status')
+        quiz_xp_map = {}
+        for u in quiz_users:
+            qxp = int((u.onboarding_status or {}).get('quiz_xp', 0))
+            if qxp > 0:
+                quiz_xp_map[u.id] = qxp
+
         # ── Build per-user list ────────────────────────────────────
         all_users = User.objects.only('id', 'email', 'first_name', 'last_name', 'study_streak')
         base_list = []
         for u in all_users:
-            earned = int(earned_map.get(u.id, 0))
+            earned = int(earned_map.get(u.id, 0)) + int(quiz_xp_map.get(u.id, 0))
             display_name = u.get_full_name().strip() or u.email.split('@')[0]
             base_list.append({
                 'user_id':   u.id,
@@ -332,7 +341,7 @@ class RankingsView(APIView):
                 'initials':  (display_name[:2]).upper(),
                 'streak':    int(u.study_streak or 0),
                 'earned_xp': earned,
-                'total_xp':  earned,   # same as earned — no separate purchase tracking
+                'total_xp':  earned,
                 'bonus_xp':  0,
                 'is_me':     (u.id == request.user.id),
             })

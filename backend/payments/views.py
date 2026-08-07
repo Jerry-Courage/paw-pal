@@ -494,9 +494,10 @@ class MarketplaceInventoryView(APIView):
             total=Sum('xp_earned')
         )['total'] or 0
 
+        quiz_xp = int(obs.get('quiz_xp', 0))
         bonus_xp = int(obs.get('bonus_xp', 0))
         spent_xp = int(obs.get('spent_xp', 0))
-        net_xp = max(0, earned_xp + bonus_xp - spent_xp)
+        net_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
 
         inventory = obs.get('inventory', {
             'clue_5050': 0, 'time_extend': 0, 'streak_guard': 0, 'double_xp': 0, 'hint': 0
@@ -505,6 +506,7 @@ class MarketplaceInventoryView(APIView):
         return Response({
             'total_xp': net_xp,
             'earned_xp': earned_xp,
+            'quiz_xp': quiz_xp,
             'bonus_xp': bonus_xp,
             'spent_xp': spent_xp,
             'inventory': inventory,
@@ -534,9 +536,10 @@ class MarketplaceBuyPowerupView(APIView):
             total=Sum('xp_earned')
         )['total'] or 0
 
+        quiz_xp = int(obs.get('quiz_xp', 0))
         bonus_xp = int(obs.get('bonus_xp', 0))
         spent_xp = int(obs.get('spent_xp', 0))
-        available_xp = max(0, earned_xp + bonus_xp - spent_xp)
+        available_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
 
         if available_xp < cost:
             return Response({
