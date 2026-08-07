@@ -1,17 +1,26 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { useState } from 'react'
-import { getSubjectById } from '@/lib/curriculum'
+import { useState, useMemo } from 'react'
+import { getSubjectById, SHS_YEAR_LABELS } from '@/lib/curriculum'
+import type { SHSYear } from '@/lib/curriculum'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, ExternalLink, BookOpen, ChevronRight, X } from 'lucide-react'
 
 export default function CurriculumSubjectPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const subjectId = params.id as string
   const subject = getSubjectById(subjectId)
+  const initialYear = (searchParams.get('year') as SHSYear | null) || null
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
+  const [yearFilter, setYearFilter] = useState<SHSYear | 'all'>(initialYear || 'all')
+
+  const filteredTopics = useMemo(() => {
+    if (!subject) return []
+    return yearFilter === 'all' ? subject.topics : subject.topics.filter(t => t.year === yearFilter)
+  }, [subject, yearFilter])
 
   if (!subject) {
     return (
@@ -53,8 +62,26 @@ export default function CurriculumSubjectPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Topics list */}
         <div className="lg:col-span-1 space-y-2">
-          <h3 className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-3 px-1">Topics ({subject.topics.length})</h3>
-          {subject.topics.map((topic) => (
+          {/* Year filter tabs */}
+          <div className="flex items-center gap-1 bg-surface-container rounded-full p-1 mb-3">
+            {(['all', 'shs1', 'shs2', 'shs3'] as const).map((y) => (
+              <button
+                key={y}
+                onClick={() => { setYearFilter(y); setActiveTopic(null) }}
+                className={cn(
+                  'flex-1 px-2 py-1.5 rounded-full text-[11px] font-bold transition-all',
+                  yearFilter === y
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                )}
+              >
+                {y === 'all' ? 'All' : SHS_YEAR_LABELS[y]}
+              </button>
+            ))}
+          </div>
+
+          <h3 className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-3 px-1">Topics ({filteredTopics.length})</h3>
+          {filteredTopics.map((topic) => (
             <button
               key={topic.id}
               onClick={() => setActiveTopic(activeTopic === topic.id ? null : topic.id)}
@@ -67,9 +94,14 @@ export default function CurriculumSubjectPage() {
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className={cn("text-sm font-bold truncate", activeTopic === topic.id ? 'text-primary' : 'text-on-surface')}>
-                    {topic.title}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className={cn("text-sm font-bold truncate", activeTopic === topic.id ? 'text-primary' : 'text-on-surface')}>
+                      {topic.title}
+                    </p>
+                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
+                      {SHS_YEAR_LABELS[topic.year]}
+                    </span>
+                  </div>
                   <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{topic.description}</p>
                 </div>
                 <ChevronRight className={cn("w-4 h-4 shrink-0 transition-transform", activeTopic === topic.id ? 'rotate-90 text-primary' : 'text-on-surface-variant')} />

@@ -1,8 +1,17 @@
+export type SHSYear = 'shs1' | 'shs2' | 'shs3'
+
 export interface CurriculumTopic {
   id: string
   title: string
   description: string
+  year: SHSYear
   naccaUrl?: string
+}
+
+export const SHS_YEAR_LABELS: Record<SHSYear, string> = {
+  shs1: 'SHS 1',
+  shs2: 'SHS 2',
+  shs3: 'SHS 3',
 }
 
 export interface CurriculumSubject {
@@ -27,12 +36,12 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'calculate',
     color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
     topics: [
-      { id: 'number', title: 'Number & Number Systems', description: 'Integers, fractions, decimals, surds, indices, and logarithms', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/number-systems' },
-      { id: 'algebra', title: 'Algebraic Expressions', description: 'Simplification, factorisation, and solving linear & quadratic equations', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/algebra' },
-      { id: 'geometry', title: 'Geometry & Trigonometry', description: 'Angles, triangles, circles, bearings, and trigonometric ratios', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/geometry' },
-      { id: 'statistics', title: 'Statistics & Probability', description: 'Data collection, measures of central tendency, probability', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/statistics' },
-      { id: 'vectors', title: 'Vectors & Matrices', description: 'Vector operations, scalar product, matrix algebra', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/vectors' },
-      { id: 'functions', title: 'Functions & Graphs', description: 'Linear, quadratic, exponential functions and transformations', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/functions' },
+      { id: 'number', title: 'Number & Number Systems', description: 'Integers, fractions, decimals, surds, indices, and logarithms', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/number-systems' },
+      { id: 'algebra', title: 'Algebraic Expressions', description: 'Simplification, factorisation, and solving linear & quadratic equations', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/algebra' },
+      { id: 'geometry', title: 'Geometry & Trigonometry', description: 'Angles, triangles, circles, bearings, and trigonometric ratios', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/geometry' },
+      { id: 'statistics', title: 'Statistics & Probability', description: 'Data collection, measures of central tendency, probability', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/statistics' },
+      { id: 'vectors', title: 'Vectors & Matrices', description: 'Vector operations, scalar product, matrix algebra', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/vectors' },
+      { id: 'functions', title: 'Functions & Graphs', description: 'Linear, quadratic, exponential functions and transformations', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/core-mathematics/functions' },
     ],
   },
   {
@@ -44,12 +53,12 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'menu_book',
     color: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
     topics: [
-      { id: 'grammar', title: 'Grammar & Structure', description: 'Parts of speech, tenses, subject-verb agreement, active/passive voice', naccaUrl: 'https://naccaghana.org/shs/english/grammar' },
-      { id: 'comprehension', title: 'Comprehension & Summary', description: 'Reading comprehension techniques, summary writing skills', naccaUrl: 'https://naccaghana.org/shs/english/comprehension' },
-      { id: 'essay', title: 'Essay Writing', description: 'Narrative, descriptive, argumentative, and letter writing', naccaUrl: 'https://naccaghana.org/shs/english/essay-writing' },
-      { id: 'literature', title: 'Literature Studies', description: 'Prose, poetry, drama analysis and literary devices', naccaUrl: 'https://naccaghana.org/shs/english/literature' },
-      { id: 'vocabulary', title: 'Vocabulary & Idioms', description: 'Word formation, synonyms, antonyms, idiomatic expressions', naccaUrl: 'https://naccaghana.org/shs/english/vocabulary' },
-      { id: 'oral', title: 'Oral English', description: 'Phonetics, intonation, stress patterns, and speech forms', naccaUrl: 'https://naccaghana.org/shs/english/oral-english' },
+      { id: 'grammar', title: 'Grammar & Structure', description: 'Parts of speech, tenses, subject-verb agreement, active/passive voice', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/english/grammar' },
+      { id: 'vocabulary', title: 'Vocabulary & Idioms', description: 'Word formation, synonyms, antonyms, idiomatic expressions', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/english/vocabulary' },
+      { id: 'comprehension', title: 'Comprehension & Summary', description: 'Reading comprehension techniques, summary writing skills', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/english/comprehension' },
+      { id: 'essay', title: 'Essay Writing', description: 'Narrative, descriptive, argumentative, and letter writing', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/english/essay-writing' },
+      { id: 'literature', title: 'Literature Studies', description: 'Prose, poetry, drama analysis and literary devices', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/english/literature' },
+      { id: 'oral', title: 'Oral English', description: 'Phonetics, intonation, stress patterns, and speech forms', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/english/oral-english' },
     ],
   },
   {
@@ -61,12 +70,12 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'science',
     color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     topics: [
-      { id: 'bio-cell', title: 'Cell Biology', description: 'Cell structure, organelles, cell division, and transport', naccaUrl: 'https://naccaghana.org/shs/science/cell-biology' },
-      { id: 'bio-genetics', title: 'Genetics & Evolution', description: 'Heredity, Mendelian genetics, natural selection', naccaUrl: 'https://naccaghana.org/shs/science/genetics' },
-      { id: 'chem-matter', title: 'Matter & Mixtures', description: 'States of matter, separation techniques, atomic structure', naccaUrl: 'https://naccaghana.org/shs/science/matter' },
-      { id: 'chem-reactions', title: 'Chemical Reactions', description: 'Acids, bases, salts, oxidation, and reduction', naccaUrl: 'https://naccaghana.org/shs/science/chemical-reactions' },
-      { id: 'phys-mechanics', title: 'Mechanics & Motion', description: 'Forces, energy, work, power, and Newton\'s laws', naccaUrl: 'https://naccaghana.org/shs/science/mechanics' },
-      { id: 'phys-electricity', title: 'Electricity & Magnetism', description: 'Circuit theory, electromagnetic induction, AC/DC', naccaUrl: 'https://naccaghana.org/shs/science/electricity' },
+      { id: 'chem-matter', title: 'Matter & Mixtures', description: 'States of matter, separation techniques, atomic structure', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/science/matter' },
+      { id: 'bio-cell', title: 'Cell Biology', description: 'Cell structure, organelles, cell division, and transport', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/science/cell-biology' },
+      { id: 'chem-reactions', title: 'Chemical Reactions', description: 'Acids, bases, salts, oxidation, and reduction', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/science/chemical-reactions' },
+      { id: 'bio-genetics', title: 'Genetics & Evolution', description: 'Heredity, Mendelian genetics, natural selection', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/science/genetics' },
+      { id: 'phys-mechanics', title: 'Mechanics & Motion', description: 'Forces, energy, work, power, and Newton\'s laws', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/science/mechanics' },
+      { id: 'phys-electricity', title: 'Electricity & Magnetism', description: 'Circuit theory, electromagnetic induction, AC/DC', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/science/electricity' },
     ],
   },
   {
@@ -78,10 +87,10 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'public',
     color: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
     topics: [
-      { id: 'env-resources', title: 'Environmental Resources', description: 'Natural resources, conservation, and environmental issues', naccaUrl: 'https://naccaghana.org/shs/social/environmental-resources' },
-      { id: 'governance', title: 'Governance & Democracy', description: 'Constitution, branches of government, civic rights', naccaUrl: 'https://naccaghana.org/shs/social/governance' },
-      { id: 'culture', title: 'Culture & Socialization', description: 'Ghanaian cultures, traditions, social norms', naccaUrl: 'https://naccaghana.org/shs/social/culture' },
-      { id: 'economy', title: 'National Economy', description: 'Economic activities, trade, development planning', naccaUrl: 'https://naccaghana.org/shs/social/economy' },
+      { id: 'culture', title: 'Culture & Socialization', description: 'Ghanaian cultures, traditions, social norms', year: 'shs1', naccaUrl: 'https://naccaghana.org/shs/social/culture' },
+      { id: 'env-resources', title: 'Environmental Resources', description: 'Natural resources, conservation, and environmental issues', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/social/environmental-resources' },
+      { id: 'governance', title: 'Governance & Democracy', description: 'Constitution, branches of government, civic rights', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/social/governance' },
+      { id: 'economy', title: 'National Economy', description: 'Economic activities, trade, development planning', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/social/economy' },
     ],
   },
 
@@ -95,11 +104,11 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'bolt',
     color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     topics: [
-      { id: 'mechanics', title: 'Classical Mechanics', description: 'Kinematics, dynamics, momentum, and projectiles', naccaUrl: 'https://naccaghana.org/shs/elective/physics/mechanics' },
-      { id: 'waves', title: 'Waves & Optics', description: 'Sound, light, reflection, refraction, lenses', naccaUrl: 'https://naccaghana.org/shs/elective/physics/waves' },
-      { id: 'thermo', title: 'Thermal Physics', description: 'Heat, temperature, ideal gas law, thermodynamics', naccaUrl: 'https://naccaghana.org/shs/elective/physics/thermal' },
-      { id: 'em', title: 'Electromagnetism', description: 'Electric fields, capacitors, magnetic fields, induction', naccaUrl: 'https://naccaghana.org/shs/elective/physics/electromagnetism' },
-      { id: 'modern', title: 'Modern Physics', description: 'Quantum theory, nuclear physics, photoelectric effect', naccaUrl: 'https://naccaghana.org/shs/elective/physics/modern' },
+      { id: 'mechanics', title: 'Classical Mechanics', description: 'Kinematics, dynamics, momentum, and projectiles', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/physics/mechanics' },
+      { id: 'waves', title: 'Waves & Optics', description: 'Sound, light, reflection, refraction, lenses', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/physics/waves' },
+      { id: 'thermo', title: 'Thermal Physics', description: 'Heat, temperature, ideal gas law, thermodynamics', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/physics/thermal' },
+      { id: 'em', title: 'Electromagnetism', description: 'Electric fields, capacitors, magnetic fields, induction', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/physics/electromagnetism' },
+      { id: 'modern', title: 'Modern Physics', description: 'Quantum theory, nuclear physics, photoelectric effect', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/physics/modern' },
     ],
   },
   {
@@ -111,11 +120,11 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'chemistry',
     color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
     topics: [
-      { id: 'atomic', title: 'Atomic Structure', description: 'Electron configuration, periodic trends, isotopes', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/atomic' },
-      { id: 'bonding', title: 'Chemical Bonding', description: 'Ionic, covalent, metallic bonding, VSEPR theory', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/bonding' },
-      { id: 'energetics', title: 'Energetics', description: 'Enthalpy, Hess\'s law, bond energies, calorimetry', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/energetics' },
-      { id: 'organic', title: 'Organic Chemistry', description: 'Hydrocarbons, functional groups, reactions, polymers', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/organic' },
-      { id: 'equilibrium', title: 'Chemical Equilibrium', description: 'Le Chatelier\'s principle, Kp, Kc, rates of reaction', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/equilibrium' },
+      { id: 'atomic', title: 'Atomic Structure', description: 'Electron configuration, periodic trends, isotopes', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/atomic' },
+      { id: 'bonding', title: 'Chemical Bonding', description: 'Ionic, covalent, metallic bonding, VSEPR theory', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/bonding' },
+      { id: 'energetics', title: 'Energetics', description: 'Enthalpy, Hess\'s law, bond energies, calorimetry', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/energetics' },
+      { id: 'organic', title: 'Organic Chemistry', description: 'Hydrocarbons, functional groups, reactions, polymers', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/organic' },
+      { id: 'equilibrium', title: 'Chemical Equilibrium', description: 'Le Chatelier\'s principle, Kp, Kc, rates of reaction', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/chemistry/equilibrium' },
     ],
   },
   {
@@ -127,10 +136,10 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'biotech',
     color: 'text-green-400 bg-green-500/10 border-green-500/20',
     topics: [
-      { id: 'ecology', title: 'Ecology', description: 'Ecosystems, energy flow, biodiversity, pollution', naccaUrl: 'https://naccaghana.org/shs/elective/biology/ecology' },
-      { id: 'genetics', title: 'Genetics & Heredity', description: 'DNA, RNA, protein synthesis, genetic engineering', naccaUrl: 'https://naccaghana.org/shs/elective/biology/genetics' },
-      { id: 'human-bio', title: 'Human Biology', description: 'Circulatory, respiratory, nervous, digestive systems', naccaUrl: 'https://naccaghana.org/shs/elective/biology/human-biology' },
-      { id: 'micro', title: 'Microbiology', description: 'Bacteria, viruses, fungi, disease prevention', naccaUrl: 'https://naccaghana.org/shs/elective/biology/microbiology' },
+      { id: 'ecology', title: 'Ecology', description: 'Ecosystems, energy flow, biodiversity, pollution', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/biology/ecology' },
+      { id: 'genetics', title: 'Genetics & Heredity', description: 'DNA, RNA, protein synthesis, genetic engineering', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/biology/genetics' },
+      { id: 'human-bio', title: 'Human Biology', description: 'Circulatory, respiratory, nervous, digestive systems', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/biology/human-biology' },
+      { id: 'micro', title: 'Microbiology', description: 'Bacteria, viruses, fungi, disease prevention', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/biology/microbiology' },
     ],
   },
   {
@@ -142,10 +151,10 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'functions',
     color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
     topics: [
-      { id: 'adv-algebra', title: 'Advanced Algebra', description: 'Polynomials, partial fractions, binomial theorem', naccaUrl: 'https://naccaghana.org/shs/elective/math/advanced-algebra' },
-      { id: 'calculus', title: 'Calculus', description: 'Differentiation, integration, applications', naccaUrl: 'https://naccaghana.org/shs/elective/math/calculus' },
-      { id: 'adv-trig', title: 'Trigonometry', description: 'Compound angles, identities, trig equations', naccaUrl: 'https://naccaghana.org/shs/elective/math/trigonometry' },
-      { id: 'vectors', title: 'Vectors & 3D Geometry', description: 'Vector algebra, scalar product, lines & planes', naccaUrl: 'https://naccaghana.org/shs/elective/math/vectors' },
+      { id: 'adv-algebra', title: 'Advanced Algebra', description: 'Polynomials, partial fractions, binomial theorem', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/math/advanced-algebra' },
+      { id: 'adv-trig', title: 'Trigonometry', description: 'Compound angles, identities, trig equations', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/elective/math/trigonometry' },
+      { id: 'calculus', title: 'Calculus', description: 'Differentiation, integration, applications', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/math/calculus' },
+      { id: 'vectors', title: 'Vectors & 3D Geometry', description: 'Vector algebra, scalar product, lines & planes', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/elective/math/vectors' },
     ],
   },
 
@@ -159,9 +168,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'account_balance',
     color: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
     topics: [
-      { id: 'bookkeeping', title: 'Bookkeeping Basics', description: 'Double-entry system, journals, ledgers, trial balance', naccaUrl: 'https://naccaghana.org/shs/business/accounting/bookkeeping' },
-      { id: 'final-accounts', title: 'Final Accounts', description: 'Trading, profit & loss, balance sheet preparation', naccaUrl: 'https://naccaghana.org/shs/business/accounting/final-accounts' },
-      { id: 'control', title: 'Control Accounts', description: 'Sales ledger, purchases ledger, bank reconciliation', naccaUrl: 'https://naccaghana.org/shs/business/accounting/control-accounts' },
+      { id: 'bookkeeping', title: 'Bookkeeping Basics', description: 'Double-entry system, journals, ledgers, trial balance', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/business/accounting/bookkeeping' },
+      { id: 'final-accounts', title: 'Final Accounts', description: 'Trading, profit & loss, balance sheet preparation', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/business/accounting/final-accounts' },
+      { id: 'control', title: 'Control Accounts', description: 'Sales ledger, purchases ledger, bank reconciliation', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/business/accounting/control-accounts' },
     ],
   },
   {
@@ -173,9 +182,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'business_center',
     color: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
     topics: [
-      { id: 'management', title: 'Principles of Management', description: 'Planning, organising, leading, controlling', naccaUrl: 'https://naccaghana.org/shs/business/management/principles' },
-      { id: 'marketing', title: 'Marketing', description: '4Ps, market research, consumer behaviour', naccaUrl: 'https://naccaghana.org/shs/business/management/marketing' },
-      { id: 'finance', title: 'Business Finance', description: 'Sources of capital, budgeting, financial analysis', naccaUrl: 'https://naccaghana.org/shs/business/management/finance' },
+      { id: 'management', title: 'Principles of Management', description: 'Planning, organising, leading, controlling', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/business/management/principles' },
+      { id: 'marketing', title: 'Marketing', description: '4Ps, market research, consumer behaviour', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/business/management/marketing' },
+      { id: 'finance', title: 'Business Finance', description: 'Sources of capital, budgeting, financial analysis', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/business/management/finance' },
     ],
   },
   {
@@ -187,9 +196,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'trending_up',
     color: 'text-lime-400 bg-lime-500/10 border-lime-500/20',
     topics: [
-      { id: 'micro', title: 'Microeconomics', description: 'Demand & supply, elasticity, market structures', naccaUrl: 'https://naccaghana.org/shs/business/economics/micro' },
-      { id: 'macro', title: 'Macroeconomics', description: 'GDP, inflation, monetary & fiscal policy', naccaUrl: 'https://naccaghana.org/shs/business/economics/macro' },
-      { id: 'dev', title: 'Economic Development', description: 'Developing economies, trade, aid, industrialisation', naccaUrl: 'https://naccaghana.org/shs/business/economics/development' },
+      { id: 'micro', title: 'Microeconomics', description: 'Demand & supply, elasticity, market structures', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/business/economics/micro' },
+      { id: 'macro', title: 'Macroeconomics', description: 'GDP, inflation, monetary & fiscal policy', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/business/economics/macro' },
+      { id: 'dev', title: 'Economic Development', description: 'Developing economies, trade, aid, industrialisation', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/business/economics/development' },
     ],
   },
 
@@ -203,9 +212,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'history_edu',
     color: 'text-amber-300 bg-amber-400/10 border-amber-400/20',
     topics: [
-      { id: 'west-africa', title: 'West African History', description: 'Ancient empires, trade routes, pre-colonial states', naccaUrl: 'https://naccaghana.org/shs/arts/history/west-africa' },
-      { id: 'colonial', title: 'Colonial Period', description: 'European colonisation, resistance, independence movements', naccaUrl: 'https://naccaghana.org/shs/arts/history/colonial' },
-      { id: 'ghana', title: 'Ghanaian History', description: 'Gold Coast, independence, Fourth Republic', naccaUrl: 'https://naccaghana.org/shs/arts/history/ghana' },
+      { id: 'west-africa', title: 'West African History', description: 'Ancient empires, trade routes, pre-colonial states', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/history/west-africa' },
+      { id: 'colonial', title: 'Colonial Period', description: 'European colonisation, resistance, independence movements', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/arts/history/colonial' },
+      { id: 'ghana', title: 'Ghanaian History', description: 'Gold Coast, independence, Fourth Republic', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/arts/history/ghana' },
     ],
   },
   {
@@ -217,9 +226,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'map',
     color: 'text-emerald-300 bg-emerald-400/10 border-emerald-400/20',
     topics: [
-      { id: 'physical', title: 'Physical Geography', description: 'Weather, climate, landforms, rivers, oceans', naccaUrl: 'https://naccaghana.org/shs/arts/geography/physical' },
-      { id: 'human', title: 'Human Geography', description: 'Population, migration, urbanisation, agriculture', naccaUrl: 'https://naccaghana.org/shs/arts/geography/human' },
-      { id: 'mapwork', title: 'Map Work & GIS', description: 'Topographic maps, interpretation, spatial analysis', naccaUrl: 'https://naccaghana.org/shs/arts/geography/mapwork' },
+      { id: 'physical', title: 'Physical Geography', description: 'Weather, climate, landforms, rivers, oceans', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/geography/physical' },
+      { id: 'human', title: 'Human Geography', description: 'Population, migration, urbanisation, agriculture', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/geography/human' },
+      { id: 'mapwork', title: 'Map Work & GIS', description: 'Topographic maps, interpretation, spatial analysis', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/arts/geography/mapwork' },
     ],
   },
   {
@@ -231,9 +240,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'balance',
     color: 'text-indigo-300 bg-indigo-400/10 border-indigo-400/20',
     topics: [
-      { id: 'concepts', title: 'Basic Concepts', description: 'State, sovereignty, power, authority, legitimacy', naccaUrl: 'https://naccaghana.org/shs/arts/government/concepts' },
-      { id: 'constitution', title: 'Constitutional Development', description: 'Ghana constitutions, separation of powers, fundamental rights', naccaUrl: 'https://naccaghana.org/shs/arts/government/constitution' },
-      { id: 'international', title: 'International Relations', description: 'UN, AU, ECOWAS, diplomacy, conflict resolution', naccaUrl: 'https://naccaghana.org/shs/arts/government/international' },
+      { id: 'concepts', title: 'Basic Concepts', description: 'State, sovereignty, power, authority, legitimacy', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/government/concepts' },
+      { id: 'constitution', title: 'Constitutional Development', description: 'Ghana constitutions, separation of powers, fundamental rights', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/government/constitution' },
+      { id: 'international', title: 'International Relations', description: 'UN, AU, ECOWAS, diplomacy, conflict resolution', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/arts/government/international' },
     ],
   },
   {
@@ -245,9 +254,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'auto_stories',
     color: 'text-pink-300 bg-pink-400/10 border-pink-400/20',
     topics: [
-      { id: 'prose', title: 'Prose Fiction', description: 'Novels, short stories, narrative techniques, themes', naccaUrl: 'https://naccaghana.org/shs/arts/literature/prose' },
-      { id: 'poetry', title: 'Poetry', description: 'Forms, devices, analysis of prescribed poems', naccaUrl: 'https://naccaghana.org/shs/arts/literature/poetry' },
-      { id: 'drama', title: 'Drama', description: 'Plays, dramatic techniques, stagecraft', naccaUrl: 'https://naccaghana.org/shs/arts/literature/drama' },
+      { id: 'prose', title: 'Prose Fiction', description: 'Novels, short stories, narrative techniques, themes', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/literature/prose' },
+      { id: 'poetry', title: 'Poetry', description: 'Forms, devices, analysis of prescribed poems', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/arts/literature/poetry' },
+      { id: 'drama', title: 'Drama', description: 'Plays, dramatic techniques, stagecraft', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/arts/literature/drama' },
     ],
   },
 
@@ -261,9 +270,9 @@ export const SHS_CURRICULUM: CurriculumSubject[] = [
     icon: 'agriculture',
     color: 'text-green-300 bg-green-400/10 border-green-400/20',
     topics: [
-      { id: 'crops', title: 'Crop Husbandry', description: 'Land preparation, planting, crop protection, harvesting', naccaUrl: 'https://naccaghana.org/shs/agriculture/crops' },
-      { id: 'animals', title: 'Animal Husbandry', description: 'Livestock management, nutrition, breeding, diseases', naccaUrl: 'https://naccaghana.org/shs/agriculture/animals' },
-      { id: 'economics', title: 'Agricultural Economics', description: 'Farm management, marketing, agricultural policy', naccaUrl: 'https://naccaghana.org/shs/agriculture/economics' },
+      { id: 'crops', title: 'Crop Husbandry', description: 'Land preparation, planting, crop protection, harvesting', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/agriculture/crops' },
+      { id: 'animals', title: 'Animal Husbandry', description: 'Livestock management, nutrition, breeding, diseases', year: 'shs2', naccaUrl: 'https://naccaghana.org/shs/agriculture/animals' },
+      { id: 'economics', title: 'Agricultural Economics', description: 'Farm management, marketing, agricultural policy', year: 'shs3', naccaUrl: 'https://naccaghana.org/shs/agriculture/economics' },
     ],
   },
 ]
