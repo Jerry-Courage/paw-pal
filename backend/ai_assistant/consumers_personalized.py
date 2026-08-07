@@ -38,13 +38,39 @@ def _get_personalized_context(user):
             history.append(f"{role_label}: {msg.content[:80]}")
         history_str = "\n".join(history) if history else "No history."
         
-        # Get resources they are studying (top 3 for lean context)
-        resources = Resource.objects.filter(owner=user).order_by('-created_at').values('title', 'subject')[:3]
-        materials = [f"- {r['title']} ({r['subject'] or 'General'})" for r in resources]
-        materials_str = "\n".join(materials) if materials else "No materials."
+        # Get resources with mastery data for strength/gap analysis
+        from library.models import ResourceProgress
+        progresses = ResourceProgress.objects.filter(user=user).select_related('resource').order_by('-created_at')[:10]
+        materials_lines = []
+        strong_areas = []
+        weak_areas = []
+        for p in progresses:
+            title = p.resource.title if p.resource else 'Unknown'
+            subject = p.resource.subject if p.resource else 'General'
+            mastery = p.mastery
+            materials_lines.append(f"- {title} ({subject}) — {mastery}% mastery")
+            if mastery >= 70:
+                strong_areas.append(title)
+            elif mastery < 40 and mastery > 0:
+                weak_areas.append(title)
+        materials_str = "\n".join(materials_lines) if materials_lines else "No materials studied yet."
+        
+        # Also get resource titles for materials without progress
+        all_resources = Resource.objects.filter(owner=user).exclude(
+            id__in=progresses.values_list('resource_id', flat=True)
+        ).order_by('-created_at').values('title', 'subject')[:5]
+        for r in all_resources:
+            materials_lines.append(f"- {r['title']} ({r['subject'] or 'General'}) — not started")
+        
+        performance_str = ""
+        if strong_areas:
+            performance_str += f"STRONG areas: {', '.join(strong_areas)}. "
+        if weak_areas:
+            performance_str += f"WEAK areas: {', '.join(weak_areas)}. "
+        if not performance_str:
+            performance_str = "No mastery data yet — student hasn't completed enough study sessions."
         
         # Get XP level
-        from library.models import ResourceProgress
         xp = ResourceProgress.objects.filter(user=user).aggregate(total=models.Sum('xp_earned'))['total'] or 0
         xp += int((user.onboarding_status or {}).get('quiz_xp', 0))
         
@@ -71,6 +97,7 @@ def _get_personalized_context(user):
             'level_name': level_name,
             'history_str': history_str,
             'materials_str': materials_str,
+            'performance_str': performance_str,
             'streak': streak,
             'education': education,
         }
@@ -185,7 +212,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         system_prompt = (
             f"You are a personal tutor for {ctx['username']}, a {ctx['level_name']} student "
             f"({ctx['xp']} XP, {ctx['streak']}-day streak). Education: {ctx['education']}.\n"
-            f"Materials: {ctx['materials_str']}\nHistory: {ctx['history_str']}\n\n"
+            f"PERFORMANCE: {ctx['performance_str']}\n"
+            f"Materials:\n{ctx['materials_str']}\nHistory: {ctx['history_str']}\n\n"
             "PERSONALITY:\n"
             "- Warm, encouraging, and patient like a favourite teacher.\n"
             "- Use the student's name naturally.\n"
@@ -204,6 +232,11 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             "- Guide them with questions rather than giving answers directly.\n"
             "- Give hints and let them think.\n"
             "- If they're stuck, explain step by step.\n\n"
+            "Analysis mode (when they ask about strengths, weaknesses, gaps, progress, how they're doing):\n"
+            "- Use the PERFORMANCE data above to give specific, honest feedback.\n"
+            "- Name their strong topics and weak topics with mastery percentages.\n"
+            "- Suggest what to focus on next based on their gaps.\n"
+            "- Be encouraging but honest — don't sugarcoat weak areas.\n\n"
             "Always be encouraging. If they get something wrong, explain why positively."
         )
 
