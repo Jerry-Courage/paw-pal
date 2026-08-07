@@ -87,21 +87,6 @@ class User(AbstractUser):
         self.last_study_date = today
         self.save(update_fields=['total_study_time', 'study_streak', 'last_study_date'])
 
-        # Sync with Planner: Create a recorded session so dashboard graphs update
-        try:
-            from planner.models import StudySession
-            now = timezone.now()
-            StudySession.objects.create(
-                user=self,
-                title=f"Focus Flow ({int(minutes)}m)",
-                start_time=now - timedelta(minutes=minutes),
-                end_time=now,
-                status='completed',
-                session_type='study'
-            )
-        except Exception as e:
-            print(f"Error syncing study session: {e}")
-
 
 NOTIFICATION_TYPES = [
     ('ai_nudge', 'AI Nudge'),
