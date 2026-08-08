@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useEffect, useState, useMemo } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -14,10 +13,8 @@ export interface ModelViewerProps {
   rotation?: [number, number, number]
   /** Uniform scale */
   scale?: number
-  /** Called when model loads */
+  /** Called when model loads successfully */
   onLoaded?: () => void
-  /** Called on load error */
-  onError?: (error: Error) => void
   /** Whether the model is selectable */
   selectable?: boolean
   /** Called when model is clicked */
@@ -26,13 +23,17 @@ export interface ModelViewerProps {
   selected?: boolean
 }
 
+/**
+ * Pure model renderer — no error boundary.
+ * Errors propagate to parent (SceneObjectRenderer) which catches
+ * and falls back to InteractiveObject placeholder.
+ */
 function Model({
   url,
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   scale = 1,
   onLoaded,
-  onError,
   selectable = false,
   onSelect,
   selected = false,
@@ -41,13 +42,8 @@ function Model({
   const { scene } = useGLTF(url)
   const [hovered, setHovered] = useState(false)
 
-  // Clone scene to avoid conflicts if same model is used multiple times
-  const clonedScene = useMemo(() => {
-    const clone = scene.clone(true)
-    return clone
-  }, [scene])
+  const clonedScene = useMemo(() => scene.clone(true), [scene])
 
-  // Center and scale the model
   useEffect(() => {
     if (!groupRef.current) return
 
@@ -55,10 +51,9 @@ function Model({
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z)
-    const targetSize = 2 // Target max dimension in world units
+    const targetSize = 2
     const autoScale = targetSize / maxDim
 
-    // Center the model at its pivot
     groupRef.current.position.set(
       position[0] - center.x * autoScale * scale,
       position[1] - center.y * autoScale * scale + size.y * autoScale * scale * 0.5,
@@ -66,7 +61,7 @@ function Model({
     )
 
     onLoaded?.()
-  }, [clonedScene]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clonedScene])
 
   return (
     <group
@@ -92,7 +87,6 @@ function Model({
       }}
     >
       <primitive object={clonedScene} />
-      {/* Selection/hover highlight */}
       {(selected || hovered) && (
         <mesh>
           <sphereGeometry args={[0.05, 8, 8]} />
@@ -107,56 +101,41 @@ function Model({
   )
 }
 
-// Pre-load is not possible without knowing the URL at build time.
-// useGLTF loads on-demand and caches internally.
-
 export default function ModelViewer({
   url,
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   scale = 1,
   onLoaded,
-  onError,
   selectable = false,
   onSelect,
   selected = false,
 }: ModelViewerProps) {
-  const [loadError, setLoadError] = useState<Error | null>(null)
+  const isValidUrl = useMemo(() => {
+    if (!url || typeof url !== 'string') return false
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
+  }, [url])
 
-  // Error boundary for GLTF loading
-  if (loadError) {
-    return (
-      <mesh position={position}>
-        <boxGeometry args={[0.5, 0.5, 0.5]} />
-        <meshStandardMaterial color="#ff4444" wireframe />
-      </mesh>
-    )
+  if (!isValidUrl) {
+    // Invalid URL — throw to trigger parent ErrorBoundary
+    throw new Error(`Invalid model URL: ${url}`)
   }
 
-  try {
-    return (
-      <Model
-        url={url}
-        position={position}
-        rotation={rotation}
-        scale={scale}
-        onLoaded={onLoaded}
-        onError={(err) => {
-          setLoadError(err)
-          onError?.(err)
-        }}
-        selectable={selectable}
-        onSelect={onSelect}
-        selected={selected}
-      />
-    )
-  } catch {
-    // Fallback if useGLTF throws synchronously
-    return (
-      <mesh position={position}>
-        <boxGeometry args={[0.5, 0.5, 0.5]} />
-        <meshStandardMaterial color="#ff4444" wireframe />
-      </mesh>
-    )
-  }
+  return (
+    <Model
+      url={url}
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      onLoaded={onLoaded}
+      selectable={selectable}
+      onSelect={onSelect}
+      selected={selected}
+    />
+  )
 }

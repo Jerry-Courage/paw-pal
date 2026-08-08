@@ -99,21 +99,29 @@ def get_model_uid(keyword: str) -> str | None:
                 if any(bad in name for bad in ['tokyo', 'littlest', 'street scene', 'city scene']):
                     continue
 
-                # Good match: keyword word appears in model name or tags
-                if any(w in name or w in tags for w in keyword_words):
-                    logger.info(f"[Sketchfab] '{keyword}' matched '{model.get('name')}' ({uid})")
+                # Score model: name match > tag match > description match
+                name_matches = sum(1 for w in keyword_words if w in name)
+                tag_matches = sum(1 for w in keyword_words if w in tags)
+                desc_matches = sum(1 for w in keyword_words if w in description)
+                total_score = name_matches * 3 + tag_matches * 2 + desc_matches
+
+                # Require at least 2 keyword matches OR name contains the full keyword
+                full_keyword_in_name = keyword_lower in name
+                if total_score >= 2 or (full_keyword_in_name and name_matches >= 1):
+                    logger.info(f"[Sketchfab] '{keyword}' matched '{model.get('name')}' ({uid}) score={total_score}")
                     return uid
 
-            # If no strong match on name/tags, try first non-blocked result
-            # but ONLY if this is not the first (most general) query
+            # Fallback: first non-blocked model with name containing the keyword
             if i > 0:
                 for model in results:
                     uid = model.get('uid', '')
                     name = (model.get('name') or '').lower()
                     if uid and uid not in BLOCKED_UIDS:
                         if not any(bad in name for bad in ['tokyo', 'littlest', 'street', 'warehouse', 'interior', 'house', 'building', 'city']):
-                            logger.info(f"[Sketchfab] '{keyword}' fallback '{model.get('name')}' ({uid})")
-                            return uid
+                            # Extra check: name should contain at least one keyword
+                            if any(w in name for w in keyword_words):
+                                logger.info(f"[Sketchfab] '{keyword}' fallback '{model.get('name')}' ({uid})")
+                                return uid
 
         except Exception as e:
             logger.warning(f"[Sketchfab] Search error for '{query}': {e}")

@@ -34,21 +34,8 @@ export const ASSET_MANIFEST: AssetManifest = {
     source: 'KhronosGroup/glTF-Sample-Models',
     version: 1,
   },
-  'heart': {
-    id: 'heart',
-    name: 'Human Heart',
-    subject: 'biology',
-    keywords: [
-      'heart', 'cardiac', 'ventricle', 'atrium', 'aorta',
-      'cardiovascular', 'blood pump', 'valve', 'mitral',
-      'pulmonary', 'myocardium', 'human heart',
-    ],
-    modelUrl: 'https://modelviewer.dev/shared-assets/models/Heart.glb',
-    thumbnailUrl: '',
-    license: 'Apache 2.0 (modelviewer.dev shared assets)',
-    source: 'modelviewer.dev shared assets',
-    version: 1,
-  },
+  // Heart asset removed — modelviewer.dev Heart.glb returns 404.
+  // TODO: Host a proper heart GLB on Cloudinary and re-add here.
 }
 
 /** Get all asset IDs */

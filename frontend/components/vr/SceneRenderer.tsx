@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useMemo, Suspense } from 'react'
+import { useCallback, useState, useMemo, Component, ReactNode } from 'react'
 import type { XRStore } from '@react-three/xr'
 import FlowStateCanvas from './FlowStateCanvas'
 import ModelViewer from './ModelViewer'
@@ -44,7 +44,6 @@ export interface SceneRendererProps {
 function AssetPlaceholder({ object }: { object: SceneObject }) {
   return (
     <group position={[object.position.x, object.position.y, object.position.z]}>
-      {/* Glowing orb placeholder */}
       <mesh>
         <sphereGeometry args={[0.15, 16, 16]} />
         <meshStandardMaterial
@@ -55,13 +54,46 @@ function AssetPlaceholder({ object }: { object: SceneObject }) {
           opacity={0.7}
         />
       </mesh>
-      {/* Selection ring */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.14, 0]}>
         <ringGeometry args={[0.18, 0.2, 32]} />
         <meshBasicMaterial color={object.color || '#6366f1'} transparent opacity={0.3} />
       </mesh>
     </group>
   )
+}
+
+/**
+ * Error boundary that catches ModelViewer load failures.
+ * Falls back to InteractiveObject placeholder — keeps the scene alive.
+ * Does NOT unmount the Canvas or sibling objects.
+ */
+class ModelLoadErrorBoundary extends Component<
+  {
+    children: ReactNode
+    fallback: ReactNode
+  },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    // Log in dev only — do not crash the scene
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[SceneRenderer] Model load failed, using placeholder:', error.message)
+    }
+  }
+
+  render() {
+    if (this.state.hasError) return this.props.fallback
+    return this.props.children
+  }
 }
 
 export default function SceneRenderer({
@@ -137,7 +169,6 @@ export default function SceneRenderer({
       fov={50}
       xrStore={xrStore}
     >
-      {/* Scene objects */}
       {scene.objects.map((obj) => (
         <SceneObjectRenderer
           key={obj.id}
@@ -172,18 +203,40 @@ function SceneObjectRenderer({
     object.position.z,
   ]
 
-  // If asset resolved → load GLB
+  // Build the InteractiveObject fallback for when model loading fails
+  const interactiveFallback = object.interactive ? (
+    <InteractiveObject
+      position={position}
+      size={0.25}
+      color={object.color || '#6366f1'}
+      selected={selected}
+      highlighted={highlighted}
+      onClick={onSelect}
+      onObjectSelect={onObjectSelect}
+      label={object.label}
+      conceptId={object.conceptId}
+      assetId={object.assetId}
+      showLabel={selected || highlighted}
+      shape="sphere"
+    />
+  ) : (
+    <AssetPlaceholder object={object} />
+  )
+
+  // If asset resolved → load GLB with error boundary
   if (object.asset.modelUrl && object.type === 'model') {
     return (
-      <ModelViewer
-        key={object.asset.modelUrl}
-        url={object.asset.modelUrl}
-        position={position}
-        scale={object.scale}
-        selectable={object.interactive}
-        onSelect={onSelect}
-        selected={selected}
-      />
+      <ModelLoadErrorBoundary fallback={interactiveFallback}>
+        <ModelViewer
+          key={object.asset.modelUrl}
+          url={object.asset.modelUrl}
+          position={position}
+          scale={object.scale}
+          selectable={object.interactive}
+          onSelect={onSelect}
+          selected={selected}
+        />
+      </ModelLoadErrorBoundary>
     )
   }
 
