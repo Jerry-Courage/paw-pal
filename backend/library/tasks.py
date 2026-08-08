@@ -508,6 +508,16 @@ def process_resource_task(res_id):
         res.status = 'generating'
         res.save()
         
+        # ── CACHE CHECK: skip if valid kit already exists ────────────────────
+        if res.has_study_kit and res.ai_notes_json and isinstance(res.ai_notes_json, dict):
+            existing_sections = res.ai_notes_json.get('sections', [])
+            if existing_sections and len(existing_sections) >= 3:
+                logger.info(f'[Task Queue] Cache hit — {len(existing_sections)} sections already exist for {res.id}')
+                res.processing_progress = 100
+                res.status_text = "Study kit ready (cached)"
+                res.save(update_fields=['processing_progress', 'status_text', 'status'])
+                return res
+        
         ai = AIService()
         try:
             kit = ai.generate_study_kit(

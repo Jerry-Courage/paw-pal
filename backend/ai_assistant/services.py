@@ -128,10 +128,13 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #    2. Groq key1 llama-3.1-8b      560 t/s  — reliable fast
 #    3. Groq key2 gpt-oss-20b      1000 t/s  — second key burst capacity
 #    4. Groq key2 llama-3.1-8b      560 t/s  — second key fallback
-#    5. SambaNova Llama-3.3-70B    12K RPD   — smart fallback
-#    6. SambaNova Llama-4-Maverick 12K RPD   — fast fallback
-#    7. Cerebras  llama3.1-8b      14.4K RPD — high-quota fallback
-#    8. Google    Gemma-4-26b                — last resort
+#    5. Groq key3-5 gpt-oss-20b    1000 t/s  — additional keys (72K RPD total)
+#    6. SambaNova Llama-3.3-70B    12K RPD   — smart fallback
+#    7. SambaNova Llama-4-Maverick 12K RPD   — fast fallback
+#    8. Cerebras  gpt-oss-120b     14.4K RPD — high-quota fallback
+#    9. Cerebras  gemma-4-31b      14.4K RPD — high-quota fallback
+#   10. Google    gemma-4-26b      14.4K RPD — huge quota safety net (2 keys)
+#   11. Google    gemma-4-31b      14.4K RPD — huge quota safety net (2 keys)
 #
 #  STUDY KIT (fast generation — needs speed + high daily quota)
 #    1. Groq key1 gpt-oss-20b      1000 t/s  — absolute fastest
@@ -252,6 +255,8 @@ class AIService:
             os.getenv('GROQ_API_KEY', ''),
             os.getenv('GROQ_API_KEY_2', ''),
             os.getenv('GROQ_API_KEY_3', ''),
+            os.getenv('GROQ_API_KEY_4', ''),
+            os.getenv('GROQ_API_KEY_5', ''),
         ]
         return [k for k in keys if k]
         local_llm_path = getattr(settings, 'LOCAL_LLM_PATH', None)
@@ -1537,10 +1542,10 @@ class AIService:
         resource.status_text = "🔬 Analyzing context..."
         resource.save(update_fields=['processing_progress', 'status_text'])
 
-        # ─── MACRO-CHUNKING (Hyper-Speed Mode) ───
-        # 6K chunks — keeps each chunk within Groq's token limits (413 on larger chunks)
-        chunk_size = 6000
-        overlap = 300
+        # ─── MACRO-CHUNKING (Turbo Mode) ───
+        # 10K chunks — larger chunks = fewer API calls, better context per chunk
+        chunk_size = 10000
+        overlap = 500
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         # Multi-Modal Vision Context — send page images for BOTH videos AND PDFs/slides
@@ -1571,7 +1576,7 @@ class AIService:
 
         # ─── PRE-GENERATE PROMPTS ───
         prompts = []
-        for idx, chunk_text in enumerate(chunks[:25]):
+        for idx, chunk_text in enumerate(chunks[:12]):
             # VERSION TAG: 3.1-PREMIUM (Ultra-Readability)
             prompt = (
                 f"You are FlowAI Study Architect — an expert at creating study materials that combine academic depth with memory science.\n"
