@@ -133,13 +133,16 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #    7. Cerebras  llama3.1-8b      14.4K RPD — high-quota fallback
 #    8. Google    Gemma-4-26b                — last resort
 #
-#  STUDY KIT (smart, high output — needs quality + high daily quota)
-#    1. Cerebras  qwen-3-235b      14.4K RPD — 235B, smartest free model
-#    2. SambaNova Llama-3.3-70B    12K RPD   — capable fallback
-#    3. SambaNova DeepSeek-V3.1    12K RPD   — strong reasoning
-#    4. Groq key1 llama-3.3-70b    280 t/s   — capable fallback
-#    5. Groq key2 llama-3.3-70b    280 t/s   — second key fallback
-#    7. Google    Gemma-4-31b                — last resort
+#  STUDY KIT (fast generation — needs speed + high daily quota)
+#    1. Groq key1 gpt-oss-20b      1000 t/s  — absolute fastest
+#    2. Groq key1 llama-3.1-8b      560 t/s  — fast + reliable
+#    3. Groq key1 gpt-oss-120b      500 t/s  — smart fallback
+#    4. Groq key2 gpt-oss-20b      1000 t/s  — second key burst
+#    5. Groq key2 llama-3.1-8b      560 t/s  — second key fallback
+#    6. Cerebras  gpt-oss-120b     14.4K RPD — high-quota fallback
+#    7. Cerebras  gemma-4-31b      14.4K RPD — high-quota fallback
+#    8. SambaNova Llama-3.3-70B    12K RPD   — smart fallback
+#    9. Google    Gemma-4-31b      14.4K RPD — huge quota safety net
 #
 #  STREAMING CHAT (needs speed + streaming support)
 #    1. Groq key1 gpt-oss-20b      1000 t/s  — fastest streamer
@@ -532,11 +535,38 @@ class AIService:
 
     async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
         """
-        Study Kit Chat — optimised for QUALITY + HIGH DAILY QUOTA (generation tasks).
-        Chain: Cerebras gpt-oss-120b (14.4K RPD) → SambaNova gpt-oss-120b (12K RPD)
-               → Groq llama-3.3-70b → Google Gemma-4-31b → OpenRouter
+        Study Kit Chat — optimised for SPEED + HIGH DAILY QUOTA (generation tasks).
+        Chain: Groq gpt-oss-20b (1000 t/s) → Cerebras gpt-oss-120b (14.4K RPD)
+               → SambaNova → Google Gemma-4-31b → OpenRouter
         """
-        # ── STAGE 0: CEREBRAS — smartest + highest daily quota ───────────────
+        # ── STAGE 0: GROQ — fastest inference on the planet ────────────────
+        groq_keys = self._groq_keys()
+        if groq_keys:
+            for key in groq_keys:
+                for groq_model, groq_timeout in [
+                    ('openai/gpt-oss-20b', 30),              # 1000 t/s — absolute fastest
+                    ('llama-3.1-8b-instant', 30),            # 560 t/s — fast + reliable
+                    ('openai/gpt-oss-120b', 45),             # 500 t/s — smart fallback
+                ]:
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(
+                                GROQ_API_URL,
+                                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                                timeout=groq_timeout,
+                            )
+                            if resp.status_code == 200:
+                                result = self._extract_content(resp.json())
+                                if result and result.strip():
+                                    logger.info(f"[Groq Kit] ✓ {groq_model}")
+                                    return result
+                            elif resp.status_code == 429:
+                                await asyncio.sleep(0.5)
+                    except Exception as e:
+                        logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
+
+        # ── STAGE 1: CEREBRAS — 14.4K RPD, high-quota safety net ──────────
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key:
             for cerebras_model, cerebras_timeout in [
@@ -587,34 +617,7 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[SambaNova Kit] {samba_model} failed: {e}")
 
-        # ── STAGE 2: GROQ (all keys) — capable fallback ─────────────────────
-        groq_keys = self._groq_keys()
-        if groq_keys:
-            for key in groq_keys:
-                for groq_model, groq_timeout in [
-                    ('openai/gpt-oss-120b', 60),            # 500 t/s — smart
-                    ('llama-3.3-70b-versatile', 60),         # most capable on Groq
-                    ('openai/gpt-oss-20b', 60),              # 1000 t/s — fast
-                ]:
-                    try:
-                        async with httpx.AsyncClient() as client:
-                            resp = await client.post(
-                                GROQ_API_URL,
-                                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
-                                timeout=groq_timeout,
-                            )
-                            if resp.status_code == 200:
-                                result = self._extract_content(resp.json())
-                                if result and result.strip():
-                                    logger.info(f"[Groq Kit] ✓ {groq_model}")
-                                    return result
-                            elif resp.status_code == 429:
-                                await asyncio.sleep(1)
-                    except Exception as e:
-                        logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
-
-        # ── STAGE 3: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
+        # ── STAGE 2: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
         for g_client in self._google_clients():
             for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
                 try:
@@ -1620,15 +1623,12 @@ class AIService:
         total_chunks = len(prompts)
         logger.info(f'[AI Service] Entering Quad-Burst Parallel Engine for {total_chunks} chunks...')
         
-        # Use single worker and sleep delay for Free Tier safety
+        # 4 parallel workers — each chunk hits a different provider/key
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
+            with ThreadPoolExecutor(max_workers=4) as executor:
                 # First chunk gets the Visual Evidence for better context
                 futures = {}
                 for idx, p in enumerate(prompts):
-                    if idx > 0:
-                        import time
-                        time.sleep(2)
                     imgs = chat_vision_bundle if idx == 0 else []
                     futures[executor.submit(self._task_with_watchdog, p, idx, imgs)] = idx
                 
@@ -1918,27 +1918,21 @@ class AIService:
             except Exception as e:
                 logger.error(f"Vision bundle {idx} failed: {e}")
                 return idx, {}
-            finally:
-                # Update progress
-                current_count = len(results) + 1
-                total = len(bundles)
-                prog = 30 + int((current_count / total) * 60)
-                resource.processing_progress = min(prog, 95)
-                resource.status_text = f"🖼️ Scanning bundle {current_count}/{total}..."
-                resource.save(update_fields=['processing_progress', 'status_text'])
 
         results = []
-        # Sequential processing with delay to stay within Gemini's 5 RPM free tier limit
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        # 4 parallel workers — Gemini 3.1 Flash Lite has higher RPM than 2.5 Flash
+        with ThreadPoolExecutor(max_workers=4) as executor:
             futures = []
             for i, b in enumerate(bundles):
-                if i > 0:
-                    import time
-                    time.sleep(13)  # 13s gap → safely under 5 RPM
                 futures.append(executor.submit(process_vision_bundle, i, b))
             
-            for future in futures:
+            for i, future in enumerate(futures):
                 results.append(future.result())
+                # Update progress after each completes
+                prog = 30 + int(((i + 1) / len(futures)) * 60)
+                resource.processing_progress = min(prog, 95)
+                resource.status_text = f"🖼️ Scanning bundle {i + 1}/{len(futures)}..."
+                resource.save(update_fields=['processing_progress', 'status_text'])
 
         results.sort(key=lambda x: x[0])
 
