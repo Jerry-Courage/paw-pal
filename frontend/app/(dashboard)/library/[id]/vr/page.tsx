@@ -639,20 +639,21 @@ export default function VRPage({ params }: { params: { id: string } }) {
                     resourceId={resourceId}
                     highlightedObjectId={guidedMode && learningPathIndex >= 0 ? learningPath[learningPathIndex] : null}
                     xrStore={xrStore}
-                  />
-                  {/* Spatial VR concept panel — shows in 3D scene */}
-                  {selectedObject && (
-                    <VRSpatialPanel
-                      object={selectedObject}
-                      scene={sceneData}
-                      learningPathIndex={learningPathIndex}
-                      totalPathSteps={totalPathSteps}
-                      exploredCount={exploredCount}
-                      totalConcepts={totalConcepts}
-                      onNext={guidedMode ? () => navigatePath('next') : undefined}
-                      onPrev={guidedMode ? () => navigatePath('prev') : undefined}
-                    />
-                  )}
+                  >
+                    {/* VRSpatialPanel must be INSIDE Canvas (uses drei Html) */}
+                    {selectedObject && (
+                      <VRSpatialPanel
+                        object={selectedObject}
+                        scene={sceneData}
+                        learningPathIndex={learningPathIndex}
+                        totalPathSteps={totalPathSteps}
+                        exploredCount={exploredCount}
+                        totalConcepts={totalConcepts}
+                        onNext={guidedMode ? () => navigatePath('next') : undefined}
+                        onPrev={guidedMode ? () => navigatePath('prev') : undefined}
+                      />
+                    )}
+                  </SceneRenderer>
                 </Suspense>
               </div>
             )}

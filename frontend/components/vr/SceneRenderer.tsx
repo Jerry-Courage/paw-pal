@@ -38,6 +38,8 @@ export interface SceneRendererProps {
   resourceTitle?: string
   /** Resource ID for SceneSpec generation from legacy concepts */
   resourceId?: string
+  /** Children rendered INSIDE the Canvas (e.g. VRSpatialPanel which uses drei Html) */
+  children?: React.ReactNode
 }
 
 /** Placeholder shown when an asset cannot be resolved */
@@ -106,6 +108,7 @@ export default function SceneRenderer({
   xrStore = null,
   resourceTitle = '',
   resourceId = '',
+  children,
 }: SceneRendererProps) {
   const [canvasError, setCanvasError] = useState(false)
 
@@ -179,6 +182,8 @@ export default function SceneRenderer({
           onObjectSelect={handleObjectSelect}
         />
       ))}
+      {/* Children rendered INSIDE Canvas (e.g. VRSpatialPanel, lights, etc.) */}
+      {children}
     </FlowStateCanvas>
   )
 }
