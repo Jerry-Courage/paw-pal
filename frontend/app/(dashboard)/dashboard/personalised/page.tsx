@@ -342,7 +342,7 @@ export default function PersonalisedLearningPage() {
       {/* ── SETUP PHASE ── */}
       {phase === 'setup' && (
         <div className="flex-1 flex flex-col overflow-y-auto">
-          <div className="flex-1 flex flex-col justify-center px-5 py-8 max-w-lg mx-auto w-full">
+          <div className="flex-1 flex flex-col px-5 sm:px-8 py-8 max-w-5xl mx-auto w-full">
 
             {/* Back link */}
             <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors mb-8">
@@ -351,7 +351,7 @@ export default function PersonalisedLearningPage() {
 
             {!isPremium ? (
               /* ── Premium Gate ── */
-              <div className="text-center space-y-6">
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto">
                 <div className="w-20 h-20 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto">
                   <Headphones className="w-10 h-10 text-violet-400" />
                 </div>
@@ -361,7 +361,7 @@ export default function PersonalisedLearningPage() {
                     Real-time voice conversations with an AI that knows your study history and teaches you like a real tutor.
                   </p>
                 </div>
-                <div className="space-y-3 text-left">
+                <div className="space-y-3 text-left w-full">
                   {['Personalised to your curriculum & materials', 'Full conversation memory across sessions', 'Voice & text — study hands-free'].map((f, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                       <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
@@ -379,89 +379,102 @@ export default function PersonalisedLearningPage() {
               </div>
             ) : (
               <>
-                {/* Hero Banner */}
-                <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-6 sm:p-8 text-white shadow-2xl mb-8">
-                  <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-                  <div className="relative z-10 flex flex-col items-center text-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-black/25 backdrop-blur-md flex items-center justify-center border border-white/10">
-                      <Headphones className="w-8 h-8" />
+                {/* Desktop: two-column layout */}
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                  {/* Left — Hero + Stats */}
+                  <div className="space-y-6">
+                    <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-8 text-white shadow-2xl">
+                      <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+                      <div className="relative z-10 flex flex-col items-center text-center gap-4">
+                        <div className="w-16 h-16 rounded-2xl bg-black/25 backdrop-blur-md flex items-center justify-center border border-white/10">
+                          <Headphones className="w-8 h-8" />
+                        </div>
+                        <div>
+                          <h1 className="text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
+                          <p className="text-white/80 text-sm leading-relaxed">
+                            Real-time voice conversations with an AI that knows your study history.
+                          </p>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Stats Row */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-center">
+                        <p className="text-[10px] uppercase font-black text-violet-400 tracking-wider mb-1">Streak</p>
+                        <p className="text-2xl font-black">{studyStreak}</p>
+                        <p className="text-[10px] text-white/30">days</p>
+                      </div>
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-center">
+                        <p className="text-[10px] uppercase font-black text-violet-400 tracking-wider mb-1">XP</p>
+                        <p className="text-2xl font-black">{totalXp.toLocaleString()}</p>
+                        <p className="text-[10px] text-white/30">earned</p>
+                      </div>
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-center">
+                        <p className="text-[10px] uppercase font-black text-violet-400 tracking-wider mb-1">Level</p>
+                        <p className="text-2xl font-black">{userLevel.num}</p>
+                        <p className="text-[10px] text-white/30">{userLevel.name}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right — Voice Selector + Context + Start */}
+                  <div className="space-y-6">
+                    {/* Voice Selector */}
                     <div>
-                      <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
-                      <p className="text-white/80 text-sm leading-relaxed max-w-xs mx-auto">
-                        Real-time voice conversations with an AI that knows your study history.
-                      </p>
+                      <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">Choose Voice</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {GEMINI_VOICES.map(v => (
+                          <button
+                            key={v.id}
+                            onClick={() => setVoice(v.id)}
+                            className={cn(
+                              "flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all text-center",
+                              voice === v.id
+                                ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
+                                : "bg-white/[0.02] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                            )}
+                          >
+                            <span className="text-xs font-bold">{v.label}</span>
+                            <span className="text-[9px] text-white/30">{v.desc}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                        <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Streak</p>
-                        <p className="text-sm font-black flex items-center gap-1">{studyStreak} Days</p>
-                      </div>
-                      <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                        <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">XP</p>
-                        <p className="text-sm font-black flex items-center gap-1">{totalXp.toLocaleString()}</p>
-                      </div>
-                      <div className="bg-black/25 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                        <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Level</p>
-                        <p className="text-sm font-black flex items-center gap-1">{userLevel.num}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Voice Selector */}
-                <div className="mb-6">
-                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">Choose Voice</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {GEMINI_VOICES.map(v => (
-                      <button
-                        key={v.id}
-                        onClick={() => setVoice(v.id)}
-                        className={cn(
-                          "flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all text-center",
-                          voice === v.id
-                            ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
-                            : "bg-white/[0.02] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
-                        )}
-                      >
-                        <span className="text-xs font-bold">{v.label}</span>
-                        <span className="text-[9px] text-white/30">{v.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Context Preview */}
-                <div className="mb-8 space-y-2">
-                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">What I Know About You</p>
-                  {[
-                    { icon: '📚', text: `${resources.length} study materials loaded` },
-                    { icon: '⚡', text: `${totalXp.toLocaleString()} XP · Level ${userLevel.num}` },
-                    { icon: '🔥', text: `${studyStreak} day streak` },
-                    { icon: '💬', text: 'Full conversation memory' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-outline-variant/30">
-                      <span className="text-sm">{item.icon}</span>
-                      <span className="text-xs text-white/60">{item.text}</span>
+                    {/* Context Preview */}
+                    <div>
+                      <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">What I Know About You</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { icon: '📚', text: `${resources.length} materials loaded` },
+                          { icon: '⚡', text: `${totalXp.toLocaleString()} XP` },
+                          { icon: '🔥', text: `${studyStreak} day streak` },
+                          { icon: '💬', text: 'Full memory' },
+                        ].map((item, i) => (
+                          <div key={i} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                            <span className="text-sm">{item.icon}</span>
+                            <span className="text-[11px] text-white/60">{item.text}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+
+                    {/* Start Button */}
+                    <button
+                      onClick={startSession}
+                      disabled={isConnecting}
+                      className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25"
+                    >
+                      {isConnecting ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
+                      ) : (
+                        <><Play className="w-5 h-5 fill-white" /> Start Session</>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </>
-            )}
-
-            {/* Start Button (premium only) */}
-            {isPremium && (
-              <button
-                onClick={startSession}
-                disabled={isConnecting}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25"
-              >
-                {isConnecting ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
-                ) : (
-                  <><Play className="w-5 h-5 fill-white" /> Start Session</>
-                )}
-              </button>
             )}
           </div>
         </div>
