@@ -930,3 +930,48 @@ class SectionQuizView(APIView):
         except Exception as e:
             logger.error(f'[SectionQuiz] Failed for resource {resource_id}: {e}')
             return Response({'error': str(e)}, status=500)
+
+
+class ResourceSceneView(APIView):
+    """
+    POST /api/library/resources/<id>/scene/
+    Generate or retrieve a SceneSpec for VR learning.
+
+    POST body: { "refresh": true } to force regeneration.
+    GET: return cached scene if available.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        resource = get_object_or_404(
+            Resource, Q(id=pk) & (Q(owner=request.user) | Q(is_public=True))
+        )
+        notes = resource.ai_notes_json or {}
+        scene = notes.get('vr_scene')
+        if scene:
+            return Response(scene)
+        return Response({'error': 'No scene generated yet'}, status=404)
+
+    def post(self, request, pk):
+        resource = get_object_or_404(
+            Resource, Q(id=pk) & (Q(owner=request.user) | Q(is_public=True))
+        )
+        refresh = request.data.get('refresh', False)
+
+        from .scene_planner import generate_scene_spec, generate_deterministic_scene
+
+        # Try AI scene planner first
+        scene = generate_scene_spec(resource, refresh=refresh)
+
+        # Fall back to deterministic generator
+        if not scene:
+            scene = generate_deterministic_scene(resource)
+
+        # Persist into ai_notes_json
+        if scene:
+            notes = resource.ai_notes_json or {}
+            notes['vr_scene'] = scene
+            resource.ai_notes_json = notes
+            resource.save(update_fields=['ai_notes_json'])
+
+        return Response(scene or {'error': 'Failed to generate scene'}, status=200 if scene else 500)

@@ -1,11 +1,25 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { libraryApi, getAuthToken, API_BASE } from '@/lib/api'
-import { Loader2, ChevronLeft, Sparkles, Mic, MicOff, Volume2, VolumeX, X } from 'lucide-react'
+import type { SceneSpec } from '@/lib/vr/sceneSpec'
+import { createXRStore } from '@react-three/xr'
+import { Loader2, ChevronLeft, ChevronRight, Sparkles, Mic, MicOff, Volume2, VolumeX, X, BookOpen, Brain, HelpCircle, CheckCircle2, Circle, Navigation, Glasses } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+
+// XR store — module level so it persists across renders
+const xrStore = createXRStore({
+  controller: true,
+  hand: false,
+  gaze: false,
+  emulate: false,
+  frameRate: 'high',
+  foveation: 0.5,
+  domOverlay: true,
+  offerSession: false,
+})
 
 interface VRNode {
   id: string
@@ -35,6 +49,12 @@ async function fetchSketchfabModel(keyword: string): Promise<SketchfabResult> {
   return res.json()
 }
 
+// Lazy-load the 3D scene renderer (client-only, SSR-safe)
+const SceneRenderer = lazy(() => import('@/components/vr/SceneRenderer'))
+const ConceptDetailPanel = lazy(() => import('@/components/vr/ConceptDetailPanel'))
+const EnterVRButton = lazy(() => import('@/components/vr/EnterVRButton'))
+const VRSpatialPanel = lazy(() => import('@/components/vr/VRSpatialPanel'))
+
 export default function VRPage({ params }: { params: { id: string } }) {
   const resourceId = params.id
   const [activeNode, setActiveNode] = useState<VRNode | null>(null)
@@ -48,6 +68,18 @@ export default function VRPage({ params }: { params: { id: string } }) {
   const [vrMode, setVrMode] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [nodeIndex, setNodeIndex] = useState(0)
+  const [r3fFailed, setR3fFailed] = useState(false)
+  const [selectedObject, setSelectedObject] = useState<{
+    objectId: string
+    conceptId: string
+    assetId: string | null
+    label: string
+  } | null>(null)
+  // Guided learning path state
+  const [learningPathIndex, setLearningPathIndex] = useState(-1)
+  const [guidedMode, setGuidedMode] = useState(false)
+  // Explored state — set of concept IDs the student has selected
+  const [exploredSet, setExploredSet] = useState<Set<string>>(new Set())
 
   const wsRef = useRef<WebSocket | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -60,6 +92,22 @@ export default function VRPage({ params }: { params: { id: string } }) {
   const { data: resource } = useQuery({
     queryKey: ['resource', resourceId],
     queryFn: () => libraryApi.getResource(Number(resourceId)).then(r => r.data),
+  })
+
+  // Fetch AI-generated SceneSpec (or null if not generated yet)
+  const { data: sceneData, isLoading: sceneLoading } = useQuery<SceneSpec>({
+    queryKey: ['scene', resourceId],
+    queryFn: async () => {
+      const token = await getAuthToken()
+      const res = await fetch(`${API_BASE}/library/resources/${resourceId}/scene/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      return res.json()
+    },
+    enabled: !!resourceId,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
   })
 
   const { data: vrLayout, isLoading, refetch: refetchLayout } = useQuery<VRLayout>({
@@ -95,6 +143,19 @@ export default function VRPage({ params }: { params: { id: string } }) {
       if (result.found && result.embed_url) setModelUrl(result.embed_url)
     } catch { /* no model found */ }
     finally { setLoadingModel(false) }
+  }, [])
+
+  // ── Guided Learning Path ─────────────────────────────────────────────
+  const learningPath = sceneData?.learningPath || []
+  const totalPathSteps = learningPath.length
+
+  // ── Explored State ───────────────────────────────────────────────────
+  const markExplored = useCallback((conceptId: string) => {
+    setExploredSet(prev => {
+      const next = new Set(prev)
+      next.add(conceptId)
+      return next
+    })
   }, [])
 
   // Auto-load first node
@@ -239,6 +300,37 @@ export default function VRPage({ params }: { params: { id: string } }) {
     loadModel(nodes[prev])
   }
 
+  // ── Guided Learning Path (after nodes declaration) ────────────────────
+  const navigatePath = useCallback((direction: 'prev' | 'next') => {
+    if (totalPathSteps === 0) return
+    const currentIndex = learningPathIndex
+    let newIndex: number
+    if (direction === 'next') {
+      newIndex = currentIndex < totalPathSteps - 1 ? currentIndex + 1 : currentIndex
+    } else {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : 0
+    }
+    setLearningPathIndex(newIndex)
+    const objectId = learningPath[newIndex]
+    const sceneObj = sceneData?.objects.find(o => o.id === objectId)
+    if (sceneObj) {
+      setSelectedObject({
+        objectId: sceneObj.id,
+        conceptId: sceneObj.conceptId,
+        assetId: sceneObj.assetId,
+        label: sceneObj.label,
+      })
+      const idx = nodes.findIndex(n => n.id === sceneObj.conceptId)
+      if (idx >= 0) {
+        setNodeIndex(idx)
+        loadModel(nodes[idx])
+      }
+    }
+  }, [learningPathIndex, totalPathSteps, learningPath, sceneData, nodes, loadModel])
+
+  const exploredCount = exploredSet.size
+  const totalConcepts = sceneData?.objects?.length || nodes.length
+
   if (isLoading) return (
     <div className="fixed inset-0 bg-black flex items-center justify-center">
       <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
@@ -258,8 +350,6 @@ export default function VRPage({ params }: { params: { id: string } }) {
             flex: 1,
             position: 'relative',
             overflow: 'hidden',
-            /* Barrel distortion for Cardboard lenses */
-            filter: 'none',
           }}>
             {modelUrl ? (
               <iframe
@@ -268,14 +358,12 @@ export default function VRPage({ params }: { params: { id: string } }) {
                 allow="autoplay; fullscreen; xr-spatial-tracking"
               />
             ) : (
-              // Animated 3D-style placeholder — shows when no Sketchfab model found
               <div style={{
                 width: '100%', height: '100%',
                 background: 'radial-gradient(ellipse at 40% 40%, #1e1b4b 0%, #050816 70%)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 gap: 16,
               }}>
-                {/* Animated orbital rings */}
                 <div style={{ position: 'relative', width: 120, height: 120 }}>
                   <div style={{
                     position: 'absolute', inset: 0, borderRadius: '50%',
@@ -300,7 +388,6 @@ export default function VRPage({ params }: { params: { id: string } }) {
               </div>
             )}
 
-            {/* Concept label overlay */}
             <div style={{
               position: 'absolute', bottom: 80, left: 0, right: 0,
               textAlign: 'center', padding: '0 20px',
@@ -319,7 +406,6 @@ export default function VRPage({ params }: { params: { id: string } }) {
               </div>
             </div>
 
-            {/* AI speech indicator */}
             {isSpeaking && (
               <div style={{
                 position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
@@ -338,7 +424,6 @@ export default function VRPage({ params }: { params: { id: string } }) {
         ))}
       </div>
 
-      {/* VR Controls overlay — bottom center */}
       <div style={{
         position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
         display: 'flex', gap: 12, zIndex: 20, alignItems: 'center',
@@ -362,7 +447,7 @@ export default function VRPage({ params }: { params: { id: string } }) {
     </div>
   )
 
-  // ── NORMAL VIEW (pre-VR setup + concept browser) ───────────────────────────
+  // ── NORMAL VIEW (pre-VR setup + concept browser + 3D canvas) ────────────────
   return (
     <div className="fixed inset-0 bg-[#050816] flex flex-col overflow-hidden">
       <style>{`
@@ -471,62 +556,244 @@ export default function VRPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* Center: 3D model preview + VR launch */}
+        {/* Center: 3D canvas + VR launch */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Grid background */}
-          <div className="absolute inset-0 pointer-events-none"
-            style={{ backgroundImage: 'linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+          {/* 3D Canvas area */}
+          <div className="flex-1 relative">
+            {r3fFailed ? (
+              /* Fallback: Sketchfab iframe or concept display */
+              <div className="absolute inset-0 flex items-center justify-center p-4">
+                {!loadingModel && modelUrl && (
+                  <div className="w-full h-full min-h-64 rounded-2xl overflow-hidden border border-indigo-500/20 shadow-2xl">
+                    <iframe key={modelUrl} src={modelUrl} className="w-full h-full" style={{ border: 'none' }}
+                      allow="autoplay; fullscreen; xr-spatial-tracking" allowFullScreen
+                      onError={() => setModelUrl(null)}
+                    />
+                  </div>
+                )}
+                {!loadingModel && !modelUrl && activeNode && (
+                  <div className="flex flex-col items-center gap-5 text-center px-6">
+                    <div className="w-32 h-32 rounded-full flex items-center justify-center"
+                      style={{ background: `radial-gradient(circle, ${activeNode.color}30, transparent)`, border: `2px solid ${activeNode.color}60` }}>
+                      <div className="w-14 h-14 rounded-full" style={{ background: activeNode.color + '60' }} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-white mb-2">{activeNode.label}</h3>
+                      <p className="text-slate-400 text-sm leading-relaxed max-w-sm">{activeNode.description}</p>
+                      <p className="text-slate-600 text-xs mt-4">No 3D model found for this concept yet.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Primary: R3F 3D Canvas */
+              <div className="absolute inset-0">
+                <Suspense fallback={
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0014]">
+                    <Loader2 className="w-8 h-8 text-violet-400 animate-spin mb-3" />
+                    <p className="text-violet-300/60 text-sm">Loading 3D engine...</p>
+                  </div>
+                }>
+                  <SceneRenderer
+                    scene={sceneData || null}
+                    concepts={nodes.map(n => ({
+                      id: n.id,
+                      title: n.label,
+                      description: n.description,
+                      sketchfab_keyword: n.sketchfab_keyword,
+                    }))}
+                    selectedConceptId={activeNode?.id || selectedObject?.conceptId || null}
+                    onConceptSelect={(id) => {
+                      const idx = nodes.findIndex(n => n.id === id)
+                      if (idx >= 0) {
+                        setNodeIndex(idx)
+                        loadModel(nodes[idx])
+                      }
+                      // Also update selected object from scene data
+                      if (sceneData) {
+                        const obj = sceneData.objects.find(o => o.conceptId === id)
+                        if (obj) {
+                          setSelectedObject({
+                            objectId: obj.id,
+                            conceptId: obj.conceptId,
+                            assetId: obj.assetId,
+                            label: obj.label,
+                          })
+                        }
+                      }
+                      markExplored(id)
+                    }}
+                    onObjectSelect={(event) => {
+                      setSelectedObject(event)
+                      const idx = nodes.findIndex(n => n.id === event.conceptId)
+                      if (idx >= 0) {
+                        setNodeIndex(idx)
+                        loadModel(nodes[idx])
+                      }
+                      markExplored(event.conceptId)
+                      // Sync guided path index if this object is in the path
+                      const pathIdx = learningPath.indexOf(event.objectId)
+                      if (pathIdx >= 0) setLearningPathIndex(pathIdx)
+                    }}
+                    resourceTitle={resource?.title}
+                    resourceId={resourceId}
+                    highlightedObjectId={guidedMode && learningPathIndex >= 0 ? learningPath[learningPathIndex] : null}
+                    xrStore={xrStore}
+                  />
+                  {/* Spatial VR concept panel — shows in 3D scene */}
+                  {selectedObject && (
+                    <VRSpatialPanel
+                      object={selectedObject}
+                      scene={sceneData}
+                      learningPathIndex={learningPathIndex}
+                      totalPathSteps={totalPathSteps}
+                      exploredCount={exploredCount}
+                      totalConcepts={totalConcepts}
+                      onNext={guidedMode ? () => navigatePath('next') : undefined}
+                      onPrev={guidedMode ? () => navigatePath('prev') : undefined}
+                    />
+                  )}
+                </Suspense>
+              </div>
+            )}
 
-          {/* Model area */}
-          <div className="flex-1 relative flex items-center justify-center p-4">
-            {loadingModel && (
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
-                <p className="text-slate-500 text-sm">Loading 3D model…</p>
-              </div>
+            {/* R3F error fallback trigger */}
+            {!r3fFailed && (
+              <div className="hidden" data-r3f-fallback />
             )}
-            {!loadingModel && modelUrl && (
-              <div className="w-full h-full min-h-64 rounded-2xl overflow-hidden border border-indigo-500/20 shadow-2xl">
-                <iframe key={modelUrl} src={modelUrl} className="w-full h-full" style={{ border: 'none' }}
-                  allow="autoplay; fullscreen; xr-spatial-tracking" allowFullScreen
-                  onError={() => setModelUrl(null)}
-                />
-              </div>
-            )}
-            {!loadingModel && !modelUrl && activeNode && (
-              <div className="flex flex-col items-center gap-5 text-center px-6">
-                <div className="w-32 h-32 rounded-full flex items-center justify-center"
-                  style={{ background: `radial-gradient(circle, ${activeNode.color}30, transparent)`, border: `2px solid ${activeNode.color}60` }}>
-                  <div className="w-14 h-14 rounded-full" style={{ background: activeNode.color + '60' }} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-white mb-2">{activeNode.label}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed max-w-sm">{activeNode.description}</p>
-                  <p className="text-slate-600 text-xs mt-4">No 3D model found for this concept yet.</p>
-                </div>
-              </div>
-            )}
-            {!loadingModel && !activeNode && (
-              <div className="text-center text-slate-600">
-                <p className="text-lg">← Select a concept</p>
-              </div>
+
+            {/* Interactive concept detail panel */}
+            {selectedObject && (
+              <ConceptDetailPanel
+                object={selectedObject}
+                scene={sceneData}
+                learningPathIndex={learningPathIndex}
+                totalPathSteps={totalPathSteps}
+                onClose={() => setSelectedObject(null)}
+                onAskFlowState={() => {
+                  // Wire to voice tutor concept_changed
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({
+                      type: 'concept_changed',
+                      concept: selectedObject.label,
+                      description: sceneData?.objects.find(o => o.id === selectedObject.objectId)?.description || '',
+                    }))
+                    toast.success('AI Tutor now focusing on this concept')
+                  } else {
+                    toast('Start the AI tutor to ask about this concept', { icon: '💡' })
+                  }
+                }}
+              />
             )}
           </div>
 
-          {/* VR launch bar */}
-          <div className="px-5 py-4 border-t border-indigo-500/15 bg-black/50 shrink-0 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-white font-black text-sm">{activeNode?.label || 'Select a concept'}</p>
-              <p className="text-slate-500 text-xs mt-0.5">{nodes.length} concepts in this lesson</p>
+          {/* Progress + Controls bar */}
+          <div className="px-5 py-3 border-t border-indigo-500/15 bg-black/50 shrink-0">
+            {/* Progress bar */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all duration-500"
+                  style={{ width: totalConcepts > 0 ? `${(exploredCount / totalConcepts) * 100}%` : '0%' }}
+                />
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                {exploredCount}/{totalConcepts} explored
+              </span>
             </div>
-            <button onClick={() => {
-                if (!sessionActive) { toast('Start the AI tutor first for the best experience', { icon: '💡', duration: 2000 }) }
-                setVrMode(true)
-              }}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm text-white transition-all active:scale-95"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
-              📱 Enter VR
-            </button>
+
+            <div className="flex items-center justify-between gap-4">
+              {/* Left: current concept info */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="min-w-0">
+                  <p className="text-white font-black text-sm truncate">{activeNode?.label || 'Select a concept'}</p>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    {guidedMode && learningPathIndex >= 0 && totalPathSteps > 0
+                      ? `Step ${learningPathIndex + 1} / ${totalPathSteps}`
+                      : `${nodes.length} concepts in this lesson`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Center: guided learning controls */}
+              {guidedMode && totalPathSteps > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigatePath('prev')}
+                    disabled={learningPathIndex <= 0}
+                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-slate-300" />
+                  </button>
+                  <div className="flex gap-1">
+                    {learningPath.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                          i === learningPathIndex
+                            ? 'bg-violet-400'
+                            : i < learningPathIndex
+                              ? 'bg-violet-600'
+                              : 'bg-white/10'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => navigatePath('next')}
+                    disabled={learningPathIndex >= totalPathSteps - 1}
+                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                  </button>
+                </div>
+              )}
+
+              {/* Right: buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                {totalPathSteps > 0 && (
+                  <button
+                    onClick={() => {
+                      setGuidedMode(!guidedMode)
+                      if (!guidedMode && learningPathIndex < 0) {
+                        setLearningPathIndex(0)
+                        // Select first in path
+                        const firstId = learningPath[0]
+                        const obj = sceneData?.objects.find(o => o.id === firstId)
+                        if (obj) {
+                          setSelectedObject({
+                            objectId: obj.id,
+                            conceptId: obj.conceptId,
+                            assetId: obj.assetId,
+                            label: obj.label,
+                          })
+                        }
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all ${
+                      guidedMode
+                        ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                        : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
+                  >
+                    <Navigation className="w-3 h-3" />
+                    {guidedMode ? 'Guided' : 'Guide'}
+                  </button>
+                )}
+                {!r3fFailed && (
+                  <span className="hidden sm:inline text-[10px] font-black text-violet-400 uppercase tracking-wider bg-violet-500/10 px-2 py-1 rounded-lg border border-violet-500/20">
+                    3D
+                  </span>
+                )}
+                <Suspense fallback={
+                  <button disabled className="flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-sm text-white opacity-50 bg-violet-600">
+                    <Glasses className="w-4 h-4" /> VR
+                  </button>
+                }>
+                  <EnterVRButton xrStore={xrStore} />
+                </Suspense>
+              </div>
+            </div>
           </div>
         </div>
       </div>

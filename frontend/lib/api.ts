@@ -83,6 +83,8 @@ export const libraryApi = {
     api.get('/library/resources/curated/', { params: type ? { type } : {} }),
   getResource: (id: number) => api.get(`/library/resources/${id}/`),
   getVRLayout: (id: number, refresh = false) => api.get(`/library/resources/${id}/vr-layout/${refresh ? '?refresh=1' : ''}`),
+  getScene: (id: number) => api.get(`/library/resources/${id}/scene/`),
+  generateScene: (id: number, refresh = false) => api.post(`/library/resources/${id}/scene/`, { refresh }),
   updateResource: (id: number, data: any) => api.patch(`/library/resources/${id}/`, data),
   updateResourceCover: (id: number, file: File) => {
     const fd = new FormData()
