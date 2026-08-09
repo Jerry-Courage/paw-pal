@@ -578,3 +578,45 @@ class SessionRemindersView(APIView):
             sent += 1
 
         return Response({'sent': sent})
+
+
+def send_planner_reminders():
+    """
+    Server-side scheduled task — sends push notifications for sessions starting
+    within the next 20 minutes. Runs via Django-Q every 5 minutes.
+    Uses DB-backed dedup (reminder_sent field) so it works across dynos/restarts.
+    """
+    from users.push_service import PushService
+    import logging
+    logger = logging.getLogger('nitemind')
+
+    now = timezone.now()
+    window_end = now + timedelta(minutes=20)
+
+    upcoming = StudySession.objects.filter(
+        start_time__gte=now,
+        start_time__lte=window_end,
+        status='scheduled',
+        reminder_sent=False,
+    ).select_related('user')
+
+    sent = 0
+    for session in upcoming:
+        try:
+            minutes_away = max(0, int((session.start_time - now).total_seconds() / 60))
+            label = 'now' if minutes_away < 2 else f'in {minutes_away} min'
+            PushService.send_notification(
+                user=session.user,
+                title=f'⏰ {session.title} starts {label}!',
+                body=f'{session.session_type.title()} · {session.start_time.strftime("%I:%M %p")}',
+                link='/planner',
+            )
+            session.reminder_sent = True
+            session.save(update_fields=['reminder_sent'])
+            sent += 1
+        except Exception as e:
+            logger.error(f'Failed to send reminder for session {session.id}: {e}')
+
+    if sent:
+        logger.info(f'[PlannerReminders] Sent {sent} push notifications')
+    return sent

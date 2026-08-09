@@ -18,6 +18,7 @@ class StudySession(models.Model):
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     is_ai_suggested = models.BooleanField(default=False)
+    reminder_sent = models.BooleanField(default=False, help_text="True once push reminder has been sent")
     recurrence_id = models.UUIDField(null=True, blank=True, help_text="Links recurring instances")
     resource = models.ForeignKey('library.Resource', on_delete=models.SET_NULL, null=True, blank=True, related_name='study_sessions')
     assignment = models.ForeignKey('assignments.Assignment', on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')

@@ -448,5 +448,12 @@ Q_SCHEDULES = [
         'schedule_type': 'D',   # Daily — proactively flips is_premium=False
         'repeats': -1,
     },
+    {
+        'name': 'Planner Session Reminders',
+        'func': 'planner.views.send_planner_reminders',
+        'schedule_type': 'I',   # Every 5 minutes
+        'minutes': 5,
+        'repeats': -1,
+    },
 ]
 # Signal: Forced Reload 2026-04-07
