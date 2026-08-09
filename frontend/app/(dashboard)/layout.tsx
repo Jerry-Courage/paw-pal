@@ -7,7 +7,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import MobileNav from '@/components/layout/MobileNav'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-import { registerPushNotifications, checkNotificationPermission } from '@/lib/push-notifications'
+import { registerPushNotifications } from '@/lib/push-notifications'
 import { getAuthToken, API_BASE } from '@/lib/api'
 
 import SplashScreen from '@/components/ui/SplashScreen'
@@ -43,14 +43,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [status, session])
 
-  // Push notifications
+  // Push notifications — always try to register (handles 'default' and 'granted')
   useEffect(() => {
     if (status !== 'authenticated') return
-    const permission = checkNotificationPermission()
-    if (permission === 'default') {
-      const timer = setTimeout(() => { registerPushNotifications() }, 3000)
-      return () => clearTimeout(timer)
-    }
+    const timer = setTimeout(() => { registerPushNotifications() }, 2000)
+    return () => clearTimeout(timer)
   }, [status])
 
   const handleOnboardingComplete = useCallback(async () => {

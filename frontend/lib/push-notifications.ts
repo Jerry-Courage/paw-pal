@@ -7,24 +7,41 @@ export async function registerPushNotifications() {
   }
 
   try {
-    // 1. Register Service Worker
+    // 1. Register Service Worker (wait for it to be ready/active)
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/'
     })
+    // Ensure the SW is controlling this page
+    await navigator.serviceWorker.ready
 
-    // 2. Request Permission
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') {
+    // 2. Check permission — if denied, bail. If default, ask. If granted, continue.
+    let permission = Notification.permission
+    if (permission === 'denied') {
+      console.warn('Push notification permission denied.')
       return false
     }
+    if (permission === 'default') {
+      permission = await Notification.requestPermission()
+      if (permission !== 'granted') return false
+    }
 
-    // 3. Subscribe to Push Manager
-    const subscription = await registration.pushManager.subscribe({
+    // 3. Check if we already have an active subscription
+    let subscription = await registration.pushManager.getSubscription()
+
+    // 4. If subscription exists, check if it needs updating (re-register with backend)
+    if (subscription) {
+      // Always ensure backend has the latest subscription
+      await authApi.registerPushSubscription(subscription.toJSON())
+      return true
+    }
+
+    // 5. Create new subscription
+    subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     })
 
-    // 4. Send to Backend
+    // 6. Send to Backend
     await authApi.registerPushSubscription(subscription.toJSON())
     return true
   } catch (error) {

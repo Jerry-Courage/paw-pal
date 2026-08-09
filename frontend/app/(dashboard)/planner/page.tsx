@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { plannerApi, authApi, VAPID_PUBLIC_KEY } from '@/lib/api'
+import { plannerApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -34,25 +34,6 @@ const TYPE_COLOR: Record<string,string> = {
 }
 const TYPE_ICON: Record<string,string> = {
   study:'book', class:'science', exam:'priority_high', assignment:'edit', personal:'person',
-}
-
-// ── Push notification helper ─────────────────────────────────────
-async function subscribeToPush(): Promise<boolean> {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
-  try {
-    const perm = await Notification.requestPermission()
-    if (perm !== 'granted') return false
-    const reg = await navigator.serviceWorker.ready
-    let sub = await reg.pushManager.getSubscription()
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: VAPID_PUBLIC_KEY,
-      })
-    }
-    await authApi.registerPushSubscription(JSON.stringify(sub))
-    return true
-  } catch { return false }
 }
 
 export default function PlannerPage() {
@@ -246,7 +227,8 @@ export default function PlannerPage() {
 
   // ── Enable push
   const handleEnablePush = async () => {
-    const ok = await subscribeToPush()
+    const { registerPushNotifications } = await import('@/lib/push-notifications')
+    const ok = await registerPushNotifications()
     if (ok) { setPushEnabled(true); toast.success('Reminders enabled! You\'ll get notified 15 min before sessions. 🔔') }
     else toast.error('Could not enable notifications. Check browser permissions.')
   }
