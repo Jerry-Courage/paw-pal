@@ -58,16 +58,22 @@ class CompleteStepView(APIView):
             # Fetch updated user XP
             request.user.refresh_from_db()
 
+            from django.db.models import Sum
+            total_xp = ResourceProgress.objects.filter(user=request.user).aggregate(
+                total=Sum('xp_earned')
+            )['total'] or 0
+            total_xp += int((request.user.onboarding_status or {}).get('quiz_xp', 0))
+
             return Response({
                 **_serialize(progress),
                 'xp_gained': xp_gained,
-                'total_xp': request.user.xp,
+                'total_xp': total_xp,
             })
         except (ProgrammingError, DatabaseError):
             return Response({
                 **_empty_progress_payload(resource.id),
                 'xp_gained': 0,
-                'total_xp': getattr(request.user, 'xp', 0),
+                'total_xp': 0,
             })
 
 

@@ -26,7 +26,7 @@ type Section = {
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
 const XP_PER_SECTION = 50
-const XP_MASTERY = 200
+const XP_MASTERY = 150
 const TIPS = [
   '"Try explaining what you just read in your own words — the Feynman technique!"',
   '"Take a 5-min break every 25 min. Your brain will thank you!"',
@@ -132,6 +132,38 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     } catch {}
   }, [sectionIndex, totalXP, completed, resourceId])
 
+  // ── Persist XP to backend on exit (beforeunload + cleanup) ──────────────
+  // Track XP that hasn't been individually persisted via awardXp calls
+  const unsavedXPRef = useRef(0)
+  const savedXpOnExit = useRef(false)
+
+  // Accumulate XP that isn't saved by individual awardXp calls
+  // (section quizzes, written tests, mystery boxes already call awardXp — skip those)
+  // This handles any edge cases where XP was added but not persisted.
+  const persistXp = useCallback(async () => {
+    if (savedXpOnExit.current || unsavedXPRef.current <= 0) return
+    savedXpOnExit.current = true
+    try {
+      const token = await getAuthToken()
+      const payload = JSON.stringify({ amount: unsavedXPRef.current, reason: 'Study Mode: Session XP', resource_id: resourceId })
+      // keepalive ensures the request completes even if page unloads
+      fetch(`${API_BASE}/auth/award-xp/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {})
+    } catch {}
+  }, [resourceId])
+
+  useEffect(() => {
+    window.addEventListener('beforeunload', persistXp)
+    return () => {
+      window.removeEventListener('beforeunload', persistXp)
+      persistXp()
+    }
+  }, [persistXp])
+
   const { data: resource, isLoading } = useQuery({
     queryKey: ['resource', resourceId],
     queryFn: () => libraryApi.getResource(resourceId).then(r => r.data),
@@ -182,9 +214,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       setTotalXP(newXP)
       setSessionXP(s => s + XP_PER_SECTION)
       setCompleted(newCompleted)
-      toast.success(`+${XP_PER_SECTION} XP! 🎉`, { duration: 2000 })
-      // completeStep handles XP via ResourceProgress — no need for separate awardXp call
-      libraryApi.completeStep(resourceId, 'notes', Math.round(newCompleted.size / total * 100)).catch(() => {})
+      toast.success(`+${XP_PER_SECTION} XP!`, { duration: 2000 })
+      authApi.awardXp(XP_PER_SECTION, `Study Mode: Section ${sectionIndex + 1} quiz`, resourceId).catch(() => {})
       qc.invalidateQueries({ queryKey: ['progress', resourceId] })
       qc.invalidateQueries({ queryKey: ['profile'] })
     }
@@ -261,12 +292,12 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       const data = res.data
       setWrittenFeedback(data.feedback || '')
       setWrittenGrade(data.correct ? 'got_it' : 'needs_work')
-      if (data.correct && !completed.has(sectionIndex)) {
+      if (data.correct) {
         const bonus = Math.round(XP_PER_SECTION * 0.5)
         const newXP = totalXP + bonus
         setTotalXP(newXP)
         setSessionXP(s => s + bonus)
-        toast.success(`+${bonus} XP for written test! 📝`, { duration: 2000 })
+        toast.success(`+${bonus} XP for written test!`, { duration: 2000 })
         authApi.awardXp(bonus, `Study Mode: Written test Section ${sectionIndex + 1}`, resourceId).catch(() => {})
         qc.invalidateQueries({ queryKey: ['profile'] })
       }
@@ -323,8 +354,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               setTotalXP(masteryXP)
               setSessionXP(s => s + XP_MASTERY)
               toast.success(`🏆 Mastery complete! +${XP_MASTERY} XP!`, { duration: 3000 })
-              // completeStep handles XP via ResourceProgress — no need for separate awardXp call
-              libraryApi.completeStep(resourceId, 'examprep', msg.score || 75).catch(() => {})
+              authApi.awardXp(XP_MASTERY, 'Study Mode: Mastery complete', resourceId).catch(() => {})
               qc.invalidateQueries({ queryKey: ['progress', resourceId] })
               qc.invalidateQueries({ queryKey: ['profile'] })
               // Clear localStorage so next visit starts fresh after mastery
