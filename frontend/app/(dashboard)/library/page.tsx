@@ -82,7 +82,7 @@ export default function LibraryPage() {
       if (status === 402 || data?.error === 'free_limit_reached') {
         setShowPaywall(true)
       } else if (status === 413 || data?.error?.toLowerCase?.()?.includes('too large')) {
-        toast.error('File is too large. Maximum size is 50 MB.')
+        toast.error(data?.error || 'File is too large.')
       } else if (!status) {
         // No response — likely a network timeout after the upload already completed on the server
         // Refresh the list rather than showing a false error

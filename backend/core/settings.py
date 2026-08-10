@@ -152,6 +152,15 @@ if USE_CLOUDINARY:
     }
     MEDIA_URL = '/media/'
 
+# ─── Cloudflare R2 (optional — fallback for files >10MB) ───────────────────────
+# Set these env vars to enable R2 for large file uploads.
+# Files ≤10MB go to Cloudinary (default). Files >10MB go to R2.
+R2_ACCOUNT_ID = os.getenv('R2_ACCOUNT_ID', '')
+R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID', '')
+R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
+R2_BUCKET_NAME = os.getenv('R2_BUCKET_NAME', '')
+R2_CUSTOM_DOMAIN = os.getenv('R2_CUSTOM_DOMAIN', '')  # optional CDN domain
+
 elif USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -297,7 +306,7 @@ if not DEBUG:
 # ─── File Upload Security ─────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB (Cloudinary free tier limit)
 ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.pptx', '.txt', '.py', '.js', '.ts', '.jpg', '.jpeg', '.png', '.mp4', '.heic', '.heif']
 API_URL = os.getenv('API_URL', os.getenv('RENDER_EXTERNAL_URL', 'http://localhost:8000'))
 

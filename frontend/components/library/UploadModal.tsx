@@ -132,7 +132,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
         refetchSub() // refresh usage count so the badge updates
         setShowPaywall(true)
       } else if (status === 413 || data?.error?.toLowerCase?.()?.includes('too large') || data?.error?.toLowerCase?.()?.includes('file too large')) {
-        toast.error('File is too large. Maximum size is 50 MB.')
+        toast.error(data?.error || 'File is too large.')
       } else {
         toast.error(data?.error || data?.detail || 'Upload failed. Please check your file and try again.')
       }
@@ -141,6 +141,10 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
 
   const onDrop = useCallback((files: File[]) => {
     if (files[0]) {
+      if (files[0].size > 50 * 1024 * 1024) {
+        toast.error('File is too large. Maximum size is 50 MB.')
+        return
+      }
       setFile(files[0])
       if (!title) setTitle(files[0].name.replace(/\.[^/.]+$/, ''))
     }
@@ -158,6 +162,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
       'image/*': []
     },
     maxFiles: 1,
+    maxSize: 50 * 1024 * 1024,
     disabled: stage !== 'idle'
   })
 

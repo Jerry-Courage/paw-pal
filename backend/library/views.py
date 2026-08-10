@@ -62,7 +62,13 @@ ALLOWED_EXTENSIONS = {
     '.pdf', '.doc', '.docx', '.pptx', '.ppt', '.txt', '.md',
     '.py', '.js', '.ts', '.rs', '.java', '.cpp', '.jpg', '.jpeg', '.png', '.mp4'
 }
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
+# Dynamic max size: R2 allows larger files, Cloudinary limited to 10MB
+def _get_max_upload_size():
+    from library.hybrid_storage import _r2_configured, CLOUDINARY_LIMIT
+    if _r2_configured():
+        return 50 * 1024 * 1024  # 50MB with R2
+    return CLOUDINARY_LIMIT      # 10MB Cloudinary only
 
 
 class ResourceListCreateView(generics.ListCreateAPIView):
@@ -100,8 +106,10 @@ class ResourceListCreateView(generics.ListCreateAPIView):
             ext = os.path.splitext(uploaded_file.name)[1].lower()
             if ext not in ALLOWED_EXTENSIONS:
                 return Response({'error': f'File type {ext} not allowed.'}, status=status.HTTP_400_BAD_REQUEST)
-            if uploaded_file.size > MAX_FILE_SIZE:
-                return Response({'error': 'File too large. Maximum 50MB.'}, status=status.HTTP_400_BAD_REQUEST)
+            max_size = _get_max_upload_size()
+            if uploaded_file.size > max_size:
+                max_mb = max_size // (1024 * 1024)
+                return Response({'error': f'File too large. Maximum {max_mb}MB.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # ── Freemium gate ────────────────────────────────────────
         user = request.user
@@ -121,12 +129,35 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         import threading
         import json
 
-        # Calculate file_size BEFORE the INSERT so the NOT NULL column is satisfied
-        # on the initial serializer.save() — setting it after causes a null violation.
-        file_size = self.request.FILES.get('file', None)
-        file_size_bytes = file_size.size if file_size else 0
+        uploaded_file = self.request.FILES.get('file', None)
+        file_size_bytes = uploaded_file.size if uploaded_file else 0
 
-        resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+        # Route large files to R2 (bypass Cloudinary's 10MB limit)
+        storage_backend = 'cloudinary'
+        r2_key = ''
+        if uploaded_file and file_size_bytes > 10 * 1024 * 1024:
+            from library.hybrid_storage import _r2_configured, _upload_to_r2
+            if _r2_configured():
+                try:
+                    storage_backend, r2_key, _ = _upload_to_r2(
+                        uploaded_file, uploaded_file.name, uploaded_file.content_type
+                    )
+                    # Save without the file — R2 has the bytes
+                    resource = serializer.save(
+                        owner=self.request.user,
+                        file_size=file_size_bytes,
+                        storage_backend=storage_backend,
+                        r2_key=r2_key,
+                    )
+                except Exception as e:
+                    logger.error(f'[R2 Upload] Failed: {e}')
+                    # Fall through to Cloudinary (will fail if >10MB)
+                    resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+            else:
+                resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+        else:
+            resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+
         resource.status_text = "🧬 Synthesis Engine Initializing..."
 
         # Increment lifetime counter — never decremented on delete
@@ -151,7 +182,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource.selected_features = features if isinstance(features, list) else []
         # Use update_fields to avoid the NOT NULL violation on file_size — the initial
         # serializer.save() inserts the row before file_size is set on the Python object.
-        resource.save(update_fields=['file_size', 'status_text', 'resource_type', 'selected_features'])
+        resource.save(update_fields=['file_size', 'status_text', 'resource_type', 'selected_features', 'storage_backend', 'r2_key'])
 
         # Run synthesis in a background thread on the same process (shares filesystem)
         def run():
@@ -635,30 +666,14 @@ class ResourceFileView(APIView):
         else:
             file_data = None
 
-            # 1. Preferred: signed Cloudinary download URL (401-proof, works with
-            #    strict delivery accounts that reject unsigned URLs). Mirrors tasks.py.
+            # 1. Use hybrid storage (Cloudinary or R2)
             try:
-                import requests as _req
-                import cloudinary.utils
-                import re as _re
-                cfg = cloudinary.config()
-                raw_name = resource.file.name or ''
-                if cfg.api_key and cfg.api_secret and cfg.cloud_name and raw_name:
-                    pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
-                    m = _re.search(r'\.([^.]+)$', raw_name)
-                    fmt = m.group(1) if m else 'pdf'
-                    signed_url = cloudinary.utils.private_download_url(
-                        pub_id, fmt, resource_type='image', type='upload'
-                    )
-                    resp = _req.get(signed_url, timeout=60)
-                    if resp.status_code == 200:
-                        file_data = resp.content
-                    else:
-                        logger.warning(f"[ResourceFileView] Signed download {resp.status_code} for {resource.file.name}")
+                from library.hybrid_storage import get_file_bytes
+                file_data = get_file_bytes(resource)
             except Exception as e:
-                logger.warning(f"[ResourceFileView] Signed download failed for {resource.file.name}: {e}")
+                logger.warning(f"[ResourceFileView] Hybrid storage download failed for {resource.id}: {e}")
 
-            # 2. Fallback: Django default_storage (Cloudinary/S3/Local)
+            # 2. Fallback: Django default_storage
             if not file_data:
                 try:
                     from django.core.files.storage import default_storage

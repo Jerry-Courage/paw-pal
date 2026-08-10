@@ -129,6 +129,26 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         self.text_fallback_mode = False
         self.text_fallback_reason = ''
 
+    @sync_to_async
+    def _save_transcript_sync(self, user):
+        first_user_msg = next((text for role, text in self.transcript_log if role == 'user'), '')
+        title = first_user_msg[:80] or 'Voice Tutor Session'
+        session = ChatSession.objects.create(
+            user=user,
+            context_type='voice_tutor',
+            title=title,
+        )
+        for role, text in self.transcript_log:
+            ChatMessage.objects.create(
+                session=session,
+                role='assistant' if role == 'ai' else 'user',
+                content=text,
+            )
+        logger.info(f'[PersonalisedVoice] Saved transcript: session={session.id}, msgs={len(self.transcript_log)}')
+
+    async def _save_transcript(self, user):
+        await self._save_transcript_sync(user)
+
     async def connect(self):
         user = self.scope.get('user')
         if not user or not user.is_authenticated:
@@ -479,21 +499,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             try:
                 user = self.scope.get('user')
                 if user and user.is_authenticated:
-                    # Build a title from the first user message
-                    first_user_msg = next((text for role, text in self.transcript_log if role == 'user'), '')
-                    title = first_user_msg[:80] or 'Voice Tutor Session'
-                    session = ChatSession.objects.create(
-                        user=user,
-                        context_type='voice_tutor',
-                        title=title,
-                    )
-                    for role, text in self.transcript_log:
-                        ChatMessage.objects.create(
-                            session=session,
-                            role='assistant' if role == 'ai' else 'user',
-                            content=text,
-                        )
-                    logger.info(f'[PersonalisedVoice] Saved transcript: session={session.id}, msgs={len(self.transcript_log)}')
+                    await self._save_transcript(user)
             except Exception as e:
                 logger.error(f'[PersonalisedVoice] Failed to save transcript: {e}')
 

@@ -136,54 +136,9 @@ def process_resource_task(res_id):
                 logger.info(f'[Task Queue] Inferred extension {ext!r} for resource {res.id} (type={res.resource_type})')
             
             try:
-                # Download file bytes from Cloudinary.
-                # Use the Cloudinary SDK's private_download_url which generates
-                # a signed, time-limited download URL — works regardless of whether
-                # the account has strict delivery (unsigned 401) enabled.
-                import requests as _req
-                file_bytes = None
-
-                try:
-                    import cloudinary
-                    import cloudinary.utils
-                    cfg = cloudinary.config()
-                    raw_name = res.file.name or ''
-
-                    if cfg.api_key and cfg.api_secret and cfg.cloud_name and raw_name:
-                        import re as _re
-                        # public_id is the file name without extension
-                        pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
-                        file_ext = _re.search(r'\.([^.]+)$', raw_name)
-                        fmt = file_ext.group(1) if file_ext else 'pdf'
-
-                        # Generate a short-lived signed download URL (1 min)
-                        signed_url = cloudinary.utils.private_download_url(
-                            pub_id,
-                            fmt,
-                            resource_type='image',
-                            type='upload',
-                        )
-                        resp = _req.get(signed_url, timeout=60)
-                        if resp.status_code == 200:
-                            file_bytes = resp.content
-                            logger.info(f'[Task Queue] Downloaded via signed URL: {res.id} ({len(file_bytes)} bytes)')
-                        else:
-                            logger.warning(f'[Task Queue] Signed download {resp.status_code} for {res.id}')
-                except Exception as sdk_err:
-                    logger.warning(f'[Task Queue] Signed download failed for {res.id}: {sdk_err}')
-
-                # Fallback: try raw/authenticated storage open
-                if not file_bytes:
-                    try:
-                        res.file.open('rb')
-                        file_bytes = res.file.read()
-                        res.file.close()
-                        logger.info(f'[Task Queue] File read via storage.open() for {res.id}')
-                    except Exception as e:
-                        logger.error(f'[Task Queue] Document extract failed for {res.id}: {e}')
-
-                if not file_bytes:
-                    raise Exception(f'Could not read file for resource {res.id}')
+                # Download file bytes using hybrid storage (Cloudinary or R2)
+                from library.hybrid_storage import get_file_bytes
+                file_bytes = get_file_bytes(res)
 
                 extraction = extract_text_from_bytes(file_bytes, ext)
                 

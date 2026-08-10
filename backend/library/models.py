@@ -22,6 +22,8 @@ class Resource(models.Model):
     resource_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='pdf')
     file = models.FileField(upload_to='resources/', null=True, blank=True)
     url = models.URLField(blank=True)
+    storage_backend = models.CharField(max_length=20, default='cloudinary', help_text='cloudinary or r2')
+    r2_key = models.CharField(max_length=500, blank=True, help_text='R2 object key for large files')
     subject = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='processing')
     processing_progress = models.IntegerField(default=0)
