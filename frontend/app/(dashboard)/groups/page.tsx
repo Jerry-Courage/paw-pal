@@ -563,7 +563,7 @@ function LobbyScreen({ pin, players, isHost, onStart, onLeave, isConnecting, isS
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="h-[100dvh] flex flex-col items-center justify-center px-4 py-8 max-w-2xl mx-auto gap-6 overflow-y-auto"
+      className="h-[100dvh] flex flex-col items-center justify-center px-4 py-8 max-w-3xl mx-auto gap-6 overflow-y-auto"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 24px)' }}>
 
       {/* PIN Card */}
@@ -590,7 +590,7 @@ function LobbyScreen({ pin, players, isHost, onStart, onLeave, isConnecting, isS
             Lobby Active
           </span>
         </div>
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto p-1">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 max-h-[350px] overflow-y-auto p-1">
           <AnimatePresence>
             {players.map((p, i) => {
               const isUserHost = p.username === me && isHost
@@ -708,7 +708,7 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer }:
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="h-[100dvh] flex flex-col max-w-4xl mx-auto px-4 pt-4 justify-between gap-3 overflow-y-auto"
+      className="h-[100dvh] flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 justify-between gap-3 overflow-y-auto bg-gradient-to-b from-[#0d091b] via-[#130b2e] to-[#0d091b]"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
       
       {/* Top Header */}
@@ -764,16 +764,16 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer }:
       </div>
 
       {/* Question Prompt */}
-      <div className="flex-1 flex items-center justify-center my-4">
-        <div className="w-full bg-white/5 border border-white/15 rounded-[2rem] p-6 sm:p-10 text-center shadow-2xl backdrop-blur-xl">
-          <p className="text-[20px] sm:text-[26px] md:text-[30px] font-black leading-snug text-white">
+      <div className="flex-1 flex items-center justify-center my-2 sm:my-4">
+        <div className="w-full bg-white/5 border border-white/15 rounded-[2rem] p-6 sm:p-10 md:p-14 text-center shadow-2xl backdrop-blur-xl">
+          <p className="text-[22px] sm:text-[30px] md:text-[38px] font-black leading-snug text-white">
             {question.text}
           </p>
         </div>
       </div>
 
       {/* Answer Options Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-2">
         {opts.map((opt, i) => {
           const key = OPTION_KEYS[i]
           const isSelected = answered === key
@@ -781,8 +781,8 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer }:
 
           if (isDisabled) {
             return (
-              <div key={key} className="rounded-2xl p-4 sm:p-5 flex items-center gap-4 bg-white/5 border border-white/5 text-white/20 cursor-not-allowed opacity-30 select-none">
-                <OptionShape index={i} className="w-7 h-7 sm:w-8 sm:h-8 fill-current shrink-0 text-white/20" />
+              <div key={key} className="rounded-2xl p-5 sm:p-6 flex items-center gap-4 bg-white/5 border border-white/5 text-white/20 cursor-not-allowed opacity-30 select-none min-h-[72px]">
+                <OptionShape index={i} className="w-8 h-8 sm:w-9 sm:h-9 fill-current shrink-0 text-white/20" />
                 <span className="leading-tight flex-1 line-through">Option eliminated</span>
               </div>
             )
@@ -792,12 +792,12 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer }:
             <motion.button key={key} whileHover={!answered ? { scale: 1.02 } : {}} whileTap={!answered ? { scale: 0.98 } : {}}
               onClick={() => onAnswer(key)} disabled={!!answered}
               className={cn(
-                'rounded-2xl p-4 sm:p-5 flex items-center gap-4 font-black text-[15px] sm:text-[17px] text-left transition-all relative overflow-hidden shadow-lg border border-white/10',
+                'rounded-2xl p-5 sm:p-6 flex items-center gap-4 font-black text-[16px] sm:text-[18px] md:text-[20px] text-left transition-all relative overflow-hidden shadow-lg border border-white/10 min-h-[72px]',
                 OPTION_COLORS[i],
                 isSelected ? 'ring-4 ring-white shadow-[0_0_30px_rgba(255,255,255,0.4)]' : 'opacity-95 hover:opacity-100',
                 answered && !isSelected ? 'opacity-35 grayscale-[30%]' : ''
               )}>
-              <OptionShape index={i} className="w-7 h-7 sm:w-8 sm:h-8 fill-current shrink-0 text-white/90" />
+              <OptionShape index={i} className="w-8 h-8 sm:w-9 sm:h-9 fill-current shrink-0 text-white/90" />
               <span className="leading-tight flex-1">{opt}</span>
               {isSelected && (
                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-7 h-7 bg-white text-black rounded-full flex items-center justify-center shrink-0">
@@ -825,7 +825,7 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-      className="min-h-[100dvh] flex flex-col items-center justify-center px-4 py-8 max-w-lg mx-auto gap-6 overflow-y-auto"
+      className="min-h-[100dvh] flex flex-col items-center justify-center px-4 py-8 max-w-3xl mx-auto gap-6 overflow-y-auto"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
 
       {/* Correct / Incorrect Banner */}
@@ -858,15 +858,15 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
       {/* Leaderboard Standings */}
       <div className="w-full">
         <p className="text-[11px] text-white/40 uppercase tracking-widest text-center mb-2 font-bold">Current Standings</p>
-        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
           {result.leaderboard.map((p, i) => (
             <motion.div key={p.username} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.05 * i }}
-              className={cn('flex items-center gap-3 px-4 py-3 rounded-xl border',
+              className={cn('flex items-center gap-3 px-5 py-3.5 rounded-xl border',
                 p.username === me ? 'bg-primary/25 border-primary/50' : 'bg-white/5 border-white/10')}>
-              <span className="text-[16px] w-6 text-center shrink-0">{MEDALS[i] || `#${i + 1}`}</span>
-              <span className="flex-1 text-[14px] font-bold truncate text-white">{p.username}</span>
+              <span className="text-[18px] w-6 text-center shrink-0">{MEDALS[i] || `#${i + 1}`}</span>
+              <span className="flex-1 text-[15px] font-bold truncate text-white">{p.username}</span>
               {p.streak >= 3 && <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">🔥{p.streak}</span>}
-              <span className="font-black text-[15px] tabular-nums text-white">{p.score.toLocaleString()}</span>
+              <span className="font-black text-[16px] tabular-nums text-white">{p.score.toLocaleString()}</span>
             </motion.div>
           ))}
         </div>
@@ -884,19 +884,19 @@ function LeaderboardScreen({ leaderboard, me }: { leaderboard: Player[]; me: str
   const MEDALS = ['🥇','🥈','🥉']
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 max-w-lg mx-auto gap-6">
-      <h2 className="text-[28px] font-black">Leaderboard</h2>
-      <div className="w-full space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-        {leaderboard.map((p, i) => (
-          <motion.div key={p.username} initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: i * 0.06 }}
-            className={cn('flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-all',
-              p.username === me ? 'bg-primary/25 border-primary shadow-[0_0_20px_rgba(var(--color-primary),0.2)]' : 'bg-white/5 border-white/10')}>
-            <span className="text-[20px] w-8 text-center shrink-0">{MEDALS[i] || `#${i+1}`}</span>
-            <span className="flex-1 font-bold text-[14px] truncate text-white">{p.username}</span>
-            {p.streak >= 3 && <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">🔥{p.streak}</span>}
-            <span className="font-black text-[16px] tabular-nums text-white">{p.score.toLocaleString()}</span>
-          </motion.div>
-        ))}
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 max-w-3xl mx-auto gap-6">
+      <h2 className="text-[32px] font-black">Leaderboard</h2>
+      <div className="w-full space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+          {leaderboard.map((p, i) => (
+            <motion.div key={p.username} initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: i * 0.06 }}
+              className={cn('flex items-center gap-3 px-5 py-4 rounded-2xl border transition-all',
+                p.username === me ? 'bg-primary/25 border-primary shadow-[0_0_20px_rgba(var(--color-primary),0.2)]' : 'bg-white/5 border-white/10')}>
+              <span className="text-[22px] w-8 text-center shrink-0">{MEDALS[i] || `#${i+1}`}</span>
+              <span className="flex-1 font-bold text-[15px] truncate text-white">{p.username}</span>
+              {p.streak >= 3 && <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">🔥{p.streak}</span>}
+              <span className="font-black text-[18px] tabular-nums text-white">{p.score.toLocaleString()}</span>
+            </motion.div>
+          ))}
       </div>
       <p className="text-[12px] text-white/30 animate-pulse font-medium">Next question loading…</p>
     </motion.div>
@@ -913,26 +913,26 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 max-w-lg mx-auto gap-8">
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 max-w-3xl mx-auto gap-8">
 
       <div className="text-center space-y-1">
-        <h2 className="text-[32px] font-black bg-gradient-to-r from-amber-300 via-amber-400 to-amber-200 bg-clip-text text-transparent">
+        <h2 className="text-[36px] sm:text-[44px] font-black bg-gradient-to-r from-amber-300 via-amber-400 to-amber-200 bg-clip-text text-transparent">
           Battle Complete!
         </h2>
-        <p className="text-[13px] text-white/50 font-medium">Final Rankings &amp; Winner Podium</p>
+        <p className="text-[14px] text-white/50 font-medium">Final Rankings &amp; Winner Podium</p>
       </div>
 
       {/* Winner Podium (2nd - 1st - 3rd) */}
       {top3.length > 0 && (
-        <div className="flex items-end justify-center gap-3 sm:gap-4 w-full h-[220px] pt-6">
+        <div className="flex items-end justify-center gap-4 sm:gap-6 w-full h-[260px] sm:h-[300px] pt-6">
           {/* 2nd Place */}
           {top3[1] && (
             <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}
               className="flex-1 flex flex-col items-center">
-              <span className="text-[28px] mb-1">🥈</span>
-              <span className="text-[12px] font-black text-white truncate max-w-[80px]">{top3[1].username}</span>
-              <span className="text-[11px] text-white/50 mb-2">{top3[1].score} pts</span>
-              <div className="w-full h-[100px] bg-slate-400/20 border-t-4 border-slate-300 rounded-t-2xl flex items-center justify-center font-black text-[24px] text-slate-300 shadow-lg">
+              <span className="text-[32px] mb-1">🥈</span>
+              <span className="text-[13px] font-black text-white truncate max-w-[90px]">{top3[1].username}</span>
+              <span className="text-[12px] text-white/50 mb-2">{top3[1].score} pts</span>
+              <div className="w-full h-[120px] sm:h-[140px] bg-slate-400/20 border-t-4 border-slate-300 rounded-t-2xl flex items-center justify-center font-black text-[28px] text-slate-300 shadow-lg">
                 2
               </div>
             </motion.div>
@@ -942,10 +942,10 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
           {top3[0] && (
             <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}
               className="flex-1 flex flex-col items-center">
-              <span className="text-[36px] mb-1">🏆</span>
-              <span className="text-[14px] font-black text-amber-300 truncate max-w-[90px]">{top3[0].username}</span>
-              <span className="text-[12px] text-amber-400/80 mb-2 font-bold">{top3[0].score} pts</span>
-              <div className="w-full h-[140px] bg-amber-500/25 border-t-4 border-amber-400 rounded-t-2xl flex items-center justify-center font-black text-[32px] text-amber-300 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+              <span className="text-[44px] mb-1">🏆</span>
+              <span className="text-[15px] font-black text-amber-300 truncate max-w-[100px]">{top3[0].username}</span>
+              <span className="text-[13px] text-amber-400/80 mb-2 font-bold">{top3[0].score} pts</span>
+              <div className="w-full h-[160px] sm:h-[200px] bg-amber-500/25 border-t-4 border-amber-400 rounded-t-2xl flex items-center justify-center font-black text-[36px] text-amber-300 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
                 1
               </div>
             </motion.div>
@@ -955,10 +955,10 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
           {top3[2] && (
             <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
               className="flex-1 flex flex-col items-center">
-              <span className="text-[28px] mb-1">🥉</span>
-              <span className="text-[12px] font-black text-white truncate max-w-[80px]">{top3[2].username}</span>
-              <span className="text-[11px] text-white/50 mb-2">{top3[2].score} pts</span>
-              <div className="w-full h-[70px] bg-amber-700/20 border-t-4 border-amber-600 rounded-t-2xl flex items-center justify-center font-black text-[20px] text-amber-600 shadow-lg">
+              <span className="text-[32px] mb-1">🥉</span>
+              <span className="text-[13px] font-black text-white truncate max-w-[90px]">{top3[2].username}</span>
+              <span className="text-[12px] text-white/50 mb-2">{top3[2].score} pts</span>
+              <div className="w-full h-[90px] sm:h-[100px] bg-amber-700/20 border-t-4 border-amber-600 rounded-t-2xl flex items-center justify-center font-black text-[24px] text-amber-600 shadow-lg">
                 3
               </div>
             </motion.div>
@@ -976,7 +976,7 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
 
       {/* Actions */}
       <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={onPlayAgain}
-        className="w-full py-4 bg-gradient-to-r from-primary to-[#a855f7] rounded-2xl font-black text-[16px] shadow-[0_8px_24px_rgba(var(--color-primary),0.35)] transition-all">
+        className="w-full py-5 bg-gradient-to-r from-primary to-[#a855f7] rounded-2xl font-black text-[18px] shadow-[0_8px_24px_rgba(var(--color-primary),0.35)] transition-all">
         Back to Lobby
       </motion.button>
     </motion.div>
