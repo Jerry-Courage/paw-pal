@@ -61,6 +61,7 @@ export default function PersonalisedLearningPage() {
   const micAudioCtxRef = useRef<AudioContext | null>(null)
   const playAudioCtxRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const isMicMutedRef = useRef(false)
   const nextPlayTimeRef = useRef(0)
@@ -241,30 +242,101 @@ export default function PersonalisedLearningPage() {
     }
   }
 
-  const activateMicProcessor = (stream: MediaStream) => {
+  const activateMicProcessor = async (stream: MediaStream) => {
     try {
       const ctx = new AudioContext({ sampleRate: 16000 })
       micAudioCtxRef.current = ctx
 
-      const resumeCtx = () => {
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      if (ctx.state === 'suspended') {
+        await ctx.resume().catch(() => {})
       }
-      const resumeInterval = setInterval(() => {
-        if (!processorRef.current) { clearInterval(resumeInterval); return }
-        resumeCtx()
-      }, 500)
+
+      // Load the noise gate AudioWorklet processor
+      await ctx.audioWorklet.addModule('/noise-gate-processor.js')
 
       const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(2048, 1, 1)
+      const workletNode = new AudioWorkletNode(ctx, 'noise-gate', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        channelCount: 1,
+        processorOptions: {},
+      })
+      workletNodeRef.current = workletNode
+
+      // Listen for VAD updates from the worklet
+      workletNode.port.onmessage = (e) => {
+        if (e.data?.type === 'vad') {
+          // Could use isSpeech for UI indicators if needed
+        }
+      }
+
+      workletNode.port.onmessage = (e) => {
+        if (e.data?.type === 'audio') {
+          // Binary audio output from worklet (if we add passthrough)
+        }
+      }
+
+      // Connect: mic -> worklet (noise gate) -> silent output (prevent feedback)
+      source.connect(workletNode)
+      const silentGain = ctx.createGain()
+      silentGain.gain.value = 0
+      workletNode.connect(silentGain)
+      silentGain.connect(ctx.destination)
+
+      // Capture audio from the worklet's output port
+      // The worklet passes through gated audio — we read it via a ScriptProcessorNode
+      // that listens to the worklet output (smallest buffer for lowest latency)
+      const captureNode = ctx.createScriptProcessor(1024, 1, 1)
+      processorRef.current = captureNode
+
+      // Connect worklet output to capture node (for encoding)
+      workletNode.connect(captureNode)
+      // Disconnect worklet from silent gain — captureNode will handle output
+      workletNode.disconnect(silentGain)
+      captureNode.connect(silentGain)
+
+      captureNode.onaudioprocess = (e) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        if (isMicMutedRef.current) return
+        // NO barge-in block — allow mic even while AI speaks.
+        // Gemini handles interruption via its built-in VAD.
+        if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
+
+        const float32 = e.inputBuffer.getChannelData(0).slice()
+        const pcm16 = new Int16Array(float32.length)
+        for (let i = 0; i < float32.length; i++) {
+          pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
+        }
+        const bytes = new Uint8Array(pcm16.buffer)
+        let binary = ''
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+        const b64 = btoa(binary)
+        wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+      }
+
+      isMicMutedRef.current = false
+      setIsRecording(true)
+    } catch (e) {
+      console.error('[PersonalTutor] AudioWorklet failed, falling back to ScriptProcessor:', e)
+      // Fallback to ScriptProcessorNode if AudioWorklet fails
+      activateMicProcessorFallback(stream)
+    }
+  }
+
+  const activateMicProcessorFallback = (stream: MediaStream) => {
+    try {
+      const ctx = new AudioContext({ sampleRate: 16000 })
+      micAudioCtxRef.current = ctx
+
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+
+      const source = ctx.createMediaStreamSource(stream)
+      const processor = ctx.createScriptProcessor(1024, 1, 1)
       processorRef.current = processor
 
       processor.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         if (isMicMutedRef.current) return
-        
-        // Block mic while AI is speaking (use ref flag — time comparison
-        // breaks on iOS because AudioContext.currentTime freezes when suspended)
-        if (isAiSpeakingRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
         const float32 = e.inputBuffer.getChannelData(0).slice()
         const pcm16 = new Int16Array(float32.length)
@@ -294,6 +366,8 @@ export default function PersonalisedLearningPage() {
   const stopMic = () => {
     processorRef.current?.disconnect()
     processorRef.current = null
+    workletNodeRef.current?.disconnect()
+    workletNodeRef.current = null
     if (micAudioCtxRef.current) {
       void micAudioCtxRef.current.close().catch(() => {})
       micAudioCtxRef.current = null
@@ -558,7 +632,7 @@ export default function PersonalisedLearningPage() {
               {isAiSpeaking ? 'Tutor Speaking' : isMicMuted ? 'Mic Muted' : 'Listening'}
             </p>
             <p className="text-xs text-white/30">
-              {isAiSpeaking ? 'Tap mute to interrupt' : isMicMuted ? 'Tap to unmute' : 'Speak naturally'}
+              {isAiSpeaking ? 'Speak to interrupt' : isMicMuted ? 'Tap to unmute' : 'Speak naturally'}
             </p>
           </div>
 

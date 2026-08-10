@@ -287,7 +287,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                             }
                         },
                         'temperature': 0.7,
-                        'maxOutputTokens': 1200,
+                        'maxOutputTokens': 2000,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -297,7 +297,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                             'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
                             'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
-                            'silenceDurationMs': 250,
+                            'silenceDurationMs': 400,
                         }
                     },
                 }
