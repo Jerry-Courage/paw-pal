@@ -152,15 +152,6 @@ if USE_CLOUDINARY:
     }
     MEDIA_URL = '/media/'
 
-# ─── Cloudflare R2 (optional — fallback for files >10MB) ───────────────────────
-# Set these env vars to enable R2 for large file uploads.
-# Files ≤10MB go to Cloudinary (default). Files >10MB go to R2.
-R2_ACCOUNT_ID = os.getenv('R2_ACCOUNT_ID', '')
-R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID', '')
-R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
-R2_BUCKET_NAME = os.getenv('R2_BUCKET_NAME', '')
-R2_CUSTOM_DOMAIN = os.getenv('R2_CUSTOM_DOMAIN', '')  # optional CDN domain
-
 elif USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -205,6 +196,15 @@ else:
     # since the app directory may not be writable. /tmp persists within a session.
     _render_media = os.getenv('RENDER_MEDIA_ROOT', '')
     MEDIA_ROOT = Path(_render_media) if _render_media else (Path('/tmp/nitemind_media') if os.getenv('RENDER') else BASE_DIR / 'media')
+
+# ─── Cloudflare R2 (optional — fallback for files >10MB) ───────────────────────
+# Set these env vars to enable R2 for large file uploads.
+# Files ≤10MB go to Cloudinary (default). Files >10MB go to R2.
+R2_ACCOUNT_ID = os.getenv('R2_ACCOUNT_ID', '')
+R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID', '')
+R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
+R2_BUCKET_NAME = os.getenv('R2_BUCKET_NAME', '')
+R2_CUSTOM_DOMAIN = os.getenv('R2_CUSTOM_DOMAIN', '')  # optional CDN domain
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
