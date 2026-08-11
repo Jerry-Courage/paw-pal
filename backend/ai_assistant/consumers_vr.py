@@ -19,7 +19,10 @@ import json
 import asyncio
 import logging
 import os
+import struct
+import base64
 import websockets
+import requests as http_requests
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
@@ -41,6 +44,8 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
         self.resource_title = ''
         self.resource_context = ''
         self.current_concept = ''
+        self.transcript_log = []
+        self.ai_audio_b64_chunks = []
 
     async def connect(self):
         user = self.scope.get('user')
@@ -219,20 +224,25 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
 
                     model_turn = server_content.get('modelTurn', {})
                     for part in model_turn.get('parts', []):
-                        # Audio output
                         inline = part.get('inlineData', {})
                         if inline.get('data'):
                             await self._send({'type': 'audio', 'data': inline['data']})
-                        # modelTurn.text is internal reasoning — do NOT send as subtitle
+                            self.ai_audio_b64_chunks.append(inline['data'])
                         if part.get('text'):
                             self.transcript_log.append(('ai', part['text']))
 
-                    # Output transcription (actual spoken words)
-                    output_transcript = server_content.get('outputTranscription', {})
-                    if output_transcript.get('text'):
-                        text = output_transcript['text'].strip()
+                    input_transcript = server_content.get('inputTranscription', {})
+                    if input_transcript.get('text'):
+                        text = input_transcript['text'].strip()
                         if text:
-                            await self._send({'type': 'transcript', 'text': text})
+                            self.transcript_log.append(('user', text))
+                            await self._send({'type': 'transcript_user', 'text': text})
+
+                    if server_content.get('turnComplete'):
+                        if self.ai_audio_b64_chunks:
+                            chunks = self.ai_audio_b64_chunks
+                            self.ai_audio_b64_chunks = []
+                            asyncio.create_task(self._transcribe_ai_audio(chunks))
 
                 except Exception as e:
                     logger.warning(f'[VR Tutor] Message handling error: {e}')
@@ -242,6 +252,61 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
             pass
         except Exception as e:
             logger.error(f'[VR Tutor] Receive error: {e}')
+
+    async def _transcribe_ai_audio(self, b64_chunks: list):
+        """Send buffered AI audio to Groq Whisper for subtitle transcription."""
+        try:
+            pcm_bytes = b''.join(base64.b64decode(c) for c in b64_chunks)
+            if len(pcm_bytes) < 48000:
+                return
+
+            sample_rate = 24000
+            num_channels = 1
+            bits_per_sample = 16
+            byte_rate = sample_rate * num_channels * bits_per_sample // 8
+            block_align = num_channels * bits_per_sample // 8
+            data_size = len(pcm_bytes)
+
+            wav_header = struct.pack(
+                '<4sI4s4sIHHIIHH4sI',
+                b'RIFF', 36 + data_size, b'WAVE',
+                b'fmt ', 16, 1, num_channels, sample_rate, byte_rate, block_align, bits_per_sample,
+                b'data', data_size,
+            )
+            wav_bytes = wav_header + pcm_bytes
+
+            groq_keys = [k for k in [
+                os.getenv('GROQ_API_KEY', ''),
+                os.getenv('GROQ_API_KEY_2', ''),
+                os.getenv('GROQ_API_KEY_3', ''),
+                os.getenv('GROQ_API_KEY_4', ''),
+                os.getenv('GROQ_API_KEY_5', ''),
+            ] if k]
+
+            for key in groq_keys:
+                try:
+                    resp = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            http_requests.post,
+                            'https://api.groq.com/openai/v1/audio/transcriptions',
+                            headers={'Authorization': f'Bearer {key}'},
+                            files={'file': ('audio.wav', wav_bytes, 'audio/wav')},
+                            data={'model': 'whisper-large-v3'},
+                            timeout=10,
+                        ),
+                        timeout=12,
+                    )
+                    if resp.status_code == 200:
+                        text = resp.json().get('text', '').strip()
+                        if text:
+                            self.transcript_log.append(('ai', text))
+                            await self._send({'type': 'transcript', 'text': text})
+                            return
+                except Exception:
+                    continue
+            logger.warning('[VR Tutor] STT failed on all Groq keys')
+        except Exception as e:
+            logger.warning(f'[VR Tutor] STT error: {e}')
 
     async def _end_session(self):
         self.session_active = False
