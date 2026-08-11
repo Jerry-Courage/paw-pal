@@ -370,13 +370,11 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             inline = part.get('inlineData', {})
             if inline.get('data'):
                 await self._send({'type': 'audio', 'data': inline['data']})
-            # Text fallback (in case model returns text)
+            # modelTurn.text is internal reasoning — only log to transcript, don't send as subtitle
             if part.get('text'):
                 self.transcript_log.append(('ai', part['text']))
-                await self._send({'type': 'transcript_ai', 'text': part['text']})
 
         # ── User speech transcript ────────────────────────────────────────────
-        # Gemini 2.0 Live uses inputTranscription
         input_transcript = server_content.get('inputTranscription', {})
         if input_transcript.get('text'):
             text = input_transcript['text'].strip()
@@ -384,15 +382,11 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 self.transcript_log.append(('user', text))
                 await self._send({'type': 'transcript_user', 'text': text})
 
-        # ── AI speech transcript ──────────────────────────────────────────────
+        # ── AI speech transcript (actual spoken words) ────────────────────────
         output_transcript = server_content.get('outputTranscription', {})
         if output_transcript.get('text'):
             text = output_transcript['text'].strip()
-            # Strip leaked thinking/planning text (bold markdown = internal reasoning)
-            import re
-            text = re.sub(r'\*\*[^*]+\*\*', '', text).strip()
             if text:
-                self.transcript_log.append(('ai', text))
                 await self._send({'type': 'transcript_ai', 'text': text})
 
     # ── Session end ───────────────────────────────────────────────────────────

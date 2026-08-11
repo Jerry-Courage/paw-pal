@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Technique = 'feynman' | 'active_recall'
@@ -148,6 +149,13 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   const [sessionDuration, setSessionDuration] = useState(0)
   const [showChat, setShowChat] = useState(false)
 
+  // Animated AI subtitles
+  const [currentAiText, setCurrentAiText] = useState('')
+  const [displayedWords, setDisplayedWords] = useState<string[]>([])
+  const prevWordCountRef = useRef(0)
+  const wordIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const MAX_VISIBLE_WORDS = 30
+
   // Exam state
   const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([])
   const [examAnswers, setExamAnswers] = useState<Record<number, string>>({})
@@ -206,6 +214,58 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     }
     return () => clearInterval(timerRef.current)
   }, [phase])
+
+  // Incremental word-by-word animation for AI subtitles
+  useEffect(() => {
+    if (!currentAiText) {
+      setDisplayedWords([])
+      prevWordCountRef.current = 0
+      if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
+      return
+    }
+    const words = currentAiText.split(/\s+/).filter(Boolean)
+    const prevCount = prevWordCountRef.current
+    if (words.length < prevCount) prevWordCountRef.current = 0
+
+    const newWords = words.slice(prevWordCountRef.current)
+    if (newWords.length === 0) return
+
+    setDisplayedWords(prev => {
+      const safePrev = prev.length <= prevWordCountRef.current ? prev : prev.slice(0, prevWordCountRef.current)
+      return [...safePrev, newWords[0]]
+    })
+    prevWordCountRef.current += 1
+
+    if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
+    let idx = 1
+    wordIntervalRef.current = setInterval(() => {
+      if (idx >= newWords.length) {
+        clearInterval(wordIntervalRef.current!)
+        wordIntervalRef.current = null
+        return
+      }
+      setDisplayedWords(prev => {
+        const safePrev = prev.length <= prevWordCountRef.current ? prev : prev.slice(0, prevWordCountRef.current)
+        return [...safePrev, newWords[idx]]
+      })
+      prevWordCountRef.current += 1
+      idx++
+    }, 80)
+
+    return () => { if (wordIntervalRef.current) clearInterval(wordIntervalRef.current) }
+  }, [currentAiText])
+
+  // Clear subtitle when AI stops speaking
+  useEffect(() => {
+    if (!isAiSpeaking && currentAiText) {
+      const timeout = setTimeout(() => {
+        setCurrentAiText('')
+        setDisplayedWords([])
+        prevWordCountRef.current = 0
+      }, 3000)
+      return () => clearTimeout(timeout)
+    }
+  }, [isAiSpeaking, currentAiText])
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -322,8 +382,22 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
           playAudioChunk(pcm)
         } else if (msg.type === 'interrupted') {
           stopAudioPlayout()
+          setCurrentAiText('')
+          setDisplayedWords([])
+          prevWordCountRef.current = 0
+          if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
         } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
+
+          // Update animated subtitle for AI speech
+          if (role === 'ai') {
+            setCurrentAiText(prev => prev + msg.text)
+          } else {
+            setCurrentAiText('')
+            setDisplayedWords([])
+            prevWordCountRef.current = 0
+          }
+
           setTranscript(prev => {
             if (prev.length === 0) return [{ role, text: msg.text, ts: Date.now() }]
             const last = prev[prev.length - 1]
@@ -559,6 +633,10 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
     setSessionDuration(0)
     nextPlayTimeRef.current = 0
     clearTimeout(isSpeakingTimeoutRef.current)
+    setCurrentAiText('')
+    setDisplayedWords([])
+    prevWordCountRef.current = 0
+    if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
   }
 
   // ── Exam logic ─────────────────────────────────────────────────────────────
@@ -955,6 +1033,69 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
               <span className="material-symbols-outlined text-[16px]">stop</span>Tap to Interrupt
             </button>
           )}
+
+          {/* Animated AI Subtitles */}
+          <AnimatePresence>
+            {displayedWords.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.35, ease: 'easeOut' }}
+                className="w-full max-w-md mt-4"
+              >
+                <div className={cn(
+                  "relative px-5 py-3.5 rounded-[1.25rem] border transition-all duration-500",
+                  isAiSpeaking
+                    ? "bg-primary/5 border-primary/20 shadow-[0_0_24px_rgba(255,182,141,0.08)]"
+                    : "bg-surface-container-low border-outline-variant/20"
+                )}>
+                  {isAiSpeaking && (
+                    <motion.div
+                      className="absolute inset-0 rounded-[1.25rem] border border-primary/15"
+                      animate={{ opacity: [0.3, 0.5, 0.3] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                    />
+                  )}
+                  <div className="relative z-10 text-center">
+                    {(() => {
+                      const total = displayedWords.length
+                      const visible = total > MAX_VISIBLE_WORDS
+                        ? displayedWords.slice(total - MAX_VISIBLE_WORDS)
+                        : displayedWords
+                      const offset = total > MAX_VISIBLE_WORDS ? total - MAX_VISIBLE_WORDS : 0
+                      return visible.map((word, i) => {
+                        const gIdx = offset + i
+                        return (
+                          <motion.span
+                            key={`${gIdx}-${word}`}
+                            initial={{ opacity: 0, y: 6, filter: 'blur(3px)' }}
+                            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                            transition={{ duration: 0.25, ease: 'easeOut' }}
+                            className={cn(
+                              "inline-block text-[14px] leading-relaxed font-medium mr-[0.35em]",
+                              gIdx === total - 1 && isAiSpeaking
+                                ? "text-primary font-bold"
+                                : "text-on-surface"
+                            )}
+                          >
+                            {word}
+                          </motion.span>
+                        )
+                      })
+                    })()}
+                    {isAiSpeaking && (
+                      <motion.span
+                        animate={{ opacity: [1, 0, 1] }}
+                        transition={{ repeat: Infinity, duration: 0.8 }}
+                        className="inline-block w-[2px] h-[1em] bg-primary ml-0.5 align-text-bottom"
+                      />
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Stats */}
           <div className="w-full max-w-sm space-y-4">
