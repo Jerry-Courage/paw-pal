@@ -250,19 +250,20 @@ AUTHENTICATION_BACKENDS = [
 import re as _re
 
 _cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+_cors_base = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    'http://localhost:5002',
+    'http://127.0.0.1:5002',
+    'https://flowstate.college',
+    'https://www.flowstate.college',
+]
 if _cors_env:
-    CORS_ALLOWED_ORIGINS = _cors_env.split(',')
+    CORS_ALLOWED_ORIGINS = list(set(_cors_base + _cors_env.split(',')))
 else:
-    CORS_ALLOWED_ORIGINS = [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:5000',
-        'http://127.0.0.1:5000',
-        'http://localhost:5002',
-        'http://127.0.0.1:5002',
-        'https://flowstate.college',
-        'https://www.flowstate.college',
-    ]
+    CORS_ALLOWED_ORIGINS = _cors_base
     CORS_ALLOW_ALL_ORIGINS = DEBUG
     CORS_URLS_REGEX = r'^/api/.*$|/media/.*$'
 
