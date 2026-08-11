@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi, libraryApi, paymentsApi, getAuthToken, API_BASE } from '@/lib/api'
-import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, MessageSquare, X } from 'lucide-react'
+import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, MessageSquare, X, Wifi, WifiOff } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
+import { NetworkQualityMonitor, type AdaptiveSettings } from '@/lib/networkQuality'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
@@ -71,6 +72,10 @@ export default function PersonalisedLearningPage() {
   const endSessionTimeoutRef = useRef<any>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
   const isAiSpeakingRef = useRef(false)
+  const netMonitorRef = useRef<NetworkQualityMonitor | null>(null)
+  const adaptiveSettingsRef = useRef<AdaptiveSettings | null>(null)
+  const [networkQuality, setNetworkQuality] = useState<string>('good')
+  const sendCounterRef = useRef(0)
 
   useEffect(() => { isMicMutedRef.current = isMicMuted }, [isMicMuted])
 
@@ -185,6 +190,21 @@ export default function PersonalisedLearningPage() {
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
+      // Attach network quality monitor
+      const monitor = new NetworkQualityMonitor()
+      netMonitorRef.current = monitor
+      monitor.attach(ws)
+      adaptiveSettingsRef.current = monitor.getSettings()
+      setNetworkQuality(monitor.getQuality())
+
+      monitor.onQualityChange((settings) => {
+        adaptiveSettingsRef.current = settings
+        setNetworkQuality(settings.quality)
+        if (settings.quality === 'terrible') {
+          toast.warning('Network is very slow. Audio quality reduced.', { duration: 5000 })
+        }
+      })
+
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'start', voice }))
       }
@@ -296,22 +316,35 @@ export default function PersonalisedLearningPage() {
       captureNode.connect(silentGain)
 
       captureNode.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        const ws = wsRef.current
+        if (!ws || ws.readyState !== WebSocket.OPEN) return
         if (isMicMutedRef.current) return
-        // NO barge-in block — allow mic even while AI speaks.
-        // Gemini handles interruption via its built-in VAD.
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
+
+        // Backpressure: skip frame if WebSocket buffer is too full
+        const monitor = netMonitorRef.current
+        if (monitor && monitor.isBackedUp()) return
 
         const float32 = e.inputBuffer.getChannelData(0).slice()
         const pcm16 = new Int16Array(float32.length)
         for (let i = 0; i < float32.length; i++) {
           pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
         }
+
         const bytes = new Uint8Array(pcm16.buffer)
-        let binary = ''
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-        const b64 = btoa(binary)
-        wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+        const settings = adaptiveSettingsRef.current
+
+        // Send binary frame (33% smaller than base64 JSON)
+        // Format: first 4 bytes = message type header, rest = PCM data
+        // Header: 0x01 = audio, 0x02 = text (future)
+        const header = new Uint8Array([0x01, 0x00, 0x00, 0x00])
+        const frame = new Uint8Array(header.length + bytes.byteLength)
+        frame.set(header, 0)
+        frame.set(bytes, header.length)
+        ws.send(frame)
+
+        // Track for network quality
+        if (monitor) monitor.trackSend(sendCounterRef.current++)
       }
 
       isMicMutedRef.current = false
@@ -335,19 +368,26 @@ export default function PersonalisedLearningPage() {
       processorRef.current = processor
 
       processor.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        const ws = wsRef.current
+        if (!ws || ws.readyState !== WebSocket.OPEN) return
         if (isMicMutedRef.current) return
         if (ctx.state !== 'running') { ctx.resume().catch(() => {}); return }
+
+        const monitor = netMonitorRef.current
+        if (monitor && monitor.isBackedUp()) return
+
         const float32 = e.inputBuffer.getChannelData(0).slice()
         const pcm16 = new Int16Array(float32.length)
         for (let i = 0; i < float32.length; i++) {
           pcm16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
         }
         const bytes = new Uint8Array(pcm16.buffer)
-        let binary = ''
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-        const b64 = btoa(binary)
-        wsRef.current.send(JSON.stringify({ type: 'audio', data: b64 }))
+        const header = new Uint8Array([0x01, 0x00, 0x00, 0x00])
+        const frame = new Uint8Array(header.length + bytes.byteLength)
+        frame.set(header, 0)
+        frame.set(bytes, header.length)
+        ws.send(frame)
+        if (monitor) monitor.trackSend(sendCounterRef.current++)
       }
 
       source.connect(processor)
@@ -381,6 +421,8 @@ export default function PersonalisedLearningPage() {
   useEffect(() => {
     return () => {
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
+      netMonitorRef.current?.detach()
+      netMonitorRef.current = null
       stopMic()
       stopAudioPlayout()
     }
@@ -563,7 +605,23 @@ export default function PersonalisedLearningPage() {
             <button onClick={endSession} className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* Network quality indicator */}
+              <div className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider",
+                networkQuality === 'excellent' ? 'bg-emerald-500/15 text-emerald-400' :
+                networkQuality === 'good' ? 'bg-green-500/15 text-green-400' :
+                networkQuality === 'fair' ? 'bg-amber-500/15 text-amber-400' :
+                networkQuality === 'poor' ? 'bg-orange-500/15 text-orange-400' :
+                'bg-red-500/15 text-red-400'
+              )}>
+                {networkQuality === 'poor' || networkQuality === 'terrible' ? (
+                  <WifiOff className="w-3 h-3" />
+                ) : (
+                  <Wifi className="w-3 h-3" />
+                )}
+                <span className="hidden sm:inline">{networkQuality}</span>
+              </div>
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-xs font-bold text-white/60">{formatTime(sessionDuration)}</span>
             </div>

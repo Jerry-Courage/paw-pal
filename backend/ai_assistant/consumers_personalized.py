@@ -179,6 +179,11 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         logger.info(f'[PersonalisedVoice] Browser disconnected: code={close_code}')
 
     async def receive(self, text_data=None, bytes_data=None):
+        # Handle binary frames (optimized audio path — 33% smaller than base64 JSON)
+        if bytes_data:
+            await self._handle_binary_audio(bytes_data)
+            return
+
         if not text_data:
             return
         try:
@@ -221,6 +226,26 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
         elif msg_type == 'end_session':
             await self._end_session()
+
+    async def _handle_binary_audio(self, data: bytes):
+        """
+        Handle binary WebSocket frames from the browser.
+        Format: [0x01, 0x00, 0x00, 0x00] + raw PCM16 bytes
+        The 0x01 header identifies this as an audio frame.
+        """
+        if len(data) < 4 or data[0] != 0x01:
+            return  # Unknown binary frame type
+        if not self.gemini_ws or not self.session_active:
+            return
+
+        pcm_bytes = data[4:]  # Skip 4-byte header
+        if not pcm_bytes:
+            return
+
+        import base64 as b64
+        audio_b64 = b64.b64encode(pcm_bytes).decode('ascii')
+        if hasattr(self, 'audio_queue'):
+            await self.audio_queue.put(audio_b64)
 
     async def _start_gemini_session(self):
         api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
