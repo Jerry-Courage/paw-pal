@@ -21,9 +21,6 @@ class User(AbstractUser):
     onboarding_status = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # ── Notification Preferences ─────────────────────────────
-    notification_preferences = models.JSONField(default=dict, blank=True, help_text='Stores per-type notification toggle preferences. Keys: study_reminders, streak_alerts, flashcard_due, group_activity, ai_nudges.')
-
     # ── Subscription / Freemium ──────────────────────────────
     is_premium = models.BooleanField(default=False, db_index=True)
     subscription_expires_at = models.DateTimeField(null=True, blank=True)

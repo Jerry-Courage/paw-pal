@@ -17,7 +17,7 @@ def _is_enabled(user, notif_type: str) -> bool:
     pref_key = NOTIFICATION_PREF_MAP.get(notif_type)
     if not pref_key:
         return True  # unknown type → allow (safety net)
-    prefs = getattr(user, 'notification_preferences', None) or {}
+    prefs = (getattr(user, 'onboarding_status', None) or {}).get('notification_preferences', {})
     # Default to True if key missing (opt-out model)
     return prefs.get(pref_key, True)
 

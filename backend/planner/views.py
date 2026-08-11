@@ -567,7 +567,7 @@ class SessionRemindersView(APIView):
         if session.id in SessionRemindersView._sent_ids:
             continue
         # Check user's notification preference for study_reminders
-        prefs = getattr(session.user, 'notification_preferences', None) or {}
+        prefs = (getattr(session.user, 'onboarding_status', None) or {}).get('notification_preferences', {})
         if not prefs.get('study_reminders', True):
             continue
         minutes_away = max(0, int((session.start_time - now).total_seconds() / 60))
@@ -608,7 +608,7 @@ def send_planner_reminders():
     for session in upcoming:
         try:
             # Check user's notification preference for study_reminders
-            prefs = getattr(session.user, 'notification_preferences', None) or {}
+            prefs = (getattr(session.user, 'onboarding_status', None) or {}).get('notification_preferences', {})
             if not prefs.get('study_reminders', True):
                 session.reminder_sent = True
                 session.save(update_fields=['reminder_sent'])

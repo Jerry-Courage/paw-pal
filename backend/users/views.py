@@ -96,6 +96,17 @@ class MeView(generics.RetrieveUpdateAPIView):
     def get_serializer_context(self):
         return {'request': self.request}
 
+    def update(self, request, *args, **kwargs):
+        # Handle notification_preferences separately — stored inside onboarding_status
+        notif_prefs = request.data.get('notification_preferences')
+        if notif_prefs is not None:
+            user = request.user
+            if not user.onboarding_status:
+                user.onboarding_status = {}
+            user.onboarding_status['notification_preferences'] = notif_prefs
+            user.save(update_fields=['onboarding_status'])
+        return super().update(request, *args, **kwargs)
+
     def retrieve(self, request, *args, **kwargs):
         # Validate streak in real-time whenever user fetches their profile (dashboard/nexus)
         request.user.validate_streak()

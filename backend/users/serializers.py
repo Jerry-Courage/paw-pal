@@ -42,6 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
     notes_limit = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
     xp = serializers.SerializerMethodField()
+    notification_preferences = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -88,8 +89,11 @@ class UserSerializer(serializers.ModelSerializer):
         if xp < 7000:   return {'num': 4, 'name': 'Senior',    'next_xp': 7000, 'current_xp': xp}
         return             {'num': 5, 'name': 'Graduate',  'next_xp': None, 'current_xp': xp}
 
+    def get_notification_preferences(self, obj):
+        return (obj.onboarding_status or {}).get('notification_preferences', {})
+
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'bio', 'university', 'weekly_goal_hours', 'avatar', 'education_level', 'notification_preferences')
+        fields = ('username', 'first_name', 'last_name', 'bio', 'university', 'weekly_goal_hours', 'avatar', 'education_level')
