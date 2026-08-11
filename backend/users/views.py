@@ -252,6 +252,11 @@ class PushSubscriptionView(APIView):
                 'auth': auth
             }
         )
+        # Clean up other stale subscriptions for this user (keep max 5)
+        old_subs = PushSubscription.objects.filter(user=request.user).order_by('-created_at')
+        if old_subs.count() > 5:
+            for stale in old_subs[5:]:
+                stale.delete()
         return Response({'status': 'subscribed', 'id': sub.id})
 
 

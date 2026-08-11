@@ -71,10 +71,12 @@ class PushService:
                 logger.info(f"Push sent to sub {sub.id} for user {user.id}")
             except WebPushException as ex:
                 status_code = getattr(ex.response, 'status_code', None) if ex.response else None
-                if status_code in [404, 410]:
+                # Also check the message string — pywebpush sometimes only embeds status there
+                ex_str = str(ex)
+                if status_code in [404, 410] or '410' in ex_str or 'Gone' in ex_str:
                     sub.delete()
-                    logger.info(f"Push sub {sub.id} expired (HTTP {status_code}), removed.")
-                elif status_code == 403:
+                    logger.info(f"Push sub {sub.id} expired (HTTP {status_code or '410'}), removed.")
+                elif status_code == 403 or '403' in ex_str:
                     logger.warning(f"Push sub {sub.id} forbidden (HTTP 403) — VAPID key mismatch?")
                 else:
                     logger.warning(f"Push failed for sub {sub.id} (HTTP {status_code}): {ex}")
