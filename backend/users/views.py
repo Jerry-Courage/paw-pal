@@ -286,6 +286,91 @@ class GlobalConfigView(APIView):
 
 
 
+class ChangePasswordView(APIView):
+    """POST /api/auth/change-password/ — change current user's password."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from django.contrib.auth.password_validation import validate_password
+        current = request.data.get('current_password', '')
+        new_password = request.data.get('new_password', '')
+
+        if not current or not new_password:
+            return Response({'error': 'Both current_password and new_password are required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if not request.user.check_password(current):
+            return Response({'error': 'Current password is incorrect.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, user=request.user)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+        return Response({'detail': 'Password changed successfully.'})
+
+
+class ExportDataView(APIView):
+    """GET /api/auth/export-data/ — download all user data as JSON."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        import json
+        from django.http import JsonResponse
+        from library.models import Resource, ResourceProgress
+
+        user = request.user
+        resources = list(Resource.objects.filter(owner=user).values(
+            'id', 'title', 'subject', 'resource_type', 'created_at',
+        ))
+        progress = list(ResourceProgress.objects.filter(user=user).values(
+            'resource_id', 'section_index', 'score', 'completed', 'xp_earned', 'updated_at',
+        ))
+
+        data = {
+            'profile': {
+                'email': user.email,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'bio': user.bio,
+                'university': user.university,
+                'education_level': user.education_level,
+                'weekly_goal_hours': user.weekly_goal_hours,
+                'study_streak': user.study_streak,
+                'total_study_time': user.total_study_time,
+                'is_premium': user.is_premium,
+                'xp': user.onboarding_status.get('quiz_xp', 0) if user.onboarding_status else 0,
+                'created_at': user.created_at.isoformat(),
+            },
+            'resources': resources,
+            'progress': progress,
+        }
+        response = JsonResponse(data)
+        response['Content-Disposition'] = f'attachment; filename="flowstate-data-{user.username}.json"'
+        return response
+
+
+class DeleteAccountView(APIView):
+    """POST /api/auth/delete-account/ — delete current user and all data."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        password = request.data.get('password', '')
+        if not password:
+            return Response({'error': 'Password required to delete account.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not request.user.check_password(password):
+            return Response({'error': 'Incorrect password.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        user.delete()
+        return Response({'detail': 'Account deleted.'})
+
+
 class RankingsView(APIView):
     """
     GET /api/auth/rankings/

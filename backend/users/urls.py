@@ -4,7 +4,7 @@ from .views import (
     RegisterView, MeView, LogoutView, AnalyticsView, LogStudyView, 
     SetWeeklyGoalView, NotificationsView, NotificationDetailView, 
     UpdateOnboardingView, PushSubscriptionView, GlobalConfigView, AwardXPView,
-    RankingsView
+    RankingsView, ChangePasswordView, ExportDataView, DeleteAccountView
 )
 from .oauth_views import GoogleOAuthView, GitHubOAuthView
 
@@ -29,4 +29,8 @@ urlpatterns = [
     # OAuth social login
     path('oauth/google/', GoogleOAuthView.as_view(), name='oauth-google'),
     path('oauth/github/', GitHubOAuthView.as_view(), name='oauth-github'),
+    # Account management
+    path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('export-data/', ExportDataView.as_view(), name='export-data'),
+    path('delete-account/', DeleteAccountView.as_view(), name='delete-account'),
 ]

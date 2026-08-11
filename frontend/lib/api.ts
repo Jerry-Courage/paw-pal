@@ -65,6 +65,11 @@ export const authApi = {
   awardXp: (amount: number, reason: string, resourceId?: number) =>
     api.post('/auth/award-xp/', { amount, reason, resource_id: resourceId }),
   getRankings: () => api.get('/auth/rankings/'),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post('/auth/change-password/', { current_password, new_password }),
+  exportData: () => api.get('/auth/export-data/', { responseType: 'blob' }),
+  deleteAccount: (password: string) =>
+    api.post('/auth/delete-account/', { password }),
 }
 
 // TTS — Gemini Live voices

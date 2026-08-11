@@ -50,7 +50,7 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar_url', 'bio', 'university', 'study_streak',
             'total_study_time', 'weekly_goal_hours', 'onboarding_status',
             'created_at', 'is_premium', 'notes_used', 'notes_limit',
-            'xp', 'level', 'education_level',
+            'xp', 'level', 'education_level', 'notification_preferences',
         )
         read_only_fields = ('id', 'email', 'study_streak', 'total_study_time', 'created_at')
 
@@ -92,4 +92,4 @@ class UserSerializer(serializers.ModelSerializer):
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'bio', 'university', 'weekly_goal_hours', 'avatar', 'education_level')
+        fields = ('username', 'first_name', 'last_name', 'bio', 'university', 'weekly_goal_hours', 'avatar', 'education_level', 'notification_preferences')
