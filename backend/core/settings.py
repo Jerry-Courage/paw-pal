@@ -264,10 +264,11 @@ if _cors_env:
     CORS_ALLOWED_ORIGINS = list(set(_cors_base + _cors_env.split(',')))
 else:
     CORS_ALLOWED_ORIGINS = _cors_base
-    CORS_ALLOW_ALL_ORIGINS = DEBUG
-    CORS_URLS_REGEX = r'^/api/.*$|/media/.*$'
 
-# Allow all *.replit.dev, *.repl.co, and flowstate.college origins
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_CREDENTIALS = True
+CORS_URLS_REGEX = r'^/api/.*$|/media/.*$'
+
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https://.*\.replit\.dev$',
     r'^https://.*\.repl\.co$',
@@ -275,7 +276,6 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https://(www\.)?flowstate\.college$',
     r'^https://.*\.onrender\.com$',
 ]
-CORS_ALLOW_CREDENTIALS = True
 
 _csrf_env = os.getenv('CSRF_TRUSTED_ORIGINS', '')
 if _csrf_env:
