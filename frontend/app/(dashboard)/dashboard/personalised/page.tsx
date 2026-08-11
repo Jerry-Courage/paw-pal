@@ -59,7 +59,9 @@ export default function PersonalisedLearningPage() {
   const [showTranscript, setShowTranscript] = useState(false)
   const [currentAiText, setCurrentAiText] = useState('')
   const [displayedWords, setDisplayedWords] = useState<string[]>([])
-  const subtitleTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const prevWordCountRef = useRef(0)
+  const wordIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const MAX_VISIBLE_WORDS = 30
 
   const wsRef = useRef<WebSocket | null>(null)
   const micAudioCtxRef = useRef<AudioContext | null>(null)
@@ -93,26 +95,53 @@ export default function PersonalisedLearningPage() {
     return () => clearInterval(timerRef.current)
   }, [phase])
 
-  // Animate words appearing one-by-one as AI speaks
+  // Animate words appearing one-by-one — incremental, doesn't restart on new text
   useEffect(() => {
     if (!currentAiText) {
       setDisplayedWords([])
+      prevWordCountRef.current = 0
+      if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
       return
     }
     const words = currentAiText.split(/\s+/).filter(Boolean)
-    let idx = 0
-    setDisplayedWords([words[0] || ''])
+    const prevCount = prevWordCountRef.current
 
-    const interval = setInterval(() => {
-      idx++
-      if (idx >= words.length) {
-        clearInterval(interval)
+    // If text was reset (e.g. interrupted), restart from 0
+    if (words.length < prevCount) {
+      prevWordCountRef.current = 0
+    }
+
+    const newWords = words.slice(prevWordCountRef.current)
+    if (newWords.length === 0) return
+
+    // Show first new word immediately
+    const firstNew = newWords[0]
+    setDisplayedWords(prev => {
+      const safePrev = prev.length <= prevWordCountRef.current ? prev : prev.slice(0, prevWordCountRef.current)
+      return [...safePrev, firstNew]
+    })
+    prevWordCountRef.current += 1
+
+    // Animate remaining new words at 80ms pace
+    if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
+    let idx = 1
+    wordIntervalRef.current = setInterval(() => {
+      if (idx >= newWords.length) {
+        clearInterval(wordIntervalRef.current!)
+        wordIntervalRef.current = null
         return
       }
-      setDisplayedWords(prev => [...prev, words[idx]])
-    }, 80) // 80ms per word — smooth reading pace
+      setDisplayedWords(prev => {
+        const safePrev = prev.length <= prevWordCountRef.current ? prev : prev.slice(0, prevWordCountRef.current)
+        return [...safePrev, newWords[idx]]
+      })
+      prevWordCountRef.current += 1
+      idx++
+    }, 80)
 
-    return () => clearInterval(interval)
+    return () => {
+      if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
+    }
   }, [currentAiText])
 
   // Clear subtitle when AI stops speaking
@@ -262,14 +291,14 @@ export default function PersonalisedLearningPage() {
           stopAudioPlayout()
           setCurrentAiText('')
           setDisplayedWords([])
+          prevWordCountRef.current = 0
+          if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
         } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
 
           // Update current AI subtitle for animated display
           if (role === 'ai') {
             setCurrentAiText(prev => prev + msg.text)
-            // Reset word animation timer
-            if (subtitleTimerRef.current) clearTimeout(subtitleTimerRef.current)
           } else {
             // User spoke — clear AI subtitle
             setCurrentAiText('')
@@ -769,24 +798,34 @@ export default function PersonalisedLearningPage() {
                       />
                     )}
 
-                    {/* Subtitle text with word-by-word animation */}
+                    {/* Subtitle text with word-by-word animation — sliding window */}
                     <div className="relative z-10 text-center">
-                      {displayedWords.map((word, i) => (
-                        <motion.span
-                          key={`${i}-${word}`}
-                          initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                          transition={{ duration: 0.3, ease: 'easeOut' }}
-                          className={cn(
-                            "inline-block text-[15px] sm:text-[17px] leading-relaxed font-medium mr-[0.4em]",
-                            i === displayedWords.length - 1 && isAiSpeaking
-                              ? "text-violet-300"
-                              : "text-white/80"
-                          )}
-                        >
-                          {word}
-                        </motion.span>
-                      ))}
+                      {(() => {
+                        const totalWords = displayedWords.length
+                        const visibleWords = totalWords > MAX_VISIBLE_WORDS
+                          ? displayedWords.slice(totalWords - MAX_VISIBLE_WORDS)
+                          : displayedWords
+                        const offset = totalWords > MAX_VISIBLE_WORDS ? totalWords - MAX_VISIBLE_WORDS : 0
+                        return visibleWords.map((word, i) => {
+                          const globalIdx = offset + i
+                          return (
+                            <motion.span
+                              key={`${globalIdx}-${word}`}
+                              initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+                              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                              transition={{ duration: 0.3, ease: 'easeOut' }}
+                              className={cn(
+                                "inline-block text-[15px] sm:text-[17px] leading-relaxed font-medium mr-[0.4em]",
+                                globalIdx === totalWords - 1 && isAiSpeaking
+                                  ? "text-violet-300"
+                                  : "text-white/80"
+                              )}
+                            >
+                              {word}
+                            </motion.span>
+                          )
+                        })
+                      })()}
 
                       {/* Blinking cursor while speaking */}
                       {isAiSpeaking && (

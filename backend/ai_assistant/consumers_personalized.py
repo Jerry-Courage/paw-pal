@@ -481,9 +481,10 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             inline = part.get('inlineData', {})
             if inline.get('data'):
                 await self._send({'type': 'audio', 'data': inline['data']})
+            # modelTurn.text is the model's internal reasoning — do NOT send as subtitle
+            # Only log it to the transcript for record-keeping
             if part.get('text'):
                 self.transcript_log.append(('ai', part['text']))
-                await self._send({'type': 'transcript_ai', 'text': part['text']})
 
         input_transcript = server_content.get('inputTranscription', {})
         if input_transcript.get('text'):
@@ -492,11 +493,11 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 self.transcript_log.append(('user', text))
                 await self._send({'type': 'transcript_user', 'text': text})
 
+        # outputTranscription is the actual spoken words — send as subtitle
         output_transcript = server_content.get('outputTranscription', {})
         if output_transcript.get('text'):
             text = output_transcript['text'].strip()
             if text:
-                self.transcript_log.append(('ai', text))
                 await self._send({'type': 'transcript_ai', 'text': text})
 
     async def _end_session(self):
