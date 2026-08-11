@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { normalizeForRendering } from '@/lib/mathFormatting'
 import StudyTimer from '@/components/study/StudyTimer'
 import SessionStats from '@/components/study/SessionStats'
 import AmbientPlayer from '@/components/study/AmbientPlayer'
@@ -24,6 +25,41 @@ type Section = {
   deep_dive?: string; memory_trick?: string; quick_summary?: string; content?: string
 }
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
+
+/** Clean AI-generated content: fix escaped newlines, normalize whitespace */
+function cleanContent(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(/\\n\\n/g, '\n\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** Prepare content for ReactMarkdown: clean + normalize LaTeX delimiters */
+function prepareForMarkdown(text: string): string {
+  if (!text) return ''
+  return normalizeForRendering(cleanContent(text))
+}
+
+/** Detect if content contains math/LaTeX expressions */
+function hasMath(text: string): boolean {
+  if (!text) return false
+  return /\\[a-zA-Z]+|\\\(|\\\|\$\$|\$[^$]/.test(text)
+}
+
+/** Extract formulas from deep_dive for a dedicated formula box */
+function extractFormulas(text: string): string[] {
+  if (!text) return []
+  const formulas: string[] = []
+  // Match $$...$$ blocks
+  const blockMatches = text.match(/\$\$[\s\S]*?\$\$/g) || []
+  formulas.push(...blockMatches)
+  // Match inline $...$ that look like standalone equations (contain = or \frac or \sum)
+  const inlineMatches = text.match(/\$[^$\n]*(?:=|\\frac|\\sum|\\int|\\prod|\\lim)[^$\n]*\$/g) || []
+  formulas.push(...inlineMatches.filter(f => !formulas.includes(f)))
+  return formulas.slice(0, 5) // cap at 5 formulas
+}
 
 const XP_PER_SECTION = 50
 const XP_MASTERY = 150
@@ -606,6 +642,25 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   <h2 className="text-[20px] sm:text-[26px] font-bold text-on-surface leading-tight">{current.title}</h2>
                 </div>
 
+                {/* Maths Formula Box — shown when section contains formulas */}
+                {hasMath(current.deep_dive || '') || hasMath(current.plain_english || '') ? (
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-violet-500/[0.06] border border-violet-500/20 rounded-[1rem]">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="material-symbols-outlined text-violet-400 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>functions</span>
+                      <span className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Key Formulas</span>
+                    </div>
+                    <div className="space-y-3">
+                      {extractFormulas(current.deep_dive || current.plain_english || '').map((formula, i) => (
+                        <div key={i} className="bg-[#0d0d1a] rounded-xl px-4 py-3 border border-violet-500/10 overflow-x-auto">
+                          <div className="prose prose-invert max-w-none text-[15px] sm:text-[17px] text-center">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(formula)}</ReactMarkdown>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Key Question */}
                 {current.key_question && (
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-secondary/10 border border-secondary/20 rounded-[1rem]">
@@ -613,7 +668,9 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       <span className="material-symbols-outlined text-secondary text-[16px]">help_outline</span>
                       <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Key Question</span>
                     </div>
-                    <p className="text-[14px] sm:text-[16px] font-bold text-on-surface">{current.key_question}</p>
+                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[16px] font-bold text-on-surface">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.key_question)}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
 
@@ -622,10 +679,12 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Simple Analogy / Plain English</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">
+                        {hasMath(current.deep_dive || current.plain_english || '') ? 'In Plain English — No Jargon' : 'Simple Analogy / Plain English'}
+                      </span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed text-on-surface/90">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{current.plain_english}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.plain_english)}</ReactMarkdown>
                     </div>
                   </div>
                 )}
@@ -635,10 +694,12 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="material-symbols-outlined text-tertiary text-[16px]">school</span>
-                      <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">Deep Dive</span>
+                      <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">
+                        {hasMath(current.deep_dive) ? 'Step-by-Step Derivation' : 'Deep Dive'}
+                      </span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{current.deep_dive}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.deep_dive)}</ReactMarkdown>
                     </div>
                   </div>
                 )}
@@ -650,7 +711,9 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       <span className="material-symbols-outlined text-tertiary text-[16px]">psychology</span>
                       <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">Memory Trick</span>
                     </div>
-                    <p className="text-[14px] sm:text-[15px] text-on-surface italic">{current.memory_trick}</p>
+                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] text-on-surface italic">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.memory_trick)}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
 
@@ -661,14 +724,16 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       <span className="material-symbols-outlined text-primary text-[16px]">summarize</span>
                       <span className="text-[10px] font-black text-primary uppercase tracking-widest">Quick Summary</span>
                     </div>
-                    <p className="text-[14px] text-on-surface-variant leading-relaxed">{current.quick_summary}</p>
+                    <div className="prose prose-invert max-w-none text-[14px] text-on-surface-variant leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.quick_summary)}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
 
                 {/* Fallback for old content field */}
                 {!current.plain_english && !current.deep_dive && current.content && (
                   <div className="mx-8 mt-7 prose prose-invert max-w-none text-[15px]">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{current.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.content)}</ReactMarkdown>
                   </div>
                 )}
 

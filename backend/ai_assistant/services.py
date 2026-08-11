@@ -1525,17 +1525,27 @@ class AIService:
         if not text.strip() or len(text.strip()) < 100:
             logger.info(f"Context is scarce for '{resource.title}'. Engaging Topic-Based Synthesis...")
             text = f"TOPIC: {resource.title}\nSUBJECT: {resource.subject or 'General'}\n\nSTRICT REQUIREMENT: Provide a deep, FOUNDATIONAL study kit based on your expert academic knowledge of this topic. Do not return empty sections. Generate at least 20 detailed modules."
-            is_math_intensive = any(kw in resource.title.lower() for kw in ['math', 'calculus', 'physics', 'equation'])
+            is_math_intensive = any(kw in resource.title.lower() for kw in ['math', 'calculus', 'physics', 'equation', 'algebra', 'geometry', 'trigonometry', 'statistics', 'linear', 'matrix', 'derivative', 'integral'])
         else:
             # Detect if the material is math-intensive
-            is_math_intensive = any(kw in text.lower() for kw in ['integral', 'derivative', 'equation', 'formula', 'theorem', 'calculus', 'algebra', 'geometry'])
+            is_math_intensive = any(kw in text.lower() for kw in ['integral', 'derivative', 'equation', 'formula', 'theorem', 'calculus', 'algebra', 'geometry', 'trigonometry', 'matrix', 'vector', 'polynomial', 'limit', 'series', 'probability', 'statistic', 'logarithm', 'exponential'])
         
         math_hint = ""
         if is_math_intensive:
             math_hint = (
-                "\n\nDETECTION: This content is Mathematics-Intensive. "
-                "Use standard LaTeX delimiters: $$[formula]$$ for block math and $[formula]$ for inline math. "
-                "Break down complex equations into logical 'Derivation Steps' with 'Variable Intuition'."
+                "\n\nDETECTION: This content is Mathematics-Intensive. FOLLOW THESE RULES STRICTLY:\n"
+                "1. Use standard LaTeX delimiters: $$[formula]$$ for block math and $[formula]$ for inline math.\n"
+                "2. In 'plain_english': Explain the CONCEPT in words first (no formulas). Then add a 'Key Formula:' line with the main formula in $$...$$.\n"
+                "3. In 'deep_dive': Structure as STEP-BY-STEP with numbered steps. Each step gets its own line:\n"
+                "   - Step name in **bold**\n"
+                "   - Formula in $$...$$ on its own line\n"
+                "   - Plain-English explanation of what this step does\n"
+                "4. Define ALL variables: when introducing a formula, list what each symbol means (e.g., '$v$ = velocity, $t$ = time').\n"
+                "5. Include WORKED EXAMPLES: pick specific numbers and walk through the calculation step by step.\n"
+                "6. For derivations: show the starting formula, then each transformation with explanation.\n"
+                "7. memory_trick: Create a mnemonic for remembering the formula (e.g., 'SOH CAH TOA' for trig).\n"
+                "8. quick_summary: State the formula in words and its main use case.\n"
+                "NEVER leave formulas as raw LaTeX commands without $$ delimiters. Every formula MUST be wrapped."
             )
 
         resource.processing_progress = 25
@@ -1617,7 +1627,9 @@ class AIService:
                 "- Every section MUST populate all fields: key_question, plain_english, deep_dive, memory_trick, quick_summary.\n"
                 "- Memory Tricks must be SPECIFIC to the concept. Create real acronyms/mnemonics, not placeholders.\n"
                 "- Minimum 250 words total per section (mostly in deep_dive). Quality over quantity.\n"
-                "- USE LATEX for all math/physics formulas.\n"
+                "- USE LATEX for all math/physics formulas. Every formula MUST be wrapped in $$...$$ (block) or $...$ (inline).\n"
+                "- For math content: deep_dive must include WORKED EXAMPLES with real numbers.\n"
+                "- For math content: plain_english must explain the concept in words BEFORE showing formulas.\n"
                 f"{image_hint if idx == 0 else ''}\n"
                 f"{math_hint}\n\n"
                 f"SOURCE MATERIAL:\n{chunk_text}\n\n"
