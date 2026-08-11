@@ -175,6 +175,10 @@ class ResourceProgress(models.Model):
     resource = models.ForeignKey('Resource', on_delete=models.CASCADE, related_name='progress')
     completed_steps = models.JSONField(default=dict)
     step_scores = models.JSONField(default=dict)
+    completed_sections = models.JSONField(default=list, blank=True,
+        help_text='List of section indices (ints) the user has completed in study mode.')
+    current_section = models.IntegerField(default=0,
+        help_text='Last section index the user was on in study mode.')
     xp_earned = models.IntegerField(default=0)
     mastery = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

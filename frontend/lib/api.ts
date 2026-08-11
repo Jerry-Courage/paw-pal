@@ -126,6 +126,8 @@ export const libraryApi = {
   cloneResource: (id: number) =>
     api.post(`/library/resources/${id}/clone/`),
   getProgress: (id: number) => api.get(`/library/resources/${id}/progress/`),
+  syncProgress: (id: number, data: { completed_sections?: number[]; current_section?: number }) =>
+    api.put(`/library/resources/${id}/progress/`, data),
   completeStep: (id: number, step: string, score = 100) =>
     api.post(`/library/resources/${id}/progress/complete/`, { step, score }),
   reprocessResource: (id: number) => api.post(`/library/resources/${id}/reprocess/`),

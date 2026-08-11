@@ -11,7 +11,7 @@ STEP_XP = {'notes': 50, 'flashcards': 10, 'quiz': 10, 'practice': 100, 'examprep
 
 
 class ResourceProgressView(APIView):
-    """GET /api/library/resources/<id>/progress/ — fetch study path progress."""
+    """GET / PUT /api/library/resources/<id>/progress/ — fetch or sync study progress."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, resource_id):
@@ -21,6 +21,25 @@ class ResourceProgressView(APIView):
                 user=request.user,
                 resource=resource,
             )
+            return Response(_serialize(progress))
+        except (ProgrammingError, DatabaseError):
+            return Response(_empty_progress_payload(resource.id))
+
+    def put(self, request, resource_id):
+        """Sync section progress from frontend to backend."""
+        resource = get_object_or_404(Resource, id=resource_id)
+        try:
+            progress, _ = ResourceProgress.objects.get_or_create(
+                user=request.user,
+                resource=resource,
+            )
+            completed_sections = request.data.get('completed_sections')
+            current_section = request.data.get('current_section')
+            if completed_sections is not None:
+                progress.completed_sections = completed_sections
+            if current_section is not None:
+                progress.current_section = int(current_section)
+            progress.save(update_fields=['completed_sections', 'current_section', 'updated_at'])
             return Response(_serialize(progress))
         except (ProgrammingError, DatabaseError):
             return Response(_empty_progress_payload(resource.id))
@@ -82,6 +101,8 @@ def _empty_progress_payload(resource_id: int) -> dict:
         'resource_id': resource_id,
         'completed_steps': {},
         'step_scores': {},
+        'completed_sections': [],
+        'current_section': 0,
         'xp_earned': 0,
         'mastery': 0,
         'next_step': 'notes',
@@ -96,6 +117,8 @@ def _serialize(p: ResourceProgress) -> dict:
         'resource_id': p.resource_id,
         'completed_steps': p.completed_steps,
         'step_scores': p.step_scores,
+        'completed_sections': p.completed_sections or [],
+        'current_section': p.current_section,
         'xp_earned': p.xp_earned,
         'mastery': p.mastery,
         'next_step': p.next_step,

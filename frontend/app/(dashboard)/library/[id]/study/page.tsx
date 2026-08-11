@@ -139,6 +139,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const [sessionXP, setSessionXP] = useState(0)
   const [mysteryBoxTimer, setMysteryBoxTimer] = useState<NodeJS.Timeout>()
   const mysteryBoxIntervalRef = useRef(0)
+  const syncTimerRef = useRef<NodeJS.Timeout>()
 
   useEffect(() => {
     if (!timerRunning) return
@@ -159,14 +160,37 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-  // ── Persist progress to localStorage ────────────────────────────────────
+  // ── Persist progress to localStorage + sync to backend ─────────────────
   useEffect(() => {
     try {
       localStorage.setItem(`study_${resourceId}_section`, String(sectionIndex))
       localStorage.setItem(`study_${resourceId}_xp`, String(totalXP))
       localStorage.setItem(`study_${resourceId}_completed`, JSON.stringify([...completed]))
     } catch {}
+    // Debounced sync to backend (every 2s max)
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    syncTimerRef.current = setTimeout(() => {
+      libraryApi.syncProgress(resourceId, {
+        completed_sections: [...completed],
+        current_section: sectionIndex,
+      }).catch(() => {})
+    }, 2000)
   }, [sectionIndex, totalXP, completed, resourceId])
+
+  // ── Load progress from backend on mount (overrides localStorage) ───────
+  useEffect(() => {
+    libraryApi.getProgress(resourceId).then(({ data }) => {
+      if (data?.completed_sections?.length) {
+        const backendCompleted = new Set<number>(data.completed_sections)
+        setCompleted(backendCompleted)
+        localStorage.setItem(`study_${resourceId}_completed`, JSON.stringify([...backendCompleted]))
+      }
+      if (data?.current_section != null && data.current_section > 0) {
+        setSectionIndex(data.current_section)
+        localStorage.setItem(`study_${resourceId}_section`, String(data.current_section))
+      }
+    }).catch(() => {})
+  }, [resourceId])
 
   // ── Persist XP to backend on exit (beforeunload + cleanup) ──────────────
   // Track XP that hasn't been individually persisted via awardXp calls
