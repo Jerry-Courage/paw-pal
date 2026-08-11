@@ -143,6 +143,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                     storage_backend, r2_key, _ = _upload_to_r2(
                         uploaded_file, uploaded_file.name, uploaded_file.content_type
                     )
+                    serializer.validated_data.pop('file', None)
                     resource = serializer.save(
                         owner=self.request.user,
                         file_size=file_size_bytes,
@@ -155,8 +156,6 @@ class ResourceListCreateView(generics.ListCreateAPIView):
             else:
                 resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
         elif uploaded_file and ext in ['.pptx', '.ppt', '.doc', '.docx', '.mp4']:
-            # Cloudinary MediaCloudinaryStorage fails on non-image/video types with resource_type='auto'.
-            # Upload as raw via Cloudinary SDK, then save without the FileField.
             try:
                 import cloudinary.uploader
                 result = cloudinary.uploader.upload(
@@ -164,18 +163,17 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                     resource_type='raw',
                     folder='resources',
                 )
-                # Store the Cloudinary public_id in a custom field
+                cloudinary_id = result.get('public_id', '')
+                # Pop file to prevent MediaCloudinaryStorage from re-uploading
+                serializer.validated_data.pop('file', None)
                 resource = serializer.save(
                     owner=self.request.user,
                     file_size=file_size_bytes,
                 )
-                # Set the file field to the public_id so Cloudinary can find it
-                if resource.file:
-                    resource.file.name = result.get('public_id', '')
-                    resource.save(update_fields=['file', 'file_size'])
+                resource.file.name = cloudinary_id
+                resource.save(update_fields=['file', 'file_size'])
             except Exception as e:
                 logger.error(f'[Cloudinary Raw Upload] Failed for {uploaded_file.name}: {e}')
-                # Fallback: try default storage (may fail for PPTX)
                 resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
         else:
             resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
