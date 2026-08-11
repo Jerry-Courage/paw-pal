@@ -55,7 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Fetch subscription status and show paywall if not premium
     try {
       const token = await getAuthToken()
-      const res = await fetch(`${API_BASE}/api/payments/status/`, {
+      const res = await fetch(`${API_BASE}/payments/status/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()

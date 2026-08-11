@@ -132,7 +132,6 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                                     'voiceName': 'Aoede'  # Warm, engaging voice for VR narration
                                 }
                             },
-                            'outputAudioTranscription': {},
                         },
                         'temperature': 0.8,
                         'maxOutputTokens': 150,

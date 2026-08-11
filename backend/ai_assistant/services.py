@@ -1203,6 +1203,7 @@ class AIService:
         text_context = ""
         try:
             if query and resource.chunks.exists():
+                from pgvector.django import L2Distance
                 logger.info(f"[RAG] Executing vector similarity search for query: {query}")
                 
                 # Cloud-First: RAM-Zero footprint
