@@ -10,6 +10,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunSQL(
             sql='ALTER TABLE users_user DROP COLUMN IF EXISTS notification_preferences;',
-            reverse_sql='ALTER TABLE users_user ADD COLUMN notification_preferences JSONField DEFAULT \'{}\' NOT NULL;',
+            reverse_sql='ALTER TABLE users_user ADD COLUMN notification_preferences jsonb DEFAULT \'{}\' NOT NULL;',
         ),
     ]
