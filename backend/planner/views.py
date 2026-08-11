@@ -563,12 +563,16 @@ class SessionRemindersView(APIView):
         )
 
         sent = 0
-        for session in upcoming:
-            if session.id in SessionRemindersView._sent_ids:
-                continue
-            minutes_away = max(0, int((session.start_time - now).total_seconds() / 60))
-            label = 'now' if minutes_away < 2 else f'in {minutes_away} min'
-            PushService.send_notification(
+    for session in upcoming:
+        if session.id in SessionRemindersView._sent_ids:
+            continue
+        # Check user's notification preference for study_reminders
+        prefs = getattr(session.user, 'notification_preferences', None) or {}
+        if not prefs.get('study_reminders', True):
+            continue
+        minutes_away = max(0, int((session.start_time - now).total_seconds() / 60))
+        label = 'now' if minutes_away < 2 else f'in {minutes_away} min'
+        PushService.send_notification(
                 user=request.user,
                 title=f'⏰ {session.title} starts {label}!',
                 body=f'{session.session_type.title()} · {session.start_time.strftime("%I:%M %p")}',
@@ -603,6 +607,12 @@ def send_planner_reminders():
     sent = 0
     for session in upcoming:
         try:
+            # Check user's notification preference for study_reminders
+            prefs = getattr(session.user, 'notification_preferences', None) or {}
+            if not prefs.get('study_reminders', True):
+                session.reminder_sent = True
+                session.save(update_fields=['reminder_sent'])
+                continue
             minutes_away = max(0, int((session.start_time - now).total_seconds() / 60))
             label = 'now' if minutes_away < 2 else f'in {minutes_away} min'
             PushService.send_notification(

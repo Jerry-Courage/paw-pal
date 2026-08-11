@@ -1,9 +1,32 @@
 """Utility to create notifications from anywhere in the app."""
-from django.contrib.auth import get_user_model
+
+# Map notification types to the user's notification_preferences key
+NOTIFICATION_PREF_MAP = {
+    'streak': 'streak_alerts',
+    'flashcard': 'flashcard_due',
+    'group': 'group_activity',
+    'ai_nudge': 'ai_nudges',
+    'deadline': 'study_reminders',
+    'resource': 'study_reminders',
+    # 'system' has no toggle — always sent
+}
+
+
+def _is_enabled(user, notif_type: str) -> bool:
+    """Return True if this notification type is enabled for the user."""
+    pref_key = NOTIFICATION_PREF_MAP.get(notif_type)
+    if not pref_key:
+        return True  # unknown type → allow (safety net)
+    prefs = getattr(user, 'notification_preferences', None) or {}
+    # Default to True if key missing (opt-out model)
+    return prefs.get(pref_key, True)
 
 
 def create_notification(user, type: str, title: str, body: str, link: str = ''):
     """Create a notification and trigger a Push notification if possible."""
+    if not _is_enabled(user, type):
+        return  # user has this type disabled
+
     try:
         from .models import Notification
         from .push_service import PushService
