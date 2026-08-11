@@ -311,8 +311,6 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 }
                             },
                         },
-                        'outputAudioTranscription': {},
-                        'inputAudioTranscription': {},
                         'temperature': 0.7,
                         'maxOutputTokens': 2000,
                     },

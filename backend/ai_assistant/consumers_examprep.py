@@ -179,10 +179,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                                 }
                             },
                         },
-                        'outputAudioTranscription': {},
-                        'inputAudioTranscription': {},
                         'temperature': 0.8,
-                        'maxOutputTokens': 800,  # enough for full conversational responses
+                        'maxOutputTokens': 800,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
