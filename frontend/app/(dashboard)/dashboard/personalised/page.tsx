@@ -57,6 +57,9 @@ export default function PersonalisedLearningPage() {
   const [isEndingSession, setIsEndingSession] = useState(false)
   const [sessionDuration, setSessionDuration] = useState(0)
   const [showTranscript, setShowTranscript] = useState(false)
+  const [currentAiText, setCurrentAiText] = useState('')
+  const [displayedWords, setDisplayedWords] = useState<string[]>([])
+  const subtitleTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const micAudioCtxRef = useRef<AudioContext | null>(null)
@@ -89,6 +92,40 @@ export default function PersonalisedLearningPage() {
     }
     return () => clearInterval(timerRef.current)
   }, [phase])
+
+  // Animate words appearing one-by-one as AI speaks
+  useEffect(() => {
+    if (!currentAiText) {
+      setDisplayedWords([])
+      return
+    }
+    const words = currentAiText.split(/\s+/).filter(Boolean)
+    let idx = 0
+    setDisplayedWords([words[0] || ''])
+
+    const interval = setInterval(() => {
+      idx++
+      if (idx >= words.length) {
+        clearInterval(interval)
+        return
+      }
+      setDisplayedWords(prev => [...prev, words[idx]])
+    }, 80) // 80ms per word — smooth reading pace
+
+    return () => clearInterval(interval)
+  }, [currentAiText])
+
+  // Clear subtitle when AI stops speaking
+  useEffect(() => {
+    if (!isAiSpeaking && currentAiText) {
+      // Keep visible for 3s after AI stops, then fade
+      const timeout = setTimeout(() => {
+        setCurrentAiText('')
+        setDisplayedWords([])
+      }, 3000)
+      return () => clearTimeout(timeout)
+    }
+  }, [isAiSpeaking, currentAiText])
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -223,8 +260,22 @@ export default function PersonalisedLearningPage() {
           playAudioChunk(pcm)
         } else if (msg.type === 'interrupted') {
           stopAudioPlayout()
+          setCurrentAiText('')
+          setDisplayedWords([])
         } else if (msg.type === 'transcript_user' || msg.type === 'transcript_ai') {
           const role = msg.type === 'transcript_user' ? 'user' : 'ai'
+
+          // Update current AI subtitle for animated display
+          if (role === 'ai') {
+            setCurrentAiText(prev => prev + msg.text)
+            // Reset word animation timer
+            if (subtitleTimerRef.current) clearTimeout(subtitleTimerRef.current)
+          } else {
+            // User spoke — clear AI subtitle
+            setCurrentAiText('')
+            setDisplayedWords([])
+          }
+
           setTranscript(prev => {
             if (prev.length === 0) return [{ role, text: msg.text, ts: Date.now() }]
             const last = prev[prev.length - 1]
@@ -692,6 +743,64 @@ export default function PersonalisedLearningPage() {
             <p className="text-xs text-white/30">
               {isAiSpeaking ? 'Speak to interrupt' : isMicMuted ? 'Tap to unmute' : 'Speak naturally'}
             </p>
+
+            {/* Animated AI Subtitles */}
+            <AnimatePresence>
+              {displayedWords.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
+                  className="mt-6 max-w-lg w-full"
+                >
+                  <div className={cn(
+                    "relative px-6 py-4 rounded-2xl backdrop-blur-xl border transition-all duration-500",
+                    isAiSpeaking
+                      ? "bg-violet-500/10 border-violet-500/20 shadow-[0_0_30px_rgba(139,92,246,0.1)]"
+                      : "bg-white/[0.03] border-white/[0.06]"
+                  )}>
+                    {/* Animated glow border */}
+                    {isAiSpeaking && (
+                      <motion.div
+                        className="absolute inset-0 rounded-2xl border border-violet-400/30"
+                        animate={{ opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                      />
+                    )}
+
+                    {/* Subtitle text with word-by-word animation */}
+                    <div className="relative z-10 text-center">
+                      {displayedWords.map((word, i) => (
+                        <motion.span
+                          key={`${i}-${word}`}
+                          initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                          transition={{ duration: 0.3, ease: 'easeOut' }}
+                          className={cn(
+                            "inline-block text-[15px] sm:text-[17px] leading-relaxed font-medium mr-[0.4em]",
+                            i === displayedWords.length - 1 && isAiSpeaking
+                              ? "text-violet-300"
+                              : "text-white/80"
+                          )}
+                        >
+                          {word}
+                        </motion.span>
+                      ))}
+
+                      {/* Blinking cursor while speaking */}
+                      {isAiSpeaking && (
+                        <motion.span
+                          animate={{ opacity: [1, 0, 1] }}
+                          transition={{ repeat: Infinity, duration: 0.8 }}
+                          className="inline-block w-[2px] h-[1em] bg-violet-400 ml-0.5 align-text-bottom"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Bottom controls */}
