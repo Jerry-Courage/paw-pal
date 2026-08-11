@@ -278,19 +278,20 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 ]
 
 _csrf_env = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+_csrf_base = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    'http://localhost:5002',
+    'http://127.0.0.1:5002',
+    'https://flowstate.college',
+    'https://www.flowstate.college',
+]
 if _csrf_env:
-    CSRF_TRUSTED_ORIGINS = _csrf_env.split(',')
+    CSRF_TRUSTED_ORIGINS = list(set(_csrf_base + _csrf_env.split(',')))
 else:
-    CSRF_TRUSTED_ORIGINS = [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:5000',
-        'http://127.0.0.1:5000',
-        'http://localhost:5002',
-        'http://127.0.0.1:5002',
-        'https://flowstate.college',
-        'https://www.flowstate.college',
-    ]
+    CSRF_TRUSTED_ORIGINS = _csrf_base
 
 # ─── Production Security ──────────────────────────────────────────────────────
 if not DEBUG:
