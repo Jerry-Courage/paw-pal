@@ -133,8 +133,10 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
         setShowPaywall(true)
       } else if (status === 413 || data?.error?.toLowerCase?.()?.includes('too large') || data?.error?.toLowerCase?.()?.includes('file too large')) {
         toast.error(data?.error || 'File is too large.')
+      } else if (status === 400) {
+        toast.error(data?.error || data?.detail || 'Invalid file. Please check the format and try again.')
       } else {
-        toast.error(data?.error || data?.detail || 'Upload failed. Please check your file and try again.')
+        toast.error(data?.error || data?.detail || 'Upload failed. Please try again.')
       }
     },
   })

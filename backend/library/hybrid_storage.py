@@ -139,16 +139,22 @@ def _get_file_bytes_cloudinary(resource):
             file_ext = _re.search(r'\.([^.]+)$', raw_name)
             fmt = file_ext.group(1) if file_ext else 'pdf'
 
-            signed_url = cloudinary.utils.private_download_url(
-                pub_id, fmt, resource_type='image', type='upload',
-            )
-            resp = _req.get(signed_url, timeout=60)
-            if resp.status_code == 200:
-                logger.info(f'[Cloudinary] Downloaded via signed URL: {resource.id} ({len(resp.content)} bytes)')
-                return resp.content
-            logger.warning(f'[Cloudinary] Signed download {resp.status_code} for {resource.id}')
+            # Try raw resource_type first (for PPTX, DOCX, MP4, etc.)
+            # Then fallback to image (for PDFs stored as images)
+            for res_type in ['raw', 'image']:
+                try:
+                    signed_url = cloudinary.utils.private_download_url(
+                        pub_id, fmt, resource_type=res_type, type='upload',
+                    )
+                    resp = _req.get(signed_url, timeout=60)
+                    if resp.status_code == 200:
+                        logger.info(f'[Cloudinary] Downloaded via {res_type} signed URL: {resource.id} ({len(resp.content)} bytes)')
+                        return resp.content
+                    logger.warning(f'[Cloudinary] {res_type} signed download {resp.status_code} for {resource.id}')
+                except Exception as e:
+                    logger.warning(f'[Cloudinary] {res_type} signed download failed for {resource.id}: {e}')
     except Exception as e:
-        logger.warning(f'[Cloudinary] Signed download failed for {resource.id}: {e}')
+        logger.warning(f'[Cloudinary] SDK error for {resource.id}: {e}')
 
     # Fallback: storage.open()
     try:

@@ -131,6 +131,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
 
         uploaded_file = self.request.FILES.get('file', None)
         file_size_bytes = uploaded_file.size if uploaded_file else 0
+        ext = os.path.splitext(uploaded_file.name)[1].lower() if uploaded_file else ''
 
         # Route large files to R2 (bypass Cloudinary's 10MB limit)
         storage_backend = 'cloudinary'
@@ -142,7 +143,6 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                     storage_backend, r2_key, _ = _upload_to_r2(
                         uploaded_file, uploaded_file.name, uploaded_file.content_type
                     )
-                    # Save without the file — R2 has the bytes
                     resource = serializer.save(
                         owner=self.request.user,
                         file_size=file_size_bytes,
@@ -151,9 +151,31 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                     )
                 except Exception as e:
                     logger.error(f'[R2 Upload] Failed: {e}')
-                    # Fall through to Cloudinary (will fail if >10MB)
                     resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
             else:
+                resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+        elif uploaded_file and ext in ['.pptx', '.ppt', '.doc', '.docx', '.mp4']:
+            # Cloudinary MediaCloudinaryStorage fails on non-image/video types with resource_type='auto'.
+            # Upload as raw via Cloudinary SDK, then save without the FileField.
+            try:
+                import cloudinary.uploader
+                result = cloudinary.uploader.upload(
+                    uploaded_file,
+                    resource_type='raw',
+                    folder='resources',
+                )
+                # Store the Cloudinary public_id in a custom field
+                resource = serializer.save(
+                    owner=self.request.user,
+                    file_size=file_size_bytes,
+                )
+                # Set the file field to the public_id so Cloudinary can find it
+                if resource.file:
+                    resource.file.name = result.get('public_id', '')
+                    resource.save(update_fields=['file', 'file_size'])
+            except Exception as e:
+                logger.error(f'[Cloudinary Raw Upload] Failed for {uploaded_file.name}: {e}')
+                # Fallback: try default storage (may fail for PPTX)
                 resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
         else:
             resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
