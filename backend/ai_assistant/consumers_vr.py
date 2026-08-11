@@ -133,6 +133,8 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                                 }
                             },
                         },
+                        'outputAudioTranscription': {},
+                        'inputAudioTranscription': {},
                         'temperature': 0.8,
                         'maxOutputTokens': 150,
                     },
@@ -223,14 +225,16 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                         inline = part.get('inlineData', {})
                         if inline.get('data'):
                             await self._send({'type': 'audio', 'data': inline['data']})
-                        # Text transcript
+                        # modelTurn.text is internal reasoning — do NOT send as subtitle
                         if part.get('text'):
-                            await self._send({'type': 'transcript', 'text': part['text']})
+                            self.transcript_log.append(('ai', part['text']))
 
-                    # AI speech transcript
+                    # Output transcription (actual spoken words)
                     output_transcript = server_content.get('outputTranscription', {})
                     if output_transcript.get('text'):
-                        await self._send({'type': 'transcript', 'text': output_transcript['text']})
+                        text = output_transcript['text'].strip()
+                        if text:
+                            await self._send({'type': 'transcript', 'text': text})
 
                 except Exception as e:
                     logger.warning(f'[VR Tutor] Message handling error: {e}')

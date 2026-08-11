@@ -179,6 +179,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                                 }
                             },
                         },
+                        'outputAudioTranscription': {},
+                        'inputAudioTranscription': {},
                         'temperature': 0.8,
                         'maxOutputTokens': 800,  # enough for full conversational responses
                     },
@@ -370,12 +372,16 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             inline = part.get('inlineData', {})
             if inline.get('data'):
                 await self._send({'type': 'audio', 'data': inline['data']})
-            # modelTurn.text — send as subtitle since native audio model doesn't support outputTranscription
+            # modelTurn.text is internal reasoning — do NOT send as subtitle
             if part.get('text'):
                 self.transcript_log.append(('ai', part['text']))
-                text = part['text'].strip()
-                if text:
-                    await self._send({'type': 'transcript_ai', 'text': text})
+
+        # ── Output transcription (actual spoken words) ──────────────────────
+        output_transcript = server_content.get('outputTranscription', {})
+        if output_transcript.get('text'):
+            text = output_transcript['text'].strip()
+            if text:
+                await self._send({'type': 'transcript_ai', 'text': text})
 
         # ── User speech transcript ────────────────────────────────────────────
         input_transcript = server_content.get('inputTranscription', {})

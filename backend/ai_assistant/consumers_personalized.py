@@ -311,6 +311,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 }
                             },
                         },
+                        'outputAudioTranscription': {},
+                        'inputAudioTranscription': {},
                         'temperature': 0.7,
                         'maxOutputTokens': 2000,
                     },
@@ -481,12 +483,9 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             inline = part.get('inlineData', {})
             if inline.get('data'):
                 await self._send({'type': 'audio', 'data': inline['data']})
+            # modelTurn.text is internal reasoning — do NOT send as subtitle
             if part.get('text'):
                 self.transcript_log.append(('ai', part['text']))
-                # Send model text as subtitle — native audio model doesn't support outputTranscription
-                text = part['text'].strip()
-                if text:
-                    await self._send({'type': 'transcript_ai', 'text': text})
 
         input_transcript = server_content.get('inputTranscription', {})
         if input_transcript.get('text'):
