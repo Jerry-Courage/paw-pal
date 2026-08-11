@@ -177,7 +177,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                                 'prebuiltVoiceConfig': {
                                     'voiceName': voice_name
                                 }
-                            }
+                            },
+                            'outputAudioTranscription': {},
                         },
                         'temperature': 0.8,
                         'maxOutputTokens': 800,  # enough for full conversational responses

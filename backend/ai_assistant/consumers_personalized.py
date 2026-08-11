@@ -309,7 +309,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                                 'prebuiltVoiceConfig': {
                                     'voiceName': voice_name
                                 }
-                            }
+                            },
+                            'outputAudioTranscription': {},
                         },
                         'temperature': 0.7,
                         'maxOutputTokens': 2000,
