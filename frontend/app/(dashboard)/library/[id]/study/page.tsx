@@ -191,6 +191,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
         setSectionIndex(data.current_section)
         localStorage.setItem(`study_${resourceId}_section`, String(data.current_section))
       }
+      if (data?.xp_earned != null && data.xp_earned > 0) {
+        setTotalXP(data.xp_earned)
+        localStorage.setItem(`study_${resourceId}_xp`, String(data.xp_earned))
+      }
     }).catch(() => {})
   }, [resourceId])
 

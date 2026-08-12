@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { libraryApi, paymentsApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -51,6 +51,21 @@ export default function LibraryPage() {
   })
 
   const resources = resourcesData?.results || []
+
+  const progressQueries = useQueries({
+    queries: resources.map((r: any) => ({
+      queryKey: ['progress', r.id],
+      queryFn: () => libraryApi.getProgress(r.id).then(res => res.data),
+      staleTime: 30000,
+      enabled: !!r.id,
+    })),
+  })
+
+  const progressMap = new Map<number, any>()
+  resources.forEach((r: any, i: number) => {
+    if (progressQueries[i]?.data) progressMap.set(r.id, progressQueries[i].data)
+  })
+
   const filtered = resources.filter((r: any) =>
     !search ||
     r.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -253,7 +268,9 @@ export default function LibraryPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map((r: any) => {
-              const badge = getMasteryBadge(r.mastery ?? 0)
+              const progress = progressMap.get(r.id)
+              const mastery = progress?.mastery ?? 0
+              const badge = getMasteryBadge(mastery)
               const typeIcon = TYPE_ICON[r.resource_type] || TYPE_ICON.other
               const typeColor = TYPE_COLOR[r.resource_type] || TYPE_COLOR.other
               const date = r.created_at

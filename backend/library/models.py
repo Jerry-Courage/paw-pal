@@ -228,3 +228,28 @@ class ResourceProgress(models.Model):
     @property
     def completed_count(self):
         return sum(1 for s in self.STEP_ORDER if self.completed_steps.get(s))
+
+    def recalculate_mastery(self, total_sections: int = 0):
+        """Recalculate mastery considering both study path steps and study mode sections."""
+        # Step-based mastery (study path)
+        completed_steps = [s for s in self.STEP_ORDER if self.completed_steps.get(s)]
+        step_mastery = 0
+        if completed_steps:
+            avg_score = sum(self.step_scores.get(s, 100) for s in completed_steps) / len(completed_steps)
+            step_mastery = avg_score * len(completed_steps) / len(self.STEP_ORDER)
+
+        # Section-based mastery (study mode)
+        section_mastery = 0
+        if total_sections > 0 and self.completed_sections:
+            section_mastery = min(100, (len(self.completed_sections) / total_sections) * 100)
+
+        # Combined: weighted average (steps 60%, sections 40%)
+        if completed_steps and self.completed_sections:
+            self.mastery = int(step_mastery * 0.6 + section_mastery * 0.4)
+        elif completed_steps:
+            self.mastery = int(step_mastery)
+        elif self.completed_sections:
+            self.mastery = int(section_mastery)
+        else:
+            self.mastery = 0
+        self.save(update_fields=['mastery', 'updated_at'])

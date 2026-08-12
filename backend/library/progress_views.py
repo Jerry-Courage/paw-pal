@@ -40,6 +40,9 @@ class ResourceProgressView(APIView):
             if current_section is not None:
                 progress.current_section = int(current_section)
             progress.save(update_fields=['completed_sections', 'current_section', 'updated_at'])
+            # Recalculate mastery based on sections completed
+            total_sections = len((resource.ai_notes_json or {}).get('sections', []))
+            progress.recalculate_mastery(total_sections)
             return Response(_serialize(progress))
         except (ProgrammingError, DatabaseError):
             return Response(_empty_progress_payload(resource.id))
