@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi, libraryApi, paymentsApi, getAuthToken, API_BASE } from '@/lib/api'
-import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, MessageSquare, X, Wifi, WifiOff } from 'lucide-react'
+import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, Wifi, WifiOff } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -52,11 +52,9 @@ export default function PersonalisedLearningPage() {
   const [isMicAvailable, setIsMicAvailable] = useState(true)
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
-  const [textInput, setTextInput] = useState('')
   const [report, setReport] = useState<SessionReport | null>(null)
   const [isEndingSession, setIsEndingSession] = useState(false)
   const [sessionDuration, setSessionDuration] = useState(0)
-  const [showTranscript, setShowTranscript] = useState(false)
   const [currentAiText, setCurrentAiText] = useState('')
   const [displayedWords, setDisplayedWords] = useState<string[]>([])
   const prevWordCountRef = useRef(0)
@@ -75,7 +73,6 @@ export default function PersonalisedLearningPage() {
   const isSpeakingTimeoutRef = useRef<any>(null)
   const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
   const endSessionTimeoutRef = useRef<any>(null)
-  const transcriptEndRef = useRef<HTMLDivElement>(null)
   const isAiSpeakingRef = useRef(false)
   const netMonitorRef = useRef<NetworkQualityMonitor | null>(null)
   const adaptiveSettingsRef = useRef<AdaptiveSettings | null>(null)
@@ -83,10 +80,6 @@ export default function PersonalisedLearningPage() {
   const sendCounterRef = useRef(0)
 
   useEffect(() => { isMicMutedRef.current = isMicMuted }, [isMicMuted])
-
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [transcript])
 
   useEffect(() => {
     if (phase === 'session') {
@@ -523,15 +516,6 @@ export default function PersonalisedLearningPage() {
     }
   }
 
-  const sendTextMessage = () => {
-    const text = textInput.trim()
-    if (!text) return
-    setTextInput('')
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
-    }
-  }
-
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-[#0a0014] via-[#050508] to-[#0a0014] text-white flex flex-col overflow-hidden select-none" style={{ paddingTop: 'env(safe-area-inset-top, 20px)' }}>
 
@@ -705,9 +689,7 @@ export default function PersonalisedLearningPage() {
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-xs font-bold text-white/60">{formatTime(sessionDuration)}</span>
             </div>
-            <button onClick={() => setShowTranscript(!showTranscript)} className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white transition-colors">
-              <MessageSquare className="w-5 h-5" />
-            </button>
+            </div>
           </div>
 
           {/* Orb — takes remaining space */}
@@ -864,68 +846,6 @@ export default function PersonalisedLearningPage() {
             </button>
           </div>
 
-          {/* Transcript drawer (mobile slide-up) */}
-          <AnimatePresence>
-            {showTranscript && (
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed inset-x-0 bottom-0 z-50 bg-[#0c0c10] rounded-t-3xl border-t border-white/[0.06] max-h-[70vh] flex flex-col"
-                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-                  <span className="text-xs font-black text-white/50 uppercase tracking-widest">Transcript</span>
-                  <button onClick={() => setShowTranscript(false)} className="p-1.5 rounded-lg bg-white/5 text-white/50">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                  {transcript.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Sparkles className="w-8 h-8 text-violet-500/20 mx-auto mb-3 animate-pulse" />
-                      <p className="text-xs text-white/30">Waiting for conversation...</p>
-                    </div>
-                  ) : (
-                    transcript.map((t, idx) => (
-                      <div key={idx} className={cn("flex flex-col", t.role === 'user' ? "items-end" : "items-start")}>
-                        <span className="text-[9px] text-white/30 uppercase font-bold tracking-wider mb-1">
-                          {t.role === 'user' ? 'You' : 'Tutor'}
-                        </span>
-                        <div className={cn(
-                          "px-4 py-2.5 rounded-2xl text-xs max-w-[85%] leading-relaxed",
-                          t.role === 'user'
-                            ? "bg-violet-500/15 border border-violet-500/20 text-violet-100"
-                            : "bg-white/[0.03] border border-white/[0.06] text-white/70"
-                        )}>
-                          {t.text}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={transcriptEndRef} />
-                </div>
-                <div className="p-4 border-t border-white/[0.06] flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={textInput}
-                    onChange={e => setTextInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') sendTextMessage() }}
-                    placeholder="Type a message..."
-                    className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/30"
-                  />
-                  <button
-                    onClick={sendTextMessage}
-                    disabled={!textInput.trim()}
-                    className="p-3 rounded-xl bg-violet-500 text-white disabled:opacity-20 disabled:pointer-events-none"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       )}
 
