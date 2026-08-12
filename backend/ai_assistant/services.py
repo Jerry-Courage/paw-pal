@@ -330,7 +330,7 @@ class AIService:
                 contents.append({'role': role, 'parts': parts})
         return contents, system_instruction.strip()
 
-    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 4096, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False) -> str:
+    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 8192, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False) -> str:
         """
         Hyper-Resilient Chat — optimised for SPEED (conversational use).
         Chain: Groq (1000 t/s) → SambaNova (12K RPD) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
@@ -342,9 +342,9 @@ class AIService:
         messages = self._sanitize_messages(messages)
         target_model = forced_model or target_model or self.model
         
-        # TUTOR MODE: Reduce max_tokens for faster responses (tutors don't need essays)
+        # TUTOR MODE: Moderate max_tokens for tutor responses
         if is_tutor_mode:
-            max_tokens = min(max_tokens, 1024)  # Cap at 1K tokens for speed
+            max_tokens = min(max_tokens, 2048)  # Cap at 2K tokens for tutor mode
         
         # Detect Multi-Modal request
         has_images = any(
@@ -804,7 +804,7 @@ class AIService:
                                     "POST",
                                     GROQ_API_URL,
                                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                    json={'model': groq_model, 'messages': messages, 'stream': True, 'max_tokens': 4096},
+                                    json={'model': groq_model, 'messages': messages, 'stream': True, 'max_tokens': 8192},
                                     timeout=httpx.Timeout(45.0, connect=5.0)
                                 ) as response:
                                     if response.status_code == 200:
@@ -855,9 +855,9 @@ class AIService:
                         if 'gemma' in g_model.lower():
                             if sys_instr and contents and contents[0].get('role') == 'user':
                                 contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                            config = {'max_output_tokens': 4096}
+                            config = {'max_output_tokens': 8192}
                         else:
-                            config = {'system_instruction': sys_instr, 'max_output_tokens': 4096}
+                            config = {'system_instruction': sys_instr, 'max_output_tokens': 8192}
 
                         async for chunk in await g_client.aio.models.generate_content_stream(
                             model=g_model, contents=contents, config=config
@@ -887,7 +887,7 @@ class AIService:
                             "POST",
                             f'{self.base_url}/chat/completions',
                             headers=self.headers,
-                            json={'model': model, 'messages': messages, 'stream': True, 'max_tokens': 4096},
+                            json={'model': model, 'messages': messages, 'stream': True, 'max_tokens': 8192},
                             timeout=httpx.Timeout(60.0, connect=5.0)
                         ) as response:
                             if response.status_code in (400, 401, 429, 402, 404):

@@ -206,7 +206,7 @@ class FlowAgent:
             {'role': 'system', 'content': f"{base_prompt}\n\n{TOOLS_SYSTEM_PROMPT}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}"},
         ]
         if history and isinstance(history, list):
-            messages.extend(history[-10:])
+            messages.extend(history[-50:])
         if current_page_context:
             messages.append({'role': 'system', 'content': f"Current Page Context: {current_page_context}"})
         messages.append({'role': 'user', 'content': user_query})
@@ -224,9 +224,9 @@ class FlowAgent:
             {'role': 'system', 'content': f"{tutor_prompt}\n\nCURRENT TIME: {current_time_str}"},
         ]
         
-        # Include only recent history (last 6 messages instead of 10)
+        # Include recent history (last 20 messages for good context)
         if history and isinstance(history, list):
-            messages.extend(history[-6:])
+            messages.extend(history[-20:])
         
         # Add current page context if provided
         if current_page_context:
