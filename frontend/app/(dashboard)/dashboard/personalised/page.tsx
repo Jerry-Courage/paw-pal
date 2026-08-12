@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi, libraryApi, paymentsApi, getAuthToken, API_BASE } from '@/lib/api'
-import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, Wifi, WifiOff } from 'lucide-react'
+import { Headphones, ChevronLeft, Volume2, Mic, MicOff, Play, Send, Loader2, Sparkles, CheckCircle2, Award, ShieldAlert, X, Wifi, WifiOff } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -688,7 +688,6 @@ export default function PersonalisedLearningPage() {
               </div>
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-xs font-bold text-white/60">{formatTime(sessionDuration)}</span>
-            </div>
             </div>
           </div>
 

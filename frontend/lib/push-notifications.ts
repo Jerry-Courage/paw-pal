@@ -1,51 +1,50 @@
 import { authApi, VAPID_PUBLIC_KEY } from './api'
 
-export async function registerPushNotifications() {
+export async function registerPushNotifications(): Promise<boolean> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.warn('Push notifications are not supported in this browser.')
+    console.warn('[Push] Not supported in this browser.')
     return false
   }
 
   try {
-    // 1. Register Service Worker (wait for it to be ready/active)
-    const registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/'
-    })
-    // Ensure the SW is controlling this page
+    // 1. Register Service Worker
+    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    // Wait until the SW is actually activated and controlling this page
     await navigator.serviceWorker.ready
 
-    // 2. Check permission — if denied, bail. If default, ask. If granted, continue.
+    // 2. Check permission
     let permission = Notification.permission
     if (permission === 'denied') {
-      console.warn('Push notification permission denied.')
+      console.warn('[Push] Permission denied by user.')
       return false
     }
     if (permission === 'default') {
       permission = await Notification.requestPermission()
-      if (permission !== 'granted') return false
+      if (permission !== 'granted') {
+        console.warn('[Push] Permission not granted after request.')
+        return false
+      }
     }
 
-    // 3. Check if we already have an active subscription
+    // 3. Get existing subscription or create new one
     let subscription = await registration.pushManager.getSubscription()
 
-    // 4. If subscription exists, check if it needs updating (re-register with backend)
-    if (subscription) {
-      // Always ensure backend has the latest subscription
-      await authApi.registerPushSubscription(subscription.toJSON())
-      return true
+    if (!subscription) {
+      // Create new subscription — this can fail if VAPID key is wrong
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      })
     }
 
-    // 5. Create new subscription
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-    })
-
-    // 6. Send to Backend
-    await authApi.registerPushSubscription(subscription.toJSON())
+    // 4. Send to backend (always, even if subscription already existed)
+    const payload = subscription.toJSON()
+    await authApi.registerPushSubscription(payload)
+    console.log('[Push] Subscription registered with backend.')
     return true
-  } catch (error) {
-    console.error('Push registration failed:', error)
+  } catch (error: any) {
+    // Log specific error info for debugging
+    console.error('[Push] Registration failed:', error?.message || error)
     return false
   }
 }

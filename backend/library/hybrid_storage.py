@@ -137,7 +137,8 @@ def _get_file_bytes_cloudinary(resource):
         if cfg.api_key and cfg.api_secret and cfg.cloud_name:
             pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
             file_ext = _re.search(r'\.([^.]+)$', raw_name)
-            fmt = file_ext.group(1) if file_ext else 'pdf'
+            KNOWN_EXTS = {'pdf', 'pptx', 'ppt', 'docx', 'doc', 'txt', 'md', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'wav', 'mp3', 'py', 'js', 'ts', 'json', 'csv', 'html', 'css'}
+            fmt = file_ext.group(1).lower() if file_ext and file_ext.group(1).lower() in KNOWN_EXTS else 'pdf'
 
             # Try raw resource_type first (for PPTX, DOCX, MP4, etc.)
             # Then fallback to image (for PDFs stored as images)

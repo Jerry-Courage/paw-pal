@@ -7,7 +7,6 @@ import Sidebar from '@/components/layout/Sidebar'
 import MobileNav from '@/components/layout/MobileNav'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-import { registerPushNotifications } from '@/lib/push-notifications'
 import { getAuthToken, API_BASE } from '@/lib/api'
 
 import SplashScreen from '@/components/ui/SplashScreen'
@@ -43,11 +42,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [status, session])
 
-  // Push notifications — always try to register (handles 'default' and 'granted')
+  // Push notifications — retry up to 3 times with backoff
   useEffect(() => {
     if (status !== 'authenticated') return
-    const timer = setTimeout(() => { registerPushNotifications() }, 2000)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const attemptRegistration = async (attempt: number) => {
+      if (cancelled) return
+      try {
+        const { registerPushNotifications } = await import('@/lib/push-notifications')
+        const ok = await registerPushNotifications()
+        if (ok || attempt >= 2) return
+        await new Promise(r => setTimeout(r, 5000 * (attempt + 1)))
+        if (!cancelled) attemptRegistration(attempt + 1)
+      } catch { /* ignore */ }
+    }
+    const timer = setTimeout(() => attemptRegistration(0), 2000)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [status])
 
   const handleOnboardingComplete = useCallback(async () => {

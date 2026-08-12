@@ -164,6 +164,9 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                     folder='resources',
                 )
                 cloudinary_id = result.get('public_id', '')
+                # Cloudinary strips extension from public_id for raw uploads; re-append it
+                if cloudinary_id and not os.path.splitext(cloudinary_id)[1]:
+                    cloudinary_id = cloudinary_id + ext
                 # Pop file to prevent MediaCloudinaryStorage from re-uploading
                 serializer.validated_data.pop('file', None)
                 resource = serializer.save(

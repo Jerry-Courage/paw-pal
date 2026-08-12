@@ -871,8 +871,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       <div className="flex gap-3">
                         <button onClick={() => { setPhase('reading'); setSelected({}); setSubmitted(false) }} className="flex-1 py-3 rounded-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-bold text-[14px] hover:bg-surface-container-highest transition-all">Re-read</button>
                         <button onClick={() => { setSelected({}); setSubmitted(false); setPhase('quiz') }} className="flex-1 py-3 rounded-full bg-primary/15 border border-primary/30 text-primary font-bold text-[14px] hover:bg-primary/20 transition-all">Retry Quiz</button>
-        </div>
-      </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </article>
