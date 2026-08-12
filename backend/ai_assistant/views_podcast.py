@@ -1,4 +1,5 @@
 import os
+import concurrent.futures
 from django.conf import settings
 from django.http import FileResponse, JsonResponse
 from django.db.models import Q
@@ -160,7 +161,6 @@ def bg_generate_script(session_id, notes):
         session.save()
 
         # 5.9. DYNAMIC VISUAL GENERATION (Parallel Background):
-        import concurrent.futures
         
         # 1. IDENTIFY THE TARGETS (Max 4 visuals to generate)
         ai_gen_count = 0
