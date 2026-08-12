@@ -133,6 +133,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const masteryScrollRef = useRef<HTMLDivElement>(null)
   const [sectionDrawerOpen, setSectionDrawerOpen] = useState(false)
   const [mobileStudyOpen, setMobileStudyOpen] = useState(false)
+  const [showBreakPopup, setShowBreakPopup] = useState(false)
+  const [breakIsLong, setBreakIsLong] = useState(false)
 
   // Mystery box state
   const [showMysteryBox, setShowMysteryBox] = useState(false)
@@ -865,8 +867,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       <div className="flex gap-3">
                         <button onClick={() => { setPhase('reading'); setSelected({}); setSubmitted(false) }} className="flex-1 py-3 rounded-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-bold text-[14px] hover:bg-surface-container-highest transition-all">Re-read</button>
                         <button onClick={() => { setSelected({}); setSubmitted(false); setPhase('quiz') }} className="flex-1 py-3 rounded-full bg-primary/15 border border-primary/30 text-primary font-bold text-[14px] hover:bg-primary/20 transition-all">Retry Quiz</button>
-                      </div>
-                    )}
+        </div>
+      </div>
                   </div>
                 </div>
               </article>
@@ -1114,7 +1116,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             </div>
 
             {/* New Study Timer */}
-            <StudyTimer />
+            <StudyTimer onBreakStart={(isLong) => { setBreakIsLong(isLong); setShowBreakPopup(true) }} />
 
             {/* Session Stats */}
             <SessionStats
@@ -1140,11 +1142,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
         <span className="material-symbols-outlined text-[22px]">timer</span>
       </button>
 
-      {/* ── Mobile Study Drawer (expanded) ── */}
-      {mobileStudyOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end xl:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileStudyOpen(false)} />
-          <div className="relative bg-surface-container-low rounded-t-3xl border-t border-outline-variant/30 max-h-[85vh] overflow-y-auto">
+      {/* ── Mobile Study Drawer (always mounted, toggled via CSS) ── */}
+      <div className={cn("fixed inset-0 z-50 flex flex-col justify-end xl:hidden transition-opacity pointer-events-auto", mobileStudyOpen ? "opacity-100" : "opacity-0 pointer-events-none")}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileStudyOpen(false)} />
+        <div className={cn("relative bg-surface-container-low rounded-t-3xl border-t border-outline-variant/30 max-h-[85vh] overflow-y-auto transition-transform duration-300", mobileStudyOpen ? "translate-y-0" : "translate-y-full")}>
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-2">
               <div className="w-10 h-1 rounded-full bg-on-surface-variant/30" />
@@ -1161,7 +1162,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             </div>
 
             <div className="p-5 space-y-5" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}>
-              <StudyTimer />
+              <StudyTimer onBreakStart={(isLong) => { setBreakIsLong(isLong); setShowBreakPopup(true) }} />
               <SessionStats
                 totalXP={totalXP}
                 sectionsCompleted={completed.size}
@@ -1171,10 +1172,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 sessionXP={sessionXP}
               />
               <AmbientPlayer compact />
-            </div>
+             </div>
           </div>
         </div>
-      )}
+
 
       {/* Mystery Box */}
       {showMysteryBox && (
@@ -1188,6 +1189,46 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
           }}
           onClose={() => setShowMysteryBox(false)}
         />
+      )}
+
+      {/* Break Time Popup */}
+      {showBreakPopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative bg-surface-container rounded-3xl border border-outline-variant/20 p-8 mx-6 max-w-sm w-full text-center animate-bounce-in">
+            {/* Animated coffee cup */}
+            <div className="relative mx-auto mb-6 w-24 h-24">
+              {/* Steam lines */}
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex gap-2">
+                <div className="w-1 h-6 bg-amber-400/60 rounded-full animate-steam-1" />
+                <div className="w-1 h-8 bg-amber-400/40 rounded-full animate-steam-2" />
+                <div className="w-1 h-5 bg-amber-400/50 rounded-full animate-steam-3" />
+              </div>
+              {/* Cup body */}
+              <div className="w-20 h-16 mx-auto bg-gradient-to-b from-amber-500 to-amber-600 rounded-b-2xl rounded-t-sm flex items-center justify-center shadow-lg shadow-amber-500/30 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shine" />
+                <span className="text-3xl relative z-10">☕</span>
+              </div>
+              {/* Handle */}
+              <div className="absolute right-0 top-2 w-5 h-8 border-4 border-amber-500 rounded-r-full" />
+              {/* Saucer */}
+              <div className="w-24 h-2 mx-auto -mt-0.5 bg-amber-700 rounded-full" />
+            </div>
+            <h3 className="text-xl font-black text-on-surface mb-2">
+              {breakIsLong ? "Long Break Time!" : "Break Time!"}
+            </h3>
+            <p className="text-sm text-on-surface-variant mb-6">
+              {breakIsLong
+                ? "Great work! Take 15 minutes to recharge. You've earned it."
+                : "Stretch, hydrate, and rest your eyes. Back in 5 minutes!"}
+            </p>
+            <button
+              onClick={() => setShowBreakPopup(false)}
+              className="px-6 py-3 rounded-2xl bg-amber-500 text-white font-bold text-sm hover:bg-amber-600 transition-colors active:scale-95"
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
