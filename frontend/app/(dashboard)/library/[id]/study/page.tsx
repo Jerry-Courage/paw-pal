@@ -16,6 +16,7 @@ import StudyTimer from '@/components/study/StudyTimer'
 import SessionStats from '@/components/study/SessionStats'
 import AmbientPlayer from '@/components/study/AmbientPlayer'
 import MysteryBox from '@/components/study/MysteryBox'
+import StudyAIAssistant from '@/components/study/StudyAIAssistant'
 
 type QuizQuestion = { question: string; options: string[]; correct: string; explanation: string }
 type WrittenQuestion = { question: string; hint?: string; model_answer: string }
@@ -1241,6 +1242,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── AI Study Assistant (floating bubble + explain selection) ── */}
+      {current && (
+        <StudyAIAssistant
+          resourceId={resourceId}
+          sectionContent={getSectionContent(current)}
+          sectionTitle={current.title || `Section ${sectionIndex + 1}`}
+        />
       )}
     </div>
   )
