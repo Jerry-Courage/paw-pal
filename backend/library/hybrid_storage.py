@@ -121,13 +121,35 @@ def _get_file_bytes_r2(key):
 
 
 def _get_file_bytes_cloudinary(resource):
-    """Download file from Cloudinary using signed URL."""
+    """Download file from Cloudinary using direct URL or signed URL or storage.open."""
     import requests as _req
     import re as _re
 
+    # 1. Try direct resource.file.url first if available
+    try:
+        if resource.file and hasattr(resource.file, 'url') and resource.file.url:
+            resp = _req.get(resource.file.url, timeout=60)
+            if resp.status_code == 200:
+                logger.info(f'[Cloudinary] Downloaded via direct file.url: {resource.id} ({len(resp.content)} bytes)')
+                return resp.content
+    except Exception as e:
+        logger.warning(f'[Cloudinary] Direct file.url download failed for {resource.id}: {e}')
+
     raw_name = resource.file.name or ''
+    
+    # 2. Try storage.open()
+    try:
+        resource.file.open('rb')
+        data = resource.file.read()
+        resource.file.close()
+        if data:
+            logger.info(f'[Cloudinary] File read via storage.open() for {resource.id} ({len(data)} bytes)')
+            return data
+    except Exception as e:
+        logger.warning(f'[Cloudinary] storage.open() failed for {resource.id}: {e}')
+
     if not raw_name:
-        raise Exception(f'Resource {resource.id} has no file name')
+        raise Exception(f'Resource {resource.id} has no file name or data available')
 
     try:
         import cloudinary
@@ -138,34 +160,24 @@ def _get_file_bytes_cloudinary(resource):
             pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
             file_ext = _re.search(r'\.([^.]+)$', raw_name)
             KNOWN_EXTS = {'pdf', 'pptx', 'ppt', 'docx', 'doc', 'txt', 'md', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'wav', 'mp3', 'py', 'js', 'ts', 'json', 'csv', 'html', 'css'}
-            fmt = file_ext.group(1).lower() if file_ext and file_ext.group(1).lower() in KNOWN_EXTS else 'pdf'
+            fmt = file_ext.group(1).lower() if file_ext and file_ext.group(1).lower() in KNOWN_EXTS else 'pptx'
 
-            # Try raw resource_type first (for PPTX, DOCX, MP4, etc.)
-            # Then fallback to image (for PDFs stored as images)
-            for res_type in ['raw', 'image']:
-                try:
-                    signed_url = cloudinary.utils.private_download_url(
-                        pub_id, fmt, resource_type=res_type, type='upload',
-                    )
-                    resp = _req.get(signed_url, timeout=60)
-                    if resp.status_code == 200:
-                        logger.info(f'[Cloudinary] Downloaded via {res_type} signed URL: {resource.id} ({len(resp.content)} bytes)')
-                        return resp.content
-                    logger.warning(f'[Cloudinary] {res_type} signed download {resp.status_code} for {resource.id}')
-                except Exception as e:
-                    logger.warning(f'[Cloudinary] {res_type} signed download failed for {resource.id}: {e}')
+            for res_type in ['raw', 'image', 'video']:
+                for t in ['upload', 'private', 'authenticated']:
+                    try:
+                        signed_url = cloudinary.utils.private_download_url(
+                            pub_id, fmt, resource_type=res_type, type=t,
+                        )
+                        resp = _req.get(signed_url, timeout=60)
+                        if resp.status_code == 200:
+                            logger.info(f'[Cloudinary] Downloaded via {res_type}/{t} signed URL: {resource.id} ({len(resp.content)} bytes)')
+                            return resp.content
+                    except Exception:
+                        pass
     except Exception as e:
         logger.warning(f'[Cloudinary] SDK error for {resource.id}: {e}')
 
-    # Fallback: storage.open()
-    try:
-        resource.file.open('rb')
-        data = resource.file.read()
-        resource.file.close()
-        logger.info(f'[Cloudinary] File read via storage.open() for {resource.id}')
-        return data
-    except Exception as e:
-        raise Exception(f'Could not read file for resource {resource.id}: {e}')
+    raise Exception(f'Could not read file for resource {resource.id} from Cloudinary')
 
 
 def get_file_url(resource):
