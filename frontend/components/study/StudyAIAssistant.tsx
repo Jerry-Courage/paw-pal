@@ -140,38 +140,46 @@ export default function StudyAIAssistant({ resourceId, sectionContent, sectionTi
         </span>
       </button>
 
-      {/* ── Slide-up panel ─────────────────────────────────────────── */}
+      {/* ── Slide-up / Full-screen panel ───────────────────────────── */}
       <div
         ref={panelRef}
         className={cn(
-          "fixed z-[54] bg-surface-container-low transition-transform duration-300 ease-out flex flex-col",
-          // Mobile: slide up from bottom
-          "left-0 right-0 bottom-0 border-t border-outline-variant/30 rounded-t-3xl",
+          "fixed z-[100] bg-surface-container-low transition-transform duration-300 ease-out flex flex-col shadow-2xl",
+          // Mobile: full screen overlay when open
+          "inset-0 rounded-none border-0",
           // Desktop (xl+): left sidebar
-          "xl:w-80 xl:left-0 xl:top-0 xl:bottom-0 xl:rounded-none xl:border-l xl:border-t-0",
+          "xl:inset-auto xl:left-0 xl:top-0 xl:bottom-0 xl:w-80 xl:border-r xl:border-outline-variant/30 xl:rounded-none",
           open
             ? "translate-y-0 xl:translate-x-0"
             : "translate-y-full xl:-translate-x-full"
         )}
-        style={{ height: 'min(50vh, 480px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/20 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20 shrink-0 bg-surface-container">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
             </div>
             <div>
-              <p className="text-[12px] font-bold text-on-surface">FlowAI Study Helper</p>
-              <p className="text-[10px] text-on-surface-variant">{sectionTitle}</p>
+              <p className="text-[14px] font-bold text-on-surface">FlowAI Study Helper</p>
+              <p className="text-[11px] text-on-surface-variant truncate max-w-[220px] sm:max-w-md">{sectionTitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {messages.length > 0 && (
-              <button onClick={clearChat} className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant" title="Clear chat">
-                <span className="material-symbols-outlined text-[16px]">delete_outline</span>
+              <button onClick={clearChat} className="p-2 rounded-xl hover:bg-surface-container-high text-on-surface-variant" title="Clear chat">
+                <span className="material-symbols-outlined text-[18px]">delete_outline</span>
               </button>
             )}
+            {/* Visible close button for mobile full screen */}
+            <button
+              onClick={() => setOpen(false)}
+              className="p-2.5 rounded-xl bg-surface-container-high text-on-surface hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center border border-outline-variant/30"
+              aria-label="Close assistant"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
           </div>
         </div>
 

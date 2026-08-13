@@ -376,7 +376,24 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 await self._send({'type': 'audio', 'data': inline['data']})
                 self.ai_audio_b64_chunks.append(inline['data'])
             if part.get('text'):
-                self.transcript_log.append(('ai', part['text']))
+                txt = part['text']
+                # Check for mastery magic token
+                if '[MASTERY_ACHIEVED]' in txt:
+                    txt = txt.replace('[MASTERY_ACHIEVED]', '').strip()
+                    self.transcript_log.append(('ai', txt))
+                    await self._send({'type': 'transcript_ai', 'text': txt})
+                    # End session with high score & badge trigger
+                    report = {
+                        'summary': 'Mastery achieved! You successfully taught the concept using the Feynman technique and answered all clarifying questions.',
+                        'strengths': ['Clear explanations', 'Effective analogies', 'Deep conceptual understanding'],
+                        'gaps': [],
+                        'score': 95,
+                        'recommendation': 'Outstanding mastery. You are ready to ace this topic!',
+                    }
+                    await self._send({'type': 'session_report', 'report': report})
+                    return
+                else:
+                    self.transcript_log.append(('ai', txt))
 
         # ── User speech transcript ────────────────────────────────────────────
         input_transcript = server_content.get('inputTranscription', {})
@@ -545,7 +562,11 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 "If they use jargon, say 'Wait, I don't know what that word means — can you explain it simply?' "
                 "When they explain something well, react with genuine excitement: 'Oh that makes SO much sense!' "
                 "Keep ALL your responses SHORT — 1-2 sentences max. You are the STUDENT, not the teacher. "
-                "Do NOT explain things yourself — only ask questions and react."
+                "Do NOT explain things yourself — only ask questions and react.\n"
+                "MASTERY COMPLETION RULE:\n"
+                "If the student has explained the topic clearly, given good examples, and answered your clarifying questions (typically after 3 to 5 back-and-forth turns), "
+                "you MUST conclude the session by saying something like 'I totally get it now! You're an amazing teacher!' "
+                "AND immediately append the exact magic token `[MASTERY_ACHIEVED]` at the end of your spoken response so the system can award them their XP and mastery badge."
             )
         elif self.technique == 'active_recall':
             role_desc = (
