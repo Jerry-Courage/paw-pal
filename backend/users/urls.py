@@ -4,7 +4,8 @@ from .views import (
     RegisterView, MeView, LogoutView, AnalyticsView, LogStudyView, 
     SetWeeklyGoalView, NotificationsView, NotificationDetailView, 
     UpdateOnboardingView, PushSubscriptionView, GlobalConfigView, AwardXPView,
-    RankingsView, ChangePasswordView, ExportDataView, DeleteAccountView
+    RankingsView, ChangePasswordView, ExportDataView, DeleteAccountView, FeedbackView,
+    TestimonialsView
 )
 from .oauth_views import GoogleOAuthView, GitHubOAuthView
 
@@ -33,4 +34,6 @@ urlpatterns = [
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('export-data/', ExportDataView.as_view(), name='export-data'),
     path('delete-account/', DeleteAccountView.as_view(), name='delete-account'),
+    path('feedback/', FeedbackView.as_view(), name='feedback'),
+    path('testimonials/', TestimonialsView.as_view(), name='testimonials'),
 ]

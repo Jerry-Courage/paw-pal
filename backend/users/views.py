@@ -481,3 +481,69 @@ class RankingsView(APIView):
             },
         })
 
+
+
+
+class FeedbackView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        rating = request.data.get('rating')
+        feedback_text = request.data.get('feedback_text') or request.data.get('feedback')
+        is_testimonial = request.data.get('is_testimonial', False)
+        display_name = (request.data.get('display_name') or '').strip()
+
+        if not rating or not feedback_text:
+            return Response({'error': 'Rating and feedback text are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from .models import Feedback
+            feedback = Feedback.objects.create(
+                user=request.user,
+                rating=int(rating),
+                feedback_text=feedback_text,
+                is_testimonial=bool(is_testimonial),
+                display_name=display_name
+            )
+            # Award XP for giving feedback (+50 XP)
+            try:
+                from library.models import ResourceProgress, Resource
+                resource = Resource.objects.filter(owner=request.user).first()
+                if resource:
+                    progress, _ = ResourceProgress.objects.get_or_create(user=request.user, resource=resource)
+                    progress.xp_earned += 50
+                    progress.save(update_fields=['xp_earned', 'updated_at'])
+            except Exception:
+                pass
+
+            return Response({
+                'success': True,
+                'message': 'Feedback submitted successfully! Thank you for helping FlowState improve.',
+                'id': feedback.id
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TestimonialsView(APIView):
+    """Public list of approved testimonials for the landing page."""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # Must be public — landing page is unauthenticated
+
+    def get(self, request):
+        from .models import Feedback
+        testimonials = Feedback.objects.filter(
+            is_testimonial=True,
+            is_approved=True,
+            rating__gte=4,
+        ).select_related('user')[:30]
+
+        data = [{
+            'id': t.id,
+            'name': t.public_name,
+            'rating': t.rating,
+            'feedback_text': t.feedback_text,
+            'created_at': t.created_at.strftime('%B %Y'),
+        } for t in testimonials]
+
+        return Response({'testimonials': data})

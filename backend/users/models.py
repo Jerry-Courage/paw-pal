@@ -165,3 +165,31 @@ class GlobalConfig(models.Model):
     def get_config(cls):
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class Feedback(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="feedbacks")
+    rating = models.IntegerField(default=5)
+    feedback_text = models.TextField()
+    is_testimonial = models.BooleanField(default=False)
+    display_name = models.CharField(
+        max_length=120, blank=True,
+        help_text='Name shown publicly if approved as a testimonial. Empty falls back to the user\'s full name.'
+    )
+    is_approved = models.BooleanField(
+        default=False,
+        help_text='Approved testimonials are shown publicly on the landing page.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Feedback by {self.user.email} ({self.rating} stars)"
+
+    @property
+    def public_name(self):
+        if self.display_name:
+            return self.display_name
+        return self.user.get_full_name() or self.user.username or 'Anonymous Student'

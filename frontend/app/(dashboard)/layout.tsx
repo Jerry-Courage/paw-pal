@@ -13,6 +13,7 @@ import SplashScreen from '@/components/ui/SplashScreen'
 import AbsurdWelcomeOverlay from '@/components/ui/AbsurdWelcomeOverlay'
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
+const FeedbackPopup = dynamic(() => import('@/components/ui/FeedbackPopup'), { ssr: false })
 
 // Pages that need full-viewport (no padding/scroll)
 const FULL_VIEWPORT_PREFIXES = [
@@ -121,6 +122,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {session?.user?.name && (
         <AbsurdWelcomeOverlay userName={session.user.name} />
+      )}
+
+      {session?.user?.name && !showOnboarding && (
+        <FeedbackPopup userName={session.user.name} />
       )}
 
       {showOnboarding && (

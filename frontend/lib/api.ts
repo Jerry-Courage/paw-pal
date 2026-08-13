@@ -72,6 +72,13 @@ export const authApi = {
     api.post('/auth/delete-account/', { password }),
 }
 
+// Feedback & Testimonials
+export const feedbackApi = {
+  submit: (rating: number, feedback_text: string, is_testimonial = false, display_name = '') =>
+    api.post('/auth/feedback/', { rating, feedback_text, is_testimonial, display_name }),
+  getTestimonials: () => api.get('/auth/testimonials/'),
+}
+
 // TTS — Gemini Live voices
 export const ttsApi = {
   speak: (text: string, voice = 'Aoede') =>

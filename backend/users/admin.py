@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from django.contrib import messages
 from unfold.admin import ModelAdmin
-from .models import User, Notification, PushSubscription, GlobalConfig
+from .models import User, Notification, PushSubscription, GlobalConfig, Feedback
 
 
 @admin.register(GlobalConfig)
@@ -219,3 +219,40 @@ class NotificationAdmin(ModelAdmin):
     def mark_unread(self, request, queryset):
         queryset.update(is_read=False)
     mark_unread.short_description = 'Mark selected as unread'
+
+
+@admin.register(Feedback)
+class FeedbackAdmin(ModelAdmin):
+    list_display = ('public_name', 'rating_stars', 'is_testimonial_badge', 'is_approved_badge', 'created_at')
+    list_filter = ('is_testimonial', 'is_approved', 'rating', 'created_at')
+    search_fields = ('feedback_text', 'display_name', 'user__email', 'user__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at',)
+    actions = ['approve_testimonials', 'unapprove_testimonials']
+
+    def rating_stars(self, obj):
+        return '★' * obj.rating + '☆' * (5 - obj.rating)
+    rating_stars.short_description = 'Rating'
+
+    def is_testimonial_badge(self, obj):
+        if obj.is_testimonial:
+            return format_html('<span style="background:#8B5CF6;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Testimonial</span>')
+        return format_html('<span style="background:#374151;color:#9CA3AF;padding:2px 8px;border-radius:10px;font-size:11px;">Feedback</span>')
+    is_testimonial_badge.short_description = 'Type'
+
+    def is_approved_badge(self, obj):
+        if obj.is_approved:
+            return format_html('<span style="color:#10B981;font-weight:700;">✓ Approved</span>')
+        return format_html('<span style="color:#F59E0B;font-weight:600;">Pending</span>')
+    is_approved_badge.short_description = 'Status'
+
+    def approve_testimonials(self, request, queryset):
+        updated = queryset.update(is_approved=True, is_testimonial=True)
+        self.message_user(request, f'{updated} testimonial(s) approved and published.', messages.SUCCESS)
+    approve_testimonials.short_description = '✓ Approve & publish as testimonials'
+
+    def unapprove_testimonials(self, request, queryset):
+        updated = queryset.update(is_approved=False)
+        self.message_user(request, f'{updated} testimonial(s) hidden.', messages.WARNING)
+    unapprove_testimonials.short_description = 'Hide from public'
+

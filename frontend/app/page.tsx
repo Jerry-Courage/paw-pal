@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import TestimonialsSection from '@/components/ui/TestimonialsSection'
 
 const FEATURES = [
   { icon: 'smart_toy', label: 'AI-Powered Everything', desc: 'Every tool adapts to your level, learning style, and curriculum', color: 'text-primary' },
@@ -33,6 +34,7 @@ export default function LandingPage() {
           <nav className="hidden md:flex gap-gutter items-center">
             <a href="#how-it-works" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-[15px]">How It Works</a>
             <a href="#features" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-[15px]">Features</a>
+            <a href="#testimonials" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-[15px]">Reviews</a>
             <a href="#pricing" className="text-on-surface-variant font-medium hover:text-primary transition-colors text-[15px]">Pricing</a>
           </nav>
           <div className="flex items-center gap-stack-sm">
@@ -179,6 +181,9 @@ export default function LandingPage() {
             ))}
           </div>
         </section>
+
+        {/* ── Testimonials ──────────────────────────────────── */}
+        <TestimonialsSection />
 
         {/* ── Pricing ───────────────────────────────────────── */}
         <section id="pricing" className="px-margin-mobile md:px-margin-desktop py-stack-lg">
