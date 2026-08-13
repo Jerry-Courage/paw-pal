@@ -1,11 +1,29 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from .serializers import RegisterSerializer, UserSerializer, UpdateProfileSerializer
 
 User = get_user_model()
+
+
+class CustomLoginView(TokenObtainPairView):
+    """Login view that auto-updates the daily streak on successful authentication."""
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            try:
+                from rest_framework_simplejwt.tokens import RefreshToken
+                refresh = RefreshToken(response.data['refresh'])
+                user_id = refresh['user_id']
+                user = User.objects.get(id=user_id)
+                streak = user.daily_check_in()
+                response.data['study_streak'] = streak
+            except Exception:
+                pass
+        return response
 
 
 class AwardXPView(APIView):
@@ -108,8 +126,8 @@ class MeView(generics.RetrieveUpdateAPIView):
         return super().update(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
-        # Validate streak in real-time whenever user fetches their profile (dashboard/nexus)
-        request.user.validate_streak()
+        # Update streak on every profile fetch (daily check-in + stale reset)
+        request.user.daily_check_in()
 
         # Check streak at risk on profile fetch (throttled by checking existing notif)
         try:

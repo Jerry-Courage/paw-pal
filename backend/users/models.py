@@ -92,6 +92,23 @@ class User(AbstractUser):
         self.last_study_date = today
         self.save(update_fields=['total_study_time', 'study_streak', 'last_study_date'])
 
+    def daily_check_in(self):
+        """Update streak on daily login. Does NOT affect total_study_time."""
+        today = timezone.now().date()
+
+        if not self.last_study_date:
+            self.study_streak = 1
+        elif self.last_study_date == today:
+            return self.study_streak  # Already checked in today
+        elif self.last_study_date == today - timedelta(days=1):
+            self.study_streak += 1  # Consecutive day
+        elif self.last_study_date < today - timedelta(days=1):
+            self.study_streak = 1  # Streak broken, restart at 1
+
+        self.last_study_date = today
+        self.save(update_fields=['study_streak', 'last_study_date'])
+        return self.study_streak
+
 
 NOTIFICATION_TYPES = [
     ('ai_nudge', 'AI Nudge'),
