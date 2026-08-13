@@ -287,17 +287,17 @@ function RichContent({ content }: { content: string }) {
             remarkPlugins={[remarkGfm, remarkMath]}
             rehypePlugins={[rehypeKatex]}
             components={{
-              h1: ({ children }) => <h1 className="text-xl font-black text-on-surface mt-8 mb-4 tracking-tight border-b border-outline-variant/20 pb-3">{children}</h1>,
-              h2: ({ children }) => <h2 className="text-lg font-black text-on-surface mt-7 mb-3 tracking-tight">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-base font-bold text-on-surface mt-5 mb-2">{children}</h3>,
-              h4: ({ children }) => <h4 className="text-sm font-bold text-on-surface mt-4 mb-2 text-on-surface/80">{children}</h4>,
-              p: ({ children }) => <p className="text-on-surface/90 leading-[1.8] mb-4 last:mb-0 text-[15px]">{children}</p>,
+              h1: ({ children }) => <h1 className="text-2xl font-black text-on-surface mt-8 mb-4 tracking-tight border-b border-outline-variant/20 pb-3">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-xl font-black text-on-surface mt-7 mb-3 tracking-tight">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-lg font-bold text-on-surface mt-5 mb-2">{children}</h3>,
+              h4: ({ children }) => <h4 className="text-base font-bold text-on-surface mt-4 mb-2 text-on-surface/80">{children}</h4>,
+              p: ({ children }) => <p className="text-on-surface/90 leading-[1.8] mb-4 last:mb-0 text-[16px]">{children}</p>,
               ul: ({ children }) => <ul className="my-3 space-y-2.5 pl-1">{children}</ul>,
               ol: ({ children }) => <ol className="my-3 space-y-2.5 pl-1 counter-[ol]">{children}</ol>,
               li: ({ children }) => (
                 <li className="flex gap-3 items-start text-on-surface/90 mb-1 last:mb-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 shrink-0 opacity-60" />
-                  <span className="flex-1 leading-[1.8] text-[15px]">{children}</span>
+                  <span className="flex-1 leading-[1.8] text-[16px]">{children}</span>
                 </li>
               ),
               strong: ({ children }) => <strong className="font-bold text-on-surface">{children}</strong>,
@@ -433,7 +433,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
         {isUser ? (
           /* User: keep subtle bubble */
           <div className="rounded-3xl px-5 py-3.5 bg-surface-container/40 border border-outline-variant/40 backdrop-blur-md text-on-surface rounded-tr-sm shadow-xl">
-            <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+            <p className="text-[16px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
             {msg.image && (
               <div className="mt-3 rounded-2xl overflow-hidden border border-outline-variant/50 shadow-lg">
                 <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
@@ -451,7 +451,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
             )}
 
             {/* Main content — no bubble, just structured text */}
-            <div className="text-[15px] leading-relaxed w-full">
+            <div className="text-[16px] leading-relaxed w-full">
               <RichContent content={msg.content} />
             </div>
 
