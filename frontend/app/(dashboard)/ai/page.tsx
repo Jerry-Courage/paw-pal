@@ -991,7 +991,7 @@ function AIChat() {
         </div>
 
         {/* Slim toolbar - just sidebar toggle + new chat, no branding */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-outline-variant/20 bg-background/90 backdrop-blur-md shrink-0 z-20">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-outline-variant/20 bg-background/90 backdrop-blur-md shrink-0 z-20">
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 rounded-xl text-on-surface-variant/60 hover:bg-surface-container-high hover:text-on-surface transition-all active:scale-95 cursor-pointer">
             <Menu className="w-4 h-4" />
@@ -1013,22 +1013,22 @@ function AIChat() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-hide relative z-10">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center min-h-full px-4 py-8 text-center max-w-2xl mx-auto">
-              <div className="w-14 h-14 bg-primary/10 border border-primary/20 rounded-[1.5rem] flex items-center justify-center mb-4 shadow-lg shadow-primary/10 animate-pulse">
-                <Sparkles className="w-7 h-7 text-primary" />
+            <div className="flex flex-col items-center justify-center min-h-full px-4 py-6 sm:py-8 text-center max-w-2xl mx-auto">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-primary/10 border border-primary/20 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-primary/10 animate-pulse">
+                <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
               </div>
-              <h1 className="text-2xl font-black text-on-surface mb-2 tracking-tight">Hi, I'm Flow AI</h1>
-              <p className="text-on-surface-variant/60 text-sm max-w-sm mb-8 leading-relaxed">
+              <h1 className="text-xl sm:text-2xl font-black text-on-surface mb-1.5 sm:mb-2 tracking-tight">Hi, I'm Flow AI</h1>
+              <p className="text-on-surface-variant/60 text-xs sm:text-sm max-w-sm mb-6 sm:mb-8 leading-relaxed">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-xl">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
-                    className={cn('flex items-start gap-2.5 p-3.5 bg-surface-container/30 border border-outline-variant/30 rounded-2xl text-left transition-all hover:border-primary/20 hover:bg-surface-container/40 hover:shadow-lg hover:shadow-orange-500/5 group cursor-pointer',
+                    className={cn('flex items-start gap-2.5 p-3 sm:p-3.5 bg-surface-container/30 border border-outline-variant/30 rounded-xl sm:rounded-2xl text-left transition-all hover:border-primary/20 hover:bg-surface-container/40 hover:shadow-lg hover:shadow-orange-500/5 group cursor-pointer',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
                     )}>
-                    <div className="w-9 h-9 shrink-0 bg-surface-container-high rounded-[1rem] flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <span className="material-symbols-outlined text-primary text-[18px]">{s.icon}</span>
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 bg-surface-container-high rounded-xl sm:rounded-[1rem] flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <span className="material-symbols-outlined text-primary text-[16px] sm:text-[18px]">{s.icon}</span>
                     </div>
                     <span className="text-xs font-bold text-on-surface-variant group-hover:text-primary transition-colors leading-relaxed">{s.text}</span>
                   </button>
@@ -1036,7 +1036,7 @@ function AIChat() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto px-4 py-12 space-y-20 animate-fade-in">
+            <div className="max-w-4xl mx-auto px-3 sm:px-4 py-8 sm:py-12 space-y-12 sm:space-y-20 animate-fade-in">
               {messages.map((msg, i) => (
                 <MessageBubble 
                   key={i} 
@@ -1053,7 +1053,7 @@ function AIChat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 sm:p-5 bg-background border-t border-outline-variant/20 flex-shrink-0 relative z-20"
+        <div className="p-3 sm:p-4 md:p-5 bg-background border-t border-outline-variant/20 flex-shrink-0 relative z-20"
           style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))' }}
         >
           <div className="max-w-4xl mx-auto">
