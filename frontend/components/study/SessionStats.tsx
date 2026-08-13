@@ -23,12 +23,12 @@ export default function SessionStats({
 }: SessionStatsProps) {
   const progressPercent = totalSections > 0 ? (sectionsCompleted / totalSections) * 100 : 0
   const xpLevel = useMemo(() => {
-    if (totalXP >= 15000) return { level: 'Legend', color: 'text-purple-500', bg: 'bg-purple-500/10', next: null, progress: 100 }
-    if (totalXP >= 7500) return { level: 'Champion', color: 'text-amber-500', bg: 'bg-amber-500/10', next: 15000, progress: ((totalXP - 7500) / 7500) * 100 }
-    if (totalXP >= 3500) return { level: 'Expert', color: 'text-blue-500', bg: 'bg-blue-500/10', next: 7500, progress: ((totalXP - 3500) / 4000) * 100 }
-    if (totalXP >= 1500) return { level: 'Ace', color: 'text-emerald-500', bg: 'bg-emerald-500/10', next: 3500, progress: ((totalXP - 1500) / 2000) * 100 }
-    if (totalXP >= 500) return { level: 'Scholar', color: 'text-amber-600', bg: 'bg-amber-600/10', next: 1500, progress: ((totalXP - 500) / 1000) * 100 }
-    return { level: 'Cadet', color: 'text-on-surface-variant', bg: 'bg-on-surface-variant/10', next: 500, progress: (totalXP / 500) * 100 }
+    if (totalXP >= 15000) return { level: 'Multiversal Syllabus Overlord 🌌👑', color: 'text-purple-500', bg: 'bg-purple-500/10', next: null, progress: 100 }
+    if (totalXP >= 7500) return { level: 'FlowState Deity 🛸🪐', color: 'text-amber-500', bg: 'bg-amber-500/10', next: 15000, progress: ((totalXP - 7500) / 7500) * 100 }
+    if (totalXP >= 3500) return { level: 'Delusional Genius 🧙‍♂️🔮', color: 'text-blue-500', bg: 'bg-blue-500/10', next: 7500, progress: ((totalXP - 3500) / 4000) * 100 }
+    if (totalXP >= 1500) return { level: 'Academic Weapon 🔫🎓', color: 'text-emerald-500', bg: 'bg-emerald-500/10', next: 3500, progress: ((totalXP - 1500) / 2000) * 100 }
+    if (totalXP >= 500) return { level: 'Late-Night Panic Titan ⚡🧠', color: 'text-amber-600', bg: 'bg-amber-600/10', next: 1500, progress: ((totalXP - 500) / 1000) * 100 }
+    return { level: 'Caffeine Goblin ☕👹', color: 'text-on-surface-variant', bg: 'bg-on-surface-variant/10', next: 500, progress: (totalXP / 500) * 100 }
   }, [totalXP])
 
   const timeDisplay = useMemo(() => {

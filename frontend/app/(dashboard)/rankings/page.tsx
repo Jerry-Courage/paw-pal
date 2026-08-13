@@ -8,12 +8,12 @@ import { cn } from '@/lib/utils'
 
 // ── Tier system (Study XP only) ───────────────────────────────────────────────
 const TIERS = [
-  { name: 'Cadet',    min: 0,     max: 499,     color: '#94a3b8' },
-  { name: 'Scholar',  min: 500,   max: 1499,    color: '#60a5fa' },
-  { name: 'Ace',      min: 1500,  max: 3499,    color: '#34d399' },
-  { name: 'Expert',   min: 3500,  max: 7499,    color: '#f59e0b' },
-  { name: 'Champion', min: 7500,  max: 14999,   color: '#c084fc' },
-  { name: 'Legend',   min: 15000, max: Infinity, color: '#fbbf24' },
+  { name: 'Caffeine Goblin ☕👹',    min: 0,     max: 499,     color: '#94a3b8' },
+  { name: 'Late-Night Panic Titan ⚡🧠',  min: 500,   max: 1499,    color: '#60a5fa' },
+  { name: 'Academic Weapon 🔫🎓',      min: 1500,  max: 3499,    color: '#34d399' },
+  { name: 'Delusional Genius 🧙‍♂️🔮',   min: 3500,  max: 7499,    color: '#f59e0b' },
+  { name: 'FlowState Deity 🛸🪐', min: 7500,  max: 14999,   color: '#c084fc' },
+  { name: 'Multiversal Syllabus Overlord 🌌👑',   min: 15000, max: Infinity, color: '#fbbf24' },
 ]
 
 function getTier(xp: number) {
