@@ -17,7 +17,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { normalizeReadableMath } from '@/lib/mathFormatting'
+import { normalizeForRendering } from '@/lib/mathFormatting'
 
 // â”€â”€â”€ LIGHTBOX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
@@ -287,22 +287,19 @@ function RichContent({ content }: { content: string }) {
             remarkPlugins={[remarkGfm, remarkMath]}
             rehypePlugins={[rehypeKatex]}
             components={{
-              // Headings
               h1: ({ children }) => <h1 className="text-xl font-black text-on-surface mt-8 mb-4 tracking-tight border-b border-outline-variant/25 pb-2">{children}</h1>,
               h2: ({ children }) => <h2 className="text-lg font-black text-on-surface mt-6 mb-3 tracking-tight">{children}</h2>,
               h3: ({ children }) => <h3 className="text-base font-bold text-on-surface mt-4 mb-2">{children}</h3>,
-              // Paragraphs
-              p: ({ children }) => <p className="text-on-surface/80 leading-relaxed mb-6 last:mb-0 text-[15px]">{children}</p>,
-              // Lists
-              ul: ({ children }) => <ul className="my-3 space-y-1.5 pl-0">{children}</ul>,
-              ol: ({ children }) => <ol className="my-3 space-y-1.5 pl-0 list-none">{children}</ol>,
+              h4: ({ children }) => <h4 className="text-sm font-bold text-on-surface mt-3 mb-2">{children}</h4>,
+              p: ({ children }) => <p className="text-on-surface/85 leading-[1.75] mb-5 last:mb-0 text-[15px]">{children}</p>,
+              ul: ({ children }) => <ul className="my-3 space-y-2 pl-0">{children}</ul>,
+              ol: ({ children }) => <ol className="my-3 space-y-2 pl-0">{children}</ol>,
               li: ({ children }) => (
-                <li className="flex gap-3 items-start text-on-surface/80 mb-2.5 last:mb-0">
+                <li className="flex gap-3 items-start text-on-surface/85 mb-1.5 last:mb-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary-container mt-2 shrink-0 shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
-                  <span className="flex-1 leading-relaxed text-[14px]">{children}</span>
+                  <span className="flex-1 leading-[1.75] text-[14px]">{children}</span>
                 </li>
               ),
-              // Code â€” intercept mermaid code blocks here too
               code: ({ className, children, ...props }: any) => {
                 const lang = className?.replace('language-', '') || ''
                 const codeStr = String(children).replace(/\n$/, '')
@@ -333,11 +330,9 @@ function RichContent({ content }: { content: string }) {
                 )
               },
               pre: ({ children }) => <>{children}</>,
-              // Blockquote
               blockquote: ({ children }) => (
                 <blockquote className="border-l-2 border-orange-500/50 pl-4 my-3 text-on-surface-variant italic">{children}</blockquote>
               ),
-              // Table
               table: ({ children }) => (
                 <div className="my-3 overflow-x-auto rounded-xl border border-outline-variant/40">
                   <table className="w-full text-sm">{children}</table>
@@ -348,7 +343,7 @@ function RichContent({ content }: { content: string }) {
               td: ({ children }) => <td className="px-4 py-2.5 text-on-surface/80 border-t border-outline-variant/25">{children}</td>,
               strong: ({ children }) => <strong className="font-bold text-on-surface">{children}</strong>,
               em: ({ children }) => <em className="italic text-on-surface/80">{children}</em>,
-              hr: () => <hr className="my-4 border-outline-variant/40" />,
+              hr: () => <hr className="my-5 border-outline-variant/40" />,
               a: ({ children, href }) => (
                 <a href={href} target="_blank" rel="noopener noreferrer"
                   className="text-primary underline decoration-orange-400/30 underline-offset-2 hover:decoration-orange-400 transition-all">
@@ -357,7 +352,7 @@ function RichContent({ content }: { content: string }) {
               ),
             }}
           >
-            {normalizeReadableMath(part.content)}
+            {normalizeForRendering(part.content)}
           </ReactMarkdown>
         )
       )}
