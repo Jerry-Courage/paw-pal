@@ -287,18 +287,23 @@ function RichContent({ content }: { content: string }) {
             remarkPlugins={[remarkGfm, remarkMath]}
             rehypePlugins={[rehypeKatex]}
             components={{
-              h1: ({ children }) => <h1 className="text-xl font-black text-on-surface mt-8 mb-4 tracking-tight border-b border-outline-variant/25 pb-2">{children}</h1>,
-              h2: ({ children }) => <h2 className="text-lg font-black text-on-surface mt-6 mb-3 tracking-tight">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-base font-bold text-on-surface mt-4 mb-2">{children}</h3>,
-              h4: ({ children }) => <h4 className="text-sm font-bold text-on-surface mt-3 mb-2">{children}</h4>,
-              p: ({ children }) => <p className="text-on-surface/85 leading-[1.75] mb-5 last:mb-0 text-[15px]">{children}</p>,
-              ul: ({ children }) => <ul className="my-3 space-y-2 pl-0">{children}</ul>,
-              ol: ({ children }) => <ol className="my-3 space-y-2 pl-0">{children}</ol>,
+              h1: ({ children }) => <h1 className="text-xl font-black text-on-surface mt-8 mb-4 tracking-tight border-b border-outline-variant/20 pb-3">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-lg font-black text-on-surface mt-7 mb-3 tracking-tight">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-base font-bold text-on-surface mt-5 mb-2">{children}</h3>,
+              h4: ({ children }) => <h4 className="text-sm font-bold text-on-surface mt-4 mb-2 text-on-surface/80">{children}</h4>,
+              p: ({ children }) => <p className="text-on-surface/90 leading-[1.8] mb-4 last:mb-0 text-[15px]">{children}</p>,
+              ul: ({ children }) => <ul className="my-3 space-y-2.5 pl-1">{children}</ul>,
+              ol: ({ children }) => <ol className="my-3 space-y-2.5 pl-1 counter-[ol]">{children}</ol>,
               li: ({ children }) => (
-                <li className="flex gap-3 items-start text-on-surface/85 mb-1.5 last:mb-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary-container mt-2 shrink-0 shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
-                  <span className="flex-1 leading-[1.75] text-[14px]">{children}</span>
+                <li className="flex gap-3 items-start text-on-surface/90 mb-1 last:mb-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 shrink-0 opacity-60" />
+                  <span className="flex-1 leading-[1.8] text-[15px]">{children}</span>
                 </li>
+              ),
+              strong: ({ children }) => <strong className="font-bold text-on-surface">{children}</strong>,
+              em: ({ children }) => <em className="italic text-on-surface/80">{children}</em>,
+              blockquote: ({ children }) => (
+                <blockquote className="my-4 pl-4 border-l-2 border-primary/40 text-on-surface/70 italic">{children}</blockquote>
               ),
               code: ({ className, children, ...props }: any) => {
                 const lang = className?.replace('language-', '') || ''
@@ -311,9 +316,9 @@ function RichContent({ content }: { content: string }) {
                   <code className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-md text-[0.85em] font-mono font-medium">{children}</code>
                 )
                 return (
-                  <div className="my-3 rounded-xl overflow-hidden border border-outline-variant/40">
-                    <div className="flex items-center justify-between px-4 py-2 bg-surface-container-high border-b border-outline-variant/25">
-                      <span className="text-[10px] font-black text-on-surface-variant/60 uppercase tracking-widest">
+                  <div className="my-4 rounded-xl overflow-hidden border border-outline-variant/30">
+                    <div className="flex items-center justify-between px-4 py-2 bg-surface-container-high/80 border-b border-outline-variant/20">
+                      <span className="text-[10px] font-black text-on-surface-variant/50 uppercase tracking-widest">
                         {lang || 'code'}
                       </span>
                       <button
@@ -330,20 +335,15 @@ function RichContent({ content }: { content: string }) {
                 )
               },
               pre: ({ children }) => <>{children}</>,
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-orange-500/50 pl-4 my-3 text-on-surface-variant italic">{children}</blockquote>
-              ),
               table: ({ children }) => (
-                <div className="my-3 overflow-x-auto rounded-xl border border-outline-variant/40">
+                <div className="my-4 overflow-x-auto rounded-xl border border-outline-variant/30">
                   <table className="w-full text-sm">{children}</table>
                 </div>
               ),
-              thead: ({ children }) => <thead className="bg-surface-container-high border-b border-outline-variant/40">{children}</thead>,
-              th: ({ children }) => <th className="px-4 py-2.5 text-left text-xs font-black text-on-surface/80 uppercase tracking-wider">{children}</th>,
-              td: ({ children }) => <td className="px-4 py-2.5 text-on-surface/80 border-t border-outline-variant/25">{children}</td>,
-              strong: ({ children }) => <strong className="font-bold text-on-surface">{children}</strong>,
-              em: ({ children }) => <em className="italic text-on-surface/80">{children}</em>,
-              hr: () => <hr className="my-5 border-outline-variant/40" />,
+              thead: ({ children }) => <thead className="bg-surface-container-high/60 border-b border-outline-variant/30">{children}</thead>,
+              th: ({ children }) => <th className="px-4 py-2.5 text-left text-xs font-bold text-on-surface/70 uppercase tracking-wider">{children}</th>,
+              td: ({ children }) => <td className="px-4 py-2.5 text-on-surface/80 border-t border-outline-variant/20">{children}</td>,
+              hr: () => <hr className="my-6 border-outline-variant/30" />,
               a: ({ children, href }) => (
                 <a href={href} target="_blank" rel="noopener noreferrer"
                   className="text-primary underline decoration-orange-400/30 underline-offset-2 hover:decoration-orange-400 transition-all">
@@ -414,7 +414,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
   }
 
   return (
-    <div className={cn('flex gap-4 group w-full', isUser ? 'flex-row-reverse' : 'flex-row')}>
+    <div className={cn('flex gap-4 group w-full', isUser ? 'flex-row-reverse justify-end' : 'flex-row justify-start')}>
       {/* Avatar */}
       <div className={cn(
         'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg',
@@ -425,78 +425,72 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
         {isUser ? <span className="font-black text-[9px]">ME</span> : <Sparkles className="w-3.5 h-3.5" />}
       </div>
 
-      {/* Bubble Container */}
+      {/* Content Area */}
       <div className={cn(
-        'flex flex-col gap-2 min-w-0 flex-1',
-        isUser ? 'items-end' : 'items-start'
+        'flex flex-col gap-2 min-w-0',
+        isUser ? 'items-end max-w-[85%] sm:max-w-[75%]' : 'items-start flex-1 max-w-full'
       )}>
-        <div className={cn(
-          'relative transition-all duration-300 overflow-hidden',
-          isUser
-            ? 'rounded-3xl px-5 py-3.5 bg-surface-container/40 border border-outline-variant/40 backdrop-blur-md text-on-surface rounded-tr-sm shadow-xl max-w-[85%] sm:max-w-[75%]'
-            : 'w-full max-w-[90%] sm:max-w-[85%] rounded-3xl rounded-tl-sm px-5 py-4 bg-surface-container/80 border border-outline-variant/25 shadow-xl text-on-surface'
-        )}>
-          {/* Subtle left gradient indicator and background glow for AI */}
-          {!isUser && (
-            <>
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500" />
-              <div className="absolute -top-10 -right-10 w-24 h-24 bg-primary-container/5 blur-[40px] pointer-events-none" />
-            </>
-          )}
-
-          {/* User image attachment */}
-          {msg.image && isUser && (
-            <div className="mb-4 rounded-2xl overflow-hidden border border-outline-variant/50 shadow-lg">
-              <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
-            </div>
-          )}
-
-          {/* Content */}
-          {isUser ? (
+        {isUser ? (
+          /* User: keep subtle bubble */
+          <div className="rounded-3xl px-5 py-3.5 bg-surface-container/40 border border-outline-variant/40 backdrop-blur-md text-on-surface rounded-tr-sm shadow-xl">
             <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
-          ) : (
-            <div className="text-[15px] leading-relaxed">
+            {msg.image && (
+              <div className="mt-3 rounded-2xl overflow-hidden border border-outline-variant/50 shadow-lg">
+                <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
+              </div>
+            )}
+          </div>
+        ) : (
+          /* AI: ChatGPT-style — clean, no bubble, full width */
+          <div className="w-full">
+            {/* AI image attachment from user upload */}
+            {msg.image && (
+              <div className="mb-4 rounded-2xl overflow-hidden border border-outline-variant/50 shadow-lg max-w-md">
+                <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
+              </div>
+            )}
+
+            {/* Main content — no bubble, just structured text */}
+            <div className="text-[15px] leading-relaxed w-full">
               <RichContent content={msg.content} />
             </div>
-          )}
 
-          {/* AI-generated image */}
-          {msg.image && !isUser && (
-            <div 
-              className="mt-4 rounded-2xl overflow-hidden border border-outline-variant/50 cursor-zoom-in relative group/img shadow-2xl transition-transform hover:scale-[1.01] active:scale-[0.99]"
-              onClick={() => setImgLightbox(msg.image!)}
-            >
-              <img src={msg.image} alt="generated" className="max-w-full h-auto" />
-              
-              {/* Image Overlays */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
-                <div className="flex items-center justify-between gap-2 translate-y-4 group-hover/img:translate-y-0 transition-transform duration-300">
-                  <button 
-                    onClick={(e) => downloadImage(e, msg.image!)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-highest backdrop-blur-md border border-outline-variant/50 rounded-xl text-[10px] font-bold text-on-surface hover:bg-white/20 transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" /> DOWNLOAD
-                  </button>
-                  <div className="p-2 bg-surface-container-highest backdrop-blur-md border border-outline-variant/50 rounded-xl">
-                    <Maximize2 className="w-4 h-4 text-on-surface" />
+            {/* AI-generated image */}
+            {msg.image && (
+              <div 
+                className="mt-4 rounded-2xl overflow-hidden border border-outline-variant/50 cursor-zoom-in relative group/img shadow-2xl transition-transform hover:scale-[1.01] active:scale-[0.99] max-w-lg"
+                onClick={() => setImgLightbox(msg.image!)}
+              >
+                <img src={msg.image} alt="generated" className="max-w-full h-auto" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                  <div className="flex items-center justify-between gap-2 translate-y-4 group-hover/img:translate-y-0 transition-transform duration-300">
+                    <button 
+                      onClick={(e) => downloadImage(e, msg.image!)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-highest backdrop-blur-md border border-outline-variant/50 rounded-xl text-[10px] font-bold text-on-surface hover:bg-white/20 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" /> DOWNLOAD
+                    </button>
+                    <div className="p-2 bg-surface-container-highest backdrop-blur-md border border-outline-variant/50 rounded-xl">
+                      <Maximize2 className="w-4 h-4 text-on-surface" />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Standalone diagram */}
-          {msg.diagram && (
-            <div className="mt-4 animate-fade-in">
-              <MermaidChart chart={msg.diagram} />
-            </div>
-          )}
-        </div>
+            {/* Standalone diagram */}
+            {msg.diagram && (
+              <div className="mt-4 animate-fade-in">
+                <MermaidChart chart={msg.diagram} />
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Actions row */}
+        {/* Actions row — only for AI messages */}
         {!isUser && (
-          <div className="flex items-center gap-3 px-2">
-            <button 
+          <div className="flex items-center gap-3 pl-0">
+            <button
               onClick={handleCopy}
               className="group/copy flex items-center gap-1.5 text-on-surface-variant/60 hover:text-primary transition-colors text-[10px] font-black uppercase tracking-widest"
             >
@@ -515,10 +509,6 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
                 </button>
               </>
             )}
-            <div className="h-1 w-1 rounded-full bg-surface-container-highest" />
-            <span className="text-[10px] font-black text-on-surface/20 uppercase tracking-widest">
-              Verified Response
-            </span>
           </div>
         )}
       </div>
