@@ -142,6 +142,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const [mysteryBoxTimer, setMysteryBoxTimer] = useState<NodeJS.Timeout>()
   const mysteryBoxIntervalRef = useRef(0)
   const syncTimerRef = useRef<NodeJS.Timeout>()
+  const backendLoadedRef = useRef(false)
 
   useEffect(() => {
     if (!timerRunning) return
@@ -169,6 +170,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       localStorage.setItem(`study_${resourceId}_xp`, String(totalXP))
       localStorage.setItem(`study_${resourceId}_completed`, JSON.stringify([...completed]))
     } catch {}
+    // Don't sync to backend until we've loaded from it (avoids overwriting with defaults)
+    if (!backendLoadedRef.current) return
     // Debounced sync to backend (every 2s max)
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     syncTimerRef.current = setTimeout(() => {
@@ -179,23 +182,28 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     }, 2000)
   }, [sectionIndex, totalXP, completed, resourceId])
 
-  // ── Load progress from backend on mount (overrides localStorage) ───────
+  // ── Load progress from backend on mount (merge with localStorage) ─────
   useEffect(() => {
     libraryApi.getProgress(resourceId).then(({ data }) => {
-      if (data?.completed_sections?.length) {
+      if (!data) return
+      const hasBackendProgress = (data.completed_sections?.length > 0) || (data.current_section > 0) || (data.xp_earned > 0)
+      // If backend has NO progress yet, don't override localStorage (user started before sync existed)
+      if (!hasBackendProgress) return
+      if (data.completed_sections?.length) {
         const backendCompleted = new Set<number>(data.completed_sections)
         setCompleted(backendCompleted)
         localStorage.setItem(`study_${resourceId}_completed`, JSON.stringify([...backendCompleted]))
       }
-      if (data?.current_section != null && data.current_section > 0) {
+      if (data.current_section != null && data.current_section > 0) {
         setSectionIndex(data.current_section)
         localStorage.setItem(`study_${resourceId}_section`, String(data.current_section))
       }
-      if (data?.xp_earned != null && data.xp_earned > 0) {
+      if (data.xp_earned != null && data.xp_earned > 0) {
         setTotalXP(data.xp_earned)
         localStorage.setItem(`study_${resourceId}_xp`, String(data.xp_earned))
       }
-    }).catch(() => {})
+      backendLoadedRef.current = true
+    }).catch(() => { backendLoadedRef.current = true })
   }, [resourceId])
 
   // ── Persist XP to backend on exit (beforeunload + cleanup) ──────────────
