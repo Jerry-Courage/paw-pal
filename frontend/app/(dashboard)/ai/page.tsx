@@ -1026,7 +1026,7 @@ function AIChat() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto px-3 sm:px-4 py-8 sm:py-12 space-y-12 sm:space-y-20 animate-fade-in">
+            <div className="max-w-4xl px-3 sm:px-4 py-8 sm:py-12 space-y-12 sm:space-y-20 animate-fade-in">
               {messages.map((msg, i) => (
                 <MessageBubble 
                   key={i} 
@@ -1046,7 +1046,7 @@ function AIChat() {
         <div className="px-3 sm:px-4 pt-3 pb-2 bg-background border-t border-outline-variant/15 flex-shrink-0 relative z-20"
           style={{ paddingBottom: 'max(0.5rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}
         >
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl">
             
             {/* Attached file preview */}
             {attachedFile && (
