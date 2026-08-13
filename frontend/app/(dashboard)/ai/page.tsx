@@ -7,7 +7,7 @@ import { aiApi, libraryApi } from '@/lib/api'
 import {
   Sparkles, Send, Plus, Loader2, Paperclip, X,
   Network, GitBranch, Menu, BarChart2, Wand2,
-  MessageSquare, Copy, Check, Download, Zap, Trash2,
+  MessageSquare, Copy, Check, Download, Trash2,
   Image as ImageIcon, GitMerge, Maximize2
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
@@ -414,29 +414,19 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
   }
 
   return (
-    <div className={cn('flex gap-4 group w-full', isUser ? 'flex-row-reverse justify-end' : 'flex-row justify-start')}>
-      {/* Avatar */}
-      <div className={cn(
-        'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg',
-        isUser 
-          ? 'bg-gradient-to-br from-primary-container to-orange-600 text-on-surface order-2' 
-          : 'bg-surface-container-high border border-outline-variant/25 text-primary order-1'
-      )}>
-        {isUser ? <span className="font-black text-[9px]">ME</span> : <Sparkles className="w-3.5 h-3.5" />}
-      </div>
-
+    <div className={cn('flex gap-4 group w-full', isUser ? 'justify-end' : 'justify-start')}>
       {/* Content Area */}
       <div className={cn(
-        'flex flex-col gap-2 min-w-0',
+        'flex flex-col min-w-0',
         isUser ? 'items-end max-w-[85%] sm:max-w-[75%]' : 'items-start flex-1 max-w-full'
       )}>
         {isUser ? (
-          /* User: keep subtle bubble */
-          <div className="rounded-3xl px-5 py-3.5 bg-surface-container/40 border border-outline-variant/40 backdrop-blur-md text-on-surface rounded-tr-sm shadow-xl">
-            <p className="text-[16px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+          /* User: clean right-aligned text, no bubble */
+          <div className="text-on-surface/90">
+            <p className="text-[16px] leading-[1.8] whitespace-pre-wrap">{msg.content}</p>
             {msg.image && (
-              <div className="mt-3 rounded-2xl overflow-hidden border border-outline-variant/50 shadow-lg">
-                <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
+              <div className="mt-3 rounded-2xl overflow-hidden border border-outline-variant/30 max-w-sm">
+                <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-64 object-contain" />
               </div>
             )}
           </div>
@@ -990,22 +980,22 @@ function AIChat() {
           <div className="absolute bottom-[20%] right-1/4 w-[400px] h-[400px] rounded-full blur-[120px] bg-indigo-500/5 opacity-20" />
         </div>
 
-        {/* Slim toolbar - just sidebar toggle + new chat, no branding */}
-        <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-outline-variant/20 bg-background/90 backdrop-blur-md shrink-0 z-20">
+        {/* Slim toolbar */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-outline-variant/15 bg-background/90 backdrop-blur-md shrink-0 z-20">
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-xl text-on-surface-variant/60 hover:bg-surface-container-high hover:text-on-surface transition-all active:scale-95 cursor-pointer">
+            className="p-1.5 rounded-lg text-on-surface-variant/50 hover:bg-surface-container-high hover:text-on-surface transition-all active:scale-95 cursor-pointer">
             <Menu className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2">
             {activeSession && (
-              <span className="text-[10px] font-black text-on-surface-variant/60 uppercase tracking-wider truncate max-w-[150px]">
+              <span className="text-[10px] font-bold text-on-surface-variant/40 uppercase tracking-wider truncate max-w-[120px]">
                 {activeSession.title || 'Current Thread'}
               </span>
             )}
             <button onClick={startNew}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-primary bg-primary/10 hover:bg-primary/15 border border-primary/20 hover:border-primary/30 transition-all font-black text-xs active:scale-95 cursor-pointer">
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Chat</span>
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-primary/80 hover:text-primary hover:bg-primary/5 transition-all font-bold text-[11px] active:scale-95 cursor-pointer">
+              <Plus className="w-3 h-3" />
+              <span>New</span>
             </button>
           </div>
         </div>
@@ -1053,43 +1043,41 @@ function AIChat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-3 sm:p-4 md:p-5 bg-background border-t border-outline-variant/20 flex-shrink-0 relative z-20"
-          style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem))' }}
+        <div className="px-3 sm:px-4 pt-3 pb-2 bg-background border-t border-outline-variant/15 flex-shrink-0 relative z-20"
+          style={{ paddingBottom: 'max(0.5rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}
         >
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-3xl mx-auto">
             
             {/* Attached file preview */}
             {attachedFile && (
-              <div className="flex items-center gap-3 mb-4 p-3 bg-surface-container/30 border border-outline-variant/30 backdrop-blur-md rounded-2xl animate-fade-in-up w-fit pr-10 relative">
+              <div className="flex items-center gap-3 mb-2 p-2.5 bg-surface-container/30 border border-outline-variant/25 rounded-xl animate-fade-in-up w-fit pr-10 relative">
                 {filePreview ? (
-                  <img src={filePreview} alt="preview" className="w-12 h-12 rounded-xl object-cover shadow-sm" />
+                  <img src={filePreview} alt="preview" className="w-10 h-10 rounded-lg object-cover" />
                 ) : (
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                    <Paperclip className="w-5 h-5 text-primary" />
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <Paperclip className="w-4 h-4 text-primary" />
                   </div>
                 )}
                 <div>
-                  <div className="text-sm font-extrabold text-on-surface max-w-[150px] sm:max-w-xs truncate">{attachedFile.name}</div>
-                  <div className="text-xs font-bold text-on-surface-variant mt-0.5">{(attachedFile.size / 1024).toFixed(0)} KB</div>
+                  <div className="text-xs font-bold text-on-surface max-w-[120px] sm:max-w-xs truncate">{attachedFile.name}</div>
+                  <div className="text-[10px] text-on-surface-variant">{(attachedFile.size / 1024).toFixed(0)} KB</div>
                 </div>
-                <button onClick={removeFile} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-surface-container-high hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant/60 hover:text-on-surface cursor-pointer">
-                  <X className="w-4 h-4" />
+                <button onClick={removeFile} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 hover:bg-surface-container-high rounded-full text-on-surface-variant/40 hover:text-on-surface transition-colors cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
 
             {/* Input Wrapper */}
-            <div className="relative bg-surface-container/30 border border-outline-variant/40 backdrop-blur-md rounded-[2rem] p-2 focus-within:border-primary/40 focus-within:shadow-[0_0_30px_rgba(249,115,22,0.06)] transition-all duration-300">
-              <div className="flex items-end gap-2">
+            <div className="relative bg-surface-container/40 border border-outline-variant/30 rounded-2xl p-1.5 focus-within:border-primary/30 transition-all duration-200">
+              <div className="flex items-end gap-1.5">
                 
-                {/* Plus context menu (mobile friendly) */}
-                <div className="flex bg-surface-container-high rounded-2xl p-1 shrink-0 mb-1 ml-1">
-                  <button onClick={() => fileRef.current?.click()}
-                    className="p-2 sm:p-2.5 text-on-surface-variant/60 hover:text-primary transition-colors hover:bg-surface-container-high rounded-xl cursor-pointer" title="Upload">
-                    <Plus className="w-5 h-5" />
-                  </button>
-                  <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
-                </div>
+                {/* Upload button */}
+                <button onClick={() => fileRef.current?.click()}
+                  className="p-2 text-on-surface-variant/40 hover:text-primary transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer" title="Upload">
+                  <Plus className="w-4 h-4" />
+                </button>
+                <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
 
                 {/* Textarea */}
                 <textarea
@@ -1098,7 +1086,7 @@ function AIChat() {
                   onChange={handleInput}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask Flow AI anything..."
-                  className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] sm:text-base text-on-surface placeholder-slate-600 py-3 sm:py-4 px-2 min-h-[50px] sm:min-h-[56px] max-h-[160px]"
+                  className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] text-on-surface placeholder-on-surface-variant/40 py-2 px-1 min-h-[36px] max-h-[120px]"
                   style={{ lineHeight: '1.5' }}
                   rows={1}
                 />
@@ -1106,19 +1094,13 @@ function AIChat() {
                 {/* Send Button */}
                 <button onClick={handleSend}
                   disabled={sending || (!input.trim() && !attachedFile)}
-                  className={cn('p-3 sm:p-4 rounded-2xl flex-shrink-0 transition-all duration-300 mb-1 mr-1 cursor-pointer',
+                  className={cn('p-2 rounded-xl flex-shrink-0 transition-all duration-200 mb-0.5 cursor-pointer',
                     (input.trim() || attachedFile) && !sending
-                      ? 'bg-primary-container hover:brightness-110 text-on-surface shadow-lg shadow-primary/20 hover:-translate-y-0.5'
-                      : 'bg-surface-container-high text-on-surface-variant/40 cursor-not-allowed')}>
-                  {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 translate-x-0.5" />}
+                      ? 'bg-primary-container text-on-surface hover:brightness-110'
+                      : 'text-on-surface-variant/25 cursor-not-allowed')}>
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
-            
-            {/* Footer tags */}
-            <div className="flex items-center justify-center md:justify-center gap-4 mt-4 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex-wrap pr-16 md:pr-0">
-              <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> High-Speed Inference</span>
-              <span className="hidden sm:flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Context Aware</span>
             </div>
           </div>
         </div>
