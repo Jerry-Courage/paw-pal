@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils'
 import { getAuthToken, API_BASE } from '@/lib/api'
 
 import SplashScreen from '@/components/ui/SplashScreen'
-import AbsurdWelcomeOverlay from '@/components/ui/AbsurdWelcomeOverlay'
 const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 const FeedbackPopup = dynamic(() => import('@/components/ui/FeedbackPopup'), { ssr: false })
@@ -119,10 +118,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {children}
       </main>
-
-      {session?.user?.name && (
-        <AbsurdWelcomeOverlay userName={session.user.name} />
-      )}
 
       {session?.user?.name && !showOnboarding && (
         <FeedbackPopup userName={session.user.name} />
