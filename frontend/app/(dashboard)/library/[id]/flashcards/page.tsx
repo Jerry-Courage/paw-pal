@@ -272,73 +272,67 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
             style={{
               transformStyle: 'preserve-3d',
               transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              minHeight: 'clamp(260px, 45vh, 340px)',
+              minHeight: 'clamp(220px, 40vh, 300px)',
             }}
           >
             {/* ── Front face ── */}
             <div
-              className="absolute inset-0 bg-surface-container-low rounded-[1.5rem] p-8 flex flex-col"
+              className="absolute inset-0 bg-surface-container-low rounded-[1.5rem] p-6 sm:p-8 flex flex-col overflow-hidden"
               style={{ backfaceVisibility: 'hidden' }}
             >
               {/* Label row */}
-              <div className="flex items-center gap-2 mb-auto">
-                <span className="material-symbols-outlined text-primary text-[18px]">quiz</span>
-                <span className="text-[11px] font-black text-primary uppercase tracking-widest">Question</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="material-symbols-outlined text-primary text-[16px]">quiz</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-widest">Question</span>
               </div>
 
-              {/* Question text — centered vertically */}
-              <div className="flex-1 flex items-center justify-center text-center py-4">
-                <div className="text-[22px] md:text-[26px] font-bold text-on-surface leading-snug prose prose-invert max-w-none [&>*]:text-[22px] [&>*]:md:text-[26px] [&>*]:font-bold [&>*]:text-center">
+              {/* Question text — centered, scrollable if too long */}
+              <div className="flex-1 flex items-center justify-center text-center py-3 overflow-y-auto min-h-0">
+                <div className="text-[18px] sm:text-[20px] md:text-[22px] font-bold text-on-surface leading-snug prose prose-invert max-w-none [&>*]:text-[18px] sm:[&>*]:text-[20px] md:[&>*]:text-[22px] [&>*]:font-bold [&>*]:text-center">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                     {normalizeForRendering(card?.question || '')}
                   </ReactMarkdown>
                 </div>
               </div>
 
-              {/* Hint + watermark row */}
-              <div className="flex items-end justify-between mt-auto">
-                <p className="text-[13px] text-on-surface-variant/50 font-medium flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px]">touch_app</span>
+              {/* Hint */}
+              <div className="flex items-center justify-center shrink-0 pt-2">
+                <p className="text-[11px] text-on-surface-variant/40 font-medium flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px]">touch_app</span>
                   Tap to reveal answer
                 </p>
-                <span className="material-symbols-outlined text-on-surface-variant/10 text-[72px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  rocket_launch
-                </span>
               </div>
             </div>
 
             {/* ── Back face ── */}
             <div
-              className="absolute inset-0 bg-surface-container-low border-2 border-primary/30 rounded-[1.5rem] p-8 flex flex-col"
+              className="absolute inset-0 bg-surface-container-low border-2 border-primary/30 rounded-[1.5rem] p-6 sm:p-8 flex flex-col overflow-hidden"
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >
               {/* Label row */}
-              <div className="flex items-center gap-2 mb-auto">
-                <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
-                <span className="text-[11px] font-black text-primary uppercase tracking-widest">Answer</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-widest">Answer</span>
               </div>
 
-              {/* Answer text */}
-              <div className="flex-1 flex items-center justify-center text-center py-4">
-                <div className="text-[20px] md:text-[24px] font-bold text-on-surface leading-relaxed prose prose-invert max-w-none [&>*]:text-[20px] [&>*]:md:text-[24px] [&>*]:font-bold [&>*]:text-center">
+              {/* Answer text — centered, scrollable if too long */}
+              <div className="flex-1 flex items-center justify-center text-center py-3 overflow-y-auto min-h-0">
+                <div className="text-[17px] sm:text-[19px] md:text-[21px] font-bold text-on-surface leading-relaxed prose prose-invert max-w-none [&>*]:text-[17px] sm:[&>*]:text-[19px] md:[&>*]:text-[21px] [&>*]:font-bold [&>*]:text-center">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                     {normalizeForRendering(card?.answer || '')}
                   </ReactMarkdown>
                 </div>
               </div>
 
-              {/* Difficulty badge */}
-              <div className="flex items-end justify-between mt-auto">
+              {/* Difficulty badge — bottom right, small */}
+              <div className="flex items-center justify-end shrink-0 pt-2">
                 <span className={cn(
-                  'text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border',
-                  card?.difficulty === 'easy' ? 'text-green-400 bg-green-400/10 border-green-400/20' :
-                  card?.difficulty === 'hard' ? 'text-error bg-error/10 border-error/20' :
-                  'text-primary bg-primary/10 border-primary/20'
+                  'text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full',
+                  card?.difficulty === 'easy' ? 'text-green-400 bg-green-400/10' :
+                  card?.difficulty === 'hard' ? 'text-error bg-error/10' :
+                  'text-primary bg-primary/10'
                 )}>
                   {card?.difficulty || 'medium'}
-                </span>
-                <span className="material-symbols-outlined text-primary/10 text-[72px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  lightbulb
                 </span>
               </div>
             </div>
@@ -357,16 +351,16 @@ export default function FlashcardsPage({ params }: { params: { id: string } }) {
           <div className="flex gap-3 w-full max-w-lg">
             <button
               onClick={() => handleResult('skip')}
-              className="flex-1 py-4 rounded-[1rem] bg-error/10 border border-error/20 text-error font-bold text-[15px] hover:bg-error/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-error/10 border border-error/20 text-error font-bold text-[14px] hover:bg-error/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
             >
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>close</span>
+              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>close</span>
               Still Learning
             </button>
             <button
               onClick={() => handleResult('know')}
-              className="flex-1 py-4 rounded-[1rem] bg-green-500/10 border border-green-500/20 text-green-400 font-bold text-[15px] hover:bg-green-500/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 font-bold text-[14px] hover:bg-green-500/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
             >
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
               Got It
             </button>
           </div>
