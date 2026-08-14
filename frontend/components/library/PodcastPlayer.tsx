@@ -42,8 +42,8 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
   const audioChunksRef = useRef<Blob[]>([])
 
   // Setup Form
-  const [voiceA, setVoiceA] = useState('Ava')
-  const [voiceB, setVoiceB] = useState('Andrew')
+  const [voiceA, setVoiceA] = useState('Aoede')
+  const [voiceB, setVoiceB] = useState('Puck')
   const [interjectionUrls, setInterjectionUrls] = useState<Record<string, string>>({})
 
   // Fetch visuals and status
@@ -259,25 +259,19 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
                 <option value="Leda">Leda (Gemini Live - Female)</option>
                 <option value="Zephyr">Zephyr (Gemini Live - Male)</option>
                 <option value="Autonoe">Autonoe (Gemini Live - Female)</option>
-                <option value="Ava">Ava (Neural - Female)</option>
-                <option value="Andrew">Andrew (Neural - Male)</option>
-                <option value="Christopher">Christopher (Neural - Male)</option>
               </select>
             </div>
             <div>
               <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Host B Voice</label>
               <select className="w-full bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-sm appearance-none cursor-pointer" value={voiceB} onChange={e=>setVoiceB(e.target.value)}>
-                <option value="Andrew">Andrew (Neural - Male)</option>
-                <option value="Ava">Ava (Neural - Female)</option>
-                <option value="Aoede">Aoede (Gemini Live - Female)</option>
                 <option value="Puck">Puck (Gemini Live - Male)</option>
+                <option value="Aoede">Aoede (Gemini Live - Female)</option>
                 <option value="Kore">Kore (Gemini Live - Female)</option>
                 <option value="Charon">Charon (Gemini Live - Male)</option>
                 <option value="Fenrir">Fenrir (Gemini Live - Male)</option>
                 <option value="Leda">Leda (Gemini Live - Female)</option>
                 <option value="Zephyr">Zephyr (Gemini Live - Male)</option>
                 <option value="Autonoe">Autonoe (Gemini Live - Female)</option>
-                <option value="Emma">Emma (Neural - Female)</option>
               </select>
             </div>
           </div>
