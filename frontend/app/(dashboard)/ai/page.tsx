@@ -1046,7 +1046,7 @@ function AIChat() {
         <div className="px-3 sm:px-4 pt-3 pb-2 bg-background border-t border-outline-variant/15 flex-shrink-0 relative z-20"
           style={{ paddingBottom: 'max(0.5rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}
         >
-          <div className="max-w-3xl">
+          <div className="max-w-3xl mx-auto">
             
             {/* Attached file preview */}
             {attachedFile && (
