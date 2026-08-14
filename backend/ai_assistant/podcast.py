@@ -4,21 +4,104 @@ import sys
 import json
 import time
 import re
+import base64
 import requests as req
 from django.conf import settings
 from asgiref.sync import async_to_sync
 from .services import AIService, VoiceSanitizer
 
-# Default voices available for users to pick from
+# Default voices available for users to pick from (Gemini Live & Edge-TTS Neural)
 SUPPORTED_VOICES = {
-    'Christopher': 'en-US-ChristopherNeural',
-    'Jenny': 'en-US-JennyNeural',
-    'Guy': 'en-US-GuyNeural',
-    'Aria': 'en-US-AriaNeural',
-    'Ava': 'en-US-AvaNeural',
-    'Emma': 'en-US-EmmaNeural',
-    'Andrew': 'en-US-AndrewNeural',
+    'Aoede (Gemini Female)': 'Aoede',
+    'Puck (Gemini Male)': 'Puck',
+    'Kore (Gemini Female)': 'Kore',
+    'Charon (Gemini Male)': 'Charon',
+    'Fenrir (Gemini Male)': 'Fenrir',
+    'Leda (Gemini Female)': 'Leda',
+    'Zephyr (Gemini Male)': 'Zephyr',
+    'Autonoe (Gemini Female)': 'Autonoe',
+    'Andrew (Neural Male)': 'en-US-AndrewNeural',
+    'Ava (Neural Female)': 'en-US-AvaNeural',
+    'Emma (Neural Female)': 'en-US-EmmaNeural',
+    'Christopher (Neural Male)': 'en-US-ChristopherNeural',
 }
+
+GEMINI_VOICES = ['Puck', 'Aoede', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe']
+
+def generate_gemini_tts_file(text, voice, output_path):
+    """Uses Gemini Live TTS API for ultra-realistic conversational voices."""
+    import struct
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    clean_text = VoiceSanitizer.clean(text)
+    if not clean_text.strip():
+        clean_text = "..."
+    if len(clean_text) > 1000:
+        clean_text = clean_text[:1000]
+
+    api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
+    if not api_key:
+        print("[Gemini-TTS] GOOGLE_STUDIO_API_KEY not configured")
+        return False
+
+    try:
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+        payload = {
+            'contents': [{'parts': [{'text': clean_text}]}],
+            'generationConfig': {
+                'responseModalities': ['AUDIO'],
+                'speechConfig': {
+                    'voiceConfig': {
+                        'prebuiltVoiceConfig': {'voiceName': voice}
+                    }
+                }
+            }
+        }
+        resp = req.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+
+        audio_b64 = (
+            data.get('candidates', [{}])[0]
+            .get('content', {})
+            .get('parts', [{}])[0]
+            .get('inlineData', {})
+            .get('data', '')
+        )
+        if not audio_b64:
+            print("[Gemini-TTS] No audio in response")
+            return False
+
+        pcm_bytes = base64.b64decode(audio_b64)
+        sample_rate = 24000
+        num_channels = 1
+        bits_per_sample = 16
+        data_size = len(pcm_bytes)
+        byte_rate = sample_rate * num_channels * bits_per_sample // 8
+        block_align = num_channels * bits_per_sample // 8
+
+        wav_header = struct.pack(
+            '<4sI4s4sIHHIIHH4sI',
+            b'RIFF',
+            36 + data_size,
+            b'WAVE',
+            b'fmt ',
+            16,
+            1,
+            num_channels,
+            sample_rate,
+            byte_rate,
+            block_align,
+            bits_per_sample,
+            b'data',
+            data_size
+        )
+
+        with open(output_path, 'wb') as f:
+            f.write(wav_header + pcm_bytes)
+        return True
+    except Exception as e:
+        print(f"[Gemini-TTS] Exception: {e}")
+        return False
 
 def json_repair(json_str):
     """Surgically repairs truncated JSON arrays if the AI gets cut off."""
@@ -83,9 +166,11 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
 
 def generate_tts_file(text, voice, output_path, fast_mode=False):
     """
-    TTS engine: edge-tts (Microsoft Neural) — Ava, Andrew, etc. sound human.
-    fast_mode: Uses faster TTS settings for real-time tutoring (shorter timeout, faster rate)
+    TTS engine: Supports Gemini Live Voices (Aoede, Puck, Kore, etc.) or edge-tts.
     """
+    if voice in GEMINI_VOICES:
+        return generate_gemini_tts_file(text, voice, output_path)
+
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     clean_text = VoiceSanitizer.clean(text)
     if not clean_text.strip():
