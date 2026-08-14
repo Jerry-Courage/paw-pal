@@ -156,27 +156,59 @@ class ResourceListCreateView(generics.ListCreateAPIView):
             else:
                 resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
         elif uploaded_file and ext in ['.pptx', '.ppt', '.doc', '.docx', '.mp4']:
-            try:
-                import cloudinary.uploader
-                result = cloudinary.uploader.upload(
-                    uploaded_file,
-                    resource_type='raw',
-                    folder='resources',
-                )
-                cloudinary_id = result.get('public_id', '')
-                # Cloudinary strips extension from public_id for raw uploads; re-append it
-                if cloudinary_id and not os.path.splitext(cloudinary_id)[1]:
-                    cloudinary_id = cloudinary_id + ext
-                # Pop file to prevent MediaCloudinaryStorage from re-uploading
-                serializer.validated_data.pop('file', None)
-                resource = serializer.save(
-                    owner=self.request.user,
-                    file_size=file_size_bytes,
-                )
-                resource.file.name = cloudinary_id
-                resource.save(update_fields=['file', 'file_size'])
-            except Exception as e:
-                logger.error(f'[Cloudinary Raw Upload] Failed for {uploaded_file.name}: {e}')
+            # Convert PPTX/PPT to PDF via LibreOffice so it goes through the
+            # same MediaCloudinaryStorage pipeline as PDFs (avoids raw upload issues)
+            if ext in ['.pptx', '.ppt']:
+                try:
+                    import subprocess, tempfile
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        src_path = os.path.join(tmpdir, f'input{ext}')
+                        with open(src_path, 'wb') as f:
+                            f.write(uploaded_file.read())
+                        uploaded_file.seek(0)
+                        result = subprocess.run(
+                            ['libreoffice', '--headless', '--norestore',
+                             '--convert-to', 'pdf', '--outdir', tmpdir, src_path],
+                            capture_output=True, timeout=120,
+                        )
+                        if result.returncode == 0:
+                            pdf_path = os.path.join(tmpdir, 'input.pdf')
+                            if os.path.exists(pdf_path):
+                                from django.core.files.base import ContentFile
+                                with open(pdf_path, 'rb') as f:
+                                    pdf_bytes = f.read()
+                                # Replace the uploaded file with the converted PDF
+                                uploaded_file = ContentFile(pdf_bytes, name=uploaded_file.name.rsplit('.', 1)[0] + '.pdf')
+                                ext = '.pdf'
+                                file_size_bytes = len(pdf_bytes)
+                                logger.info(f'[Upload] PPTX→PDF conversion succeeded for {uploaded_file.name}')
+                except Exception as e:
+                    logger.warning(f'[Upload] PPTX→PDF conversion failed, falling back to raw upload: {e}')
+
+            if ext in ['.pptx', '.ppt', '.doc', '.docx', '.mp4']:
+                # Original path: direct Cloudinary raw upload
+                try:
+                    import cloudinary.uploader
+                    result = cloudinary.uploader.upload(
+                        uploaded_file,
+                        resource_type='raw',
+                        folder='resources',
+                    )
+                    cloudinary_id = result.get('public_id', '')
+                    if cloudinary_id and not os.path.splitext(cloudinary_id)[1]:
+                        cloudinary_id = cloudinary_id + ext
+                    serializer.validated_data.pop('file', None)
+                    resource = serializer.save(
+                        owner=self.request.user,
+                        file_size=file_size_bytes,
+                    )
+                    resource.file.name = cloudinary_id
+                    resource.save(update_fields=['file', 'file_size'])
+                except Exception as e:
+                    logger.error(f'[Cloudinary Raw Upload] Failed for {uploaded_file.name}: {e}')
+                    resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+            else:
+                # Converted to PDF — fall through to default MediaCloudinaryStorage path
                 resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
         else:
             resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
