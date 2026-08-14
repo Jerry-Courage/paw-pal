@@ -125,18 +125,36 @@ def _get_file_bytes_cloudinary(resource):
     import requests as _req
     import re as _re
 
-    # 1. Try direct resource.file.url first if available
+    raw_name = resource.file.name or ''
+
+    # Build all possible public_id variants to handle media/ prefix mismatches.
+    # MediaCloudinaryStorage stores files under MEDIA_ROOT (e.g. "media/resources/...")
+    # but resource.file.name may only hold "resources/..." (relative to MEDIA_ROOT).
+    def _build_pub_id_variants(name):
+        """Return a list of public_id candidates, strip extension."""
+        base = _re.sub(r'\.[^.]+$', '', name) if name else ''
+        if not base:
+            return []
+        variants = [base]
+        # Add media/ prefix variant if not already present
+        if not base.startswith('media/'):
+            variants.append('media/' + base)
+        # Strip media/ prefix variant if present
+        if base.startswith('media/'):
+            variants.append(base[len('media/'):])
+        return variants
+
+    # 1. Try direct resource.file.url first (Django constructs this via storage.url())
     try:
         if resource.file and hasattr(resource.file, 'url') and resource.file.url:
             resp = _req.get(resource.file.url, timeout=60)
             if resp.status_code == 200:
                 logger.info(f'[Cloudinary] Downloaded via direct file.url: {resource.id} ({len(resp.content)} bytes)')
                 return resp.content
+            logger.warning(f'[Cloudinary] Direct file.url returned {resp.status_code} for {resource.id}')
     except Exception as e:
         logger.warning(f'[Cloudinary] Direct file.url download failed for {resource.id}: {e}')
 
-    raw_name = resource.file.name or ''
-    
     # 2. Try storage.open()
     try:
         resource.file.open('rb')
@@ -151,29 +169,33 @@ def _get_file_bytes_cloudinary(resource):
     if not raw_name:
         raise Exception(f'Resource {resource.id} has no file name or data available')
 
+    # 3. Brute-force signed URLs with all public_id variants × resource_type × type
     try:
         import cloudinary
         import cloudinary.utils
         cfg = cloudinary.config()
 
         if cfg.api_key and cfg.api_secret and cfg.cloud_name:
-            pub_id = _re.sub(r'\.[^.]+$', '', raw_name)
             file_ext = _re.search(r'\.([^.]+)$', raw_name)
             KNOWN_EXTS = {'pdf', 'pptx', 'ppt', 'docx', 'doc', 'txt', 'md', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'wav', 'mp3', 'py', 'js', 'ts', 'json', 'csv', 'html', 'css'}
-            fmt = file_ext.group(1).lower() if file_ext and file_ext.group(1).lower() in KNOWN_EXTS else 'pptx'
+            fmt = file_ext.group(1).lower() if file_ext and file_ext.group(1).lower() in KNOWN_EXTS else 'pdf'
 
-            for res_type in ['raw', 'image', 'video']:
-                for t in ['upload', 'private', 'authenticated']:
-                    try:
-                        signed_url = cloudinary.utils.private_download_url(
-                            pub_id, fmt, resource_type=res_type, type=t,
-                        )
-                        resp = _req.get(signed_url, timeout=60)
-                        if resp.status_code == 200:
-                            logger.info(f'[Cloudinary] Downloaded via {res_type}/{t} signed URL: {resource.id} ({len(resp.content)} bytes)')
-                            return resp.content
-                    except Exception:
-                        pass
+            pub_id_variants = _build_pub_id_variants(raw_name)
+            logger.info(f'[Cloudinary] Trying {len(pub_id_variants)} public_id variants for {resource.id}: {pub_id_variants}')
+
+            for pub_id in pub_id_variants:
+                for res_type in ['raw', 'image', 'video']:
+                    for t in ['upload', 'private', 'authenticated']:
+                        try:
+                            signed_url = cloudinary.utils.private_download_url(
+                                pub_id, fmt, resource_type=res_type, type=t,
+                            )
+                            resp = _req.get(signed_url, timeout=60)
+                            if resp.status_code == 200:
+                                logger.info(f'[Cloudinary] Downloaded via {pub_id} as {res_type}/{t}: {resource.id} ({len(resp.content)} bytes)')
+                                return resp.content
+                        except Exception:
+                            pass
     except Exception as e:
         logger.warning(f'[Cloudinary] SDK error for {resource.id}: {e}')
 
