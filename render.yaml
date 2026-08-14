@@ -3,7 +3,7 @@ services:
   - type: web
     name: paw-pal-backend
     env: python
-    plan: free
+    plan: starter
     buildCommand: "./build.sh"
     startCommand: "bash start.sh"
     rootDir: backend
@@ -26,14 +26,13 @@ services:
       - key: ALLOWED_HOSTS
         value: "*"
 
-  # ─── AI WORKER SERVICE (FREE TIER HACK) ─────────────────────────────────────
-  - type: web
+  # ─── AI WORKER SERVICE ──────────────────────────────────────────────────────
+  - type: worker
     name: paw-pal-worker
     env: python
-    plan: free
+    plan: starter
     buildCommand: "./build.sh"
-    # Starts the worker in background and runs a dummy web server to pass health checks
-    startCommand: "python manage.py qcluster & python -m http.server $PORT"
+    startCommand: "python manage.py qcluster"
     rootDir: backend
     envVars:
       - key: DATABASE_URL
@@ -58,7 +57,7 @@ services:
   - type: cron
     name: paw-pal-cron
     env: python
-    plan: free
+    plan: starter
     buildCommand: "./build.sh"
     schedule: "0 0 * * *"
     rootDir: backend
@@ -86,7 +85,7 @@ services:
   - type: web
     name: paw-pal-frontend
     env: node
-    plan: free
+    plan: starter
     buildCommand: "npm install && npm run build"
     startCommand: "npm start"
     rootDir: frontend
@@ -114,9 +113,9 @@ services:
   # ─── REDIS (FOR CHANNELS / TASKS) ───────────────────────────────────────────
   - type: redis
     name: paw-pal-redis
-    plan: free
+    plan: starter
     ipAllowList: [] 
 
 databases:
   - name: paw-pal-db
-    plan: free
+    plan: starter

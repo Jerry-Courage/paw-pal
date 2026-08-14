@@ -438,7 +438,7 @@ Q_CLUSTER = {
     'orm': 'default',
     'timeout': 1200,
     'retry': 1300,
-    'workers': 1,
+    'workers': 2,
     'recycle': 500,
     'save_limit': 250,
     'label': 'Django Q',
