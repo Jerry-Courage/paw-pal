@@ -269,14 +269,14 @@ class PodcastInitView(APIView):
             except Resource.DoesNotExist:
                 return Response({'error': 'Resource not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            voice_a = request.data.get('voice_a', 'Ava')
-            voice_b = request.data.get('voice_b', 'Andrew')
+            voice_a = request.data.get('voice_a', 'Aoede')
+            voice_b = request.data.get('voice_b', 'Puck')
 
             session = PodcastSession.objects.create(
                 resource=resource,
                 owner=request.user,
-                voice_a=SUPPORTED_VOICES.get(voice_a, SUPPORTED_VOICES['Ava']),
-                voice_b=SUPPORTED_VOICES.get(voice_b, SUPPORTED_VOICES['Andrew']),
+                voice_a=SUPPORTED_VOICES.get(voice_a, 'Aoede'),
+                voice_b=SUPPORTED_VOICES.get(voice_b, 'Puck'),
                 status='generating',
                 script_chunks=[]
             )
