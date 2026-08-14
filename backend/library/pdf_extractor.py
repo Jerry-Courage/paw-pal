@@ -14,6 +14,10 @@ logger = logging.getLogger('nitemind')
 MIN_IMAGE_WIDTH = 80
 MIN_IMAGE_HEIGHT = 80
 
+# Page image sampling thresholds — prevents OOM on large PDFs
+MAX_PAGE_IMAGES = 30        # cap total full-page PNGs kept in memory
+LARGE_DOC_THRESHOLD = 60    # above this, sample pages instead of rendering all
+
 
 def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pages: int = 500) -> Dict[str, Any]:
     """
@@ -22,7 +26,7 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
     Returns: {
         'text': str,
         'images': [{'page': int, 'data': bytes, 'ext': str, 'width': int, 'height': int}],
-        'page_images': [{'page': int, 'data': bytes}],  # FULL PAGE IMAGES FOR VISION OCR
+        'page_images': [{'page': int, 'data': bytes}],  # SAMPLED full page images for vision OCR
         'toc': [{'level': int, 'title': str, 'page': int}],
         'page_count': int
     }
@@ -51,6 +55,17 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
 
         logger.info(f'Extracting PDF: {total_pages} total pages, reading {pages_to_read}')
 
+        # Determine which pages to render as full-page PNGs (memory-expensive)
+        # Always include page 0 (cover), then sample evenly across the doc
+        if pages_to_read <= LARGE_DOC_THRESHOLD:
+            pages_to_render = set(range(pages_to_read))
+        else:
+            # Sample ~MAX_PAGE_IMAGES pages: cover + even spread + last page
+            step = max(1, (pages_to_read - 1) // (MAX_PAGE_IMAGES - 2))
+            sampled = list(range(0, pages_to_read, step))[:MAX_PAGE_IMAGES - 2]
+            pages_to_render = set(sampled + [0, pages_to_read - 1])
+            logger.info(f'Large PDF: sampling {len(pages_to_render)} page images from {pages_to_read} pages')
+
         seen_xrefs = set()  # Avoid duplicate images across pages
 
         for i in range(pages_to_read):
@@ -61,20 +76,21 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
             if page_text.strip():
                 text_parts.append(f'\n[PAGE_{i + 1}_START]\n{page_text}\n[PAGE_{i + 1}_END]')
             
-            # 2b. Capture high-resolution full-page image for Vision OCR fallback
-            try:
-                # [ADAPTIVE RESOLUTION] Scale down for larger docs to prevent OOM
-                zoom_factor = 3 if total_pages <= 30 else 2
-                pix = page.get_pixmap(matrix=fitz.Matrix(zoom_factor, zoom_factor))
-                content['page_images'].append({'page': i + 1, 'data': pix.tobytes('png')})
-            except Exception as e:
-                logger.warning(f'Page snapshot failed on {i+1}: {e}')
+            # 2b. Capture full-page image only for sampled pages (memory-expensive)
+            if i in pages_to_render:
+                try:
+                    zoom_factor = 3 if total_pages <= 30 else 2
+                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom_factor, zoom_factor))
+                    content['page_images'].append({'page': i + 1, 'data': pix.tobytes('png')})
+                except Exception as e:
+                    logger.warning(f'Page snapshot failed on {i+1}: {e}')
 
             # 3. Extract meaningful images (limit to prevent bloat)
+            max_imgs_per_page = 3 if pages_to_read > 100 else 5
             image_list = page.get_images(full=True)
             imgs_on_page = 0
             for img in image_list:
-                if imgs_on_page >= 5: 
+                if imgs_on_page >= max_imgs_per_page:
                     break
                 try:
                     xref = img[0]
@@ -103,7 +119,7 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
 
         content['text'] = '\n'.join(text_parts)
         doc.close()
-        logger.info(f'Extracted: {len(content["text"])} chars, {len(content["toc"])} TOC entries, {len(content["images"])} images')
+        logger.info(f'Extracted: {len(content["text"])} chars, {len(content["toc"])} TOC entries, {len(content["images"])} images, {len(content["page_images"])} page samples')
 
     except ImportError:
         logger.warning('PyMuPDF (fitz) not installed. PDF power limited.')

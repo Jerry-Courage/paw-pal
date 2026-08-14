@@ -436,8 +436,8 @@ UNFOLD = {
 Q_CLUSTER = {
     'name': 'nitemind_worker',
     'orm': 'default',
-    'timeout': 600,
-    'retry': 700,
+    'timeout': 1200,
+    'retry': 1300,
     'workers': 1,
     'recycle': 500,
     'save_limit': 250,
