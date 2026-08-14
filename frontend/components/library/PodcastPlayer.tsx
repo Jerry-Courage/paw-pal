@@ -251,19 +251,33 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
             <div>
               <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Host A Voice</label>
               <select className="w-full bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-sm appearance-none cursor-pointer" value={voiceA} onChange={e=>setVoiceA(e.target.value)}>
-                <option value="Ava">Ava (Humanoid)</option>
-                <option value="Christopher">Christopher (Expert)</option>
-                <option value="Brian">Brian (Conversational)</option>
-                <option value="Guy">Guy (Casual)</option>
+                <option value="Aoede">Aoede (Gemini Live - Female)</option>
+                <option value="Puck">Puck (Gemini Live - Male)</option>
+                <option value="Kore">Kore (Gemini Live - Female)</option>
+                <option value="Charon">Charon (Gemini Live - Male)</option>
+                <option value="Fenrir">Fenrir (Gemini Live - Male)</option>
+                <option value="Leda">Leda (Gemini Live - Female)</option>
+                <option value="Zephyr">Zephyr (Gemini Live - Male)</option>
+                <option value="Autonoe">Autonoe (Gemini Live - Female)</option>
+                <option value="Ava">Ava (Neural - Female)</option>
+                <option value="Andrew">Andrew (Neural - Male)</option>
+                <option value="Christopher">Christopher (Neural - Male)</option>
               </select>
             </div>
             <div>
               <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Host B Voice</label>
               <select className="w-full bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-sm appearance-none cursor-pointer" value={voiceB} onChange={e=>setVoiceB(e.target.value)}>
-                <option value="Andrew">Andrew (Humanoid)</option>
-                <option value="Emma">Emma (Humanoid)</option>
-                <option value="Jenny">Jenny (Curious)</option>
-                <option value="Aria">Aria (Sharp)</option>
+                <option value="Andrew">Andrew (Neural - Male)</option>
+                <option value="Ava">Ava (Neural - Female)</option>
+                <option value="Aoede">Aoede (Gemini Live - Female)</option>
+                <option value="Puck">Puck (Gemini Live - Male)</option>
+                <option value="Kore">Kore (Gemini Live - Female)</option>
+                <option value="Charon">Charon (Gemini Live - Male)</option>
+                <option value="Fenrir">Fenrir (Gemini Live - Male)</option>
+                <option value="Leda">Leda (Gemini Live - Female)</option>
+                <option value="Zephyr">Zephyr (Gemini Live - Male)</option>
+                <option value="Autonoe">Autonoe (Gemini Live - Female)</option>
+                <option value="Emma">Emma (Neural - Female)</option>
               </select>
             </div>
           </div>
@@ -297,6 +311,24 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
 
   return (
     <div className="w-full h-full min-h-[92vh] sm:min-h-[500px] lg:h-[750px] bg-slate-950 flex flex-col relative">
+       {/* Top Bar with Regenerate / Change Voices button */}
+       <div className="absolute top-4 right-4 z-30 flex items-center gap-3">
+          <button
+            onClick={() => {
+              globalStop()
+              setStatus('idle')
+            }}
+            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-2 backdrop-blur-md transition-all"
+          >
+            <Settings2 className="w-3.5 h-3.5" /> Change Voices & Regenerate
+          </button>
+          {onClose && (
+            <button onClick={onClose} className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-all">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+       </div>
+
        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
           <div className="absolute inset-0 z-0 opacity-40 blur-[120px] pointer-events-none transition-all duration-1000">
              <div className={cn("absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full animate-pulse", currentChunk?.speaker === 'A' ? "bg-indigo-600/40" : "bg-pink-600/20")} />
