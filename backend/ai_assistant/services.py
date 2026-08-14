@@ -439,6 +439,9 @@ class AIService:
                                     return result
                             elif resp.status_code == 429:
                                 await asyncio.sleep(0.2 if is_tutor_mode else 0.3)
+                            elif resp.status_code == 413:
+                                logger.warning(f"[Groq Chat] 413 Payload Too Large for {groq_model} — falling back")
+                                break
                     except Exception as e:
                         logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
 

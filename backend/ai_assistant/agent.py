@@ -234,7 +234,7 @@ class FlowAgent:
             {'role': 'system', 'content': f"{base_prompt}\n\n{mode_indicator}\n\n{TOOLS_SYSTEM_PROMPT}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}"},
         ]
         if history and isinstance(history, list):
-            messages.extend(history[-50:])
+            messages.extend(self._truncate_history(history, max_messages=50, max_chars=12000))
         if current_page_context:
             messages.append({'role': 'system', 'content': f"Current Page Context: {current_page_context}"})
         messages.append({'role': 'user', 'content': user_query})
@@ -254,7 +254,7 @@ class FlowAgent:
         
         # Include recent history (last 20 messages for good context)
         if history and isinstance(history, list):
-            messages.extend(history[-20:])
+            messages.extend(self._truncate_history(history, max_messages=20, max_chars=8000))
         
         # Add current page context if provided
         if current_page_context:
@@ -262,6 +262,25 @@ class FlowAgent:
         
         messages.append({'role': 'user', 'content': user_query})
         return messages
+
+    @staticmethod
+    def _truncate_history(history: list, max_messages: int = 50, max_chars: int = 12000) -> list:
+        """Keep history within Groq's payload limits by trimming oldest messages first."""
+        if not history:
+            return []
+        # Take the most recent messages up to max_messages
+        trimmed = history[-max_messages:]
+        # Then enforce a character budget from newest → oldest
+        total = 0
+        result = []
+        for msg in reversed(trimmed):
+            content = msg.get('content', '') or ''
+            total += len(content)
+            if total > max_chars:
+                break
+            result.append(msg)
+        result.reverse()
+        return result
 
     def _extract_action(self, text):
         action_match = re.search(r"ACTION:\s*({.*})", text, re.DOTALL)

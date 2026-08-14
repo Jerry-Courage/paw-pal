@@ -395,8 +395,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       const host = backendHost || 'localhost:8000'
       // Build topic summary from all sections
       const topicSummary = sections.slice(0, 10).map((s, i) => `${i + 1}. ${s.title}: ${s.quick_summary || s.plain_english || ''}`.slice(0, 120)).join('\n')
-      const context = `resource_id:${resourceId}|technique:feynman|topic:${resource?.title}|sections:${topicSummary}`
-      const wsUrl = `${protocol}//${host}/ws/ai/examprep/?token=${token}&context=${encodeURIComponent(context)}`
+      const resourceContext = `Topic: ${resource?.title}\nSections:\n${topicSummary}`
+      const wsUrl = `${protocol}//${host}/ws/examprep/${resourceId}/?token=${token}`
       const ws = new WebSocket(wsUrl)
       masteryWsRef.current = ws
       const audioCtx = new AudioContext({ sampleRate: 24000 })
@@ -455,6 +455,13 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       ws.onopen = async () => {
         setMasteryConnecting(false)
         setMasteryActive(true)
+        // Send start message with technique and context
+        ws.send(JSON.stringify({
+          type: 'start',
+          technique: 'feynman',
+          resource_context: resourceContext,
+          resource_title: resource?.title || 'this topic',
+        }))
         // Start mic
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 24000, channelCount: 1 } })
         masteryStreamRef.current = stream
