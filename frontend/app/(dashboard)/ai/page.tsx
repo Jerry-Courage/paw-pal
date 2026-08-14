@@ -831,7 +831,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="fixed inset-0 md:left-64 mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface">
+    <div className="fixed inset-x-0 top-0 bottom-20 md:bottom-0 md:left-64 mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface">
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
