@@ -5,6 +5,7 @@ import { Menu, Brain, ChevronRight } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 import NotificationsPanel from '@/components/layout/NotificationsPanel'
 import SearchBar from '@/components/layout/SearchBar'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import Link from 'next/link'
 
 interface Props {
@@ -54,6 +55,7 @@ export default function TopBar({ onMenuClick, onToggleSidebar, isSidebarOpen }: 
       <SearchBar />
 
       <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+        <ThemeToggle />
         <NotificationsPanel />
         <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-xs font-black cursor-pointer hover:bg-orange-400 transition-colors flex-shrink-0">
           {getInitials(name)}

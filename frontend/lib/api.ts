@@ -403,6 +403,7 @@ export const paymentsApi = {
   usePowerup: (itemId: string) => api.post('/payments/marketplace/use-powerup/', { item_id: itemId }),
   buyXpPack: (packId: string, callbackUrl?: string) =>
     api.post('/payments/marketplace/buy-xp/', { pack_id: packId, callback_url: callbackUrl }),
+  buyTheme: (themeId: string) => api.post('/payments/marketplace/buy-theme/', { theme_id: themeId }),
 }
 
 export const spacedRepetitionApi = {

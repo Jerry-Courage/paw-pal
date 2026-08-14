@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     InitializePaymentView, VerifyPaymentView,
     PaystackWebhookView, SubscriptionStatusView, ApplyPromoCodeView,
-    MarketplaceInventoryView, MarketplaceBuyPowerupView, MarketplaceUsePowerupView, MarketplaceBuyXPView
+    MarketplaceInventoryView, MarketplaceBuyPowerupView, MarketplaceUsePowerupView, MarketplaceBuyXPView, MarketplaceBuyThemeView
 )
 
 urlpatterns = [
@@ -15,4 +15,5 @@ urlpatterns = [
     path('marketplace/buy-powerup/', MarketplaceBuyPowerupView.as_view(), name='marketplace-buy-powerup'),
     path('marketplace/use-powerup/', MarketplaceUsePowerupView.as_view(), name='marketplace-use-powerup'),
     path('marketplace/buy-xp/', MarketplaceBuyXPView.as_view(), name='marketplace-buy-xp'),
+    path('marketplace/buy-theme/', MarketplaceBuyThemeView.as_view(), name='marketplace-buy-theme'),
 ]

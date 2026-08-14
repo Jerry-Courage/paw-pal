@@ -1,8 +1,9 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { Sun, Moon } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme()
@@ -11,12 +12,13 @@ export default function ThemeToggle() {
   if (!mounted) return <div className="w-8 h-8" />
 
   return (
-    <button
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-colors"
-      aria-label="Toggle theme"
+    <Link
+      href="/marketplace?tab=themes"
+      className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5"
+      title="Customize Themes in Marketplace"
     >
-      {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-    </button>
+      <Palette className="w-4 h-4 text-orange-400" />
+      <span className="hidden md:inline text-xs font-bold text-slate-300">Themes</span>
+    </Link>
   )
 }

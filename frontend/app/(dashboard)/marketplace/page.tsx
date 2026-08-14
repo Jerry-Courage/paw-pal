@@ -88,7 +88,27 @@ const XP_PACKS = [
 
 export default function MarketplacePage() {
   const qc = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'powerups' | 'xp_packs' | 'inventory'>('powerups')
+  const [activeTab, setActiveTab] = useState<'powerups' | 'themes' | 'xp_packs' | 'inventory'>('powerups')
+
+  const themesCatalog = marketplaceData?.themes_catalog || {
+    'theme_emerald': { name: 'Forest Emerald', cost_xp: 1000, color: '#10b981', bg: '#064e3b', primary: '#34d399' },
+    'theme_amethyst': { name: 'Royal Amethyst', cost_xp: 1200, color: '#8b5cf6', bg: '#2e1065', primary: '#a78bfa' },
+    'theme_nordic': { name: 'Nordic Slate', cost_xp: 800, color: '#64748b', bg: '#0f172a', primary: '#94a3b8' },
+    'theme_neon': { name: 'Cyberpunk Neon', cost_xp: 2000, color: '#ec4899', bg: '#09090b', primary: '#f472b6' },
+  }
+  const unlockedThemes = marketplaceData?.unlocked_themes || ['default', 'light']
+
+  const buyThemeMutation = useMutation({
+    mutationFn: (themeId: string) => paymentsApi.buyTheme(themeId),
+    onSuccess: (res) => {
+      toast.success(res.data.message)
+      qc.invalidateQueries({ queryKey: ['marketplace-inventory'] })
+      qc.invalidateQueries({ queryKey: ['profile'] })
+    },
+    onError: (e: any) => {
+      toast.error(e.response?.data?.error || 'Failed to unlock theme.')
+    },
+  })
 
   const { data: marketplaceData, isLoading } = useQuery({
     queryKey: ['marketplace-inventory'],
@@ -169,6 +189,7 @@ export default function MarketplacePage() {
       <div className="flex items-center gap-2 border-b border-outline-variant/20 pb-2 overflow-x-auto scrollbar-hide">
         {[
           { id: 'powerups', label: 'Quiz Battle Power-Ups', icon: 'extension' },
+          { id: 'themes', label: 'App Themes Marketplace', icon: 'palette' },
           { id: 'xp_packs', label: 'Buy XP Bundles (GH₵)', icon: 'add_shopping_cart' },
           { id: 'inventory', label: 'My Inventory', icon: 'backpack' },
         ].map((tab) => (
@@ -250,7 +271,87 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* TAB 2: BUY XP PACKS */}
+      {/* TAB 2: THEMES MARKETPLACE */}
+      {activeTab === 'themes' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Object.entries(themesCatalog).map(([id, theme]: [string, any]) => {
+            const isUnlocked = unlockedThemes.includes(id)
+            const canAfford = totalXp >= theme.cost_xp
+            return (
+              <motion.div
+                key={id}
+                whileHover={{ y: -4 }}
+                className="flex flex-col justify-between bg-surface-container-low rounded-[1.75rem] p-7 border border-outline-variant/20 hover:border-primary/40 transition-all shadow-xl relative overflow-hidden"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: theme.color }}>
+                        <span className="material-symbols-outlined text-[24px]">palette</span>
+                      </div>
+                      <div>
+                        <h3 className="text-[20px] font-bold text-on-surface">{theme.name}</h3>
+                        <p className="text-[12px] text-on-surface-variant">Custom application aesthetic theme</p>
+                      </div>
+                    </div>
+                    {isUnlocked ? (
+                      <span className="text-[11px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Unlocked
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {theme.cost_xp} XP
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-surface-container flex items-center gap-4 border border-outline-variant/10">
+                    <div className="w-8 h-8 rounded-full shadow-md" style={{ backgroundColor: theme.bg }} title="Background" />
+                    <div className="w-8 h-8 rounded-full shadow-md" style={{ backgroundColor: theme.color }} title="Accent Color" />
+                    <div className="w-8 h-8 rounded-full shadow-md" style={{ backgroundColor: theme.primary }} title="Primary" />
+                    <span className="text-[12px] text-on-surface-variant font-medium ml-auto">Preview Palette</span>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-outline-variant/15 mt-6 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider block">Price</span>
+                    <span className="text-[18px] font-black text-primary">{theme.cost_xp} XP</span>
+                  </div>
+
+                  {isUnlocked ? (
+                    <button
+                      onClick={() => {
+                        localStorage.setItem('flowstate_active_theme', id)
+                        window.dispatchEvent(new Event('storage'))
+                        toast.success(`Applied ${theme.name}!`)
+                      }}
+                      className="px-6 py-2.5 rounded-xl font-bold text-[13px] bg-secondary text-on-secondary hover:bg-secondary/90 transition-all shadow-md"
+                    >
+                      Apply Theme
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => buyThemeMutation.mutate(id)}
+                      disabled={!canAfford || buyThemeMutation.isPending}
+                      className={cn(
+                        'px-6 py-2.5 rounded-xl font-bold text-[13px] transition-all flex items-center gap-1.5',
+                        canAfford
+                          ? 'bg-primary text-on-primary hover:bg-primary/90 active:scale-95 shadow-md'
+                          : 'bg-surface-container-high text-on-surface-variant/40 cursor-not-allowed border border-outline-variant/20'
+                      )}
+                    >
+                      {buyThemeMutation.isPending ? 'Unlocking...' : canAfford ? 'Unlock Theme' : 'Need More XP'}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* TAB 3: BUY XP PACKS */}
       {activeTab === 'xp_packs' && (
         <div className="space-y-6">
           <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center gap-3">

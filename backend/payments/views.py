@@ -477,10 +477,11 @@ POWERUP_PRICES = {
     'hint':         {'name': 'AI Clue / Poll',   'cost_xp': 350, 'icon': 'visibility',       'desc': 'Shows AI answer probability breakdown'},
 }
 
-XP_PACKS = {
-    'pack_500':  {'xp': 500,  'price_ghs': 10.00, 'amount_cents': 1000, 'label': 'Starter Pack'},
-    'pack_1500': {'xp': 1500, 'price_ghs': 25.00, 'amount_cents': 2500, 'label': 'Pro Pack'},
-    'pack_5000': {'xp': 5000, 'price_ghs': 70.00, 'amount_cents': 7000, 'label': 'Mega Pack'},
+THEME_PRICES = {
+    'theme_emerald': {'name': 'Forest Emerald', 'cost_xp': 1000, 'color': '#10b981', 'bg': '#064e3b', 'primary': '#34d399'},
+    'theme_amethyst': {'name': 'Royal Amethyst', 'cost_xp': 1200, 'color': '#8b5cf6', 'bg': '#2e1065', 'primary': '#a78bfa'},
+    'theme_nordic': {'name': 'Nordic Slate', 'cost_xp': 800, 'color': '#64748b', 'bg': '#0f172a', 'primary': '#94a3b8'},
+    'theme_neon': {'name': 'Cyberpunk Neon', 'cost_xp': 2000, 'color': '#ec4899', 'bg': '#09090b', 'primary': '#f472b6'},
 }
 
 
@@ -515,7 +516,9 @@ class MarketplaceInventoryView(APIView):
             'bonus_xp': bonus_xp,
             'spent_xp': spent_xp,
             'inventory': inventory,
+            'unlocked_themes': obs.get('unlocked_themes', ['default', 'light']),
             'catalog': POWERUP_PRICES,
+            'themes_catalog': THEME_PRICES,
             'xp_packs': XP_PACKS,
         })
 
@@ -575,7 +578,57 @@ class MarketplaceBuyPowerupView(APIView):
         })
 
 
-class MarketplaceUsePowerupView(APIView):
+class MarketplaceBuyThemeView(APIView):
+    """POST /api/payments/marketplace/buy-theme/ — Spend XP to unlock an aesthetic theme."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        theme_id = request.data.get('theme_id')
+        if theme_id not in THEME_PRICES:
+            return Response({'error': 'Invalid theme selected.'}, status=400)
+
+        theme = THEME_PRICES[theme_id]
+        cost = theme['cost_xp']
+
+        user = request.user
+        obs = user.onboarding_status or {}
+        unlocked = obs.get('unlocked_themes', ['default', 'light'])
+
+        if theme_id in unlocked:
+            return Response({'error': 'You already unlocked this theme!'}, status=400)
+
+        from library.models import ResourceProgress
+        from django.db.models import Sum
+        earned_xp = ResourceProgress.objects.filter(user=user).aggregate(
+            total=Sum('xp_earned')
+        )['total'] or 0
+
+        quiz_xp = int(obs.get('quiz_xp', 0))
+        bonus_xp = int(obs.get('bonus_xp', 0))
+        spent_xp = int(obs.get('spent_xp', 0))
+        available_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
+
+        if available_xp < cost:
+            return Response({
+                'error': f"Not enough XP! You need {cost} XP but only have {available_xp} XP.",
+                'required': cost,
+                'available': available_xp,
+            }, status=400)
+
+        obs['spent_xp'] = spent_xp + cost
+        unlocked.append(theme_id)
+        obs['unlocked_themes'] = unlocked
+        user.onboarding_status = obs
+        user.save(update_fields=['onboarding_status'])
+
+        new_balance = max(0, earned_xp + bonus_xp - obs['spent_xp'])
+
+        return Response({
+            'success': True,
+            'message': f"🎨 Unlocked {theme['name']} theme!",
+            'total_xp': new_balance,
+            'unlocked_themes': unlocked,
+        })
     """POST /api/payments/marketplace/use-powerup/ — Use 1 charge of a power-up during a battle."""
     permission_classes = [permissions.IsAuthenticated]
 
