@@ -578,6 +578,30 @@ class MarketplaceBuyPowerupView(APIView):
         })
 
 
+class MarketplaceUsePowerupView(APIView):
+    """POST /api/payments/marketplace/use-powerup/ — Mark a powerup as consumed."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        powerup_id = request.data.get('powerup_id')
+        user = request.user
+        obs = user.onboarding_status or {}
+        inventory = obs.get('marketplace_inventory', {})
+
+        count = inventory.get(powerup_id, 0)
+        if count <= 0:
+            return Response({'error': 'You don\'t own this powerup.'}, status=400)
+
+        inventory[powerup_id] = count - 1
+        if inventory[powerup_id] <= 0:
+            del inventory[powerup_id]
+        obs['marketplace_inventory'] = inventory
+        user.onboarding_status = obs
+        user.save(update_fields=['onboarding_status'])
+
+        return Response({'ok': True, 'inventory': inventory})
+
+
 class MarketplaceBuyThemeView(APIView):
     """POST /api/payments/marketplace/buy-theme/ — Spend XP to unlock an aesthetic theme."""
     permission_classes = [permissions.IsAuthenticated]
