@@ -217,6 +217,7 @@ class AIService:
         # Both engines are now synchronized to v1beta for total endpoint compatibility.
         self.google_key = getattr(settings, 'GOOGLE_STUDIO_API_KEY', '')
         self.google_key2 = os.getenv('GOOGLE_STUDIO_API_KEY_2', '')
+        self.google_key3 = os.getenv('GOOGLE_STUDIO_API_KEY_3', '')
         if self.google_key:
             from google.genai.types import HttpOptions
             self.google_client_beta = genai.Client(
@@ -240,6 +241,16 @@ class AIService:
         else:
             self.google_client2 = None
 
+        # Third Google key for additional rotation capacity
+        if self.google_key3:
+            from google.genai.types import HttpOptions as HttpOptions3
+            self.google_client3 = genai.Client(
+                api_key=self.google_key3,
+                http_options=HttpOptions3(api_version="v1beta")
+            )
+        else:
+            self.google_client3 = None
+
     def _google_clients(self):
         """Return all available Google clients for rotation."""
         clients = []
@@ -247,6 +258,8 @@ class AIService:
             clients.append(self.google_client)
         if self.google_client2:
             clients.append(self.google_client2)
+        if self.google_client3:
+            clients.append(self.google_client3)
         return clients
 
     def _groq_keys(self):
