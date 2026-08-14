@@ -14,6 +14,7 @@ interface AudioState {
   sessionId: number | null
   script: any[]
   isChunkLoaded: boolean
+  playbackRate: number
 }
 
 interface AudioContextType {
@@ -26,6 +27,7 @@ interface AudioContextType {
   setMiniPlayerVisible: (visible: boolean) => void
   updateScript: (newScript: any[], newTotal: number) => void
   setCurrentIndex: (index: number) => void
+  setPlaybackRate: (rate: number) => void
   audioRef: React.RefObject<HTMLAudioElement | null>
 }
 
@@ -43,6 +45,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     sessionId: null,
     script: [],
     isChunkLoaded: false,
+    playbackRate: 1,
   })
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -103,6 +106,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       const audio = audioRef.current
       audio.src = url
       audio.load()
+      audio.playbackRate = audio.playbackRate || 1
 
       if (autoPlay) {
         try {
@@ -235,6 +239,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const setCurrentIndex = useCallback((index: number) => {
     handleNextChunk(index, true)
   }, [handleNextChunk])
+
+  const setPlaybackRate = (rate: number) => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate
+    }
+    setState(prev => ({ ...prev, playbackRate: rate }))
+  }
 
   // 4. Smooth progress
   useEffect(() => {

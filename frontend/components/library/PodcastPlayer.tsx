@@ -25,6 +25,7 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
     resume: globalResume, 
     updateScript, 
     setCurrentIndex,
+    setPlaybackRate,
     stop: globalStop
   } = useAudio()
   
@@ -360,11 +361,28 @@ export default function PodcastPlayer({ resourceId, onClose }: PodcastPlayerProp
                  </div>
               </div>
              
-             <div className="flex-1 max-w-xl hidden lg:block mx-12">
-                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                   <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${audio.playbackProgress}%` }} />
-                </div>
-             </div>
+              <div className="flex-1 max-w-xl hidden lg:flex flex-col gap-2 mx-12">
+                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${audio.playbackProgress}%` }} />
+                 </div>
+                 <div className="flex items-center gap-2 justify-end">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Speed:</span>
+                    {[0.75, 1, 1.25, 1.5, 2].map(rate => (
+                      <button
+                        key={rate}
+                        onClick={() => setPlaybackRate(rate)}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-bold transition-all",
+                          (audio.playbackRate || 1) === rate
+                            ? "bg-indigo-500 text-white"
+                            : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
+                        )}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                 </div>
+              </div>
 
              <div className="flex flex-col items-end gap-2">
                 {/* Text fallback — shown when mic fails or user prefers typing */}

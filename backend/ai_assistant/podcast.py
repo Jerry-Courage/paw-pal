@@ -153,27 +153,31 @@ def generate_podcast_script(notes_json, length_pref=15, available_images=None, n
             img_context += f"- ID {img['id']} (Page {img['page_number']}): {str(img.get('description') or 'Diagram')[:70]}\n"
 
     sys_inst = system_instruction or (
-        f"You are a professional podcast script writer. You write ONLY the spoken dialogue for {name_a} (A) and {name_b} (B). "
-        "HUMANOID NATURALISM (REQUIRED): "
-        "- Use discourse markers: 'Hmm', 'Uh', 'Well', 'Actually', 'Right?'. "
-        "- Use organic fillers naturally: '(clears throat)', '[hesitates]', '[coughs]'. "
-        "- Use ellipses '...' mid-sentence for natural pondering. "
+        f"You are an elite podcast producer and script writer for top-tier masterclasses (in the style of The Diary of a CEO and deep intellectual masterclasses). "
+        f"You write ONLY spoken dialogue for {name_a} (A, the provocative philosophical host who pulls out profound human truths) and {name_b} (B, the razor-sharp expert guide who breaks down complex material with mind-blowing clarity). "
+        "STYLE & TONE (THE DIARY OF A CEO STANDARD): "
+        "- RAW & UNFILTERED: Avoid generic textbook summaries. Start with a gripping psychological hook or a paradigm-shifting question. "
+        "- INTELLECTUAL BANTER: Have real back-and-forth friction, moments of realization ('Wait... are you saying...?'), and deep philosophical takeaways. "
+        "- HUMAN NATURALISM: Use natural discourse markers ('Hmm', 'Look', 'Honestly', 'Right?'), organic pauses ('...'), and subtle vocal reactions. "
         "NO narration. NO stage directions. Output raw JSON array only."
     )
     
-    prompt_template = """Write a HIGH-FIDELITY, DEEP-DIVE podcast script based on these notes:
+    prompt_template = """Write a MASTERCLASS-LEVEL, DEEP-DIVE podcast script based on these notes (in the riveting, intellectual style of The Diary of a CEO):
 [MATERIAL]
 
 INSTRUCTIONS:
 [IMAGES]
-- SPEAKERS: Use ID "A" for [NAME_A] and "B" for [NAME_B].
+- SPEAKERS: Use ID "A" for [NAME_A] (Host) and "B" for [NAME_B] (Expert/Guest).
 - STRUCTURE: [{"speaker": "A", "text": "...", "visual_ref": ID, "visual_prompt": "..."}]
-- LENGTH: Provide a detailed, long-form conversation with at least 25 segments.
+- LENGTH: Provide a gripping, long-form conversation with at least 25-30 rich segments.
+- NARRATIVE ARC: 
+    1. Hook the listener immediately with why this concept shatters conventional thinking.
+    2. Unpack the core mechanics through gripping analogies and real-world stakes.
+    3. Conclude with a profound, life-changing takeaway.
 - VISUAL VARIETY (CRITICAL):
     1. Use "visual_ref" ID if the dialogue directly discusses an existing diagram from the notes.
     2. Use "visual_prompt": "description" for a new concept illustration NOT in the notes.
-    3. DO NOT repeat the same visual! CHANGE the visual (ref or prompt) every 4 segments.
-- STYLE: Deeply conversational and human. [NAME_A] is the expert guide, [NAME_B] is the inquisitive analyst.
+    3. CHANGE the visual (ref or prompt) every 4 segments.
 - CRITICAL: Output ONLY the raw JSON array. Start immediately with '['. Do not include markdown formatting or talk outside the JSON.
 """
     prompt = prompt_template.replace("[MATERIAL]", sections_text[:5000]) \
