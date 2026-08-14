@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 
-const VOICES_A = ['Ava', 'Christopher', 'Brian', 'Guy']
-const VOICES_B = ['Andrew', 'Emma', 'Jenny', 'Aria']
+const VOICES_A = ['Aoede', 'Puck', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe', 'Ava', 'Christopher', 'Brian', 'Guy']
+const VOICES_B = ['Andrew', 'Ava', 'Aoede', 'Puck', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe', 'Emma', 'Jenny', 'Aria']
 
 export default function PodcastPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
@@ -61,7 +61,7 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   const liveActiveSourcesRef = useRef<AudioBufferSourceNode[]>([])
 
   const { state: audio, startPodcast, pause: globalPause, resume: globalResume,
-    updateScript, setCurrentIndex, stop: globalStop } = useAudio()
+    updateScript, setCurrentIndex, setPlaybackRate, stop: globalStop } = useAudio()
 
   const hasLoadedSession = useRef(false)
 
@@ -505,10 +505,20 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
             <p className="text-[13px] font-bold text-white leading-tight truncate max-w-[200px] sm:max-w-sm">{resource?.title || '…'}</p>
           </div>
         </div>
-        {/* On Air badge */}
-        <div className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full backdrop-blur-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-          <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">On Air</span>
+        {/* On Air badge + Regenerate button */}
+        <div className="pointer-events-auto flex items-center gap-3">
+          <button
+            onClick={() => {
+              globalStop()
+              setStatus('idle')
+            }}
+            className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] flex items-center gap-1.5 backdrop-blur-md transition-all">
+            <span>Regenerate</span>
+          </button>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full backdrop-blur-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+            <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">On Air</span>
+          </div>
         </div>
       </header>
 
@@ -606,6 +616,25 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
               className="p-2 rounded-full text-slate-500 hover:text-white transition-all disabled:opacity-20">
               <SkipForward className="w-5 h-5" />
             </button>
+          </div>
+
+          {/* Speed controls */}
+          <div className="flex items-center gap-1.5 justify-center mt-3">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Speed:</span>
+            {[0.75, 1, 1.25, 1.5, 2].map(rate => (
+              <button
+                key={rate}
+                onClick={() => setPlaybackRate(rate)}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[11px] font-bold transition-all",
+                  (audio.playbackRate || 1) === rate
+                    ? "bg-orange-500 text-white"
+                    : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
+                )}
+              >
+                {rate}x
+              </button>
+            ))}
           </div>
         </div>
 
