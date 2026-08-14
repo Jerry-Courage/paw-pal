@@ -202,20 +202,10 @@ class ResourceProgress(models.Model):
             self.completed_steps[step] = True
             xp_gained = self.STEP_XP.get(step, 50)
             self.xp_earned += xp_gained
-        completed = [s for s in self.STEP_ORDER if self.completed_steps.get(s)]
-        if completed:
-            avg_score = sum(self.step_scores.get(s, 100) for s in completed) / len(completed)
-            self.mastery = int(avg_score * len(completed) / len(self.STEP_ORDER))
-        else:
-            self.mastery = 0
         self.save()
-        if xp_gained > 0:
-            try:
-                # xp_earned on ResourceProgress is the source of truth for XP
-                # No separate user.xp column needed
-                pass
-            except Exception:
-                pass
+        # Use recalculate_mastery to combine step + section progress
+        total_sections = len((self.resource.ai_notes_json or {}).get('sections', []))
+        self.recalculate_mastery(total_sections)
         return xp_gained
 
     @property

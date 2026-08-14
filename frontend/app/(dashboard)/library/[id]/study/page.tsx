@@ -207,37 +207,41 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     }).catch(() => { backendLoadedRef.current = true })
   }, [resourceId])
 
-  // ── Persist XP to backend on exit (beforeunload + cleanup) ──────────────
-  // Track XP that hasn't been individually persisted via awardXp calls
+  // ── Persist progress + XP to backend on exit (beforeunload + cleanup) ──
   const unsavedXPRef = useRef(0)
-  const savedXpOnExit = useRef(false)
+  const savedOnExitRef = useRef(false)
+  const completedRef = useRef(completed)
+  completedRef.current = completed
 
-  // Accumulate XP that isn't saved by individual awardXp calls
-  // (section quizzes, written tests, mystery boxes already call awardXp — skip those)
-  // This handles any edge cases where XP was added but not persisted.
-  const persistXp = useCallback(async () => {
-    if (savedXpOnExit.current || unsavedXPRef.current <= 0) return
-    savedXpOnExit.current = true
+  const flushOnExit = useCallback(async () => {
+    if (savedOnExitRef.current) return
+    savedOnExitRef.current = true
     try {
       const token = await getAuthToken()
-      const payload = JSON.stringify({ amount: unsavedXPRef.current, reason: 'Study Mode: Session XP', resource_id: resourceId })
-      // keepalive ensures the request completes even if page unloads
-      fetch(`${API_BASE}/auth/award-xp/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: payload,
-        keepalive: true,
+      // Flush section progress immediately (not debounced)
+      libraryApi.syncProgress(resourceId, {
+        completed_sections: [...completedRef.current],
+        current_section: sectionIndex,
       }).catch(() => {})
+      // Flush unsaved XP
+      if (unsavedXPRef.current > 0) {
+        fetch(`${API_BASE}/auth/award-xp/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ amount: unsavedXPRef.current, reason: 'Study Mode: Session XP', resource_id: resourceId }),
+          keepalive: true,
+        }).catch(() => {})
+      }
     } catch {}
-  }, [resourceId])
+  }, [resourceId, sectionIndex])
 
   useEffect(() => {
-    window.addEventListener('beforeunload', persistXp)
+    window.addEventListener('beforeunload', flushOnExit)
     return () => {
-      window.removeEventListener('beforeunload', persistXp)
-      persistXp()
+      window.removeEventListener('beforeunload', flushOnExit)
+      flushOnExit()
     }
-  }, [persistXp])
+  }, [flushOnExit])
 
   const { data: resource, isLoading } = useQuery({
     queryKey: ['resource', resourceId],
