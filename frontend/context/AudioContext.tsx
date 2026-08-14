@@ -121,9 +121,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.error('Chunk load failed for index', idx, e)
-      if (idx + 1 < totalChunksRef.current) {
-        handleNextChunk(idx + 1, autoPlay)
-      }
+      // Retry loading the same chunk after 1.5s instead of skipping segments
+      setTimeout(() => {
+        if (sessionIdRef.current) {
+          handleNextChunk(idx, autoPlay)
+        }
+      }, 1500)
     }
   }, []) // No state deps — reads from refs
 

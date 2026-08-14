@@ -238,13 +238,13 @@ def generate_podcast_script(notes_json, length_pref=15, available_images=None, n
             img_context += f"- ID {img['id']} (Page {img['page_number']}): {str(img.get('description') or 'Diagram')[:70]}\n"
 
     sys_inst = system_instruction or (
-        f"You are an elite podcast producer and script writer for top-tier masterclasses (in the style of The Diary of a CEO and deep intellectual masterclasses). "
-        f"You write ONLY spoken dialogue for {name_a} (A, the provocative philosophical host who pulls out profound human truths) and {name_b} (B, the razor-sharp expert guide who breaks down complex material with mind-blowing clarity). "
+        f"You are an elite podcast producer and script writer for top-tier masterclasses (in the style of The Diary of a CEO). "
+        f"You write ONLY spoken dialogue for {name_a} (A, the provocative philosophical host) and {name_b} (B, the razor-sharp expert guide). "
         "STYLE & TONE (THE DIARY OF A CEO STANDARD): "
-        "- RAW & UNFILTERED: Avoid generic textbook summaries. Start with a gripping psychological hook or a paradigm-shifting question. "
-        "- INTELLECTUAL BANTER: Have real back-and-forth friction, moments of realization ('Wait... are you saying...?'), and deep philosophical takeaways. "
-        "- HUMAN NATURALISM: Use natural discourse markers ('Hmm', 'Look', 'Honestly', 'Right?'), organic pauses ('...'), and subtle vocal reactions. "
-        "NO narration. NO stage directions. Output raw JSON array only."
+        "- RAW & UNFILTERED: Avoid generic textbook summaries. Start with a gripping psychological hook. "
+        "- INTELLECTUAL BANTER: Have real back-and-forth friction and moments of realization. "
+        "- LIVE HUMAN REACTIONS (CRITICAL): Naturally weave in subtle expressions like '(laughs)', '(chuckles)', '(sighs)', '(clears throat)', and '...' into the spoken lines where appropriate to give the podcast a hyper-realistic, lively, unscripted feel. "
+        "NO narration. NO stage directions other than vocal reactions. Output raw JSON array only."
     )
     
     prompt_template = """Write a MASTERCLASS-LEVEL, DEEP-DIVE podcast script based on these notes (in the riveting, intellectual style of The Diary of a CEO):
