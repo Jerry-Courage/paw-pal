@@ -57,6 +57,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const totalChunksRef = useRef(0)
   const sessionIdRef = useRef<number | null>(null)
   const currentIndexRef = useRef(0)
+  const playbackRateRef = useRef(1)
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -64,7 +65,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     totalChunksRef.current = state.totalChunks
     sessionIdRef.current = state.sessionId
     currentIndexRef.current = state.currentIndex
-  }, [state.script, state.totalChunks, state.sessionId, state.currentIndex])
+    playbackRateRef.current = state.playbackRate
+  }, [state.script, state.totalChunks, state.sessionId, state.currentIndex, state.playbackRate])
 
   // 1. Create persistent Audio element
   useEffect(() => {
@@ -106,7 +108,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       const audio = audioRef.current
       audio.src = url
       audio.load()
-      audio.playbackRate = audio.playbackRate || 1
+      audio.playbackRate = playbackRateRef.current
 
       if (autoPlay) {
         try {
@@ -244,6 +246,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [handleNextChunk])
 
   const setPlaybackRate = (rate: number) => {
+    playbackRateRef.current = rate
     if (audioRef.current) {
       audioRef.current.playbackRate = rate
     }
