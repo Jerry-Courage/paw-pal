@@ -95,8 +95,8 @@ export default function BattleArenaPage() {
       setTimeout(() => {
         if (bossHp - damage <= 0) {
           setGameState('victory')
-          authApi.awardXp(250, 'Battle Arena Victory', resourceId).catch(() => {})
-          toast.success('🏆 Victory! +250 XP Awarded!')
+          authApi.awardXp(50, 'Battle Arena Victory', resourceId).catch(() => {})
+          toast.success('🏆 Victory! +50 XP Awarded!')
         } else {
           nextQuestion()
         }
@@ -212,7 +212,7 @@ export default function BattleArenaPage() {
                 {gameState === 'victory' ? '🏆 VICTORY ACHIEVED!' : '💀 DEFEATED IN BATTLE'}
               </h1>
               <p className="text-slate-400 text-sm">
-                {gameState === 'victory' ? 'You mastered this material and crushed the boss! +250 XP earned.' : 'Review your study notes and try again to conquer the arena!'}
+                {gameState === 'victory' ? 'You mastered this material and crushed the boss! +50 XP earned.' : 'Review your study notes and try again to conquer the arena!'}
               </p>
               <p className="text-lg font-bold text-amber-400 pt-2">Final Score: {score} pts • Max Combo: {combo}x</p>
             </div>
