@@ -503,7 +503,16 @@ class MarketplaceInventoryView(APIView):
         quiz_xp = int(obs.get('quiz_xp', 0))
         bonus_xp = int(obs.get('bonus_xp', 0))
         spent_xp = int(obs.get('spent_xp', 0))
-        net_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
+        
+        # Give new users a starting bonus of 500 XP if they have 0 earned XP
+        base_bonus = 0
+        if earned_xp == 0 and quiz_xp == 0 and bonus_xp == 0 and 'has_starting_bonus' not in obs:
+            obs['has_starting_bonus'] = True
+            base_bonus = 500
+            user.onboarding_status = obs
+            user.save(update_fields=['onboarding_status'])
+
+        net_xp = max(0, earned_xp + quiz_xp + bonus_xp + base_bonus - spent_xp)
 
         inventory = obs.get('inventory', {
             'clue_5050': 0, 'time_extend': 0, 'streak_guard': 0, 'double_xp': 0, 'hint': 0
