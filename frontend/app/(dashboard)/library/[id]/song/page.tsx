@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { studySongApi, libraryApi } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Pause, SkipForward, SkipBack, Music, ArrowLeft, Disc, Volume2, Sparkles, RefreshCw } from 'lucide-react'
-import toast from 'react-hot-toast'
+
 
 interface SongLine {
   section: string
@@ -43,7 +43,7 @@ export default function StudySongPage() {
       setSongData(res.data)
       setCurrentIndex(0)
     } catch (e: any) {
-      toast.error('Failed to generate study song.')
+      console.error('Failed to generate study song.')
     } finally {
       setLoading(false)
       setIsGenerating(false)
@@ -219,7 +219,7 @@ export default function StudySongPage() {
         ref={audioRef}
         onEnded={handleAudioEnded}
         onError={() => {
-          toast.error('Audio playback error, moving to next line.')
+          console.error('Audio playback error, moving to next line.')
           handleAudioEnded()
         }}
       />

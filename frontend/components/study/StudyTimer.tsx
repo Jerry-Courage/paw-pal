@@ -31,7 +31,7 @@ export default function StudyTimer({ onTick, onComplete, onBreakStart, onBreakEn
   const [mode, setMode] = useState<'work' | 'break'>('work')
   const [isLongBreak, setIsLongBreak] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(PRESETS[0].settings.workMinutes * 60)
-  const [isRunning, setIsRunning] = useState(false)
+  const [isRunning, setIsRunning] = useState(true)
   const [sessionsCompleted, setSessionsCompleted] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [muted, setMuted] = useState(false)
