@@ -90,6 +90,14 @@ export default function MarketplacePage() {
   const qc = useQueryClient()
   const [activeTab, setActiveTab] = useState<'powerups' | 'themes' | 'xp_packs' | 'inventory'>('powerups')
 
+  const { data: marketplaceData, isLoading } = useQuery({
+    queryKey: ['marketplace-inventory'],
+    queryFn: () => paymentsApi.getMarketplaceInventory().then(r => r.data),
+  })
+
+  const totalXp = marketplaceData?.total_xp ?? 0
+  const inventory = marketplaceData?.inventory ?? {}
+
   const themesCatalog = marketplaceData?.themes_catalog || {
     'theme_emerald': { name: 'Forest Emerald', cost_xp: 1000, color: '#10b981', bg: '#064e3b', primary: '#34d399' },
     'theme_amethyst': { name: 'Royal Amethyst', cost_xp: 1200, color: '#8b5cf6', bg: '#2e1065', primary: '#a78bfa' },
@@ -109,14 +117,6 @@ export default function MarketplacePage() {
       toast.error(e.response?.data?.error || 'Failed to unlock theme.')
     },
   })
-
-  const { data: marketplaceData, isLoading } = useQuery({
-    queryKey: ['marketplace-inventory'],
-    queryFn: () => paymentsApi.getMarketplaceInventory().then(r => r.data),
-  })
-
-  const totalXp = marketplaceData?.total_xp ?? 0
-  const inventory = marketplaceData?.inventory ?? {}
 
   const buyPowerupMutation = useMutation({
     mutationFn: (itemId: string) => paymentsApi.buyPowerup(itemId),
