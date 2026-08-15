@@ -90,7 +90,7 @@ const STUDY_TOOLS = [
   {
     id: 'game',
     name: 'Battle Arena',
-    desc: 'Fight AI opponents using your study knowledge.',
+    desc: 'Turn your material into a fun game.',
     icon: 'sports_mma',
     color: 'text-red-400',
     bg: 'bg-red-400/15',
