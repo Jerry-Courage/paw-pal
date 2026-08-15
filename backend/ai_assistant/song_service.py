@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from django.conf import settings
+from asgiref.sync import async_to_sync
 from .services import AIService
 from .podcast import generate_tts_file
 
@@ -37,7 +38,7 @@ MATERIAL:
 """
         
         sys_inst = "You write catchy, rhyming educational songs. Output ONLY valid JSON array."
-        raw = ai.chat([
+        raw = async_to_sync(ai.chat)([
             {"role": "system", "content": sys_inst},
             {"role": "user", "content": prompt}
         ])

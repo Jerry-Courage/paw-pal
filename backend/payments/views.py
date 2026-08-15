@@ -484,6 +484,12 @@ THEME_PRICES = {
     'theme_neon': {'name': 'Cyberpunk Neon', 'cost_xp': 2000, 'color': '#ec4899', 'bg': '#09090b', 'primary': '#f472b6'},
 }
 
+XP_PACKS = {
+    'pack_500': {'xp': 500, 'price_ghs': 10.00, 'amount_cents': 1000, 'name': 'Starter Pack'},
+    'pack_1500': {'xp': 1500, 'price_ghs': 25.00, 'amount_cents': 2500, 'name': 'Pro Pack'},
+    'pack_5000': {'xp': 5000, 'price_ghs': 70.00, 'amount_cents': 7000, 'name': 'Mega Pack'},
+}
+
 
 class MarketplaceInventoryView(APIView):
     """GET /api/payments/marketplace/inventory/ — Returns user XP balance & power-up inventory."""
@@ -504,15 +510,7 @@ class MarketplaceInventoryView(APIView):
         bonus_xp = int(obs.get('bonus_xp', 0))
         spent_xp = int(obs.get('spent_xp', 0))
         
-        # Give new users a starting bonus of 500 XP if they have 0 earned XP
-        base_bonus = 0
-        if earned_xp == 0 and quiz_xp == 0 and bonus_xp == 0 and 'has_starting_bonus' not in obs:
-            obs['has_starting_bonus'] = True
-            base_bonus = 500
-            user.onboarding_status = obs
-            user.save(update_fields=['onboarding_status'])
-
-        net_xp = max(0, earned_xp + quiz_xp + bonus_xp + base_bonus - spent_xp)
+        net_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
 
         inventory = obs.get('inventory', {
             'clue_5050': 0, 'time_extend': 0, 'streak_guard': 0, 'double_xp': 0, 'hint': 0
