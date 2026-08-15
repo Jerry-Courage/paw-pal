@@ -14,6 +14,7 @@ from .views import (
 from .views_podcast import (
     PodcastInitView, PodcastStatusView, PodcastChunkAudioView, PodcastInterruptView
 )
+from .views_song import StudySongView
 
 urlpatterns = [
     path('agent/', AgentView.as_view(), name='platform_agent'),
@@ -31,6 +32,7 @@ urlpatterns = [
     path('podcast/<int:session_id>/status/', PodcastStatusView.as_view()),
     path('podcast/<int:session_id>/chunk/<int:chunk_index>/', PodcastChunkAudioView.as_view()),
     path('podcast/<int:session_id>/interrupt/', PodcastInterruptView.as_view()),
+    path('resources/<int:resource_id>/song/', StudySongView.as_view()),
     path('explain/', ExplainTextView.as_view()),
     path('diagram/', GenerateDiagramView.as_view()),
     path('generate-image/', GenerateImageView.as_view()),

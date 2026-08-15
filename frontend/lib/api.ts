@@ -273,6 +273,12 @@ export const podcastApi = {
   }
 }
 
+// Study Song
+export const studySongApi = {
+  getSong: (resourceId: number, style = 'upbeat_rap') =>
+    api.get(`/ai/resources/${resourceId}/song/`, { params: { style } }),
+}
+
 // Groups
 export const groupsApi = {
   getGroups: (filter = 'my') => api.get('/groups/', { params: { filter } }),

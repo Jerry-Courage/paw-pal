@@ -88,6 +88,15 @@ const STUDY_TOOLS = [
     href: (id: number) => `/library/${id}/solver`,
   },
   {
+    id: 'song',
+    name: 'Study Song',
+    desc: 'Turn notes into catchy memory songs.',
+    icon: 'music_note',
+    color: 'text-amber-400',
+    bg: 'bg-amber-400/15',
+    href: (id: number) => `/library/${id}/song`,
+  },
+  {
     id: 'vr',
     name: 'VR',
     desc: '3D immersive learning mode.',
