@@ -640,7 +640,7 @@ class AIService:
 
         # ── STAGE 2: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
         for g_client in self._google_clients():
-            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
+            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
                 try:
                     contents, sys_instr = self._to_gemini_format(messages)
                     if sys_instr and contents and contents[0].get('role') == 'user':
@@ -2095,7 +2095,7 @@ class AIService:
         
         # ── 1. Google Gemini (rotate both keys) ───────────────────────────────
         for g_client in self._google_clients():
-            for model_attempt in ['models/gemini-3.1-flash-lite', 'models/gemini-3.5-flash', 'models/gemini-2.5-flash-lite', 'models/gemini-2.0-flash']:
+            for model_attempt in ['models/gemini-3.1-flash-lite', 'models/gemini-3.5-flash']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
                     result = self._call_google_studio_vision(messages, model_name=model_attempt, client=g_client)
@@ -2127,13 +2127,9 @@ class AIService:
         # ── 3. OPENROUTER MULTI-MODEL FALLBACK (FREE TIER) ───────────────────
         vision_models = [
             'openrouter/auto',
-            'google/gemini-2.0-flash-001',
-            'google/gemini-pro-1.5-exp:free',
-            'google/gemini-flash-1.5-8b',
-            'google/gemini-flash-1.5',
+            'google/gemini-3.5-flash',
             'mistralai/pixtral-12b',
             'qwen/qwen-2.5-vl-72b-instruct',
-            'qwen/qwen-2-vl-7b-instruct:free',
             'openrouter/free',
         ]
         
