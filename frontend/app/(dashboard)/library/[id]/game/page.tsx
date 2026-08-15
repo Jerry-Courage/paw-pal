@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { libraryApi, authApi } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Shield, Zap, Flame, Trophy, RefreshCw, Heart, Sparkles, Sword } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface Question {
   question: string
