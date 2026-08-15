@@ -328,34 +328,44 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3">
-                {STUDY_TOOLS.map((tool) => (
-                  <button
-                    key={tool.id}
-                    onClick={() => router.push(tool.href(id))}
-                    className="group flex flex-col items-center text-center p-4 bg-surface-container rounded-[1.5rem] border border-outline-variant/30 hover:border-outline-variant hover:bg-surface-container-high transition-all active:scale-95 gap-3"
-                  >
-                    {/* Icon */}
-                    <div className={cn('w-12 h-12 rounded-[1rem] flex items-center justify-center transition-transform group-hover:scale-110', tool.bg)}>
-                      <span
-                        className={cn('material-symbols-outlined text-[26px]', tool.color)}
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        {tool.icon}
+                {STUDY_TOOLS.map((tool) => {
+                  const isVr = tool.id === 'vr'
+                  return (
+                    <button
+                      key={tool.id}
+                      onClick={() => !isVr && router.push(tool.href(id))}
+                      disabled={isVr}
+                      className={cn(
+                        "group flex flex-col items-center text-center p-4 bg-surface-container rounded-[1.5rem] border border-outline-variant/30 transition-all gap-3",
+                        isVr ? "opacity-60 cursor-not-allowed" : "hover:border-outline-variant hover:bg-surface-container-high active:scale-95"
+                      )}
+                    >
+                      {/* Icon */}
+                      <div className={cn('w-12 h-12 rounded-[1rem] flex items-center justify-center transition-transform', !isVr && 'group-hover:scale-110', tool.bg)}>
+                        <span
+                          className={cn('material-symbols-outlined text-[26px]', tool.color)}
+                          style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                          {tool.icon}
+                        </span>
+                      </div>
+
+                      {/* Name */}
+                      <div>
+                        <p className="text-[13px] font-bold text-on-surface leading-tight mb-1">{tool.name}</p>
+                        <p className="text-[11px] text-on-surface-variant leading-snug">{tool.desc}</p>
+                      </div>
+
+                      {/* Launch button or Coming Soon */}
+                      <span className={cn(
+                        "w-full mt-auto text-[12px] font-bold rounded-[0.75rem] py-1.5 transition-all",
+                        isVr ? "bg-surface-container-highest text-amber-400 font-semibold text-[11px]" : "bg-surface-container-high text-on-surface-variant group-hover:bg-primary-container group-hover:text-on-primary-container"
+                      )}>
+                        {isVr ? 'Coming Soon' : 'Launch'}
                       </span>
-                    </div>
-
-                    {/* Name */}
-                    <div>
-                      <p className="text-[13px] font-bold text-on-surface leading-tight mb-1">{tool.name}</p>
-                      <p className="text-[11px] text-on-surface-variant leading-snug">{tool.desc}</p>
-                    </div>
-
-                    {/* Launch button */}
-                    <span className="w-full mt-auto text-[12px] font-bold bg-surface-container-high text-on-surface-variant group-hover:bg-primary-container group-hover:text-on-primary-container rounded-[0.75rem] py-1.5 transition-all">
-                      Launch
-                    </span>
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
