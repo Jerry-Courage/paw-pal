@@ -18,7 +18,7 @@ SUPPORTED_VOICES = {
     'Charon (Gemini Male)': 'Charon',
     'Fenrir (Gemini Male)': 'Fenrir',
     'Leda (Gemini Female)': 'Leda',
-    'Zephyr (Gemini Male)': 'Zephyr',
+    'Zephyr (Gemini Female)': 'Zephyr',
     'Autonoe (Gemini Female)': 'Autonoe',
     'Andrew (Neural Male)': 'en-US-AndrewNeural',
     'Ava (Neural Female)': 'en-US-AvaNeural',
@@ -29,7 +29,11 @@ SUPPORTED_VOICES = {
 GEMINI_VOICES = ['Puck', 'Aoede', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe']
 
 def generate_gemini_tts_file(text, voice, output_path):
-    """Uses Gemini Live TTS API for ultra-realistic conversational voices."""
+    """
+    Uses Gemini Live TTS API for ultra-realistic conversational voices with 
+    key rotation (GOOGLE_STUDIO_API_KEY, GOOGLE_STUDIO_API_KEY_2, GOOGLE_STUDIO_API_KEY_3) 
+    and exponential backoff retry logic for 429 Too Many Requests.
+    """
     import struct
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     clean_text = VoiceSanitizer.clean(text)
@@ -38,82 +42,115 @@ def generate_gemini_tts_file(text, voice, output_path):
     if len(clean_text) > 1000:
         clean_text = clean_text[:1000]
 
-    api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
-    if not api_key:
-        print("[Gemini-TTS] GOOGLE_STUDIO_API_KEY not configured")
+    # Collect available API keys for rotation
+    api_keys = [
+        os.getenv('GOOGLE_STUDIO_API_KEY', ''),
+        os.getenv('GOOGLE_STUDIO_API_KEY_2', ''),
+        os.getenv('GOOGLE_STUDIO_API_KEY_3', '')
+    ]
+    api_keys = [k.strip() for k in api_keys if k and k.strip()]
+    
+    if not api_keys:
+        print("[Gemini-TTS] No Google Studio API keys configured")
         return False
 
-    try:
-        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
-        payload = {
-            'contents': [{'parts': [{'text': clean_text}]}],
-            'generationConfig': {
-                'responseModalities': ['AUDIO'],
-                'speechConfig': {
-                    'voiceConfig': {
-                        'prebuiltVoiceConfig': {'voiceName': voice}
+    max_retries = 6
+    base_delay = 1.0
+    key_index = 0
+
+    for attempt in range(max_retries):
+        api_key = api_keys[key_index % len(api_keys)]
+        try:
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
+            payload = {
+                'contents': [{'parts': [{'text': clean_text}]}],
+                'generationConfig': {
+                    'responseModalities': ['AUDIO'],
+                    'speechConfig': {
+                        'voiceConfig': {
+                            'prebuiltVoiceConfig': {'voiceName': voice}
+                        }
                     }
                 }
             }
-        }
-        resp = req.post(url, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
+            resp = req.post(url, json=payload, timeout=30)
+            
+            if resp.status_code == 429:
+                print(f"[Gemini-TTS] Rate limited (429) using key index {key_index % len(api_keys)}. Rotating key and retrying...")
+                key_index += 1
+                sleep_time = base_delay * (2 ** attempt)
+                time.sleep(sleep_time)
+                continue
 
-        audio_b64 = (
-            data.get('candidates', [{}])[0]
-            .get('content', {})
-            .get('parts', [{}])[0]
-            .get('inlineData', {})
-            .get('data', '')
-        )
-        if not audio_b64:
-            print("[Gemini-TTS] No audio in response")
-            return False
+            resp.raise_for_status()
+            data = resp.json()
 
-        pcm_bytes = base64.b64decode(audio_b64)
-        sample_rate = 24000
-        num_channels = 1
-        bits_per_sample = 16
-        data_size = len(pcm_bytes)
-        byte_rate = sample_rate * num_channels * bits_per_sample // 8
-        block_align = num_channels * bits_per_sample // 8
+            audio_b64 = (
+                data.get('candidates', [{}])[0]
+                .get('content', {})
+                .get('parts', [{}])[0]
+                .get('inlineData', {})
+                .get('data', '')
+            )
+            if not audio_b64:
+                print("[Gemini-TTS] No audio in response")
+                return False
 
-        wav_header = struct.pack(
-            '<4sI4s4sIHHIIHH4sI',
-            b'RIFF',
-            36 + data_size,
-            b'WAVE',
-            b'fmt ',
-            16,
-            1,
-            num_channels,
-            sample_rate,
-            byte_rate,
-            block_align,
-            bits_per_sample,
-            b'data',
-            data_size
-        )
+            pcm_bytes = base64.b64decode(audio_b64)
+            sample_rate = 24000
+            num_channels = 1
+            bits_per_sample = 16
+            data_size = len(pcm_bytes)
+            byte_rate = sample_rate * num_channels * bits_per_sample // 8
+            block_align = num_channels * bits_per_sample // 8
 
-        with open(output_path, 'wb') as f:
-            f.write(wav_header + pcm_bytes)
-        return True
-    except Exception as e:
-        print(f"[Gemini-TTS] Exception: {e}")
-        return False
+            wav_header = struct.pack(
+                '<4sI4s4sIHHIIHH4sI',
+                b'RIFF',
+                36 + data_size,
+                b'WAVE',
+                b'fmt ',
+                16,
+                1,
+                num_channels,
+                sample_rate,
+                byte_rate,
+                block_align,
+                bits_per_sample,
+                b'data',
+                data_size
+            )
+
+            with open(output_path, 'wb') as f:
+                f.write(wav_header + pcm_bytes)
+            return True
+
+        except req.exceptions.HTTPError as he:
+            if he.response is not None and he.response.status_code == 429:
+                print(f"[Gemini-TTS] Rate limited (429) caught via HTTPError. Rotating key and retrying...")
+                key_index += 1
+                sleep_time = base_delay * (2 ** attempt)
+                time.sleep(sleep_time)
+                continue
+            print(f"[Gemini-TTS] HTTP Error: {he}")
+            sleep_time = base_delay * (2 ** attempt)
+            time.sleep(sleep_time)
+        except Exception as e:
+            print(f"[Gemini-TTS] Exception: {e}")
+            sleep_time = base_delay * (2 ** attempt)
+            time.sleep(sleep_time)
+
+    print(f"[Gemini-TTS] Failed after {max_retries} attempts across available API keys.")
+    return False
 
 def json_repair(json_str):
     """Surgically repairs truncated JSON arrays if the AI gets cut off."""
     if not json_str: return "[]"
     json_str = json_str.strip()
     
-    # Remove markdown code blocks if present
     if json_str.startswith('```'):
         lines = json_str.splitlines()
-        # Remove the first line if it's ```json or ```
         if lines and lines[0].startswith('```'): lines = lines[1:]
-        # Remove the last line if it's ```
         if lines and lines[-1].strip() == '```': lines = lines[:-1]
         json_str = '\n'.join(lines).strip()
 
@@ -133,12 +170,7 @@ def json_repair(json_str):
     return json_str
 
 def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
-    """
-    Calls OpenRouter via the existing AIService. 
-    Keeps the batching and repair logic to ensure stability even with free models.
-    """
     result = ""
-    # We use the existing AIService which defaults to openrouter/auto
     ai_service = AIService()
     
     for attempt in range(max_retries):
@@ -154,9 +186,7 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
             if result and "trouble connecting" not in result.lower():
                 return result
             
-            # If we get an error string, wait a bit before retry
-            wait = 2
-            time.sleep(wait)
+            time.sleep(2)
         except Exception as e:
             with open(log_path, 'a') as f:
                 f.write(f"\n[OpenRouter] Exception: {str(e)}\n")
@@ -165,9 +195,6 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
     return result
 
 def generate_tts_file(text, voice, output_path, fast_mode=False):
-    """
-    TTS engine: Supports Gemini Live Voices (Aoede, Puck, Kore, etc.) or edge-tts.
-    """
     if voice in GEMINI_VOICES:
         return generate_gemini_tts_file(text, voice, output_path)
 
@@ -176,14 +203,7 @@ def generate_tts_file(text, voice, output_path, fast_mode=False):
     if not clean_text.strip():
         clean_text = "..."
 
-    # OPTIMIZATION: Faster speaking rate for tutor mode
-    if fast_mode:
-        rate = "+10%"  # 10% faster for snappy tutor responses
-    else:
-        rate = "+0%"
-        if 'AndrewNeural' in voice:
-            rate = "-5%"
-    
+    rate = "+10%" if fast_mode else "+0%"
     cmd = [
         sys.executable, "-m", "edge_tts",
         "--voice", voice,
@@ -192,7 +212,6 @@ def generate_tts_file(text, voice, output_path, fast_mode=False):
         "--write-media", output_path
     ]
     
-    # OPTIMIZATION: Fewer retries and shorter timeout for fast mode
     max_attempts = 2 if fast_mode else 3
     timeout = 15 if fast_mode else 30
     retry_delay = 1 if fast_mode else 2
@@ -201,22 +220,14 @@ def generate_tts_file(text, voice, output_path, fast_mode=False):
         try:
             result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=timeout)
             if result.returncode == 0:
-                print(f"[TTS] edge-tts success for voice={voice} (fast_mode={fast_mode})")
                 return True
-            print(f"TTS Error [Attempt {attempt+1}]: {result.stderr[:200]}")
             time.sleep(retry_delay)
-        except Exception as e:
-            print(f"TTS Exception: {str(e)}")
+        except:
             time.sleep(retry_delay)
 
-    print(f"[TTS-FATAL] edge-tts failed for path: {output_path}")
     return False
 
 def generate_podcast_script(notes_json, length_pref=15, available_images=None, name_a="Host A", name_b="Host B", system_instruction=None):
-    """
-    Generates a single-shot, high-quality podcast script.
-    """
-    # Force creation of the media directory to prevent "Connecting synapse..." hangs
     tts_dir = os.path.join(settings.MEDIA_ROOT, 'podcast_tts')
     os.makedirs(tts_dir, exist_ok=True)
     
@@ -224,67 +235,43 @@ def generate_podcast_script(notes_json, length_pref=15, available_images=None, n
     with open(log_path, 'w') as f:
         f.write(f"--- START ONE-SHOT GENERATION ---\n")
 
-    # 1. Process Material
     sections_text = ""
     sections = notes_json.get('sections', [])[:20]
     for idx, sec in enumerate(sections):
         sections_text += f"{sec.get('title', 'Topic')}: {sec.get('content', '')}\n\n"
 
-    # 2. Build Prompt
     img_context = ""
     if available_images:
-        img_context = "\nRELEVANT VISUALS (Use these IDs for visual_ref):\n"
+        img_context = "\nRELEVANT VISUALS:\n"
         for img in available_images[:10]:
             img_context += f"- ID {img['id']} (Page {img['page_number']}): {str(img.get('description') or 'Diagram')[:70]}\n"
 
     sys_inst = system_instruction or (
-        f"You are an elite podcast producer and script writer for top-tier masterclasses (in the style of The Diary of a CEO). "
-        f"You write ONLY spoken dialogue for {name_a} (A, the provocative philosophical host) and {name_b} (B, the razor-sharp expert guide). "
-        "STYLE & TONE (THE DIARY OF A CEO STANDARD): "
-        "- RAW & UNFILTERED: Avoid generic textbook summaries. Start with a gripping psychological hook. "
-        "- INTELLECTUAL BANTER: Have real back-and-forth friction and moments of realization. "
-        "- LIVE HUMAN REACTIONS (CRITICAL): Naturally weave in subtle expressions like '(laughs)', '(chuckles)', '(sighs)', '(clears throat)', and '...' into the spoken lines where appropriate to give the podcast a hyper-realistic, lively, unscripted feel. "
-        "NO narration. NO stage directions other than vocal reactions. Output raw JSON array only."
+        f"You are an elite podcast producer for top masterclasses. "
+        f"Write ONLY spoken dialogue for {name_a} (A) and {name_b} (B). "
+        "STYLE: RAW & UNFILTERED, real banter, natural reactions like '(laughs)' or '(chuckles)'. Output raw JSON array only."
     )
     
-    prompt_template = """Write a MASTERCLASS-LEVEL, DEEP-DIVE podcast script based on these notes (in the riveting, intellectual style of The Diary of a CEO):
+    prompt_template = """Write a masterclass podcast script based on these notes:
 [MATERIAL]
-
-INSTRUCTIONS:
 [IMAGES]
-- SPEAKERS: Use ID "A" for [NAME_A] (Host) and "B" for [NAME_B] (Expert/Guest).
+- SPEAKERS: Use ID "A" for [NAME_A] and "B" for [NAME_B].
 - STRUCTURE: [{"speaker": "A", "text": "...", "visual_ref": ID, "visual_prompt": "..."}]
-- LENGTH: Provide a gripping, long-form conversation with at least 25-30 rich segments.
-- NARRATIVE ARC: 
-    1. Hook the listener immediately with why this concept shatters conventional thinking.
-    2. Unpack the core mechanics through gripping analogies and real-world stakes.
-    3. Conclude with a profound, life-changing takeaway.
-- VISUAL VARIETY (CRITICAL):
-    1. Use "visual_ref" ID if the dialogue directly discusses an existing diagram from the notes.
-    2. Use "visual_prompt": "description" for a new concept illustration NOT in the notes.
-    3. CHANGE the visual (ref or prompt) every 4 segments.
-- CRITICAL: Output ONLY the raw JSON array. Start immediately with '['. Do not include markdown formatting or talk outside the JSON.
-"""
+- LENGTH: At least 25-30 segments.
+- Output ONLY raw JSON array. Start immediately with '['."""
+    
     prompt = prompt_template.replace("[MATERIAL]", sections_text[:5000]) \
                             .replace("[IMAGES]", img_context) \
                             .replace("[NAME_A]", name_a) \
                             .replace("[NAME_B]", name_b)
 
-    ai_service = AIService()
     res = call_ai_with_retry(prompt, sys_inst, log_path)
-
-    # DIAGNOSTIC: Log the raw response for forensic analysis
-    with open(log_path, 'a') as f:
-        f.write(f"\n[OpenRouter] Raw Response (Preview): {str(res)[:500]}...\n")
 
     def validate_script(res_text):
         if not res_text or not isinstance(res_text, str): return []
-        import re
         try:
-            # 1. Direct parse check
             data = json.loads(json_repair(res_text))
             if isinstance(data, list):
-                # Standardize keys if AI used 'line' instead of 'text'
                 standardized = []
                 for item in data:
                     if isinstance(item, dict):
@@ -298,103 +285,14 @@ INSTRUCTIONS:
                             if vprompt: chunk["visual_prompt"] = vprompt
                             standardized.append(chunk)
                 return standardized
-            if isinstance(data, dict) and 'script' in data: return data['script']
         except: pass
 
-        # 2. UNIVERSAL REGEX EXTRACTOR (Flexible Dialogue Filter)
         found = []
         for obj_match in re.finditer(r'\{(?P<body>[\s\S]*?)\}', res_text):
             body = obj_match.group('body')
-            
-            spk_match = re.search(r'"speaker":\s*"(?P<spk>[ABab]|' + re.escape(name_a) + r'|' + re.escape(name_b) + r')"', body, re.IGNORECASE)
+            spk_match = re.search(r'"speaker":\s*"(?P<spk>[ABab]|' + re.escape(name_a) + r'|' + re.escape(name_b)  + r')"', body, re.IGNORECASE)
             if not spk_match: continue
-            
             txt_match = re.search(r'"(?:text|line|content)":\s*"(?P<txt>.*?)(?<!\\)"(?=[\s\r\n]*[,}])', body, re.DOTALL)
-            if not txt_match: continue
-            
-            s_val = spk_match.group('spk').upper()
-            spk_id = 'B' if ('B' in s_val or name_b.upper() in s_val) else 'A'
-            txt_val = txt_match.group('txt').strip()
-            
-            chunk = {"speaker": spk_id, "text": txt_val}
-            
-            vref_match = re.search(r'"visual_ref":\s*(?P<vref>\d+|"\d+")', body)
-            if vref_match:
-                chunk["visual_ref"] = vref_match.group('vref').strip('"')
-            
-            vprompt_match = re.search(r'"visual_prompt":\s*"(?P<vprompt>.*?)(?<!\\)"', body, re.DOTALL)
-            if vprompt_match:
-                chunk["visual_prompt"] = vprompt_match.group('vprompt').strip()
-                
-            found.append(chunk)
-        return found
-
-    final_script = validate_script(res)
-
-    if not final_script or len(final_script) < 3:
-        with open(log_path, 'a') as f:
-            f.write(f"\n[OpenRouter] Generation failed or too short. Length: {len(final_script) if final_script else 0}. Using partial fallback if available.\n")
-        
-        if not final_script:
-            final_script = [
-                {"speaker": "A", "text": "Welcome back to NITECast. We're breaking down some complex material today."},
-                {"speaker": "B", "text": "That's right! There was a brief signal interruption, but we've got the core material ready."},
-                {"speaker": "A", "text": "Let's dive straight into the primary concepts from your notes."}
-            ]
-
-    with open(log_path, 'a') as f:
-        f.write(f"\n--- COMPLETE ---\nSegments: {len(final_script)}\n")
-    return final_script
-
-def handle_interruption(user_query, current_script, current_index, full_material="", available_images=None, name_a="Host A", name_b="Host B"):
-    """
-    The 'Answer Guru': Handles user questions with robust formatting.
-    """
-    log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
-    recent = json.dumps(current_script[max(0, current_index-1) : current_index+1])
-    
-    img_context = ""
-    if available_images:
-        img_context = "\nRELEVANT VISUALS (Use these IDs for visual_ref when answering):\n"
-        for img in available_images[:6]:
-            img_context += f"- ID {img['id']} (Page {img['page_number']}): {str(img.get('description') or 'Diagram')[:70]}\n"
-
-    prompt_template = """Provide a host response to: "[QUERY]". 
-Source material: [MATERIAL]
-Recent chat: [CHAT]
-[IMAGES]
-
-INSTRUCTIONS:
-- CONCISE: Give exactly 1-2 rapid dialogue segments in a JSON array.
-- BE DIRECT: Jump straight into the answer. 
-- If a specific visual ID explains it, use "visual_ref": ID. 
-- Output ONLY JSON array [{"speaker": "A" or "B", "text": "...", "visual_ref": ID, "visual_prompt": "..."}]."""
-
-    prompt = prompt_template.replace("[QUERY]", user_query) \
-                            .replace("[MATERIAL]", full_material[:6000]) \
-                            .replace("[CHAT]", recent) \
-                            .replace("[IMAGES]", img_context)
-
-    sys_inst = (
-        f"You are {name_a} and {name_b}. Speak ONLY as the host. "
-        "HUMANOID NATURALISM: Use fillers like 'Hmm', 'Actually', or '(clears throat)' naturally. "
-        "No stage directions. Output ONLY JSON."
-    )
-
-    def validate_guru(res_text):
-        if not res_text or not isinstance(res_text, str): return []
-        import re
-        try:
-            data = json.loads(json_repair(res_text))
-            if isinstance(data, list): return data
-        except: pass
-        
-        found = []
-        for obj_match in re.finditer(r'\{(?P<body>[\s\S]*?)\}', res_text):
-            body = obj_match.group('body')
-            spk_match = re.search(r'"speaker":\s*"(?P<spk>[ABab]|' + re.escape(name_a) + r'|' + re.escape(name_b) + r')"', body, re.IGNORECASE)
-            if not spk_match: continue
-            txt_match = re.search(r'"text":\s*"(?P<txt>.*?)(?<!\\)"(?=[\s\r\n]*[,}])', body, re.DOTALL)
             if not txt_match: continue
             s_val = spk_match.group('spk').upper()
             spk_id = 'B' if ('B' in s_val or name_b.upper() in s_val) else 'A'
@@ -407,15 +305,28 @@ INSTRUCTIONS:
             found.append(chunk)
         return found
 
+    final_script = validate_script(res)
+    if not final_script or len(final_script) < 3:
+        final_script = [
+            {"speaker": "A", "text": "Welcome back to NITECast. Let's dive into our core material today."},
+            {"speaker": "B", "text": "Excited to unpack this with you!"},
+            {"speaker": "A", "text": "Let's get started."}
+        ]
+    return final_script
+
+def handle_interruption(user_query, current_script, current_index, full_material="", available_images=None, name_a="Host A", name_b="Host B"):
+    log_path = os.path.join(settings.BASE_DIR, 'podcast_debug.log')
+    recent = json.dumps(current_script[max(0, current_index-1) : current_index+1])
+    
+    prompt = f'Provide host response to: "{user_query}". Chat: {recent}. Output ONLY JSON array [{"speaker": "A" or "B", "text": "...", "visual_ref": ID, "visual_prompt": "..."}].'
     ai_service = AIService()
     res = async_to_sync(ai_service.groq_chat)([
-        {"role": "system", "content": sys_inst},
+        {"role": "system", "content": "You are podcast host. Output ONLY JSON array."},
         {"role": "user", "content": prompt}
     ], max_tokens=512)
     
-    # LOG: Guru response (for debugging)
-    with open(log_path, 'a') as f:
-        f.write(f"[GURU-RAW] {res[:300]}...\n")
-        
-    data = validate_guru(json_repair(res))
-    return data if data else [{"speaker": "A", "text": "That's a great question."}]
+    try:
+        data = json.loads(json_repair(res))
+        if isinstance(data, list): return data
+    except: pass
+    return [{"speaker": "A", "text": "That's a great question."}]
