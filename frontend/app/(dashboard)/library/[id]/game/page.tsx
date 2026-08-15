@@ -42,7 +42,7 @@ export default function BattleArenaPage() {
   const loadQuestions = async () => {
     setLoading(true)
     try {
-      const res = await libraryApi.getPractice(resourceId)
+      const res = await libraryApi.generatePracticeQuestions(resourceId)
       const data = res.data
       let qList: Question[] = []
       if (Array.isArray(data)) {
