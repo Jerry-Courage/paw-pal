@@ -183,16 +183,21 @@ def process_resource_task(res_id):
                                 'is_large': img_data.get('width', 0) > 250 and img_data.get('height', 0) > 250
                             })
 
+                        # Cap diagram scanning to save Gemini vision quota
+                        MAX_DIAGRAM_SCANS = 10
+                        large_objs = [o for o in image_objs if o['is_large']]
+                        scan_set = set(id(o) for o in large_objs[:MAX_DIAGRAM_SCANS])
+                        if len(large_objs) > MAX_DIAGRAM_SCANS:
+                            logger.info(f'[Task] Capping diagram scans: {len(large_objs)} large images found, scanning top {MAX_DIAGRAM_SCANS}')
+
                         def get_desc(idx_item_tuple):
                             idx, item = idx_item_tuple
-                            if item['is_large']:
+                            if item['is_large'] and id(item) in scan_set:
                                 try:
                                     res.status_text = f"👁️ Scanning Diagram {idx+1}/{len(image_objs)}..."
                                     res.save(update_fields=['status_text'])
                                     ai = AIService()
                                     desc = ai.describe_image_for_notes(item['data'], item['page'], item['ext'])
-                                    # Don't overwrite the base64 data URI — it's stored in description
-                                    # Store AI caption in page_image_map instead
                                     return desc
                                 except Exception as e:
                                     logger.error(f"Image desc error: {e}")
