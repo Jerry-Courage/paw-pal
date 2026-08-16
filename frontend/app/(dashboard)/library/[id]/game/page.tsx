@@ -451,6 +451,8 @@ class CityRunEngine {
       const height = size.y
       const scale = 2.5 / height
       model.scale.setScalar(scale)
+      // Rotate 180° to face camera (models face +Z, camera looks at -Z)
+      model.rotation.y = Math.PI
       // Center horizontally, feet on ground
       const center = box.getCenter(new THREE!.Vector3())
       model.position.set(0, -center.y * scale + (height * scale) / 2, 0)
@@ -532,7 +534,7 @@ class CityRunEngine {
     this.animPhase += this.speed * 2
 
     const diff = this.targetLane - this.currentLane
-    if (Math.abs(diff) > 0.01) this.currentLane += diff * 0.15
+    if (Math.abs(diff) > 0.01) this.currentLane += diff * 0.25
     else this.currentLane = this.targetLane
 
     if (this.isJumping) {
@@ -644,7 +646,7 @@ class CityRunEngine {
     }
 
     // Collision — obstacles
-    const rl = Math.round(this.currentLane)
+    const rl = this.targetLane
     if (this.invincible) {
       this.invincibleTimer--
       if (this.invincibleTimer <= 0) this.invincible = false
@@ -935,10 +937,6 @@ export default function KnowledgeRunnerPage() {
     // Try to lock landscape orientation on mobile
     try {
       if (screen.orientation?.lock) await screen.orientation.lock('landscape')
-    } catch {}
-    // Try fullscreen
-    try {
-      if (containerRef.current.requestFullscreen) await containerRef.current.requestFullscreen()
     } catch {}
     engineRef.current?.dispose()
     const engine = new CityRunEngine()
