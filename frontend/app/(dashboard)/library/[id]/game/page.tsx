@@ -454,6 +454,7 @@ class CityRunEngine {
   }
 
   clearObstacles() {
+    this.spawnObstaclesActive = false
     for (const obs of this.obstacles) {
       this.spawnParticles(obs.mesh.position.x, 1.5, obs.z, 0x44ff44, 8)
       this.scene.remove(obs.mesh)
@@ -577,24 +578,34 @@ class CityRunEngine {
       setTimeout(() => {
         if (!THREE || !this.alive) return
         const fbGroup = new THREE.Group()
-        const coreMat = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff4400, emissiveIntensity: 3 })
-        const core = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 10), coreMat)
+        // Core — bright white-hot center
+        const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffff00, emissiveIntensity: 5 })
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), coreMat)
         fbGroup.add(core)
-        const glowMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 2, transparent: true, opacity: 0.6 })
-        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), glowMat)
+        // Inner flame — orange
+        const innerMat = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 4, transparent: true, opacity: 0.9 })
+        const inner = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 10), innerMat)
+        fbGroup.add(inner)
+        // Outer flame — red/orange
+        const outerMat = new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 3, transparent: true, opacity: 0.6 })
+        const outer = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 10), outerMat)
+        fbGroup.add(outer)
+        // Glow halo
+        const glowMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 2, transparent: true, opacity: 0.35, side: 2 })
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), glowMat)
         fbGroup.add(glow)
-        // Trail
-        for (let t = 0; t < 3; t++) {
-          const trailMat = new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 2, transparent: true, opacity: 0.4 - t * 0.1 })
-          const trail = new THREE.Mesh(new THREE.SphereGeometry(0.2 - t * 0.04, 6, 6), trailMat)
-          trail.position.z = 0.3 + t * 0.25
+        // Flame trail particles
+        for (let t = 0; t < 5; t++) {
+          const trailMat = new THREE.MeshStandardMaterial({ color: t < 2 ? 0xff6600 : 0xff2200, emissive: 0xff4400, emissiveIntensity: 2, transparent: true, opacity: 0.5 - t * 0.08 })
+          const trail = new THREE.Mesh(new THREE.SphereGeometry(0.18 - t * 0.03, 6, 6), trailMat)
+          trail.position.z = 0.4 + t * 0.3
           fbGroup.add(trail)
         }
         fbGroup.position.set(runnerX + (Math.random() - 0.5) * 0.5, runnerY + (Math.random() - 0.5) * 0.3, -2)
         this.scene.add(fbGroup)
-        this.fireballs.push({ mesh: fbGroup, vz: -1.5, life: 200 })
+        this.fireballs.push({ mesh: fbGroup, vz: -1.8, life: 200 })
         if (i === 0) SFX.fireball()
-      }, i * 200)
+      }, i * 250)
     }
   }
 
@@ -892,7 +903,18 @@ class CityRunEngine {
     for (let i = this.fireballs.length - 1; i >= 0; i--) {
       const fb = this.fireballs[i]
       fb.mesh.position.z += fb.vz
+      fb.mesh.rotation.y += 0.15
+      fb.mesh.rotation.x += 0.08
       fb.life--
+      // Emit flame particles behind fireball
+      if (fb.life % 3 === 0) {
+        this.spawnParticles(
+          fb.mesh.position.x + (Math.random() - 0.5) * 0.3,
+          fb.mesh.position.y + (Math.random() - 0.5) * 0.3,
+          fb.mesh.position.z + 0.5,
+          Math.random() > 0.5 ? 0xff6600 : 0xffaa00, 2
+        )
+      }
       // Check collision with boss
       if (this.bossGroup && this.bossHealth > 0) {
         const dx = Math.abs(fb.mesh.position.x - this.bossGroup.position.x)
@@ -1094,6 +1116,7 @@ export default function KnowledgeRunnerPage() {
   const [warmupTimer, setWarmupTimer] = useState(8)
   const [questionTimer, setQuestionTimer] = useState(15)
   const [bossIntroTimer, setBossIntroTimer] = useState(3)
+  const [bossHealthDisplay, setBossHealthDisplay] = useState(3)
   const [correctAnswers, setCorrectAnswers] = useState(0)
   const [quizResult, setQuizResult] = useState<'correct' | 'wrong' | null>(null)
 
@@ -1272,9 +1295,9 @@ export default function KnowledgeRunnerPage() {
       engine.start()
       const ticker = setInterval(() => {
         if (engineRef.current) {
-          void 0
+          setBossHealthDisplay(engineRef.current.bossHealth)
         }
-      }, 200)
+      }, 100)
       ;(engine as any)._ticker = ticker
     }
   }, [soundEnabled])
@@ -1455,6 +1478,33 @@ export default function KnowledgeRunnerPage() {
               </button>
             </div>
           </div>
+          {/* Boss Health Bar */}
+          {(gameState === 'boss_intro' || gameState === 'boss_fight') && (
+            <div className="px-4 pt-2 pb-1 pointer-events-none">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Boss</span>
+                <span className="text-[10px] font-bold text-white/60">{bossHealthDisplay}/3</span>
+              </div>
+              <div className="w-full h-3 bg-black/40 rounded-full overflow-hidden border border-red-500/30 backdrop-blur">
+                <div
+                  className="h-full rounded-full transition-all duration-300 ease-out"
+                  style={{
+                    width: `${(bossHealthDisplay / 3) * 100}%`,
+                    background: bossHealthDisplay === 3
+                      ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+                      : bossHealthDisplay === 2
+                      ? 'linear-gradient(90deg, #f97316, #ea580c)'
+                      : 'linear-gradient(90deg, #eab308, #ca8a04)',
+                    boxShadow: bossHealthDisplay <= 1
+                      ? '0 0 12px rgba(234, 179, 8, 0.6)'
+                      : bossHealthDisplay === 2
+                      ? '0 0 8px rgba(249, 115, 22, 0.4)'
+                      : '0 0 6px rgba(239, 68, 68, 0.3)',
+                  }}
+                />
+              </div>
+            </div>
+          )}
           {gameState === 'warmup' && (
             <div className="text-center mt-2 pointer-events-none">
               <span className="px-4 py-1.5 rounded-full bg-cyan-500/20 text-cyan-300 text-xs font-black uppercase tracking-widest animate-pulse">
