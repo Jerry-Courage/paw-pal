@@ -93,21 +93,21 @@ export default function UniDashboard() {
 
       {/* ── Personal Tutor CTA ── */}
       <Link href="/dashboard/personalised"
-        className="block relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-rose-600 via-pink-600 to-fuchsia-600 p-6 sm:p-8 text-white shadow-2xl hover:shadow-rose-500/20 transition-all group">
-        <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute right-4 top-4 sm:right-8 sm:top-6">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform">
-            <Headphones className="w-7 h-7 sm:w-8 sm:h-8" />
-          </div>
+        className="flex items-center gap-4 rounded-2xl bg-surface-container border border-outline-variant/30 p-4 sm:p-5 hover:border-primary/50 hover:bg-surface-container-high transition-all group shadow-sm">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+          <Headphones className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
         </div>
-        <div className="relative z-10 max-w-[75%]">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md text-[10px] font-black uppercase tracking-wider mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> Live Voice Tutor
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <h3 className="text-sm sm:text-base font-black text-on-surface tracking-tight">Talk to Your Personal Tutor</h3>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />
           </div>
-          <h3 className="text-xl sm:text-2xl font-black tracking-tight mb-1">Talk to Your Personal Tutor</h3>
-          <p className="text-white/80 text-sm font-medium leading-relaxed">
-            Real-time voice conversations. Remembers everything you've studied. Adapts to your level.
+          <p className="text-xs text-on-surface-variant font-medium line-clamp-1">
+            Real-time voice conversations · Remembers everything · Adapts to your level
           </p>
+        </div>
+        <div className="shrink-0 bg-primary text-on-primary text-xs font-bold px-4 py-2 rounded-xl group-hover:brightness-110 transition-all hidden sm:flex items-center gap-1.5">
+          Start Session <ArrowRight className="w-3.5 h-3.5" />
         </div>
       </Link>
 
