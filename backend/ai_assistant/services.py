@@ -118,8 +118,7 @@ FALLBACK_MODELS = [
 
 # ─── PROVIDER ENDPOINTS ────────────────────────────────────────────────────────
 CEREBRAS_API_URL  = "https://api.cerebras.ai/v1/chat/completions"
-SAMBANOVA_API_URL = "https://api.sambanova.ai/v1/chat/completions"
-GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # ─── MODEL ROUTING STRATEGY ────────────────────────────────────────────────────
 #
@@ -129,12 +128,10 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #    3. Groq key2 gpt-oss-20b      1000 t/s  — second key burst capacity
 #    4. Groq key2 llama-3.1-8b      560 t/s  — second key fallback
 #    5. Groq key3-5 gpt-oss-20b    1000 t/s  — additional keys (72K RPD total)
-#    6. SambaNova Llama-3.3-70B    12K RPD   — smart fallback
-#    7. SambaNova Llama-4-Maverick 12K RPD   — fast fallback
-#    8. Cerebras  gpt-oss-120b     14.4K RPD — high-quota fallback
-#    9. Cerebras  gemma-4-31b      14.4K RPD — high-quota fallback
-#   10. Google    gemma-4-26b      14.4K RPD — huge quota safety net (2 keys)
-#   11. Google    gemma-4-31b      14.4K RPD — huge quota safety net (2 keys)
+#    6. Cerebras  gpt-oss-120b     14.4K RPD — high-quota fallback
+#    7. Cerebras  gemma-4-31b      14.4K RPD — high-quota fallback
+#    8. Google    gemma-4-26b      14.4K RPD — huge quota safety net (2 keys)
+#    9. Google    gemma-4-31b      14.4K RPD — huge quota safety net (2 keys)
 #
 #  STUDY KIT (fast generation — needs speed + high daily quota)
 #    1. Groq key1 gpt-oss-20b      1000 t/s  — absolute fastest
@@ -144,8 +141,7 @@ GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions"
 #    5. Groq key2 llama-3.1-8b      560 t/s  — second key fallback
 #    6. Cerebras  gpt-oss-120b     14.4K RPD — high-quota fallback
 #    7. Cerebras  gemma-4-31b      14.4K RPD — high-quota fallback
-#    8. SambaNova Llama-3.3-70B    12K RPD   — smart fallback
-#    9. Google    Gemma-4-31b      14.4K RPD — huge quota safety net
+#    8. Google    Gemma-4-31b      14.4K RPD — huge quota safety net
 #
 #  STREAMING CHAT (needs speed + streaming support)
 #    1. Groq key1 gpt-oss-20b      1000 t/s  — fastest streamer
@@ -346,7 +342,7 @@ class AIService:
     async def chat(self, messages: list, target_model: str = None, max_tokens: int = 8192, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False) -> str:
         """
         Hyper-Resilient Chat — optimised for SPEED (conversational use).
-        Chain: Groq (1000 t/s) → SambaNova (12K RPD) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
+        Chain: Groq (1000 t/s) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
         
         TUTOR MODE OPTIMIZATION: When is_tutor_mode=True, uses ultra-fast models with aggressive timeouts
         """
@@ -458,32 +454,6 @@ class AIService:
                     except Exception as e:
                         logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
 
-        # ── STAGE 1: SAMBANOVA — 12K RPD, OpenAI-compatible ──────────────────
-        samba_key = os.getenv('SAMBANOVA_API_KEY')
-        if samba_key and not has_images:
-            for samba_model, samba_timeout in [
-                ('Meta-Llama-3.3-70B-Instruct', 12),       # 12K RPD — smart
-                ('Llama-4-Maverick-17B-128E-Instruct', 10),# 12K RPD — fast
-                ('DeepSeek-V3.1', 12),                     # 12K RPD — reasoning
-            ]:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            SAMBANOVA_API_URL,
-                            headers={"Authorization": f"Bearer {samba_key}", "Content-Type": "application/json"},
-                            json={'model': samba_model, 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=samba_timeout,
-                        )
-                        if resp.status_code == 200:
-                            result = self._extract_content(resp.json())
-                            if result and result.strip():
-                                logger.info(f"[SambaNova Chat] ✓ {samba_model}")
-                                return result
-                        elif resp.status_code == 429:
-                            await asyncio.sleep(0.3)
-                except Exception as e:
-                    logger.warning(f"[SambaNova Chat] {samba_model} failed: {e}")
-
         # ── STAGE 2: CEREBRAS — 14.4K RPD, high-quota safety net ─────────────
         cerebras_key = os.getenv('CEREBRAS_API_KEY')
         if cerebras_key and not has_images:
@@ -513,22 +483,37 @@ class AIService:
         for g_client in self._google_clients():
             if has_images: continue
             for g_model in ['models/gemma-4-26b-a4b-it', 'models/gemma-4-31b-it']:
-                try:
-                    contents, sys_instr = self._to_gemini_format(messages)
-                    if sys_instr and contents and contents[0].get('role') == 'user':
-                        contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                    response = await asyncio.wait_for(
-                        g_client.aio.models.generate_content(
-                            model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                        ), timeout=25
-                    )
-                    if response.text:
-                        logger.info(f"[Google SDK Chat] ✓ {g_model}")
-                        return response.text
-                except asyncio.TimeoutError:
-                    logger.warning(f"[Google SDK Chat] {g_model} timed out")
-                except Exception as e:
-                    logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
+                for attempt in range(3):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=25
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Chat] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Chat] {g_model} timed out")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
+                            break
 
         # ── STAGE 4: OPENROUTER — last resort ────────────────────────────────
         models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
@@ -558,7 +543,7 @@ class AIService:
         """
         Study Kit Chat — optimised for SPEED + HIGH DAILY QUOTA (generation tasks).
         Chain: Groq gpt-oss-20b (1000 t/s) → Cerebras gpt-oss-120b (14.4K RPD)
-               → SambaNova → Google Gemma-4-31b → OpenRouter
+               → Google Gemma-4-31b → OpenRouter
         """
         # ── STAGE 0: GROQ — fastest inference on the planet ────────────────
         groq_keys = self._groq_keys()
@@ -612,51 +597,40 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Cerebras Kit] {cerebras_model} failed: {e}")
 
-        # ── STAGE 1: SAMBANOVA — 12K RPD smart fallback ──────────────────────
-        samba_key = os.getenv('SAMBANOVA_API_KEY')
-        if samba_key:
-            for samba_model, samba_timeout in [
-                ('Meta-Llama-3.3-70B-Instruct', 90),       # 12K RPD — capable
-                ('DeepSeek-V3.1', 90),                     # 12K RPD — strong reasoning
-                ('Llama-4-Maverick-17B-128E-Instruct', 90),# 12K RPD — fast
-            ]:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            SAMBANOVA_API_URL,
-                            headers={"Authorization": f"Bearer {samba_key}", "Content-Type": "application/json"},
-                            json={'model': samba_model, 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=samba_timeout,
-                        )
-                        if resp.status_code == 200:
-                            result = self._extract_content(resp.json())
-                            if result and result.strip():
-                                logger.info(f"[SambaNova Kit] ✓ {samba_model}")
-                                return result
-                        elif resp.status_code == 429:
-                            await asyncio.sleep(1)
-                except Exception as e:
-                    logger.warning(f"[SambaNova Kit] {samba_model} failed: {e}")
-
         # ── STAGE 2: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
         for g_client in self._google_clients():
             for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
-                try:
-                    contents, sys_instr = self._to_gemini_format(messages)
-                    if sys_instr and contents and contents[0].get('role') == 'user':
-                        contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                    response = await asyncio.wait_for(
-                        g_client.aio.models.generate_content(
-                            model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                        ), timeout=60
-                    )
-                    if response.text:
-                        logger.info(f"[Google SDK Kit] ✓ {g_model}")
-                        return response.text
-                except asyncio.TimeoutError:
-                    logger.warning(f"[Google SDK Kit] {g_model} timed out")
-                except Exception as e:
-                    logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+                for attempt in range(3):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=60
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Kit] {g_model} timed out")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+                            break
 
         # ── STAGE 4: OPENROUTER (Final Ultimate Resiliency Fallback) ─────────
         if self.api_key:
@@ -1244,7 +1218,7 @@ class AIService:
             for concept in resource.ai_concepts:
                 text = concept.get('extracted_text', '') or concept.get('transcript', '')
                 if text:
-                    parts.append(f'--- Document Text ---\n{text[:15000]}')
+                    parts.append(f'--- Document Text ---\n{text[:4000]}')
                     break
 
         # 2. AI-generated study notes (lets chat AI reference what the student sees)
@@ -1268,7 +1242,7 @@ class AIService:
                 parts.append('--- AI Study Notes (what the student sees) ---\n' + '\n\n'.join(notes_text))
 
         if parts:
-            return '\n\n'.join(parts)[:35000]
+            return '\n\n'.join(parts)[:8000]
 
         if resource.ai_summary:
             return resource.ai_summary[:5000]
@@ -1311,7 +1285,7 @@ class AIService:
         # Use Hyper-Speed models for instant interactivity
         prompt = (
             f"Generate exactly {count} professional high-yield flashcards {base} based on this content:\n\n"
-            f"{content[:8000]}\n\n"
+            f"{content[:4000]}\n\n"
             'Return ONLY a RAW JSON array of objects with exactly these keys: "question", "answer", "difficulty" (easy/medium/hard). '
             f"{latex_rule} No markdown formatting, just the raw array."
         )
@@ -1325,7 +1299,7 @@ class AIService:
         context = self._get_resource_context(resource)
         # Normalize format aliases
         fmt = fmt.replace('multiple_choice', 'mcq').replace('multiple-choice', 'mcq')
-        content_part = f"\n\nBased on:\n{context[:8000]}" if context else ""
+        content_part = f"\n\nBased on:\n{context[:4000]}" if context else ""
         prompt = (
             f"Generate {count} multiple choice questions for '{resource.title}' at {level} level{content_part}.\n"
             "Return ONLY a JSON array. Each object MUST have exactly these keys:\n"
@@ -1382,21 +1356,6 @@ class AIService:
                                     return result
                     except Exception as e:
                         logger.warning(f"[StudyNudge] {model} failed: {e}")
-            # Fallback to SambaNova
-            samba_key = os.getenv('SAMBANOVA_API_KEY', '')
-            if samba_key:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            SAMBANOVA_API_URL,
-                            headers={"Authorization": f"Bearer {samba_key}", "Content-Type": "application/json"},
-                            json={'model': 'Meta-Llama-3.3-70B-Instruct', 'messages': messages, 'max_tokens': 80},
-                            timeout=10,
-                        )
-                        if resp.status_code == 200:
-                            return resp.json()["choices"][0]["message"]["content"].strip()
-                except Exception as e:
-                    logger.warning(f"[StudyNudge] SambaNova failed: {e}")
             return ''
 
         try:
@@ -1570,9 +1529,9 @@ class AIService:
         resource.save(update_fields=['processing_progress', 'status_text'])
 
         # ─── MACRO-CHUNKING (Turbo Mode) ───
-        # 10K chunks — larger chunks = fewer API calls, better context per chunk
-        chunk_size = 10000
-        overlap = 500
+        # 4K chunks — keep payloads within Groq limits to prevent 413 errors
+        chunk_size = 4000
+        overlap = 300
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         # Multi-Modal Vision Context — send page images for BOTH videos AND PDFs/slides
@@ -2026,7 +1985,7 @@ class AIService:
         context = self._get_resource_context(resource)
         prompt = (
             f"Create a detailed mind map structure for '{resource.title}' (Subject: {resource.subject or 'General'}).\n\n"
-            f"Content:\n{context[:8000] if context else resource.title}\n\n"
+            f"Content:\n{context[:4000] if context else resource.title}\n\n"
             "Return ONLY a raw JSON object (no markdown, no code blocks):\n"
             '{"center": "Main Topic", "branches": [{"topic": "Branch 1", "subtopics": ["sub1", "sub2"]}, ...]}\n'
             "Include 5-8 main branches with 3-5 subtopics each. Use emojis in topics. Start with { and end with }."
@@ -2217,16 +2176,34 @@ class AIService:
         else:
             prompt_parts.append(str(user_msg['content']))
 
-        try:
-            # New SDK call format
-            response = g_client.models.generate_content(
-                model=model_name,
-                contents=prompt_parts
-            )
-            return response.text or ""
-        except Exception as e:
-            logger.error(f"Google SDK Error ({model_name}): {e}")
-            raise e
+        import time as _time
+        last_err = None
+        for attempt in range(3):
+            try:
+                # New SDK call format
+                response = g_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt_parts
+                )
+                return response.text or ""
+            except Exception as e:
+                last_err = e
+                err_str = str(e)
+                if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
+                    delay = (2 ** attempt) + 1
+                    logger.warning(f"[Gemini Vision] 503 on {model_name} attempt {attempt+1}/3, sleeping {delay}s")
+                    _time.sleep(delay)
+                    continue
+                elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
+                    delay = (2 ** attempt) + 1
+                    logger.warning(f"[Gemini Vision] 429 on {model_name} attempt {attempt+1}/3, sleeping {delay}s")
+                    _time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"Google SDK Error ({model_name}): {e}")
+                    raise e
+        logger.error(f"Google SDK Error ({model_name}): all retries exhausted: {last_err}")
+        raise last_err
 
     def _get_style_suffix(self, prompt: str) -> str:
         """
