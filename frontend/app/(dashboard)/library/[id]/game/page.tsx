@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { libraryApi, authApi } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Trophy, Heart, Volume2, VolumeX, Play, Award, Pause, MessageSquare, Check, X } from 'lucide-react'
+import { ArrowLeft, Trophy, Heart, Volume2, VolumeX, Award, Pause, MessageSquare, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Question {
@@ -28,7 +28,8 @@ const SFX = {
   coin: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'); a.volume = 0.2; a.play() } catch {} },
   hit: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2803/2803-preview.mp3'); a.volume = 0.3; a.play() } catch {} },
   jump: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'); a.volume = 0.15; a.play() } catch {} },
-  quizGate: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3'); a.volume = 0.3; a.play() } catch {} },
+  enemy: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3'); a.volume = 0.35; a.play() } catch {} },
+  defeat: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); a.volume = 0.4; a.play() } catch {} },
 }
 
 let THREE: typeof import('three') | null = null
@@ -49,6 +50,7 @@ class CityRunEngine {
   private animId = 0
   private alive = false
 
+  // Runner
   private runnerGroup: any = null
   private runnerParts: Record<string, any> = {}
   private currentLane = 1
@@ -60,29 +62,30 @@ class CityRunEngine {
   private slideTimer = 0
   private animPhase = 0
 
+  // World
   private worldOffset = 0
   private speed = 0.3
   private baseSpeed = 0.3
   private frame = 0
   private trackPlanks: any[] = []
-  private trees: any[] = []
   private obstacles: { mesh: any; lane: number; z: number; type: string; hit: boolean; jumpable: boolean }[] = []
   private coins: { mesh: any; lane: number; z: number; collected: boolean }[] = []
   private particles: { mesh: any; vx: number; vy: number; vz: number; life: number }[] = []
+  private enemies: { mesh: any; lane: number; z: number; alive: boolean; group: any }[] = []
 
   private LANE_X = [-3, 0, 3]
   private onHit: () => void = () => {}
   private onCoin: () => void = () => {}
-  private onQuiz: () => void = () => {}
-  private quizCooldown = 0
+  private onEnemy: () => void = () => {}
+  private enemyCooldown = 0
   private quizActive = false
 
-  async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onQuiz: () => void }) {
+  async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onEnemy: () => void }) {
     await ensureThree()
     if (!THREE) return false
     this.onHit = cbs.onHit
     this.onCoin = cbs.onCoin
-    this.onQuiz = cbs.onQuiz
+    this.onEnemy = cbs.onEnemy
     this.alive = true
 
     const w = container.clientWidth || window.innerWidth
@@ -121,6 +124,7 @@ class CityRunEngine {
     fill.position.set(-5, 5, -5)
     this.scene.add(fill)
 
+    // Ground
     const grassMat = new THREE.MeshStandardMaterial({ color: 0x4a8c3f, roughness: 0.9 })
     const grass = new THREE.Mesh(new THREE.PlaneGeometry(120, 300), grassMat)
     grass.rotation.x = -Math.PI / 2
@@ -128,6 +132,7 @@ class CityRunEngine {
     grass.receiveShadow = true
     this.scene.add(grass)
 
+    // Track
     const gravelMat = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.85 })
     const gravel = new THREE.Mesh(new THREE.BoxGeometry(10, 0.15, 300), gravelMat)
     gravel.position.set(0, 0, -100)
@@ -161,6 +166,7 @@ class CityRunEngine {
       }
     }
 
+    // Trees
     const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.9 })
     const treeLeafMats = [
       new THREE.MeshStandardMaterial({ color: 0x2d7a2d, roughness: 0.7 }),
@@ -190,79 +196,160 @@ class CityRunEngine {
         }
         treeGroup.position.set(side * (7 + Math.random() * 15), 0, -i * 6 - Math.random() * 4)
         this.scene.add(treeGroup)
-        this.trees.push(treeGroup)
       }
     }
 
+    // ─── Runner Character (improved) ────────────────────────
     this.runnerGroup = new THREE.Group()
-    const capMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 })
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.35, 0.15, 12), capMat)
-    cap.position.y = 2.55
-    this.runnerGroup.add(cap)
-    this.runnerParts.cap = cap
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.25), capMat)
-    brim.position.set(0, 2.48, 0.18)
-    this.runnerGroup.add(brim)
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5c7a1, roughness: 0.6 })
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), skinMat)
-    head.position.y = 2.35
-    head.castShadow = true
-    this.runnerGroup.add(head)
-    this.runnerParts.head = head
-    const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xffffff })
-    const eyePupil = new THREE.MeshStandardMaterial({ color: 0x222222 })
-    for (const ex of [-0.1, 0.1]) {
-      const ew = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), eyeWhite)
-      ew.position.set(ex, 2.38, 0.25)
-      this.runnerGroup.add(ew)
-      const ep = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyePupil)
-      ep.position.set(ex, 2.38, 0.29)
-      this.runnerGroup.add(ep)
+
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf0b080, roughness: 0.5 })
+    const darkSkinMat = new THREE.MeshStandardMaterial({ color: 0xd4956a, roughness: 0.5 })
+
+    // Shoes
+    const shoeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 })
+    const shoeAccent = new THREE.MeshStandardMaterial({ color: 0x2288cc, roughness: 0.4 })
+    for (const sx of [-0.15, 0.15]) {
+      const shoe = new THREE.Group()
+      const sole = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.34), new THREE.MeshStandardMaterial({ color: 0x333333 }))
+      sole.position.y = 0.03
+      shoe.add(sole)
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.32), shoeMat)
+      upper.position.y = 0.12
+      shoe.add(upper)
+      const accent = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.04, 0.15), shoeAccent)
+      accent.position.set(0, 0.1, 0.08)
+      shoe.add(accent)
+      shoe.position.set(sx, 0.48, 0.02)
+      this.runnerGroup.add(shoe)
+      this.runnerParts[`shoe${sx > 0 ? 'R' : 'L'}`] = shoe
     }
-    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x22883a, roughness: 0.6 })
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.4), shirtMat)
-    body.position.y = 1.65
-    body.castShadow = true
-    this.runnerGroup.add(body)
-    this.runnerParts.body = body
-    const packMat = new THREE.MeshStandardMaterial({ color: 0x3344aa, roughness: 0.5 })
-    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.25), packMat)
-    pack.position.set(0, 1.7, -0.32)
-    this.runnerGroup.add(pack)
-    const packStrap1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.05), packMat)
-    packStrap1.position.set(-0.15, 1.8, -0.18)
-    this.runnerGroup.add(packStrap1)
-    const packStrap2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.05), packMat)
-    packStrap2.position.set(0.15, 1.8, -0.18)
-    this.runnerGroup.add(packStrap2)
-    const armMat = new THREE.MeshStandardMaterial({ color: 0xf5c7a1, roughness: 0.6 })
-    for (const ax of [-0.48, 0.48]) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.16), armMat)
-      arm.position.set(ax, 1.5, 0)
-      arm.castShadow = true
-      this.runnerGroup.add(arm)
-      this.runnerParts[`arm${ax > 0 ? 'R' : 'L'}`] = arm
-    }
-    const handMat = new THREE.MeshStandardMaterial({ color: 0xf0b888, roughness: 0.5 })
-    for (const hx of [-0.48, 0.48]) {
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), handMat)
-      hand.position.set(hx, 1.15, 0)
-      this.runnerGroup.add(hand)
-    }
-    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.6 })
+
+    // Legs (pants)
+    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.5 })
+    const pantsLight = new THREE.MeshStandardMaterial({ color: 0x2a52bb, roughness: 0.5 })
     for (const lx of [-0.15, 0.15]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.22), pantsMat)
-      leg.position.set(lx, 0.8, 0)
-      leg.castShadow = true
+      const leg = new THREE.Group()
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.4, 0.24), pantsMat)
+      upper.position.y = 0.5
+      leg.add(upper)
+      const lower = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, 0.22), pantsLight)
+      lower.position.y = 0.25
+      leg.add(lower)
+      leg.position.set(lx, 0, 0)
       this.runnerGroup.add(leg)
       this.runnerParts[`leg${lx > 0 ? 'R' : 'L'}`] = leg
     }
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
-    for (const sx of [-0.15, 0.15]) {
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.3), shoeMat)
-      shoe.position.set(sx, 0.45, 0.04)
-      this.runnerGroup.add(shoe)
+
+    // Body (torso with shirt)
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x22883a, roughness: 0.5 })
+    const shirtDark = new THREE.MeshStandardMaterial({ color: 0x1a6e2e, roughness: 0.5 })
+    const torso = new THREE.Group()
+    const shirtFront = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.75, 0.35), shirtMat)
+    shirtFront.position.y = 0
+    torso.add(shirtFront)
+    const shirtBack = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.75, 0.35), shirtDark)
+    shirtBack.position.set(0, 0, -0.35)
+    torso.add(shirtBack)
+    // Collar
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.15), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }))
+    collar.position.set(0, 0.4, 0.1)
+    torso.add(collar)
+    torso.position.y = 1.55
+    this.runnerGroup.add(torso)
+    this.runnerParts.torso = torso
+
+    // Backpack
+    const packMat = new THREE.MeshStandardMaterial({ color: 0x3344aa, roughness: 0.4 })
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 0.22), packMat)
+    pack.position.set(0, 1.6, -0.3)
+    this.runnerGroup.add(pack)
+    const packFlap = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.23), new THREE.MeshStandardMaterial({ color: 0x2233aa }))
+    packFlap.position.set(0, 1.88, -0.3)
+    this.runnerGroup.add(packFlap)
+    for (const sx of [-0.12, 0.12]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.35, 0.04), packMat)
+      strap.position.set(sx, 1.7, -0.16)
+      this.runnerGroup.add(strap)
     }
+
+    // Arms
+    const armMat = new THREE.MeshStandardMaterial({ color: 0xf0b080, roughness: 0.5 })
+    for (const ax of [-0.42, 0.42]) {
+      const arm = new THREE.Group()
+      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.25, 0.16), shirtMat)
+      sleeve.position.y = 0.35
+      arm.add(sleeve)
+      const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.3, 0.14), armMat)
+      forearm.position.y = 0.1
+      arm.add(forearm)
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), darkSkinMat)
+      hand.position.y = -0.05
+      arm.add(hand)
+      arm.position.set(ax, 1.55, 0)
+      this.runnerGroup.add(arm)
+      this.runnerParts[`arm${ax > 0 ? 'R' : 'L'}`] = arm
+    }
+
+    // Head
+    const headGroup = new THREE.Group()
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMat)
+    headMesh.castShadow = true
+    headGroup.add(headMesh)
+
+    // Hair
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.6 })
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.29, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat)
+    hair.position.y = 0.03
+    headGroup.add(hair)
+
+    // Eyes
+    const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xffffff })
+    const eyePupil = new THREE.MeshStandardMaterial({ color: 0x1a1a2e })
+    const eyeIris = new THREE.MeshStandardMaterial({ color: 0x3a2510 })
+    for (const ex of [-0.1, 0.1]) {
+      const ew = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), eyeWhite)
+      ew.position.set(ex, 0.04, 0.22)
+      headGroup.add(ew)
+      const iris = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), eyeIris)
+      iris.position.set(ex, 0.04, 0.25)
+      headGroup.add(iris)
+      const ep = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), eyePupil)
+      ep.position.set(ex, 0.04, 0.27)
+      headGroup.add(ep)
+    }
+
+    // Eyebrows
+    const browMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e })
+    for (const bx of [-0.1, 0.1]) {
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.03), browMat)
+      brow.position.set(bx, 0.12, 0.23)
+      headGroup.add(brow)
+    }
+
+    // Nose
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), darkSkinMat)
+    nose.position.set(0, -0.02, 0.28)
+    headGroup.add(nose)
+
+    // Mouth (smile)
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0xcc6655 })
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.02), mouthMat)
+    mouth.position.set(0, -0.08, 0.26)
+    headGroup.add(mouth)
+
+    // Cap
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.4 })
+    const capDome = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.18, 16), capMat)
+    capDome.position.y = 0.22
+    headGroup.add(capDome)
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.03, 0.2), capMat)
+    brim.position.set(0, 0.15, 0.2)
+    headGroup.add(brim)
+
+    headGroup.position.y = 2.25
+    this.runnerGroup.add(headGroup)
+    this.runnerParts.head = headGroup
+
     this.runnerGroup.position.set(0, 0, 0)
     this.scene.add(this.runnerGroup)
 
@@ -290,31 +377,29 @@ class CityRunEngine {
     this.jumpY = 0
     this.isSliding = false
     this.slideTimer = 0
-    this.quizCooldown = 0
+    this.enemyCooldown = 0
     this.quizActive = false
     this.obstacles.forEach(o => this.scene.remove(o.mesh))
     this.coins.forEach(c => this.scene.remove(c.mesh))
     this.particles.forEach(p => this.scene.remove(p.mesh))
+    this.enemies.forEach(e => { this.scene.remove(e.group) })
     this.obstacles = []
     this.coins = []
     this.particles = []
+    this.enemies = []
     this.worldOffset = 0
-    // Spawn initial obstacles immediately so the player sees them right away
+
+    // Spawn initial obstacles
     for (let i = 0; i < 5; i++) {
       this.spawnObstacle()
-      // Spread them out
       const last = this.obstacles[this.obstacles.length - 1]
-      if (last) {
-        last.z = -15 - i * 12
-        last.mesh.position.z = last.z
-      }
+      if (last) { last.z = -15 - i * 12; last.mesh.position.z = last.z }
     }
     this.run()
   }
 
   setQuizActive(active: boolean) {
     this.quizActive = active
-    // Slow down during quiz
     if (active) {
       this.baseSpeed = Math.max(0.15, this.speed * 0.4)
     } else {
@@ -358,12 +443,20 @@ class CityRunEngine {
     this.obstacles = []
   }
 
+  defeatEnemy(enemy: { mesh: any; group: any; z: number; lane: number }) {
+    const x = this.LANE_X[enemy.lane]
+    this.spawnParticles(x, 2, enemy.z, 0xff4444, 15)
+    this.spawnParticles(x, 2, enemy.z, 0xffaa00, 10)
+    this.spawnParticles(x, 2, enemy.z, 0xffff00, 8)
+    this.scene.remove(enemy.group)
+    enemy.alive = false
+  }
+
   private run = () => {
     if (!this.alive || !THREE) return
     this.animId = requestAnimationFrame(this.run)
 
     this.frame++
-    // Smooth speed towards base
     this.speed += (this.baseSpeed - this.speed) * 0.05
     this.baseSpeed = Math.min(1.2, this.baseSpeed + 0.00015)
     this.worldOffset += this.speed
@@ -383,6 +476,7 @@ class CityRunEngine {
       if (this.slideTimer <= 0) this.isSliding = false
     }
 
+    // Runner animation
     if (this.runnerGroup) {
       const tx = this.LANE_X[this.targetLane]
       this.runnerGroup.position.x += (tx - this.runnerGroup.position.x) * 0.15
@@ -394,22 +488,27 @@ class CityRunEngine {
         this.runnerGroup.scale.y += (1 - this.runnerGroup.scale.y) * 0.2
       }
       const t = this.animPhase
-      const bob = Math.sin(t) * 0.08
-      const legSwing = Math.sin(t) * 0.5
-      if (this.runnerParts.body) this.runnerParts.body.position.y = 1.65 + bob
-      if (this.runnerParts.head) this.runnerParts.head.position.y = 2.35 + bob
-      if (this.runnerParts.cap) this.runnerParts.cap.position.y = 2.55 + bob
+      const bob = Math.sin(t) * 0.06
+      const legSwing = Math.sin(t) * 0.6
+      const armSwing = Math.sin(t) * 0.7
+
+      if (this.runnerParts.torso) this.runnerParts.torso.position.y = 1.55 + bob
+      if (this.runnerParts.head) this.runnerParts.head.position.y = 2.25 + bob
       if (this.runnerParts.legL) this.runnerParts.legL.rotation.x = this.isSliding ? 0.8 : legSwing
       if (this.runnerParts.legR) this.runnerParts.legR.rotation.x = this.isSliding ? -0.3 : -legSwing
-      if (this.runnerParts.armL) this.runnerParts.armL.rotation.x = this.isSliding ? 0.3 : -legSwing * 0.8
-      if (this.runnerParts.armR) this.runnerParts.armR.rotation.x = this.isSliding ? -0.3 : legSwing * 0.8
+      if (this.runnerParts.shoeL) this.runnerParts.shoeL.rotation.x = this.isSliding ? 0.6 : legSwing * 0.5
+      if (this.runnerParts.shoeR) this.runnerParts.shoeR.rotation.x = this.isSliding ? -0.2 : -legSwing * 0.5
+      if (this.runnerParts.armL) this.runnerParts.armL.rotation.x = this.isSliding ? 0.3 : -armSwing
+      if (this.runnerParts.armR) this.runnerParts.armR.rotation.x = this.isSliding ? -0.3 : armSwing
     }
 
+    // Move track
     for (const plank of this.trackPlanks) {
       plank.position.z += this.speed
       if (plank.position.z > 15) plank.position.z -= 280
     }
 
+    // Move obstacles
     for (const obs of this.obstacles) {
       obs.z += this.speed
       obs.mesh.position.z = obs.z
@@ -419,6 +518,7 @@ class CityRunEngine {
       return true
     })
 
+    // Move coins
     for (const c of this.coins) {
       c.z += this.speed
       c.mesh.position.z = c.z
@@ -429,6 +529,19 @@ class CityRunEngine {
       return true
     })
 
+    // Move enemies
+    for (const e of this.enemies) {
+      e.z += this.speed
+      e.group.position.z = e.z
+      // Hover animation
+      e.group.position.y = 0.5 + Math.sin(this.frame * 0.08) * 0.3
+      e.group.rotation.y += 0.03
+    }
+    this.enemies = this.enemies.filter(e => {
+      if (!e.alive || e.z > 12) { this.scene.remove(e.group); return false }
+      return true
+    })
+
     // Spawn obstacles
     const gap = Math.max(5, 10 - this.speed * 4)
     if (this.frame > 20 && Math.random() < 0.08 + this.speed * 0.03) {
@@ -436,12 +549,23 @@ class CityRunEngine {
       if (far < -gap) this.spawnObstacle()
     }
 
+    // Spawn coins
     if (this.frame % 10 === 0 && Math.random() < 0.6) {
       const far = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : -999
       if (far < -6) this.spawnCoin()
     }
 
-    // Collision
+    // Spawn enemies (every ~8-12 seconds)
+    if (this.enemyCooldown > 0) this.enemyCooldown--
+    if (this.frame > 200 && this.enemyCooldown <= 0 && !this.quizActive && Math.random() < 0.006) {
+      const far = this.enemies.length > 0 ? Math.min(...this.enemies.map(e => e.z)) : -999
+      if (far < -20) {
+        this.spawnEnemy()
+        this.enemyCooldown = 500
+      }
+    }
+
+    // Collision — obstacles
     const rl = Math.round(this.currentLane)
     for (const obs of this.obstacles) {
       if (obs.hit) continue
@@ -453,6 +577,8 @@ class CityRunEngine {
         this.spawnParticles(obs.mesh.position.x, 1.5, 0, 0xff4444, 10)
       }
     }
+
+    // Collision — coins
     for (const c of this.coins) {
       if (c.collected) continue
       if (Math.abs(c.z) < 1.5 && c.lane === rl) {
@@ -462,16 +588,21 @@ class CityRunEngine {
       }
     }
 
-    // Quiz trigger — after enough distance, trigger a quiz
-    if (this.quizCooldown > 0) this.quizCooldown--
-    if (this.frame > 500 && this.quizCooldown <= 0 && !this.quizActive && Math.random() < 0.005) {
-      this.onQuiz()
-      this.quizCooldown = 600
+    // Collision — enemies (triggers quiz)
+    for (const e of this.enemies) {
+      if (!e.alive) continue
+      if (Math.abs(e.z) < 2.5 && e.lane === rl) {
+        e.alive = false
+        this.onEnemy()
+        this.spawnParticles(this.LANE_X[e.lane], 2, e.z, 0xff6600, 12)
+      }
     }
 
+    // Camera
     this.camera.position.x += (this.runnerGroup.position.x * 0.3 - this.camera.position.x) * 0.05
     this.camera.position.y = 5 + this.jumpY * 0.3 + Math.sin(this.frame * 0.05) * 0.1
 
+    // Particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i]
       p.mesh.position.x += p.vx
@@ -540,6 +671,47 @@ class CityRunEngine {
     mesh.position.set(this.LANE_X[lane], 1.5, -45)
     this.scene.add(mesh)
     this.coins.push({ mesh, lane, z: -45, collected: false })
+  }
+
+  private spawnEnemy() {
+    if (!THREE) return
+    const lane = Math.floor(Math.random() * 3)
+    const group = new THREE.Group()
+
+    // Enemy body — dark floating orb with spikes
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x880044, emissive: 0x440022, emissiveIntensity: 0.8, roughness: 0.3 })
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 12), bodyMat)
+    body.castShadow = true
+    group.add(body)
+
+    // Spikes
+    const spikeMat = new THREE.MeshStandardMaterial({ color: 0xff2266, emissive: 0xff0044, emissiveIntensity: 1.2 })
+    for (let i = 0; i < 8; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.5, 4), spikeMat)
+      const angle = (i / 8) * Math.PI * 2
+      spike.position.set(Math.cos(angle) * 0.7, Math.sin(angle) * 0.7, 0)
+      spike.lookAt(0, 0, 0)
+      spike.rotateX(Math.PI / 2)
+      group.add(spike)
+    }
+
+    // Eyes
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 2 })
+    for (const ex of [-0.2, 0.2]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeMat)
+      eye.position.set(ex, 0.15, 0.55)
+      group.add(eye)
+    }
+
+    // Glow ring
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xff4488, emissive: 0xff2266, emissiveIntensity: 1, transparent: true, opacity: 0.5 })
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.05, 8, 24), ringMat)
+    ring.rotation.x = Math.PI / 2
+    group.add(ring)
+
+    group.position.set(this.LANE_X[lane], 2, -45)
+    this.scene.add(group)
+    this.enemies.push({ mesh: body, lane, z: -45, alive: true, group })
   }
 
   private spawnParticles(x: number, y: number, z: number, color: number, count: number) {
@@ -630,7 +802,6 @@ export default function KnowledgeRunnerPage() {
         correctIndex: item.correct_index ?? item.answerIndex ?? 0,
         explanation: item.explanation || ''
       }))
-      // Filter to only questions with 4 options
       qList = qList.filter((q: Question) => q.options.length === 4)
       if (qList.length < 3) {
         qList = [
@@ -675,14 +846,14 @@ export default function KnowledgeRunnerPage() {
         setScore(s => s + 25)
         if (soundEnabled) SFX.coin()
       },
-      onQuiz: () => {
-        // Trigger quiz — game slows down but keeps running
+      onEnemy: () => {
+        // Enemy encountered — trigger quiz
         setQuizActive(true)
         setSelectedAnswer(null)
         setShowExplanation(false)
         setQuizResult(null)
         engine.setQuizActive(true)
-        if (soundEnabled) SFX.quizGate()
+        if (soundEnabled) SFX.enemy()
       },
     })
 
@@ -703,37 +874,6 @@ export default function KnowledgeRunnerPage() {
     setGameState('playing')
     engineRef.current?.start()
   }, [])
-
-  const handleAnswer = useCallback((idx: number) => {
-    if (selectedAnswer !== null) return
-    setSelectedAnswer(idx)
-    const q = questions[currentQIndex]
-    if (!q) return
-
-    const isCorrect = idx === q.correctIndex
-    setQuestionHistory(prev => [...prev, { question: q, selectedIndex: idx, correct: isCorrect }])
-
-    if (isCorrect) {
-      setScore(s => s + 300 * (combo + 1))
-      setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
-      setQuizResult('correct')
-      if (soundEnabled) SFX.correct()
-      engineRef.current?.destroyAllObstacles()
-    } else {
-      setCombo(0)
-      setQuizResult('wrong')
-      setLives(l => {
-        const n = l - 1
-        if (soundEnabled) SFX.wrong()
-        return n
-      })
-    }
-    setShowExplanation(true)
-    // Auto-continue after 2 seconds
-    setTimeout(() => {
-      advanceAfterQuiz()
-    }, 2000)
-  }, [selectedAnswer, questions, currentQIndex, combo, soundEnabled])
 
   const advanceAfterQuiz = useCallback(() => {
     setShowExplanation(false)
@@ -756,6 +896,37 @@ export default function KnowledgeRunnerPage() {
     })
   }, [currentQIndex, questions.length, resourceId])
 
+  const handleAnswer = useCallback((idx: number) => {
+    if (selectedAnswer !== null) return
+    setSelectedAnswer(idx)
+    const q = questions[currentQIndex]
+    if (!q) return
+
+    const isCorrect = idx === q.correctIndex
+    setQuestionHistory(prev => [...prev, { question: q, selectedIndex: idx, correct: isCorrect }])
+
+    if (isCorrect) {
+      setScore(s => s + 300 * (combo + 1))
+      setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
+      setQuizResult('correct')
+      if (soundEnabled) SFX.correct()
+      SFX.defeat()
+      // Defeat the enemy with explosion
+      engineRef.current?.defeatEnemy(engineRef.current['enemies']?.[0] || { mesh: null, group: new (THREE as any).Group(), z: 0, lane: 1 })
+      engineRef.current?.destroyAllObstacles()
+    } else {
+      setCombo(0)
+      setQuizResult('wrong')
+      setLives(l => {
+        const n = l - 1
+        if (soundEnabled) SFX.wrong()
+        return n
+      })
+    }
+    setShowExplanation(true)
+    setTimeout(() => { advanceAfterQuiz() }, 2000)
+  }, [selectedAnswer, questions, currentQIndex, combo, soundEnabled])
+
   // Keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -766,10 +937,7 @@ export default function KnowledgeRunnerPage() {
         if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') { e.preventDefault(); eng.jump() }
         if (e.key === 'ArrowDown' || e.key === 's') eng.slide()
         if (e.key === 'Escape') { eng.stop(); setGameState('paused') }
-        // Quiz answer keys (1-4) — game keeps running
-        if (quizActive && e.key >= '1' && e.key <= '4') {
-          handleAnswer(parseInt(e.key) - 1)
-        }
+        if (quizActive && e.key >= '1' && e.key <= '4') handleAnswer(parseInt(e.key) - 1)
       } else if (gameState === 'paused' && e.key === 'Escape') {
         resumeGame()
       }
@@ -815,7 +983,6 @@ export default function KnowledgeRunnerPage() {
 
   return (
     <div className="fixed inset-0 bg-black text-white overflow-hidden select-none z-50">
-      {/* 3D Canvas */}
       <div ref={containerRef} className="absolute inset-0" style={{ touchAction: 'none' }} />
 
       {/* HUD */}
@@ -868,17 +1035,16 @@ export default function KnowledgeRunnerPage() {
         </div>
       )}
 
-      {/* Quiz Overlay — game keeps running behind this */}
+      {/* Quiz Overlay — enemy encounter */}
       <AnimatePresence>
         {quizActive && currentQ && (
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
             className="absolute bottom-0 left-0 right-0 z-40 pointer-events-auto">
             <div className="mx-auto max-w-2xl p-4 pb-6 md:pb-4">
-              <div className="bg-[#0f172a]/95 border border-cyan-500/30 rounded-2xl p-5 shadow-[0_0_60px_rgba(6,182,212,0.15)] backdrop-blur-xl">
-                {/* Question header */}
+              <div className="bg-[#0f172a]/95 border border-red-500/30 rounded-2xl p-5 shadow-[0_0_60px_rgba(255,0,60,0.15)] backdrop-blur-xl">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-[11px] font-black uppercase tracking-widest">
-                    ⚡ Question {currentQIndex + 1}/{questions.length}
+                  <span className="px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-[11px] font-black uppercase tracking-widest">
+                    ⚔️ Enemy Encounter — Question {currentQIndex + 1}/{questions.length}
                   </span>
                   {quizResult && (
                     <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest ${
@@ -886,15 +1052,13 @@ export default function KnowledgeRunnerPage() {
                         ? 'bg-green-500/20 text-green-400'
                         : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {quizResult === 'correct' ? '✅ Correct!' : '❌ Wrong!'}
+                      {quizResult === 'correct' ? '💀 Enemy Defeated!' : '💔 Wrong!'}
                     </span>
                   )}
                 </div>
 
-                {/* Question text */}
                 <h2 className="text-base md:text-lg font-black text-white leading-snug mb-4">{currentQ.question}</h2>
 
-                {/* 4 Options as big tap buttons */}
                 <div className="grid grid-cols-2 gap-2.5">
                   {currentQ.options.map((opt, i) => {
                     const isCorrect = i === currentQ.correctIndex
@@ -914,7 +1078,6 @@ export default function KnowledgeRunnerPage() {
                   })}
                 </div>
 
-                {/* Explanation */}
                 {showExplanation && (
                   <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                     className={`mt-3 p-3 rounded-xl text-sm font-medium ${
@@ -940,10 +1103,10 @@ export default function KnowledgeRunnerPage() {
               className="bg-[#0f172a]/90 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl">
               <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-lg">City Run</h1>
               <p className="text-slate-300 text-sm leading-relaxed">
-                Dodge obstacles, collect coins, and answer questions!<br/>
+                Dodge obstacles, collect coins, and defeat enemies!<br/>
                 Use ← → to switch lanes, ↑ or Space to jump, ↓ to slide.<br/>
-                <span className="text-cyan-400 font-bold">Answer questions with keys 1-4 or tap the options.</span><br/>
-                <span className="text-green-400 font-bold">Correct answers destroy all obstacles!</span>
+                <span className="text-red-400 font-bold">Enemies appear on the track — answer correctly to defeat them!</span><br/>
+                <span className="text-cyan-400 font-bold">Answer with keys 1-4 or tap the options.</span>
               </p>
               <label className="flex items-center justify-center gap-2 text-sm text-slate-300 cursor-pointer">
                 <input type="checkbox" checked={slowMotion} onChange={e => setSlowMotion(e.target.checked)}
@@ -990,7 +1153,6 @@ export default function KnowledgeRunnerPage() {
             <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }}
               className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl my-8">
 
-              {/* Header */}
               <div className="text-center space-y-2">
                 <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
                   gameState === 'victory'
@@ -1007,7 +1169,6 @@ export default function KnowledgeRunnerPage() {
                 </p>
               </div>
 
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="bg-white/5 p-3 rounded-xl border border-white/10">
                   <p className="text-2xl font-black text-primary">{score}</p>
@@ -1025,7 +1186,6 @@ export default function KnowledgeRunnerPage() {
                 </div>
               </div>
 
-              {/* Question Review */}
               {showReview && questionHistory.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-[14px] font-black text-white uppercase tracking-wider">Question Review</h3>
@@ -1036,7 +1196,6 @@ export default function KnowledgeRunnerPage() {
                           ? 'bg-green-500/5 border-green-500/20'
                           : 'bg-red-500/5 border-red-500/20'
                       }`}>
-                        {/* Question + result */}
                         <div className="flex items-start gap-3 mb-3">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
                             record.correct
@@ -1049,8 +1208,6 @@ export default function KnowledgeRunnerPage() {
                             <p className="text-[13px] font-bold text-white leading-snug">{record.question.question}</p>
                           </div>
                         </div>
-
-                        {/* Options */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 ml-9">
                           {record.question.options.map((opt, oi) => {
                             const isCorrect = oi === record.question.correctIndex
@@ -1068,13 +1225,9 @@ export default function KnowledgeRunnerPage() {
                             )
                           })}
                         </div>
-
-                        {/* Explanation */}
                         {record.question.explanation && (
                           <p className="ml-9 mt-2 text-[11px] text-slate-400 italic">{record.question.explanation}</p>
                         )}
-
-                        {/* Ask the tutor — only for wrong answers */}
                         {!record.correct && (
                           <div className="ml-9 mt-2.5">
                             <button
@@ -1097,7 +1250,6 @@ export default function KnowledgeRunnerPage() {
                 </div>
               )}
 
-              {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button onClick={() => startGame()}
                   className="flex-1 py-3 rounded-xl bg-blue-500 text-white font-black text-sm hover:bg-blue-600 transition-all">Run Again</button>
