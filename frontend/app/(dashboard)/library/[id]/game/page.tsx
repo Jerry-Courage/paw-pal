@@ -710,7 +710,6 @@ export default function KnowledgeRunnerPage() {
       setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
       setQuizResult('correct')
       if (soundEnabled) SFX.correct()
-      // Destroy all obstacles as a reward
       engineRef.current?.destroyAllObstacles()
     } else {
       setCombo(0)
@@ -718,11 +717,14 @@ export default function KnowledgeRunnerPage() {
       setLives(l => {
         const n = l - 1
         if (soundEnabled) SFX.wrong()
-        if (n <= 0) setTimeout(() => { setShowReview(true); setGameState('gameover') }, 800)
         return n
       })
     }
     setShowExplanation(true)
+    // Auto-continue after 2 seconds
+    setTimeout(() => {
+      advanceAfterQuiz()
+    }, 2000)
   }, [selectedAnswer, questions, currentQIndex, combo, soundEnabled])
 
   const advanceAfterQuiz = useCallback(() => {
@@ -732,17 +734,19 @@ export default function KnowledgeRunnerPage() {
     setQuizActive(false)
     engineRef.current?.setQuizActive(false)
 
-    if (lives <= 0) { setShowReview(true); setGameState('gameover'); return }
-    if (currentQIndex < questions.length - 1) {
-      setCurrentQIndex(i => i + 1)
-    } else {
-      setShowReview(true)
-      setGameState('victory')
-      authApi.awardXp(50, 'Knowledge Runner Victory', resourceId).catch(() => {})
-      toast.success('Mission Complete! +50 XP Awarded!')
-      return
-    }
-  }, [lives, currentQIndex, questions.length, resourceId])
+    setLives(l => {
+      if (l <= 0) { setShowReview(true); setGameState('gameover'); return l }
+      if (currentQIndex < questions.length - 1) {
+        setCurrentQIndex(i => i + 1)
+      } else {
+        setShowReview(true)
+        setGameState('victory')
+        authApi.awardXp(50, 'Knowledge Runner Victory', resourceId).catch(() => {})
+        toast.success('Mission Complete! +50 XP Awarded!')
+      }
+      return l
+    })
+  }, [currentQIndex, questions.length, resourceId])
 
   // Keyboard
   useEffect(() => {
@@ -902,22 +906,16 @@ export default function KnowledgeRunnerPage() {
                   })}
                 </div>
 
-                {/* Explanation + Continue */}
+                {/* Explanation */}
                 {showExplanation && (
-                  <>
-                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                      className={`mt-3 p-3 rounded-xl text-sm font-medium ${
-                        selectedAnswer === currentQ.correctIndex
-                          ? 'bg-green-500/10 border border-green-500/30 text-green-300'
-                          : 'bg-red-500/10 border border-red-500/30 text-red-300'
-                      }`}>
-                      {currentQ.explanation && <p className="text-xs opacity-80">{currentQ.explanation}</p>}
-                    </motion.div>
-                    <button onClick={advanceAfterQuiz}
-                      className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-black text-sm shadow-lg shadow-cyan-500/20 hover:scale-[1.02] active:scale-95 transition-all">
-                      CONTINUE RUNNING →
-                    </button>
-                  </>
+                  <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                    className={`mt-3 p-3 rounded-xl text-sm font-medium ${
+                      selectedAnswer === currentQ.correctIndex
+                        ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+                        : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                    }`}>
+                    {currentQ.explanation && <p className="text-xs opacity-80">{currentQ.explanation}</p>}
+                  </motion.div>
                 )}
               </div>
             </div>
