@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { libraryApi, authApi } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Trophy, Heart, Volume2, VolumeX, Play, Award, Pause } from 'lucide-react'
+import { ArrowLeft, Trophy, Heart, Volume2, VolumeX, Play, Award, Pause, MessageSquare, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Question {
@@ -12,6 +12,12 @@ interface Question {
   options: string[]
   correctIndex: number
   explanation: string
+}
+
+interface AnswerRecord {
+  question: Question
+  selectedIndex: number
+  correct: boolean
 }
 
 type GameState = 'loading' | 'intro' | 'playing' | 'paused' | 'gameover' | 'victory'
@@ -593,6 +599,8 @@ export default function KnowledgeRunnerPage() {
   const [slowMotion, setSlowMotion] = useState(true)
   const [quizActive, setQuizActive] = useState(false)
   const [quizResult, setQuizResult] = useState<'correct' | 'wrong' | null>(null)
+  const [questionHistory, setQuestionHistory] = useState<AnswerRecord[]>([])
+  const [showReview, setShowReview] = useState(false)
 
   const currentQ = questions[currentQIndex] || questions[0]
 
@@ -650,7 +658,7 @@ export default function KnowledgeRunnerPage() {
         setLives(l => {
           const n = l - 1
           if (soundEnabled) SFX.hit()
-          if (n <= 0) setTimeout(() => setGameState('gameover'), 600)
+          if (n <= 0) setTimeout(() => { setShowReview(true); setGameState('gameover') }, 600)
           return n
         })
         setCombo(0)
@@ -673,7 +681,7 @@ export default function KnowledgeRunnerPage() {
     if (ok) {
       setScore(0); setLives(3); setCombo(0); setMaxCombo(0)
       setCurrentQIndex(0); setSelectedAnswer(null); setShowExplanation(false)
-      setQuizActive(false); setQuizResult(null)
+      setQuizActive(false); setQuizResult(null); setQuestionHistory([]); setShowReview(false)
       setGameState('playing')
       engine.start()
       const ticker = setInterval(() => {
@@ -694,7 +702,10 @@ export default function KnowledgeRunnerPage() {
     const q = questions[currentQIndex]
     if (!q) return
 
-    if (idx === q.correctIndex) {
+    const isCorrect = idx === q.correctIndex
+    setQuestionHistory(prev => [...prev, { question: q, selectedIndex: idx, correct: isCorrect }])
+
+    if (isCorrect) {
       setScore(s => s + 300 * (combo + 1))
       setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
       setQuizResult('correct')
@@ -707,7 +718,7 @@ export default function KnowledgeRunnerPage() {
       setLives(l => {
         const n = l - 1
         if (soundEnabled) SFX.wrong()
-        if (n <= 0) setTimeout(() => setGameState('gameover'), 800)
+        if (n <= 0) setTimeout(() => { setShowReview(true); setGameState('gameover') }, 800)
         return n
       })
     }
@@ -721,10 +732,11 @@ export default function KnowledgeRunnerPage() {
     setQuizActive(false)
     engineRef.current?.setQuizActive(false)
 
-    if (lives <= 0) { setGameState('gameover'); return }
+    if (lives <= 0) { setShowReview(true); setGameState('gameover'); return }
     if (currentQIndex < questions.length - 1) {
       setCurrentQIndex(i => i + 1)
     } else {
+      setShowReview(true)
       setGameState('victory')
       authApi.awardXp(50, 'Knowledge Runner Victory', resourceId).catch(() => {})
       toast.success('Mission Complete! +50 XP Awarded!')
@@ -964,28 +976,32 @@ export default function KnowledgeRunnerPage() {
         )}
       </AnimatePresence>
 
-      {/* Game Over / Victory */}
+      {/* Game Over / Victory — Review Screen */}
       <AnimatePresence>
         {(gameState === 'gameover' || gameState === 'victory') && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
             <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }}
-              className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl">
-              <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
-                gameState === 'victory'
-                  ? 'bg-gradient-to-br from-amber-500 to-yellow-400 text-black'
-                  : 'bg-gradient-to-br from-red-600 to-rose-800 text-white'
-              }`}>
-                {gameState === 'victory' ? <Award className="w-8 h-8" /> : <span className="text-3xl">💀</span>}
-              </div>
-              <div>
+              className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl my-8">
+
+              {/* Header */}
+              <div className="text-center space-y-2">
+                <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
+                  gameState === 'victory'
+                    ? 'bg-gradient-to-br from-amber-500 to-yellow-400 text-black'
+                    : 'bg-gradient-to-br from-red-600 to-rose-800 text-white'
+                }`}>
+                  {gameState === 'victory' ? <Award className="w-8 h-8" /> : <span className="text-3xl">💀</span>}
+                </div>
                 <h1 className="text-2xl md:text-3xl font-black text-white">
                   {gameState === 'victory' ? 'RUN COMPLETE!' : 'GAME OVER'}
                 </h1>
-                <p className="text-slate-400 text-sm mt-1">
+                <p className="text-slate-400 text-sm">
                   {gameState === 'victory' ? 'You crushed it! +50 XP awarded.' : 'The city got you. Try again!'}
                 </p>
               </div>
+
+              {/* Stats */}
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="bg-white/5 p-3 rounded-xl border border-white/10">
                   <p className="text-2xl font-black text-primary">{score}</p>
@@ -996,11 +1012,87 @@ export default function KnowledgeRunnerPage() {
                   <p className="text-[10px] font-bold text-slate-500">MAX COMBO</p>
                 </div>
                 <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-                  <p className="text-2xl font-black text-cyan-400">{questions.length}</p>
-                  <p className="text-[10px] font-bold text-slate-500">QUESTIONS</p>
+                  <p className="text-2xl font-black text-cyan-400">
+                    {questionHistory.filter(h => h.correct).length}/{questionHistory.length}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500">CORRECT</p>
                 </div>
               </div>
-              <div className="flex gap-3">
+
+              {/* Question Review */}
+              {showReview && questionHistory.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-[14px] font-black text-white uppercase tracking-wider">Question Review</h3>
+                  <div className="max-h-[40vh] overflow-y-auto space-y-3 pr-1 scrollbar-hide">
+                    {questionHistory.map((record, idx) => (
+                      <div key={idx} className={`p-4 rounded-xl border ${
+                        record.correct
+                          ? 'bg-green-500/5 border-green-500/20'
+                          : 'bg-red-500/5 border-red-500/20'
+                      }`}>
+                        {/* Question + result */}
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                            record.correct
+                              ? 'bg-green-500/20 text-green-400'
+                              : 'bg-red-500/20 text-red-400'
+                          }`}>
+                            {record.correct ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-bold text-white leading-snug">{record.question.question}</p>
+                          </div>
+                        </div>
+
+                        {/* Options */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 ml-9">
+                          {record.question.options.map((opt, oi) => {
+                            const isCorrect = oi === record.question.correctIndex
+                            const isSelected = oi === record.selectedIndex
+                            let optStyle = 'bg-white/5 border-white/5 text-white/40'
+                            if (isCorrect) optStyle = 'bg-green-500/15 border-green-500/40 text-green-300'
+                            else if (isSelected && !isCorrect) optStyle = 'bg-red-500/15 border-red-500/40 text-red-300'
+                            return (
+                              <div key={oi} className={`px-3 py-2 rounded-lg border text-[12px] font-medium flex items-center gap-2 ${optStyle}`}>
+                                <span className="font-black text-[10px] opacity-50">{oi + 1}.</span>
+                                <span className="flex-1 truncate">{opt}</span>
+                                {isCorrect && <Check className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                                {isSelected && !isCorrect && <X className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Explanation */}
+                        {record.question.explanation && (
+                          <p className="ml-9 mt-2 text-[11px] text-slate-400 italic">{record.question.explanation}</p>
+                        )}
+
+                        {/* Ask the tutor — only for wrong answers */}
+                        {!record.correct && (
+                          <div className="ml-9 mt-2.5">
+                            <button
+                              onClick={() => {
+                                const q = record.question.question
+                                const yourAnswer = record.question.options[record.selectedIndex]
+                                const msg = `I answered "${yourAnswer}" but got this wrong — can you explain why?\n\nQuestion: ${q}`
+                                router.push(`/ai?q=${encodeURIComponent(msg)}&resource=${resourceId}`)
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-slate-300 hover:bg-white/10 hover:border-cyan-500/30 transition-all"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              Ask the tutor
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
                 <button onClick={() => startGame()}
                   className="flex-1 py-3 rounded-xl bg-blue-500 text-white font-black text-sm hover:bg-blue-600 transition-all">Run Again</button>
                 <button onClick={() => { engineRef.current?.dispose(); router.push(`/library/${resourceId}`) }}
