@@ -2,12 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { authApi } from '@/lib/api'
+import { authApi, paymentsApi } from '@/lib/api'
 import { useSession, signOut } from 'next-auth/react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { useFlowTheme } from '@/context/FlowThemeContext'
+import { THEME_CONFIGS } from '@/lib/theme-configs'
+import { useTheme } from 'next-themes'
 
-const TABS = ['My Profile', 'Notifications', 'Account']
+const TABS = ['My Profile', 'Notifications', 'Appearance', 'Account']
 
 const WEEKLY_QUOTES = [
   "Every minute counts, Buddy!",
@@ -52,6 +55,17 @@ export default function SettingsPage() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
   const [showExportConfirm, setShowExportConfirm] = useState(false)
+
+  // Appearance
+  const { activeThemeId, applyTheme } = useFlowTheme()
+  const { theme: darkMode, setTheme: setDarkMode } = useTheme()
+
+  // Unlocked themes from marketplace
+  const { data: marketplaceData } = useQuery({
+    queryKey: ['marketplace-inventory'],
+    queryFn: () => paymentsApi.getMarketplaceInventory().then(r => r.data),
+  })
+  const unlockedThemes: string[] = marketplaceData?.unlocked_themes || ['default', 'light']
 
   // Profile query
   const { data: profileData } = useQuery({
@@ -403,6 +417,94 @@ export default function SettingsPage() {
             >
               {updateMutation.isPending ? 'Saving…' : 'Save Preferences'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Appearance Tab ────────────────────────────── */}
+      {activeTab === 'Appearance' && (
+        <div className="space-y-stack-lg">
+          {/* Dark / Light mode toggle */}
+          <div className="bg-surface-container-low rounded-[1.5rem] p-gutter border border-outline-variant/20">
+            <h3 className="text-[18px] font-bold text-on-surface mb-base">Mode</h3>
+            <p className="text-[14px] text-on-surface-variant mb-stack-md">Switch between dark and light appearance.</p>
+            <div className="flex gap-stack-sm">
+              {[
+                { id: 'dark', label: 'Dark', icon: 'dark_mode' },
+                { id: 'light', label: 'Light', icon: 'light_mode' },
+                { id: 'system', label: 'System', icon: 'computer' },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setDarkMode(opt.id)}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-base px-gutter py-3 rounded-[1rem] border-2 transition-all font-semibold text-[14px]',
+                    darkMode === opt.id
+                      ? 'bg-primary-container text-on-primary-container border-primary shadow-[0_4px_0_0_#763300]'
+                      : 'bg-surface-container-highest text-on-surface-variant border-outline-variant hover:border-surface-variant-highest'
+                  )}
+                >
+                  <span className="material-symbols-outlined text-[18px]">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Color themes */}
+          <div className="bg-surface-container-low rounded-[1.5rem] p-gutter border border-outline-variant/20">
+            <h3 className="text-[18px] font-bold text-on-surface mb-base">Color Theme</h3>
+            <p className="text-[14px] text-on-surface-variant mb-stack-md">
+              Pick a color scheme. Unlock new themes in the <a href="/marketplace?tab=themes" className="text-primary font-bold hover:underline">Marketplace</a>.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(THEME_CONFIGS).map(([id, theme]) => {
+                const isUnlocked = unlockedThemes.includes(id)
+                const isActive = activeThemeId === id
+                return (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      if (!isUnlocked) {
+                        toast.info('Unlock this theme in the Marketplace first!')
+                        return
+                      }
+                      applyTheme(id)
+                      toast.success(`Applied ${theme.name}!`)
+                    }}
+                    className={cn(
+                      'relative flex flex-col gap-3 p-4 rounded-2xl border-2 transition-all text-left',
+                      isActive
+                        ? 'border-primary shadow-[0_4px_0_0_#763300] bg-surface-container'
+                        : isUnlocked
+                          ? 'border-outline-variant/30 hover:border-primary/50 bg-surface-container-highest/50'
+                          : 'border-outline-variant/15 opacity-50 cursor-not-allowed bg-surface-container-highest/30'
+                    )}
+                  >
+                    {/* Color swatches */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full border border-white/10 shadow-sm" style={{ background: theme.vars['--background'] }} title="Background" />
+                      <div className="w-7 h-7 rounded-full border border-white/10 shadow-sm" style={{ background: theme.vars['--surface-container'] }} title="Surface" />
+                      <div className="w-7 h-7 rounded-full border border-white/10 shadow-sm" style={{ background: theme.vars['--primary'] }} title="Primary" />
+                      <div className="w-7 h-7 rounded-full border border-white/10 shadow-sm" style={{ background: theme.vars['--secondary'] }} title="Secondary" />
+                      <div className="w-7 h-7 rounded-full border border-white/10 shadow-sm" style={{ background: theme.vars['--tertiary'] }} title="Tertiary" />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[14px] font-bold text-on-surface">{theme.name}</span>
+                      {!isUnlocked && (
+                        <span className="material-symbols-outlined text-[16px] text-on-surface-variant">lock</span>
+                      )}
+                      {isActive && (
+                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-primary text-on-primary">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
