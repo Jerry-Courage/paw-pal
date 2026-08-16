@@ -12,45 +12,45 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // ── FlowState Design System (v2) ──────────────────────────
-        'background': '#121416',
-        'surface': '#121416',
-        'surface-dim': '#121416',
+        // ── FlowState Design System (v2) — CSS variable driven ────
+        'background': 'rgb(var(--background) / <alpha-value>)',
+        'surface': 'rgb(var(--background) / <alpha-value>)',
+        'surface-dim': 'rgb(var(--background) / <alpha-value>)',
         'surface-bright': '#37393b',
         'surface-container-lowest': '#0c0e10',
-        'surface-container-low': '#1a1c1e',
-        'surface-container': '#1e2022',
-        'surface-container-high': '#282a2c',
+        'surface-container-low': 'rgb(var(--surface-container-low) / <alpha-value>)',
+        'surface-container': 'rgb(var(--surface-container) / <alpha-value>)',
+        'surface-container-high': 'rgb(var(--surface-container-high) / <alpha-value>)',
         'surface-container-highest': '#333537',
         'surface-variant': '#333537',
-        'on-surface': '#e2e2e5',
-        'on-surface-variant': '#ddc1b3',
-        'on-background': '#e2e2e5',
-        // Primary (orange)
-        'primary': '#ffb68d',
-        'primary-container': '#ff8a3d',
+        'on-surface': 'rgb(var(--on-surface) / <alpha-value>)',
+        'on-surface-variant': 'rgb(var(--on-surface-variant) / <alpha-value>)',
+        'on-background': 'rgb(var(--on-surface) / <alpha-value>)',
+        // Primary
+        'primary': 'rgb(var(--primary) / <alpha-value>)',
+        'primary-container': 'rgb(var(--primary-container) / <alpha-value>)',
         'primary-fixed': '#ffdbc9',
-        'primary-fixed-dim': '#ffb68d',
-        'on-primary': '#532200',
+        'primary-fixed-dim': 'rgb(var(--primary) / <alpha-value>)',
+        'on-primary': 'rgb(var(--on-primary) / <alpha-value>)',
         'on-primary-container': '#682d00',
         'on-primary-fixed': '#321200',
-        'on-primary-fixed-variant': '#763300',
+        'on-primary-fixed-variant': 'rgb(var(--on-primary-fixed-variant) / <alpha-value>)',
         'inverse-primary': '#9a4600',
-        'surface-tint': '#ffb68d',
-        // Secondary (blue/indigo)
-        'secondary': '#bfc2ff',
+        'surface-tint': 'rgb(var(--primary) / <alpha-value>)',
+        // Secondary
+        'secondary': 'rgb(var(--secondary) / <alpha-value>)',
         'secondary-container': '#2f34b1',
         'secondary-fixed': '#e0e0ff',
-        'secondary-fixed-dim': '#bfc2ff',
+        'secondary-fixed-dim': 'rgb(var(--secondary) / <alpha-value>)',
         'on-secondary': '#12139b',
         'on-secondary-container': '#aaaeff',
         'on-secondary-fixed': '#02006d',
         'on-secondary-fixed-variant': '#2f34b1',
-        // Tertiary (purple)
-        'tertiary': '#d4bbff',
+        // Tertiary
+        'tertiary': 'rgb(var(--tertiary) / <alpha-value>)',
         'tertiary-container': '#bc96ff',
         'tertiary-fixed': '#ebdcff',
-        'tertiary-fixed-dim': '#d4bbff',
+        'tertiary-fixed-dim': 'rgb(var(--tertiary) / <alpha-value>)',
         'on-tertiary': '#400688',
         'on-tertiary-container': '#4e1f95',
         'on-tertiary-fixed': '#260058',
@@ -62,17 +62,17 @@ const config: Config = {
         'on-error-container': '#ffdad6',
         // Outline
         'outline': '#a58c7f',
-        'outline-variant': '#564338',
+        'outline-variant': 'rgb(var(--outline-variant) / <alpha-value>)',
         // Inverse
         'inverse-surface': '#e2e2e5',
         'inverse-on-surface': '#2f3133',
-        // Legacy orange primary kept for backward compat
+        // Legacy primary scale (400/500 map to theme-aware tokens)
         primary: {
-          DEFAULT: '#ffb68d',
+          DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
           50: '#fff7ed',
           100: '#ffedd5',
-          400: '#ffb68d',
-          500: '#ff8a3d',
+          400: 'rgb(var(--primary) / <alpha-value>)',
+          500: 'rgb(var(--primary-container) / <alpha-value>)',
           600: '#ea580c',
           700: '#c2410c',
         },
