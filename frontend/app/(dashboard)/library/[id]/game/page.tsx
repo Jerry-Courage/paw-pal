@@ -79,6 +79,8 @@ class CityRunEngine {
   private onEnemy: () => void = () => {}
   private enemyCooldown = 0
   private quizActive = false
+  private invincible = false
+  private invincibleTimer = 0
 
   async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onEnemy: () => void }) {
     await ensureThree()
@@ -379,6 +381,8 @@ class CityRunEngine {
     this.slideTimer = 0
     this.enemyCooldown = 0
     this.quizActive = false
+    this.invincible = false
+    this.invincibleTimer = 0
     this.obstacles.forEach(o => this.scene.remove(o.mesh))
     this.coins.forEach(c => this.scene.remove(c.mesh))
     this.particles.forEach(p => this.scene.remove(p.mesh))
@@ -393,7 +397,7 @@ class CityRunEngine {
     for (let i = 0; i < 5; i++) {
       this.spawnObstacle()
       const last = this.obstacles[this.obstacles.length - 1]
-      if (last) { last.z = -15 - i * 12; last.mesh.position.z = last.z }
+      if (last) { last.z = -20 - i * 18; last.mesh.position.z = last.z }
     }
     this.run()
   }
@@ -405,6 +409,11 @@ class CityRunEngine {
     } else {
       this.baseSpeed = Math.min(1.2, 0.3 + this.worldOffset * 0.0001)
     }
+  }
+
+  grantInvincibility(frames: number = 60) {
+    this.invincible = true
+    this.invincibleTimer = frames
   }
 
   switchLane(dir: number) {
@@ -543,8 +552,8 @@ class CityRunEngine {
     })
 
     // Spawn obstacles
-    const gap = Math.max(5, 10 - this.speed * 4)
-    if (this.frame > 20 && Math.random() < 0.08 + this.speed * 0.03) {
+    const gap = Math.max(10, 18 - this.speed * 5)
+    if (this.frame > 20 && Math.random() < 0.05 + this.speed * 0.02) {
       const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : -999
       if (far < -gap) this.spawnObstacle()
     }
@@ -567,12 +576,22 @@ class CityRunEngine {
 
     // Collision — obstacles
     const rl = Math.round(this.currentLane)
+    if (this.invincible) {
+      this.invincibleTimer--
+      if (this.invincibleTimer <= 0) this.invincible = false
+      // Flash runner during invincibility
+      if (this.runnerGroup) this.runnerGroup.visible = Math.floor(this.frame / 3) % 2 === 0
+    } else {
+      if (this.runnerGroup) this.runnerGroup.visible = true
+    }
     for (const obs of this.obstacles) {
       if (obs.hit) continue
       if (Math.abs(obs.z) < 1.5 && obs.lane === rl) {
         if (obs.jumpable && this.jumpY > 0.8) continue
         if (!obs.jumpable && this.isSliding) continue
         obs.hit = true
+        this.invincible = true
+        this.invincibleTimer = 60
         this.onHit()
         this.spawnParticles(obs.mesh.position.x, 1.5, 0, 0xff4444, 10)
       }
@@ -922,6 +941,7 @@ export default function KnowledgeRunnerPage() {
         if (soundEnabled) SFX.wrong()
         return n
       })
+      engineRef.current?.grantInvincibility(90)
     }
     setShowExplanation(true)
     setTimeout(() => { advanceAfterQuiz() }, 2000)
