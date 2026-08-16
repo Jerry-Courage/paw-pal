@@ -421,16 +421,16 @@ class CityRunEngine {
 
     // Spawn obstacles (skip if quiz is active to give player a break)
     if (!this.quizActive) {
-      const gap = Math.max(10, 22 - this.speed * 10)
-      if (this.frame > 80 && Math.random() < 0.025 + this.speed * 0.008) {
+      const gap = Math.max(6, 14 - this.speed * 5)
+      if (this.frame > 40 && Math.random() < 0.06 + this.speed * 0.02) {
         const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : 0
         if (far < -gap) this.spawnObstacle()
       }
     }
 
-    if (this.frame % 18 === 0 && Math.random() < 0.5) {
+    if (this.frame % 12 === 0 && Math.random() < 0.6) {
       const far = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : 0
-      if (far < -12) this.spawnCoin()
+      if (far < -8) this.spawnCoin()
     }
 
     // Collision
@@ -456,7 +456,7 @@ class CityRunEngine {
 
     // Quiz trigger — after enough distance, trigger a quiz
     if (this.quizCooldown > 0) this.quizCooldown--
-    if (this.frame > 300 && this.quizCooldown <= 0 && !this.quizActive && Math.random() < 0.004) {
+    if (this.frame > 500 && this.quizCooldown <= 0 && !this.quizActive && Math.random() < 0.005) {
       this.onQuiz()
       this.quizCooldown = 600
     }
@@ -500,25 +500,25 @@ class CityRunEngine {
         st.position.set(s, 0, 0)
         mesh.add(st)
       }
-      mesh.position.set(this.LANE_X[lane], 0.5, -130)
+      mesh.position.set(this.LANE_X[lane], 0.5, -45)
     } else if (type === 'crate') {
       mesh = new THREE.Mesh(
         new THREE.BoxGeometry(0.9, 0.9, 0.9),
         new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.5 })
       )
       mesh.castShadow = true
-      mesh.position.set(this.LANE_X[lane], 0.55, -130)
+      mesh.position.set(this.LANE_X[lane], 0.55, -45)
     } else {
       mesh = new THREE.Mesh(
         new THREE.DodecahedronGeometry(0.6, 0),
         new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7, metalness: 0.2 })
       )
       mesh.castShadow = true
-      mesh.position.set(this.LANE_X[lane], 0.6, -130)
+      mesh.position.set(this.LANE_X[lane], 0.6, -45)
     }
 
     this.scene.add(mesh)
-    this.obstacles.push({ mesh, lane, z: -130, type, hit: false, jumpable })
+    this.obstacles.push({ mesh, lane, z: -45, type, hit: false, jumpable })
   }
 
   private spawnCoin() {
@@ -529,9 +529,9 @@ class CityRunEngine {
       new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 1.5, metalness: 0.8, roughness: 0.2 })
     )
     mesh.rotation.x = Math.PI / 2
-    mesh.position.set(this.LANE_X[lane], 1.5, -130)
+    mesh.position.set(this.LANE_X[lane], 1.5, -45)
     this.scene.add(mesh)
-    this.coins.push({ mesh, lane, z: -130, collected: false })
+    this.coins.push({ mesh, lane, z: -45, collected: false })
   }
 
   private spawnParticles(x: number, y: number, z: number, color: number, count: number) {
