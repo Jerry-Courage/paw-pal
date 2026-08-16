@@ -6,6 +6,7 @@ import { paymentsApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { useFlowTheme } from '@/context/FlowThemeContext'
 
 const POWERUPS = [
   {
@@ -88,6 +89,7 @@ const XP_PACKS = [
 
 export default function MarketplacePage() {
   const qc = useQueryClient()
+  const { applyTheme } = useFlowTheme()
   const [activeTab, setActiveTab] = useState<'powerups' | 'themes' | 'xp_packs' | 'inventory'>('powerups')
 
   const { data: marketplaceData, isLoading } = useQuery({
@@ -322,8 +324,7 @@ export default function MarketplacePage() {
                   {isUnlocked ? (
                     <button
                       onClick={() => {
-                        localStorage.setItem('flowstate_active_theme', id)
-                        window.dispatchEvent(new Event('storage'))
+                        applyTheme(id)
                         toast.success(`Applied ${theme.name}!`)
                       }}
                       className="px-6 py-2.5 rounded-xl font-bold text-[13px] bg-secondary text-on-secondary hover:bg-secondary/90 transition-all shadow-md"
