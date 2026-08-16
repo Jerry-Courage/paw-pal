@@ -6,6 +6,13 @@ import axios from 'axios'
 
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
+// 7 days in ms (matches backend ACCESS_TOKEN_LIFETIME)
+const ACCESS_TOKEN_LIFETIME = 7 * 24 * 60 * 60 * 1000
+const REFRESH_BUFFER_MS = 60_000 // refresh 1 min before expiry
+
+// Mutex to prevent multi-tab refresh race condition
+let refreshPromise: Promise<string> | null = null
+
 export const authOptions: NextAuthOptions = {
   providers: [
     // ── Credentials (email + password) ────────────────────────────────────
@@ -94,8 +101,7 @@ export const authOptions: NextAuthOptions = {
         token.name         = (user as any).username || user.name
         token.picture      = (user as any).avatar_url || user.image
         token.onboarded    = (user as any).onboarding_status?.completed || false
-        // Store expiry: access token lifetime is 1 day
-        token.accessTokenExpires = Date.now() + 24 * 60 * 60 * 1000 - 60_000 // 1 min buffer
+        token.accessTokenExpires = Date.now() + ACCESS_TOKEN_LIFETIME - REFRESH_BUFFER_MS
         return token
       }
 
@@ -104,21 +110,48 @@ export const authOptions: NextAuthOptions = {
         return token
       }
 
-      // Access token expired — try to refresh it
+      // Access token expired — refresh with mutex to prevent multi-tab race
       try {
-        const res = await axios.post(`${API_URL}/auth/token/refresh/`, {
-          refresh: token.refreshToken,
-        })
+        // If another tab is already refreshing, wait for its result
+        if (!refreshPromise) {
+          refreshPromise = (async () => {
+            // Retry up to 3 times
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                const res = await axios.post(`${API_URL}/auth/token/refresh/`, {
+                  refresh: token.refreshToken,
+                })
+                return res.data.access
+              } catch (err) {
+                if (attempt === 2) throw err
+                await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+              }
+            }
+            throw new Error('Refresh failed after 3 attempts')
+          })()
+        }
+
+        const newAccessToken = await refreshPromise
+        // Fetch new refresh token separately (don't block on this)
+        let newRefreshToken = token.refreshToken
+        try {
+          const refreshRes = await axios.post(`${API_URL}/auth/token/refresh/`, {
+            refresh: token.refreshToken,
+          })
+          newRefreshToken = refreshRes.data.refresh ?? token.refreshToken
+        } catch {}
+
         return {
           ...token,
-          accessToken: res.data.access,
-          // simplejwt with ROTATE_REFRESH_TOKENS=True issues a new refresh token
-          refreshToken: res.data.refresh ?? token.refreshToken,
-          accessTokenExpires: Date.now() + 24 * 60 * 60 * 1000 - 60_000,
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+          accessTokenExpires: Date.now() + ACCESS_TOKEN_LIFETIME - REFRESH_BUFFER_MS,
+          error: undefined,
         }
       } catch {
-        // Refresh failed — force re-login by returning a token with an error flag
         return { ...token, error: 'RefreshAccessTokenError' }
+      } finally {
+        refreshPromise = null
       }
     },
 

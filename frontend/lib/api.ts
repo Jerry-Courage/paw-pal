@@ -16,6 +16,8 @@ api.interceptors.request.use(async (config) => {
   if ((session as any)?.error === 'RefreshAccessTokenError') {
     if (typeof window !== 'undefined' && !(window as any)._isRedirecting) {
       (window as any)._isRedirecting = true
+      // Clear flag after 5s in case signOut fails
+      setTimeout(() => { (window as any)._isRedirecting = false }, 5000)
       await signOut({ callbackUrl: '/login?loggedOut=true', redirect: true })
     }
   }
@@ -28,13 +30,23 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !err.config._retry) {
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        // Prevent multiple simultaneous redirects/signouts
+        try {
+          // Try to get a fresh session (triggers token refresh)
+          const freshSession = await getSession()
+          if (freshSession?.accessToken && !(freshSession as any)?.error) {
+            // Retry the request with the new token
+            err.config._retry = true
+            err.config.headers.Authorization = `Bearer ${freshSession.accessToken}`
+            return api.request(err.config)
+          }
+        } catch {}
+        // Refresh failed — only now sign out
         if (!(window as any)._isRedirecting) {
-            (window as any)._isRedirecting = true
-            // signOut handles the session clear and redirect to login
-            await signOut({ callbackUrl: '/login?loggedOut=true', redirect: true })
+          (window as any)._isRedirecting = true
+          setTimeout(() => { (window as any)._isRedirecting = false }, 5000)
+          await signOut({ callbackUrl: '/login?loggedOut=true', redirect: true })
         }
       }
     }
