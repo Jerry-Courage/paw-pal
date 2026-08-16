@@ -6,7 +6,6 @@ import { libraryApi, authApi } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Trophy, Heart, Volume2, VolumeX, Play, Award, Pause } from 'lucide-react'
 import { toast } from 'sonner'
-import * as THREE from 'three'
 
 interface Question {
   question: string
@@ -17,11 +16,6 @@ interface Question {
 
 type GameState = 'loading' | 'intro' | 'playing' | 'quiz' | 'paused' | 'gameover' | 'victory'
 
-const LANE_X = [-3.5, 0, 3.5]
-const INITIAL_SPEED = 0.35
-const MAX_SPEED = 1.2
-const SPEED_INC = 0.00008
-
 const SFX = {
   correct: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); a.volume = 0.25; a.play() } catch {} },
   wrong: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2658/2658-preview.mp3'); a.volume = 0.25; a.play() } catch {} },
@@ -29,12 +23,16 @@ const SFX = {
   hit: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2803/2803-preview.mp3'); a.volume = 0.3; a.play() } catch {} },
 }
 
+interface Runner { lane: number; targetLane: number; animPhase: number }
+interface Obstacle { lane: number; z: number; type: 'crate' | 'barrier' | 'spike'; hit: boolean }
+interface Coin { lane: number; z: number; collected: boolean }
+interface Particle { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }
+
 export default function KnowledgeRunnerPage() {
   const params = useParams()
   const router = useRouter()
   const resourceId = Number(params.id)
-  const mountRef = useRef<HTMLDivElement>(null)
-  const gameLoopRef = useRef<number>(0)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const [resource, setResource] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -45,7 +43,7 @@ export default function KnowledgeRunnerPage() {
   const [lives, setLives] = useState(3)
   const [combo, setCombo] = useState(0)
   const [maxCombo, setMaxCombo] = useState(0)
-  const [speed, setSpeed] = useState(INITIAL_SPEED)
+  const [speed, setSpeed] = useState(0.4)
   const [distance, setDistance] = useState(0)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
@@ -53,555 +51,27 @@ export default function KnowledgeRunnerPage() {
 
   const currentQ = questions[currentQIndex] || questions[0]
 
-  // Three.js refs
-  const sceneRef = useRef<THREE.Scene | null>(null)
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
-  const runnerRef = useRef<THREE.Group | null>(null)
-  const trailRef = useRef<THREE.Mesh[]>([])
-
-  const gameRef = useRef({
-    currentLane: 1,
-    targetLane: 1,
-    runnerX: 0,
-    speed: INITIAL_SPEED,
+  // Mutable game state (not React state — avoids re-render lag)
+  const g = useRef({
+    runner: { lane: 1, targetLane: 1, animPhase: 0 } as Runner,
+    obstacles: [] as Obstacle[],
+    coins: [] as Coin[],
+    particles: [] as Particle[],
+    speed: 0.4,
     frame: 0,
-    obstacles: [] as { mesh: THREE.Mesh; lane: number; z: number; type: string; hit: boolean }[],
-    coins: [] as { mesh: THREE.Mesh; lane: number; z: number; collected: boolean }[],
-    laneMarkers: [] as THREE.Mesh[],
-    particles: [] as { mesh: THREE.Mesh; vx: number; vy: number; vz: number; life: number }[],
-    shakeIntensity: 0,
+    shakeX: 0,
+    shakeY: 0,
+    flashAlpha: 0,
+    flashColor: '#00ff00',
+    lastObstacleZ: 0,
+    lastCoinZ: 0,
+    quizTriggered: false,
+    quizCooldown: 0,
   })
 
-  // Init Three.js scene
-  const initScene = useCallback(() => {
-    if (!mountRef.current) return
-    const w = window.innerWidth
-    const h = window.innerHeight
-
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x050510)
-    scene.fog = new THREE.FogExp2(0x050510, 0.012)
-    sceneRef.current = scene
-
-    const camera = new THREE.PerspectiveCamera(70, w / h, 0.1, 200)
-    camera.position.set(0, 5.5, 8)
-    camera.lookAt(0, 1.5, -20)
-    cameraRef.current = camera
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-    renderer.setSize(w, h)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.2
-    mountRef.current.appendChild(renderer.domElement)
-    rendererRef.current = renderer
-
-    // Lighting
-    scene.add(new THREE.AmbientLight(0x404060, 1.5))
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5)
-    dirLight.position.set(5, 15, 10)
-    dirLight.castShadow = true
-    dirLight.shadow.mapSize.set(1024, 1024)
-    dirLight.shadow.camera.near = 1
-    dirLight.shadow.camera.far = 80
-    dirLight.shadow.camera.left = -15
-    dirLight.shadow.camera.right = 15
-    scene.add(dirLight)
-
-    const rimLight = new THREE.DirectionalLight(0x00aaff, 0.8)
-    rimLight.position.set(-5, 3, -10)
-    scene.add(rimLight)
-
-    const pointLight = new THREE.PointLight(0xff6600, 1.5, 30)
-    pointLight.position.set(0, 4, -5)
-    scene.add(pointLight)
-
-    // Road
-    const roadGeo = new THREE.PlaneGeometry(14, 200)
-    const roadMat = new THREE.MeshStandardMaterial({
-      color: 0x111122,
-      roughness: 0.6,
-      metalness: 0.1,
-    })
-    const road = new THREE.Mesh(roadGeo, roadMat)
-    road.rotation.x = -Math.PI / 2
-    road.position.set(0, 0, -80)
-    road.receiveShadow = true
-    scene.add(road)
-
-    // Road edges — neon glow strips
-    const edgeMat = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 2 })
-    for (const side of [-1, 1]) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 200), edgeMat)
-      edge.position.set(side * 7, 0.05, -80)
-      scene.add(edge)
-    }
-
-    // Lane dividers
-    const dividerMat = new THREE.MeshStandardMaterial({ color: 0x444466, emissive: 0x222244, emissiveIntensity: 0.5 })
-    const g = gameRef.current
-    g.laneMarkers = []
-    for (let laneIdx = 0; laneIdx < 2; laneIdx++) {
-      const x = (laneIdx === 0 ? -1.75 : 1.75)
-      for (let i = 0; i < 50; i++) {
-        const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 2), dividerMat)
-        marker.position.set(x, 0.01, -i * 4)
-        scene.add(marker)
-        g.laneMarkers.push(marker)
-      }
-    }
-
-    // Side buildings / walls
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x0a0a1a, roughness: 0.8, metalness: 0.2 })
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 30; i++) {
-        const h = 3 + Math.random() * 8
-        const wall = new THREE.Mesh(
-          new THREE.BoxGeometry(2 + Math.random() * 2, h, 3 + Math.random() * 3),
-          wallMat
-        )
-        wall.position.set(side * (8 + Math.random() * 4), h / 2, -i * 7 - Math.random() * 5)
-        wall.castShadow = true
-        scene.add(wall)
-
-        // Window lights
-        const windowMat = new THREE.MeshStandardMaterial({
-          color: 0x334455,
-          emissive: Math.random() > 0.5 ? 0x223344 : 0x112233,
-          emissiveIntensity: 1 + Math.random() * 2,
-        })
-        for (let w = 0; w < Math.floor(Math.random() * 4) + 1; w++) {
-          const win = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.5), windowMat)
-          win.position.set(
-            side * (8 + Math.random() * 4) + (side * -1.01),
-            1 + Math.random() * (h - 2),
-            -i * 7 - Math.random() * 5
-          )
-          win.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2
-          scene.add(win)
-        }
-      }
-    }
-
-    // Ground plane
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 200),
-      new THREE.MeshStandardMaterial({ color: 0x080810, roughness: 1 })
-    )
-    ground.rotation.x = -Math.PI / 2
-    ground.position.y = -0.05
-    ground.position.z = -80
-    scene.add(ground)
-
-    // Runner character
-    const runner = new THREE.Group()
-    // Body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 1.2, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xd97706, emissiveIntensity: 0.3, roughness: 0.4, metalness: 0.3 })
-    )
-    body.position.y = 1.2
-    body.castShadow = true
-    runner.add(body)
-    // Head
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.35, 16, 16),
-      new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.5, roughness: 0.3, metalness: 0.2 })
-    )
-    head.position.y = 2.15
-    head.castShadow = true
-    runner.add(head)
-    // Eyes
-    for (const ex of [-0.12, 0.12]) {
-      const eye = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06, 8, 8),
-        new THREE.MeshStandardMaterial({ color: 0x1e1b4b })
-      )
-      eye.position.set(ex, 2.2, 0.3)
-      runner.add(eye)
-    }
-    // Legs
-    for (const lx of [-0.18, 0.18]) {
-      const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.7, 0.25),
-        new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.6 })
-      )
-      leg.position.set(lx, 0.4, 0)
-      leg.castShadow = true
-      runner.add(leg)
-    }
-    // Arms
-    for (const ax of [-0.55, 0.55]) {
-      const arm = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.8, 0.2),
-        new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 })
-      )
-      arm.position.set(ax, 1.2, 0)
-      arm.castShadow = true
-      runner.add(arm)
-    }
-    runner.position.set(0, 0, 0)
-    scene.add(runner)
-    runnerRef.current = runner
-
-    // Trail
-    for (let i = 0; i < 15; i++) {
-      const trailMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08 - i * 0.004, 6, 6),
-        new THREE.MeshStandardMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.3 - i * 0.02 })
-      )
-      trailMesh.position.set(0, 0.5, i * 0.5)
-      scene.add(trailMesh)
-      trailRef.current.push(trailMesh)
-    }
-  }, [])
-
-  const spawnObstacle = useCallback((type: string) => {
-    const scene = sceneRef.current
-    if (!scene) return
-    const g = gameRef.current
-    const lane = Math.floor(Math.random() * 3)
-    let mesh: THREE.Mesh
-
-    if (type === 'crate') {
-      const size = 1.0 + Math.random() * 0.5
-      mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(size, size, size),
-        new THREE.MeshStandardMaterial({
-          color: 0xef4444,
-          emissive: 0xdc2626,
-          emissiveIntensity: 0.4,
-          roughness: 0.3,
-          metalness: 0.5,
-        })
-      )
-      mesh.castShadow = true
-    } else if (type === 'barrier') {
-      mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(2.5, 1.8, 0.4),
-        new THREE.MeshStandardMaterial({
-          color: 0xff6b00,
-          emissive: 0xff4400,
-          emissiveIntensity: 0.6,
-          roughness: 0.2,
-          metalness: 0.6,
-        })
-      )
-      mesh.castShadow = true
-      // Warning stripes
-      const stripeMat = new THREE.MeshStandardMaterial({ color: 0xffdd00, emissive: 0xffaa00, emissiveIntensity: 0.8 })
-      for (let s = -0.6; s <= 0.6; s += 0.4) {
-        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.42), stripeMat)
-        stripe.position.set(s, 0, 0)
-        mesh.add(stripe)
-      }
-    } else {
-      // Spike
-      mesh = new THREE.Mesh(
-        new THREE.ConeGeometry(0.6, 1.5, 4),
-        new THREE.MeshStandardMaterial({
-          color: 0xaa00ff,
-          emissive: 0x7700cc,
-          emissiveIntensity: 0.5,
-          roughness: 0.2,
-          metalness: 0.7,
-        })
-      )
-      mesh.castShadow = true
-    }
-
-    mesh.position.set(LANE_X[lane], mesh.geometry instanceof THREE.ConeGeometry ? 0.75 : 0.7, -120)
-    scene.add(mesh)
-    g.obstacles.push({ mesh, lane, z: -120, type, hit: false })
-  }, [])
-
-  const spawnCoin = useCallback(() => {
-    const scene = sceneRef.current
-    if (!scene) return
-    const g = gameRef.current
-    const lane = Math.floor(Math.random() * 3)
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.35, 0.1, 16),
-      new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 1, roughness: 0.2, metalness: 0.9 })
-    )
-    mesh.rotation.x = Math.PI / 2
-    mesh.position.set(LANE_X[lane], 1.5, -120)
-    scene.add(mesh)
-    g.coins.push({ mesh, lane, z: -120, collected: false })
-  }, [])
-
-  const spawnParticles = useCallback((x: number, y: number, z: number, color: number, count: number = 10) => {
-    const scene = sceneRef.current
-    if (!scene) return
-    const g = gameRef.current
-    for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08, 4, 4),
-        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2 })
-      )
-      mesh.position.set(x, y, z)
-      scene.add(mesh)
-      g.particles.push({
-        mesh,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: Math.random() * 0.3 + 0.1,
-        vz: (Math.random() - 0.5) * 0.4,
-        life: 1,
-      })
-    }
-  }, [])
-
-  const handleAnswer = useCallback((optionIndex: number) => {
-    if (selectedAnswer !== null) return
-    setSelectedAnswer(optionIndex)
-    const q = questions[currentQIndex]
-    if (!q) return
-    const isCorrect = optionIndex === q.correctIndex
-
-    if (isCorrect) {
-      const pts = 300 * (combo + 1)
-      setScore(s => s + pts)
-      setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
-      if (soundEnabled) SFX.correct()
-      if (runnerRef.current) {
-        spawnParticles(runnerRef.current.position.x, 2, 0, 0x22c55e, 15)
-      }
-    } else {
-      setCombo(0)
-      setLives(l => {
-        const n = l - 1
-        if (soundEnabled) SFX.wrong()
-        gameRef.current.shakeIntensity = 0.5
-        if (n <= 0) setTimeout(() => setGameState('gameover'), 1000)
-        return n
-      })
-    }
-    setShowExplanation(true)
-  }, [selectedAnswer, questions, currentQIndex, combo, soundEnabled, spawnParticles])
-
-  const advanceAfterQuiz = useCallback(() => {
-    setShowExplanation(false)
-    setSelectedAnswer(null)
-    if (lives <= 0) { setGameState('gameover'); return }
-    if (currentQIndex < questions.length - 1) {
-      setCurrentQIndex(i => i + 1)
-    } else {
-      setGameState('victory')
-      authApi.awardXp(50, 'Knowledge Runner Victory', resourceId).catch(() => {})
-      toast.success('Mission Complete! +50 XP Awarded!')
-      return
-    }
-    setGameState('playing')
-  }, [lives, currentQIndex, questions.length, resourceId])
-
-  const startGame = useCallback(() => {
-    const g = gameRef.current
-    // Clean up old objects
-    const scene = sceneRef.current
-    if (scene) {
-      g.obstacles.forEach(o => scene.remove(o.mesh))
-      g.coins.forEach(c => scene.remove(c.mesh))
-      g.particles.forEach(p => scene.remove(p.mesh))
-    }
-    g.obstacles = []
-    g.coins = []
-    g.particles = []
-    g.currentLane = 1
-    g.targetLane = 1
-    g.runnerX = 0
-    g.speed = INITIAL_SPEED
-    g.frame = 0
-    g.shakeIntensity = 0
-    setScore(0)
-    setLives(3)
-    setCombo(0)
-    setMaxCombo(0)
-    setCurrentQIndex(0)
-    setDistance(0)
-    setSelectedAnswer(null)
-    setShowExplanation(false)
-    setGameState('playing')
-  }, [])
-
-  // Game loop
-  const animate = useCallback(() => {
-    const scene = sceneRef.current
-    const camera = cameraRef.current
-    const renderer = rendererRef.current
-    const runner = runnerRef.current
-    if (!scene || !camera || !renderer || !runner) {
-      gameLoopRef.current = requestAnimationFrame(animate)
-      return
-    }
-
-    const g = gameRef.current
-    const isPlaying = gameState === 'playing'
-
-    if (isPlaying) {
-      g.frame++
-      g.speed = Math.min(MAX_SPEED, g.speed + SPEED_INC)
-      setSpeed(g.speed)
-
-      // Smooth lane switch
-      const targetX = LANE_X[g.targetLane]
-      g.runnerX += (targetX - g.runnerX) * 0.12
-      runner.position.x = g.runnerX
-
-      // Spawn obstacles
-      const spawnChance = 0.015 + g.speed * 0.01
-      const minGap = Math.max(12, 25 - g.speed * 10)
-      if (g.frame > 60 && Math.random() < spawnChance) {
-        const lastZ = g.obstacles.length > 0 ? Math.min(...g.obstacles.map(o => o.z)) : -50
-        if (lastZ < -minGap) {
-          const types = ['crate', 'barrier', 'spike']
-          spawnObstacle(types[Math.floor(Math.random() * types.length)])
-        }
-      }
-
-      // Spawn coins
-      if (g.frame % 20 === 0 && Math.random() < 0.5) {
-        spawnCoin()
-      }
-
-      // Move obstacles toward player
-      for (const obs of g.obstacles) {
-        obs.z += g.speed
-        obs.mesh.position.z = obs.z
-      }
-      g.obstacles = g.obstacles.filter(o => {
-        if (o.z > 15) { scene.remove(o.mesh); return false }
-        return true
-      })
-
-      // Move coins
-      for (const c of g.coins) {
-        c.z += g.speed
-        c.mesh.position.z = c.z
-        c.mesh.rotation.y += 0.05
-      }
-      g.coins = g.coins.filter(c => {
-        if (c.z > 15) { scene.remove(c.mesh); return false }
-        return true
-      })
-
-      // Collision — obstacles
-      const runnerLane = Math.round(g.runnerX) <= -1 ? 0 : Math.round(g.runnerX) >= 1 ? 2 : 1
-      for (const obs of g.obstacles) {
-        if (obs.hit) continue
-        if (Math.abs(obs.z) < 1.2 && obs.lane === runnerLane) {
-          obs.hit = true
-          const newLives = lives - 1
-          setLives(newLives)
-          setCombo(0)
-          g.shakeIntensity = 0.6
-          spawnParticles(runner.position.x, 1.5, 0, 0xef4444, 12)
-          if (soundEnabled) SFX.hit()
-          if (newLives <= 0) setGameState('gameover')
-        }
-      }
-
-      // Collision — coins
-      for (const c of g.coins) {
-        if (c.collected) continue
-        if (Math.abs(c.z) < 1.2 && c.lane === runnerLane) {
-          c.collected = true
-          setScore(s => s + 25)
-          spawnParticles(c.mesh.position.x, 1.5, 0, 0xffd700, 6)
-          if (soundEnabled) SFX.coin()
-        }
-      }
-
-      // Quiz gate — trigger after certain distance
-      if (g.frame > 300 && g.frame % 600 === 0 && currentQIndex < questions.length - 1) {
-        setGameState('quiz')
-        setSelectedAnswer(null)
-        setShowExplanation(false)
-      }
-
-      setDistance(d => d + g.speed)
-      setScore(s => s + Math.floor(g.speed * 2))
-    }
-
-    // Camera shake
-    if (g.shakeIntensity > 0.01) {
-      camera.position.x = (Math.random() - 0.5) * g.shakeIntensity
-      camera.position.y = 5.5 + (Math.random() - 0.5) * g.shakeIntensity
-      g.shakeIntensity *= 0.9
-    } else {
-      camera.position.x += (0 - camera.position.x) * 0.1
-      camera.position.y += (5.5 - camera.position.y) * 0.1
-    }
-
-    // Runner animation
-    if (runner) {
-      const t = g.frame
-      const bob = Math.sin(t * 0.15) * 0.15
-      runner.children[0].position.y = 1.2 + bob // body
-      runner.children[1].position.y = 2.15 + bob // head
-      // Eye positions
-      runner.children[2].position.y = 2.2 + bob
-      runner.children[3].position.y = 2.2 + bob
-      // Legs
-      const legSwing = Math.sin(t * 0.15) * 0.3
-      if (runner.children[4]) runner.children[4].rotation.x = legSwing
-      if (runner.children[5]) runner.children[5].rotation.x = -legSwing
-      // Arms
-      if (runner.children[6]) runner.children[6].rotation.x = -legSwing
-      if (runner.children[7]) runner.children[7].rotation.x = legSwing
-    }
-
-    // Move lane markers
-    for (const marker of g.laneMarkers) {
-      marker.position.z += isPlaying ? g.speed : INITIAL_SPEED * 0.3
-      if (marker.position.z > 10) marker.position.z -= 200
-    }
-
-    // Animate trail
-    for (let i = 0; i < trailRef.current.length; i++) {
-      const trail = trailRef.current[i]
-      if (runner) {
-        trail.position.x = runner.position.x + (Math.random() - 0.5) * 0.1
-        trail.position.z = i * 0.4
-        trail.position.y = 0.5 + Math.sin(g.frame * 0.1 + i) * 0.1
-      }
-      trail.material.opacity = 0.3 - i * 0.02
-    }
-
-    // Animate particles
-    for (let i = g.particles.length - 1; i >= 0; i--) {
-      const p = g.particles[i]
-      p.mesh.position.x += p.vx
-      p.mesh.position.y += p.vy
-      p.mesh.position.z += p.vz
-      p.vy -= 0.008
-      p.life -= 0.025
-      p.mesh.material.opacity = p.life
-      p.mesh.material.transparent = true
-      if (p.life <= 0) {
-        scene.remove(p.mesh)
-        g.particles.splice(i, 1)
-      }
-    }
-
-    renderer.render(scene, camera)
-    gameLoopRef.current = requestAnimationFrame(animate)
-  }, [gameState, lives, questions, currentQIndex, soundEnabled, spawnObstacle, spawnCoin, spawnParticles])
-
-  // Setup
   useEffect(() => {
     libraryApi.getResource(resourceId).then(r => setResource(r.data)).catch(() => {})
     loadQuestions()
-    return () => {
-      cancelAnimationFrame(gameLoopRef.current)
-      if (rendererRef.current && mountRef.current) {
-        mountRef.current.removeChild(rendererRef.current.domElement)
-        rendererRef.current.dispose()
-      }
-    }
   }, [resourceId])
 
   const loadQuestions = async () => {
@@ -618,13 +88,12 @@ export default function KnowledgeRunnerPage() {
       }))
       if (qList.length < 3) {
         qList = [
-          { question: `What is a key concept in ${resource?.title || 'this material'}?`, options: ['Core Principles', 'Random Guess', 'Skip It', 'None'], correctIndex: 0, explanation: 'Core principles build real understanding.' },
+          { question: `What is a key concept in ${resource?.title || 'this material'}?`, options: ['Core Principles', 'Random Guess', 'Skip It', 'None of these'], correctIndex: 0, explanation: 'Core principles build real understanding.' },
           { question: 'Best study method for retention?', options: ['Active Recall', 'Skimming', 'Highlighting', 'Cramming'], correctIndex: 0, explanation: 'Active recall is scientifically proven.' },
-          { question: 'How to handle complex topics?', options: ['Break Down Step-by-Step', 'Skip to Easy', 'Memorize Verbatim', 'Ignore'], correctIndex: 0, explanation: 'Decomposition builds deeper mastery.' },
+          { question: 'How to handle complex topics?', options: ['Break Down Step-by-Step', 'Skip to Easy Parts', 'Memorize Verbatim', 'Ignore Details'], correctIndex: 0, explanation: 'Decomposition builds mastery.' },
         ]
       }
       setQuestions(qList)
-      initScene()
       setGameState('intro')
     } catch {
       setQuestions([
@@ -632,40 +101,615 @@ export default function KnowledgeRunnerPage() {
         { question: 'Best retention technique?', options: ['Spaced Repetition', 'Cramming', 'Highlighting', 'Reading Once'], correctIndex: 0, explanation: 'Spaced repetition is proven.' },
         { question: 'How to learn deeply?', options: ['Practice & Apply', 'Just Read', 'Copy Notes', 'Watch Passively'], correctIndex: 0, explanation: 'Application cements knowledge.' },
       ])
-      initScene()
       setGameState('intro')
     } finally {
       setLoading(false)
     }
   }
 
-  // Animation loop
-  useEffect(() => {
-    gameLoopRef.current = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(gameLoopRef.current)
-  }, [animate])
+  // ─── Canvas 2D Rendering ────────────────────────────────────────────
 
-  // Resize
-  useEffect(() => {
-    const onResize = () => {
-      const cam = cameraRef.current
-      const ren = rendererRef.current
-      if (!cam || !ren) return
-      cam.aspect = window.innerWidth / window.innerHeight
-      cam.updateProjectionMatrix()
-      ren.setSize(window.innerWidth, window.innerHeight)
-    }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+  const project = useCallback((worldZ: number, laneX: number, W: number, H: number) => {
+    // worldZ: negative = far (horizon), 0 = at runner
+    const t = (worldZ + 5) / 100 // t=0 at horizon, t=1 at runner
+    if (t <= 0 || t > 1.2) return null
+    const horizonY = H * 0.15
+    const runnerY = H * 0.78
+    const roadLeftEdge = W * 0.25
+    const roadRightEdge = W * 0.75
+    const roadCenterX = W * 0.5
+    // Lane X at runner level
+    const laneOffset = (laneX) * (roadRightEdge - roadLeftEdge) / 3
+    const perspX = roadCenterX + laneOffset * t
+    const perspY = horizonY + (runnerY - horizonY) * t
+    const scale = t
+    return { x: perspX, y: perspY, scale, roadLeft: roadLeftEdge + (0 - roadLeftEdge) * t, roadRight: roadRightEdge + (W - roadRightEdge) * t }
   }, [])
 
-  // Keyboard
+  const laneToX = useCallback((lane: number, W: number): number => {
+    const roadLeft = W * 0.25
+    const roadRight = W * 0.75
+    const roadW = roadRight - roadLeft
+    return roadLeft + ((lane + 0.5) / 3) * roadW
+  }, [])
+
+  const drawScene = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, t: number) => {
+    const gRef = g.current
+    const horizonY = H * 0.15
+    const runnerY = H * 0.78
+    const roadLeft = W * 0.25
+    const roadRight = W * 0.75
+    const roadW = roadRight - roadLeft
+
+    // Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, H)
+    sky.addColorStop(0, '#050520')
+    sky.addColorStop(0.4, '#0a0a30')
+    sky.addColorStop(0.7, '#10103a')
+    sky.addColorStop(1, '#1a1a4a')
+    ctx.fillStyle = sky
+    ctx.fillRect(0, 0, W, H)
+
+    // Stars
+    for (let i = 0; i < 50; i++) {
+      const sx = (i * 137.508 + t * 0.02) % W
+      const sy = (i * 97.3) % (horizonY * 0.8)
+      const blink = Math.sin(t * 0.015 + i * 2.3) * 0.5 + 0.5
+      ctx.globalAlpha = blink * 0.7
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.arc(sx, sy, 1 + blink * 0.5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
+
+    // Buildings silhouettes on sides
+    ctx.fillStyle = '#08081a'
+    for (let i = 0; i < 20; i++) {
+      const frac = i / 20
+      const bH = 40 + Math.sin(i * 3.7) * 30
+      const bW = 25 + Math.sin(i * 2.1) * 15
+      const bY = horizonY + frac * (runnerY - horizonY) * 0.9
+      const perspScale = 0.2 + frac * 0.8
+      const actualH = bH * perspScale
+      const actualW = bW * perspScale
+      // Left buildings
+      ctx.fillRect(roadLeft - 30 - actualW * (1 + frac * 2), bY - actualH, actualW, actualH)
+      // Right buildings
+      ctx.fillRect(roadRight + 30, bY - actualH, actualW, actualH)
+      // Window lights
+      if (Math.sin(i * 7.3) > 0) {
+        ctx.fillStyle = `rgba(100,150,255,${0.15 + Math.sin(t * 0.01 + i) * 0.1})`
+        ctx.fillRect(roadLeft - 30 - actualW * (1 + frac * 2) + actualW * 0.3, bY - actualH * 0.7, actualW * 0.2, actualH * 0.15)
+        ctx.fillRect(roadRight + 30 + actualW * 0.5, bY - actualH * 0.5, actualW * 0.2, actualH * 0.15)
+        ctx.fillStyle = '#08081a'
+      }
+    }
+
+    // Road surface with perspective
+    const roadGrad = ctx.createLinearGradient(0, horizonY, 0, runnerY + 20)
+    roadGrad.addColorStop(0, '#1a1a30')
+    roadGrad.addColorStop(1, '#12122a')
+    ctx.fillStyle = roadGrad
+    ctx.beginPath()
+    ctx.moveTo(roadLeft + 80, horizonY)
+    ctx.lineTo(roadLeft - 20, runnerY + 20)
+    ctx.lineTo(roadRight + 20, runnerY + 20)
+    ctx.lineTo(roadRight - 80, horizonY)
+    ctx.closePath()
+    ctx.fill()
+
+    // Road edges — bright neon
+    ctx.strokeStyle = '#ff8800'
+    ctx.lineWidth = 3
+    ctx.shadowColor = '#ff6600'
+    ctx.shadowBlur = 12
+    ctx.beginPath()
+    ctx.moveTo(roadLeft + 80, horizonY)
+    ctx.lineTo(roadLeft - 20, runnerY + 20)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(roadRight - 80, horizonY)
+    ctx.lineTo(roadRight + 20, runnerY + 20)
+    ctx.stroke()
+    ctx.shadowBlur = 0
+
+    // Lane dividers with scrolling dash
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+    ctx.lineWidth = 2
+    ctx.setLineDash([10, 8])
+    ctx.lineDashOffset = -(t * gRef.speed * 2) % 18
+    for (let i = 1; i < 3; i++) {
+      const xFrac = i / 3
+      const topX = roadLeft + 80 + xFrac * (roadRight - roadLeft - 160)
+      const botX = roadLeft - 20 + xFrac * (roadRight - roadLeft + 40)
+      ctx.beginPath()
+      ctx.moveTo(topX, horizonY)
+      ctx.lineTo(botX, runnerY + 20)
+      ctx.stroke()
+    }
+    ctx.setLineDash([])
+
+    // Scrolling horizontal grid lines for depth
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+    ctx.lineWidth = 1
+    const gridScroll = (t * gRef.speed * 2) % 30
+    for (let i = 0; i < 20; i++) {
+      const rawFrac = (i * 30 - gridScroll) / (20 * 30)
+      if (rawFrac <= 0.02 || rawFrac >= 1) continue
+      const gy = horizonY + rawFrac * (runnerY - horizonY)
+      const shrink = 1 - (1 - rawFrac) * 0.6
+      const gl = roadLeft + 80 * shrink + (1 - shrink) * (roadLeft - 20)
+      const gr = roadRight - 80 * shrink + (1 - shrink) * (roadRight + 20)
+      ctx.beginPath()
+      ctx.moveTo(gl, gy)
+      ctx.lineTo(gr, gy)
+      ctx.stroke()
+    }
+
+    // ─── Draw coins (behind runner) ────────────────────────────
+    for (const coin of gRef.coins) {
+      if (coin.collected) continue
+      const pos = project(coin.z, coin.lane - 1, W, H)
+      if (!pos || pos.scale < 0.06) continue
+      const r = 10 * pos.scale
+      const coinY = pos.y - r * 3
+      const shimmer = Math.sin(t * 0.08 + coin.lane) * 0.3 + 0.7
+      ctx.shadowColor = '#ffd700'
+      ctx.shadowBlur = 10 * pos.scale
+      ctx.fillStyle = `rgba(255,215,0,${shimmer})`
+      ctx.beginPath()
+      ctx.ellipse(pos.x, coinY, r, r * (0.5 + Math.abs(Math.sin(t * 0.06)) * 0.5), 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.shadowBlur = 0
+      ctx.fillStyle = '#ffaa00'
+      ctx.beginPath()
+      ctx.ellipse(pos.x, coinY, r * 0.5, r * 0.25, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // ─── Draw obstacles ───────────────────────────────────────
+    const obsColors = {
+      crate: { main: '#ef4444', dark: '#b91c1c', light: '#f87171', glow: '#ff0000' },
+      barrier: { main: '#ff6b00', dark: '#c2410c', light: '#fb923c', glow: '#ff4400' },
+      spike: { main: '#a855f7', dark: '#7e22ce', light: '#c084fc', glow: '#9900ff' },
+    }
+
+    for (const obs of gRef.obstacles) {
+      const pos = project(obs.z, obs.lane - 1, W, H)
+      if (!pos || pos.scale < 0.05) continue
+      const size = Math.max(20, 80 * pos.scale)
+      const c = obsColors[obs.type]
+      const baseY = pos.y
+
+      ctx.shadowColor = c.glow
+      ctx.shadowBlur = 18 * pos.scale
+
+      if (obs.type === 'crate') {
+        const grad = ctx.createLinearGradient(pos.x - size / 2, baseY - size, pos.x + size / 2, baseY)
+        grad.addColorStop(0, c.light)
+        grad.addColorStop(0.5, c.main)
+        grad.addColorStop(1, c.dark)
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.roundRect(pos.x - size / 2, baseY - size, size, size, 4 * pos.scale)
+        ctx.fill()
+        // Cross pattern
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+        ctx.lineWidth = Math.max(1, 2 * pos.scale)
+        ctx.beginPath()
+        ctx.moveTo(pos.x - size * 0.3, baseY - size * 0.3)
+        ctx.lineTo(pos.x + size * 0.3, baseY - size * 0.7)
+        ctx.moveTo(pos.x + size * 0.3, baseY - size * 0.3)
+        ctx.lineTo(pos.x - size * 0.3, baseY - size * 0.7)
+        ctx.stroke()
+      } else if (obs.type === 'barrier') {
+        const w = size * 1.5
+        const h = size * 0.8
+        const grad = ctx.createLinearGradient(pos.x - w / 2, baseY - h, pos.x + w / 2, baseY)
+        grad.addColorStop(0, c.light)
+        grad.addColorStop(0.5, c.main)
+        grad.addColorStop(1, c.dark)
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.roundRect(pos.x - w / 2, baseY - h, w, h, 3 * pos.scale)
+        ctx.fill()
+        // Hazard stripes
+        ctx.fillStyle = '#ffdd00'
+        for (let s = -w * 0.3; s < w * 0.3; s += w * 0.2) {
+          ctx.fillRect(pos.x + s, baseY - h * 0.7, w * 0.08, h * 0.4)
+        }
+      } else {
+        // Spike cone
+        const grad = ctx.createLinearGradient(pos.x, baseY - size * 1.2, pos.x, baseY)
+        grad.addColorStop(0, c.light)
+        grad.addColorStop(0.5, c.main)
+        grad.addColorStop(1, c.dark)
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.moveTo(pos.x, baseY - size * 1.2)
+        ctx.lineTo(pos.x - size * 0.4, baseY)
+        ctx.lineTo(pos.x + size * 0.4, baseY)
+        ctx.closePath()
+        ctx.fill()
+        // Inner triangle highlight
+        ctx.fillStyle = `rgba(255,255,255,0.15)`
+        ctx.beginPath()
+        ctx.moveTo(pos.x, baseY - size * 0.9)
+        ctx.lineTo(pos.x - size * 0.15, baseY - size * 0.2)
+        ctx.lineTo(pos.x + size * 0.15, baseY - size * 0.2)
+        ctx.closePath()
+        ctx.fill()
+      }
+      ctx.shadowBlur = 0
+    }
+
+    // ─── Draw runner ───────────────────────────────────────────
+    const runnerX = laneToX(gRef.runner.lane, W)
+    const bob = Math.sin(t * 0.12) * 4
+    const lean = (gRef.runner.targetLane - gRef.runner.lane) * 3
+    const drawX = runnerX + lean
+    const drawY = runnerY + bob
+    const rW = 40
+    const rH = 70
+
+    // Runner shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'
+    ctx.beginPath()
+    ctx.ellipse(drawX, runnerY + rH * 0.48, rW * 0.5, 6, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Runner glow
+    ctx.shadowColor = '#f59e0b'
+    ctx.shadowBlur = 25
+
+    // Legs
+    const legSwing = Math.sin(t * 0.15) * 8
+    ctx.fillStyle = '#92400e'
+    ctx.fillRect(drawX - 10, drawY + rH * 0.2, 8, 25 + legSwing)
+    ctx.fillRect(drawX + 2, drawY + rH * 0.2, 8, 25 - legSwing)
+
+    // Body
+    const bodyGrad = ctx.createLinearGradient(drawX - rW * 0.3, drawY - rH * 0.15, drawX + rW * 0.3, drawY + rH * 0.35)
+    bodyGrad.addColorStop(0, '#fbbf24')
+    bodyGrad.addColorStop(1, '#d97706')
+    ctx.fillStyle = bodyGrad
+    ctx.beginPath()
+    ctx.roundRect(drawX - rW * 0.3, drawY - rH * 0.15, rW * 0.6, rH * 0.4, 6)
+    ctx.fill()
+
+    // Arms
+    ctx.strokeStyle = '#f59e0b'
+    ctx.lineWidth = 5
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(drawX - rW * 0.3, drawY - rH * 0.05)
+    ctx.lineTo(drawX - rW * 0.5, drawY + rH * 0.1 + legSwing)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(drawX + rW * 0.3, drawY - rH * 0.05)
+    ctx.lineTo(drawX + rW * 0.5, drawY + rH * 0.1 - legSwing)
+    ctx.stroke()
+
+    // Head
+    const headGrad = ctx.createRadialGradient(drawX, drawY - rH * 0.35, 0, drawX, drawY - rH * 0.35, rW * 0.3)
+    headGrad.addColorStop(0, '#fde68a')
+    headGrad.addColorStop(1, '#f59e0b')
+    ctx.fillStyle = headGrad
+    ctx.beginPath()
+    ctx.arc(drawX, drawY - rH * 0.35, rW * 0.28, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+
+    // Eyes
+    ctx.fillStyle = '#1e1b4b'
+    ctx.beginPath()
+    ctx.arc(drawX - 5, drawY - rH * 0.37, 3, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(drawX + 5, drawY - rH * 0.37, 3, 0, Math.PI * 2)
+    ctx.fill()
+    // Eye shine
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.arc(drawX - 4, drawY - rH * 0.38, 1.2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(drawX + 6, drawY - rH * 0.38, 1.2, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Runner trail
+    for (let i = 0; i < 6; i++) {
+      const trailY = drawY + rH * 0.3 + i * 6
+      const trailAlpha = (0.3 - i * 0.04) * (gRef.speed / 0.4)
+      if (trailAlpha <= 0) continue
+      ctx.fillStyle = `rgba(245,158,11,${trailAlpha})`
+      ctx.beginPath()
+      ctx.ellipse(drawX + (Math.random() - 0.5) * 4, trailY, 3 + i, 2, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // ─── Particles ─────────────────────────────────────────────
+    for (const p of gRef.particles) {
+      ctx.globalAlpha = p.life
+      ctx.fillStyle = p.color
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
+
+    // ─── Flash overlay ─────────────────────────────────────────
+    if (gRef.flashAlpha > 0.01) {
+      ctx.fillStyle = gRef.flashColor
+      ctx.globalAlpha = gRef.flashAlpha
+      ctx.fillRect(0, 0, W, H)
+      ctx.globalAlpha = 1
+      gRef.flashAlpha *= 0.88
+    }
+
+    // ─── Vignette ──────────────────────────────────────────────
+    const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7)
+    vig.addColorStop(0, 'rgba(0,0,0,0)')
+    vig.addColorStop(1, 'rgba(0,0,0,0.6)')
+    ctx.fillStyle = vig
+    ctx.fillRect(0, 0, W, H)
+
+    // ─── Approaching danger indicator ──────────────────────────
+    const nearestObs = gRef.obstacles
+      .filter(o => !o.hit && Math.abs(o.lane - gRef.runner.lane) < 0.5)
+      .sort((a, b) => a.z - b.z)[0]
+    if (nearestObs && nearestObs.z > -15 && nearestObs.z < 5) {
+      const warning = Math.sin(t * 0.2) * 0.5 + 0.5
+      ctx.fillStyle = `rgba(255,0,0,${warning * 0.3})`
+      ctx.fillRect(0, 0, W, H)
+      ctx.font = `bold ${Math.max(14, 24)}px system-ui`
+      ctx.fillStyle = `rgba(255,100,100,${warning})`
+      ctx.textAlign = 'center'
+      ctx.fillText('⚠ DANGER!', W / 2, H * 0.4)
+      ctx.textAlign = 'start'
+    }
+  }, [project, laneToX])
+
+  const spawnParticles = useCallback((x: number, y: number, color: string, count: number = 8) => {
+    for (let i = 0; i < count; i++) {
+      g.current.particles.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 5,
+        vy: (Math.random() - 0.5) * 5 - 2,
+        life: 1,
+        color,
+        size: 2 + Math.random() * 3,
+      })
+    }
+  }, [])
+
+  // ─── Game loop ──────────────────────────────────────────────────────
+
+  const gameLoop = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) { requestAnimationFrame(gameLoop); return }
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { requestAnimationFrame(gameLoop); return }
+
+    const W = canvas.width
+    const H = canvas.height
+    const gRef = g.current
+    const isPlaying = gameState === 'playing'
+    const t = gRef.frame
+
+    // Shake decay
+    gRef.shakeX *= 0.85
+    gRef.shakeY *= 0.85
+
+    ctx.save()
+    ctx.translate(gRef.shakeX, gRef.shakeY)
+
+    // Draw everything
+    drawScene(ctx, W, H, t)
+
+    ctx.restore()
+
+    // ─── Game Logic (only while playing) ───────────────────────
+    if (!isPlaying) {
+      requestAnimationFrame(gameLoop)
+      return
+    }
+
+    gRef.frame++
+    gRef.speed = Math.min(1.5, gRef.speed + 0.0003)
+    setSpeed(gRef.speed)
+
+    // Smooth lane switch
+    const diff = gRef.runner.targetLane - gRef.runner.lane
+    if (Math.abs(diff) > 0.01) {
+      gRef.runner.lane += diff * 0.12
+    } else {
+      gRef.runner.lane = gRef.runner.targetLane
+    }
+
+    // Move obstacles
+    for (const obs of gRef.obstacles) obs.z += gRef.speed
+    gRef.obstacles = gRef.obstacles.filter(o => o.z < 12)
+
+    // Move coins
+    for (const c of gRef.coins) c.z += gRef.speed
+    gRef.coins = gRef.coins.filter(c => c.z < 12 && !c.collected)
+
+    // ─── Spawn obstacles ──────────────────────────────────────
+    const minGap = Math.max(8, 20 - gRef.speed * 8)
+    if (gRef.frame > 60 && Math.random() < 0.03 + gRef.speed * 0.01) {
+      const furthest = gRef.obstacles.length > 0 ? Math.min(...gRef.obstacles.map(o => o.z)) : 0
+      if (furthest < -minGap) {
+        const types: Obstacle['type'][] = ['crate', 'barrier', 'spike']
+        gRef.obstacles.push({
+          lane: Math.floor(Math.random() * 3),
+          z: -40 - Math.random() * 20,
+          type: types[Math.floor(Math.random() * types.length)],
+          hit: false,
+        })
+      }
+    }
+
+    // ─── Spawn coins ──────────────────────────────────────────
+    if (gRef.frame % 25 === 0 && Math.random() < 0.4) {
+      const furthestCoin = gRef.coins.length > 0 ? Math.min(...gRef.coins.map(c => c.z)) : 0
+      if (furthestCoin < -15) {
+        gRef.coins.push({
+          lane: Math.floor(Math.random() * 3),
+          z: -45 - Math.random() * 15,
+          collected: false,
+        })
+      }
+    }
+
+    // ─── Collision: obstacles ─────────────────────────────────
+    const runnerLane = Math.round(gRef.runner.lane)
+    const hitZone = 1.5
+
+    for (const obs of gRef.obstacles) {
+      if (obs.hit) continue
+      if (Math.abs(obs.z) < hitZone && obs.lane === runnerLane) {
+        obs.hit = true
+        const newLives = lives - 1
+        setLives(newLives)
+        setCombo(0)
+        gRef.shakeX = (Math.random() - 0.5) * 15
+        gRef.shakeY = (Math.random() - 0.5) * 15
+        gRef.flashAlpha = 0.4
+        gRef.flashColor = '#ef4444'
+        spawnParticles(laneToX(runnerLane, W), H * 0.78, '#ef4444', 12)
+        if (soundEnabled) SFX.hit()
+        if (newLives <= 0) setGameState('gameover')
+      }
+    }
+
+    // ─── Collision: coins ─────────────────────────────────────
+    for (const c of gRef.coins) {
+      if (c.collected) continue
+      if (Math.abs(c.z) < hitZone && c.lane === runnerLane) {
+        c.collected = true
+        setScore(s => s + 25)
+        spawnParticles(laneToX(c.lane, W), H * 0.73, '#ffd700', 6)
+        if (soundEnabled) SFX.coin()
+      }
+    }
+
+    // ─── Quiz trigger ─────────────────────────────────────────
+    if (gRef.quizCooldown > 0) gRef.quizCooldown--
+    if (gRef.frame > 300 && gRef.quizCooldown <= 0 && currentQIndex < questions.length - 1) {
+      if (Math.random() < 0.004) {
+        setGameState('quiz')
+        setSelectedAnswer(null)
+        setShowExplanation(false)
+        gRef.quizCooldown = 600
+      }
+    }
+
+    setDistance(d => d + gRef.speed)
+    setScore(s => s + Math.floor(gRef.speed))
+
+    requestAnimationFrame(gameLoop)
+  }, [gameState, lives, questions, currentQIndex, soundEnabled, drawScene, spawnParticles, laneToX])
+
+  // ─── Start / Restart ────────────────────────────────────────────────
+
+  const startGame = useCallback(() => {
+    const gRef = g.current
+    gRef.runner = { lane: 1, targetLane: 1, animPhase: 0 }
+    gRef.obstacles = []
+    gRef.coins = []
+    gRef.particles = []
+    gRef.speed = 0.4
+    gRef.frame = 0
+    gRef.shakeX = 0
+    gRef.shakeY = 0
+    gRef.flashAlpha = 0
+    gRef.quizCooldown = 0
+    setScore(0)
+    setLives(3)
+    setCombo(0)
+    setMaxCombo(0)
+    setCurrentQIndex(0)
+    setDistance(0)
+    setSelectedAnswer(null)
+    setShowExplanation(false)
+    setGameState('playing')
+  }, [])
+
+  const handleAnswer = useCallback((idx: number) => {
+    if (selectedAnswer !== null) return
+    setSelectedAnswer(idx)
+    const q = questions[currentQIndex]
+    if (!q) return
+    const correct = idx === q.correctIndex
+    if (correct) {
+      const pts = 300 * (combo + 1)
+      setScore(s => s + pts)
+      setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
+      g.current.flashAlpha = 0.2
+      g.current.flashColor = '#22c55e'
+      if (soundEnabled) SFX.correct()
+    } else {
+      setCombo(0)
+      setLives(l => {
+        const n = l - 1
+        g.current.flashAlpha = 0.35
+        g.current.flashColor = '#ef4444'
+        g.current.shakeX = (Math.random() - 0.5) * 15
+        g.current.shakeY = (Math.random() - 0.5) * 15
+        if (soundEnabled) SFX.wrong()
+        if (n <= 0) setTimeout(() => setGameState('gameover'), 800)
+        return n
+      })
+    }
+    setShowExplanation(true)
+  }, [selectedAnswer, questions, currentQIndex, combo, soundEnabled])
+
+  const advanceAfterQuiz = useCallback(() => {
+    setShowExplanation(false)
+    setSelectedAnswer(null)
+    if (lives <= 0) { setGameState('gameover'); return }
+    if (currentQIndex < questions.length - 1) {
+      setCurrentQIndex(i => i + 1)
+    } else {
+      setGameState('victory')
+      authApi.awardXp(50, 'Knowledge Runner Victory', resourceId).catch(() => {})
+      toast.success('Mission Complete! +50 XP Awarded!')
+      return
+    }
+    setGameState('playing')
+  }, [lives, currentQIndex, questions.length, resourceId])
+
+  // ─── Canvas resize ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const resize = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    resize()
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [])
+
+  // ─── Game loop start ────────────────────────────────────────────────
+
+  useEffect(() => {
+    const id = requestAnimationFrame(gameLoop)
+    return () => cancelAnimationFrame(id)
+  }, [gameLoop])
+
+  // ─── Keyboard ───────────────────────────────────────────────────────
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const g = gameRef.current
+      const gRef = g.current
       if (gameState === 'playing') {
-        if ((e.key === 'ArrowLeft' || e.key === 'a') && g.targetLane > 0) g.targetLane--
-        if ((e.key === 'ArrowRight' || e.key === 'd') && g.targetLane < 2) g.targetLane++
+        if ((e.key === 'ArrowLeft' || e.key === 'a') && gRef.runner.targetLane > 0) gRef.runner.targetLane--
+        if ((e.key === 'ArrowRight' || e.key === 'd') && gRef.runner.targetLane < 2) gRef.runner.targetLane++
         if (e.key === 'Escape') setGameState('paused')
       } else if (gameState === 'paused' && e.key === 'Escape') {
         setGameState('playing')
@@ -677,17 +721,18 @@ export default function KnowledgeRunnerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [gameState, handleAnswer])
 
-  // Touch swipe
+  // ─── Touch swipe ────────────────────────────────────────────────────
+
   useEffect(() => {
     let sx = 0
     const onStart = (e: TouchEvent) => { sx = e.touches[0].clientX }
     const onEnd = (e: TouchEvent) => {
       if (gameState !== 'playing') return
       const dx = e.changedTouches[0].clientX - sx
-      const g = gameRef.current
+      const gRef = g.current
       if (Math.abs(dx) > 40) {
-        if (dx < 0 && g.targetLane > 0) g.targetLane--
-        if (dx > 0 && g.targetLane < 2) g.targetLane++
+        if (dx < 0 && gRef.runner.targetLane > 0) gRef.runner.targetLane--
+        if (dx > 0 && gRef.runner.targetLane < 2) gRef.runner.targetLane++
       }
     }
     window.addEventListener('touchstart', onStart, { passive: true })
@@ -695,9 +740,11 @@ export default function KnowledgeRunnerPage() {
     return () => { window.removeEventListener('touchstart', onStart); window.removeEventListener('touchend', onEnd) }
   }, [gameState])
 
+  // ─── Loading screen ─────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-[#050510] flex items-center justify-center text-white z-50">
+      <div className="fixed inset-0 bg-[#050520] flex items-center justify-center text-white z-50">
         <div className="flex flex-col items-center gap-4">
           <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
           <p className="font-extrabold text-slate-300 text-lg">Loading Knowledge Runner...</p>
@@ -708,8 +755,8 @@ export default function KnowledgeRunnerPage() {
 
   return (
     <div className="fixed inset-0 bg-black text-white overflow-hidden select-none z-50">
-      {/* 3D Canvas */}
-      <div ref={mountRef} className="absolute inset-0" style={{ touchAction: 'none' }} />
+      {/* Canvas */}
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
 
       {/* HUD */}
       {(gameState === 'playing' || gameState === 'quiz') && (
@@ -749,9 +796,9 @@ export default function KnowledgeRunnerPage() {
       {gameState === 'playing' && (
         <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center gap-3 px-4 md:hidden pointer-events-auto">
           {[0, 1, 2].map(l => (
-            <button key={l} onTouchStart={(e) => { e.preventDefault(); gameRef.current.targetLane = l }}
+            <button key={l} onTouchStart={(e) => { e.preventDefault(); g.current.runner.targetLane = l }}
               className={`flex-1 py-4 rounded-2xl font-black text-sm border-2 transition-all active:scale-95 ${
-                gameRef.current.targetLane === l
+                Math.round(g.current.runner.targetLane) === l
                   ? 'bg-primary/20 border-primary text-primary shadow-[0_0_20px_rgba(245,158,11,0.3)]'
                   : 'bg-white/5 border-white/10 text-white/60'
               }`}>
@@ -827,9 +874,9 @@ export default function KnowledgeRunnerPage() {
                 <Play className="w-8 h-8 text-black fill-black" />
               </div>
               <div>
-                <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[11px] font-black uppercase tracking-widest">Knowledge Runner 3D</span>
+                <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[11px] font-black uppercase tracking-widest">Knowledge Runner</span>
                 <h1 className="text-2xl md:text-3xl font-black text-white mt-2">{resource?.title || 'Quiz Runner'}</h1>
-                <p className="text-slate-400 text-sm mt-2">Run through the neon city! Dodge crates, barriers and spikes. Collect coins. Smash quiz gates to prove your mastery.</p>
+                <p className="text-slate-400 text-sm mt-2">Dodge crates, barriers and spikes. Collect coins. Smash quiz gates to prove mastery.</p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-[11px] font-bold text-slate-400 bg-white/5 p-3 rounded-2xl border border-white/10">
                 <div className="text-center">⬅️ ➡️<br/>Switch Lanes</div>
@@ -911,7 +958,7 @@ export default function KnowledgeRunnerPage() {
       </AnimatePresence>
 
       <div className="absolute bottom-2 left-0 right-0 text-center text-[10px] text-slate-600 z-20 pointer-events-none">
-        Knowledge Runner 3D • Immersive Arcade Engine
+        Knowledge Runner • Immersive Arcade Engine
       </div>
     </div>
   )
