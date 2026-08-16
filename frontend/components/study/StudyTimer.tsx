@@ -37,6 +37,7 @@ export default function StudyTimer({ onTick, onComplete, onBreakStart, onBreakEn
   const [muted, setMuted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const intervalRef = useRef<NodeJS.Timeout>()
+  const elapsedRef = useRef(0)
   const totalDuration = mode === 'work' ? settings.workMinutes * 60 : (isLongBreak ? settings.longBreakMinutes : settings.breakMinutes) * 60
 
   // Play notification sound
@@ -105,19 +106,20 @@ export default function StudyTimer({ onTick, onComplete, onBreakStart, onBreakEn
           setIsRunning(false)
           return 0
         }
-        setElapsed(e => e + 1)
-        onTick?.(elapsed + 1)
+        elapsedRef.current += 1
+        onTick?.(elapsedRef.current)
         return s - 1
       })
     }, 1000)
     return () => clearInterval(intervalRef.current)
-  }, [isRunning, mode, sessionsCompleted, settings, playSound, onTick, onComplete, onBreakStart, onBreakEnd, elapsed])
+  }, [isRunning]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     setIsRunning(false)
     setMode('work')
     setSecondsLeft(settings.workMinutes * 60)
     setElapsed(0)
+    elapsedRef.current = 0
     setSessionsCompleted(0)
     setIsLongBreak(false)
   }
