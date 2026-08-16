@@ -299,6 +299,16 @@ class CityRunEngine {
     this.coins = []
     this.particles = []
     this.worldOffset = 0
+    // Spawn initial obstacles immediately so the player sees them right away
+    for (let i = 0; i < 5; i++) {
+      this.spawnObstacle()
+      // Spread them out
+      const last = this.obstacles[this.obstacles.length - 1]
+      if (last) {
+        last.z = -15 - i * 12
+        last.mesh.position.z = last.z
+      }
+    }
     this.run()
   }
 
@@ -419,18 +429,16 @@ class CityRunEngine {
       return true
     })
 
-    // Spawn obstacles (skip if quiz is active to give player a break)
-    if (!this.quizActive) {
-      const gap = Math.max(6, 14 - this.speed * 5)
-      if (this.frame > 40 && Math.random() < 0.06 + this.speed * 0.02) {
-        const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : 0
-        if (far < -gap) this.spawnObstacle()
-      }
+    // Spawn obstacles
+    const gap = Math.max(5, 10 - this.speed * 4)
+    if (this.frame > 20 && Math.random() < 0.08 + this.speed * 0.03) {
+      const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : -999
+      if (far < -gap) this.spawnObstacle()
     }
 
-    if (this.frame % 12 === 0 && Math.random() < 0.6) {
-      const far = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : 0
-      if (far < -8) this.spawnCoin()
+    if (this.frame % 10 === 0 && Math.random() < 0.6) {
+      const far = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : -999
+      if (far < -6) this.spawnCoin()
     }
 
     // Collision
