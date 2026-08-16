@@ -590,19 +590,21 @@ class MarketplaceUsePowerupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        powerup_id = request.data.get('powerup_id')
+        item_id = request.data.get('item_id')
+        if not item_id:
+            return Response({'error': 'Missing item_id.'}, status=400)
         user = request.user
         obs = user.onboarding_status or {}
-        inventory = obs.get('marketplace_inventory', {})
+        inventory = obs.get('inventory', {})
 
-        count = inventory.get(powerup_id, 0)
+        count = inventory.get(item_id, 0)
         if count <= 0:
             return Response({'error': 'You don\'t own this powerup.'}, status=400)
 
-        inventory[powerup_id] = count - 1
-        if inventory[powerup_id] <= 0:
-            del inventory[powerup_id]
-        obs['marketplace_inventory'] = inventory
+        inventory[item_id] = count - 1
+        if inventory[item_id] <= 0:
+            del inventory[item_id]
+        obs['inventory'] = inventory
         user.onboarding_status = obs
         user.save(update_fields=['onboarding_status'])
 
@@ -659,29 +661,6 @@ class MarketplaceBuyThemeView(APIView):
             'message': f"🎨 Unlocked {theme['name']} theme!",
             'total_xp': new_balance,
             'unlocked_themes': unlocked,
-        })
-    """POST /api/payments/marketplace/use-powerup/ — Use 1 charge of a power-up during a battle."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        item_id = request.data.get('item_id')
-        user = request.user
-        obs = user.onboarding_status or {}
-        inventory = obs.get('inventory', {})
-
-        count = inventory.get(item_id, 0)
-        if count <= 0:
-            return Response({'error': 'You do not own this power-up! Buy it from the Marketplace.'}, status=400)
-
-        inventory[item_id] = count - 1
-        obs['inventory'] = inventory
-        user.onboarding_status = obs
-        user.save(update_fields=['onboarding_status'])
-
-        return Response({
-            'success': True,
-            'item_id': item_id,
-            'remaining': inventory[item_id],
         })
 
 

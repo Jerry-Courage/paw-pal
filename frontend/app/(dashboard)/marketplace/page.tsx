@@ -40,7 +40,7 @@ const POWERUPS = [
     name: '2x XP Boost',
     cost: 800,
     icon: 'bolt',
-    color: 'from-violet-500 to-purple-500',
+    color: 'from-primary to-secondary',
     badge: 'Multiplier',
     desc: 'Doubles all XP earned across your next 3 completed study sessions or quiz battles.',
   },
