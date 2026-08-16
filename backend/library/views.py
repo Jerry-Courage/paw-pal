@@ -456,8 +456,9 @@ class GeneratePracticeQuestionsView(APIView):
         resource = get_object_or_404(Resource, Q(id=resource_id) & (Q(owner=request.user) | Q(is_public=True)))
         difficulty = request.data.get('difficulty', 'medium')
         count = int(request.data.get('count', 5))
+        fmt = request.data.get('format', 'mcq')
         ai = AIService()
-        questions = ai.generate_practice_questions(resource, difficulty, count)
+        questions = ai.generate_practice_questions(resource, difficulty, count, format=fmt)
         return Response(questions)
 
 

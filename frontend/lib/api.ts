@@ -118,8 +118,8 @@ export const libraryApi = {
     api.post(`/library/resources/${id}/quiz/generate/`, { format, level, count }),
   generateMindMap: (id: number) =>
     api.post(`/library/resources/${id}/mindmap/generate/`),
-  generatePracticeQuestions: (id: number, difficulty = 'medium', count = 5) =>
-    api.post(`/library/resources/${id}/practice/generate/`, { difficulty, count }),
+  generatePracticeQuestions: (id: number, difficulty = 'medium', count = 5, format = 'mcq') =>
+    api.post(`/library/resources/${id}/practice/generate/`, { difficulty, count, format }),
   getFlashcards: () => api.get('/library/flashcards/'),
   getResourceFlashcards: (resourceId: number) =>
     api.get('/library/flashcards/', { params: { resource: resourceId } }),

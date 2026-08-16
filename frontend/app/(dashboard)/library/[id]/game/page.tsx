@@ -14,7 +14,7 @@ interface Question {
   explanation: string
 }
 
-type GameState = 'loading' | 'intro' | 'playing' | 'quiz' | 'paused' | 'gameover' | 'victory'
+type GameState = 'loading' | 'intro' | 'playing' | 'paused' | 'gameover' | 'victory'
 
 const SFX = {
   correct: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); a.volume = 0.25; a.play() } catch {} },
@@ -22,6 +22,7 @@ const SFX = {
   coin: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'); a.volume = 0.2; a.play() } catch {} },
   hit: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2803/2803-preview.mp3'); a.volume = 0.3; a.play() } catch {} },
   jump: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'); a.volume = 0.15; a.play() } catch {} },
+  quizGate: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3'); a.volume = 0.3; a.play() } catch {} },
 }
 
 let THREE: typeof import('three') | null = null
@@ -42,7 +43,6 @@ class CityRunEngine {
   private animId = 0
   private alive = false
 
-  // Runner
   private runnerGroup: any = null
   private runnerParts: Record<string, any> = {}
   private currentLane = 1
@@ -54,9 +54,9 @@ class CityRunEngine {
   private slideTimer = 0
   private animPhase = 0
 
-  // World
   private worldOffset = 0
   private speed = 0.3
+  private baseSpeed = 0.3
   private frame = 0
   private trackPlanks: any[] = []
   private trees: any[] = []
@@ -69,6 +69,7 @@ class CityRunEngine {
   private onCoin: () => void = () => {}
   private onQuiz: () => void = () => {}
   private quizCooldown = 0
+  private quizActive = false
 
   async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onQuiz: () => void }) {
     await ensureThree()
@@ -81,17 +82,14 @@ class CityRunEngine {
     const w = container.clientWidth || window.innerWidth
     const h = container.clientHeight || window.innerHeight
 
-    // Scene — bright sky
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x87ceeb)
     this.scene.fog = new THREE.Fog(0x87ceeb, 40, 120)
 
-    // Camera — third person behind runner
     this.camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 200)
     this.camera.position.set(0, 5, 10)
     this.camera.lookAt(0, 1.5, -15)
 
-    // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setSize(w, h)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -101,9 +99,7 @@ class CityRunEngine {
     this.renderer.toneMappingExposure = 1.4
     container.appendChild(this.renderer.domElement)
 
-    // ─── Lighting — bright daylight ─────────────
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.7))
-
     const sun = new THREE.DirectionalLight(0xfff5e0, 1.8)
     sun.position.set(10, 20, 10)
     sun.castShadow = true
@@ -115,12 +111,10 @@ class CityRunEngine {
     sun.shadow.camera.top = 20
     sun.shadow.camera.bottom = -20
     this.scene.add(sun)
-
     const fill = new THREE.DirectionalLight(0xaaddff, 0.4)
     fill.position.set(-5, 5, -5)
     this.scene.add(fill)
 
-    // ─── Ground — green grass ───────────────────
     const grassMat = new THREE.MeshStandardMaterial({ color: 0x4a8c3f, roughness: 0.9 })
     const grass = new THREE.Mesh(new THREE.PlaneGeometry(120, 300), grassMat)
     grass.rotation.x = -Math.PI / 2
@@ -128,15 +122,12 @@ class CityRunEngine {
     grass.receiveShadow = true
     this.scene.add(grass)
 
-    // ─── Railroad Track ─────────────────────────
-    // Road bed (gravel)
     const gravelMat = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.85 })
     const gravel = new THREE.Mesh(new THREE.BoxGeometry(10, 0.15, 300), gravelMat)
     gravel.position.set(0, 0, -100)
     gravel.receiveShadow = true
     this.scene.add(gravel)
 
-    // Rails
     const railMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.7, roughness: 0.3 })
     for (const rx of [-2.2, 2.2]) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 300), railMat)
@@ -145,7 +136,6 @@ class CityRunEngine {
       this.scene.add(rail)
     }
 
-    // Cross ties (wooden planks)
     const tieMat = new THREE.MeshStandardMaterial({ color: 0x6B4226, roughness: 0.8 })
     for (let i = 0; i < 80; i++) {
       const tie = new THREE.Mesh(new THREE.BoxGeometry(6, 0.08, 0.3), tieMat)
@@ -155,7 +145,6 @@ class CityRunEngine {
       this.trackPlanks.push(tie)
     }
 
-    // Lane dividers — subtle markers on the track
     const markerMat = new THREE.MeshStandardMaterial({ color: 0xdddd44, emissive: 0xcccc22, emissiveIntensity: 0.3 })
     for (let i = 0; i < 50; i++) {
       for (const mx of [-1.5, 1.5]) {
@@ -166,81 +155,54 @@ class CityRunEngine {
       }
     }
 
-    // ─── Trees ──────────────────────────────────
     const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.9 })
     const treeLeafMats = [
       new THREE.MeshStandardMaterial({ color: 0x2d7a2d, roughness: 0.7 }),
       new THREE.MeshStandardMaterial({ color: 0x3a8c3a, roughness: 0.7 }),
       new THREE.MeshStandardMaterial({ color: 0x1d6a1d, roughness: 0.7 }),
     ]
-
     for (const side of [-1, 1]) {
       for (let i = 0; i < 40; i++) {
         const treeGroup = new THREE.Group()
         const trunkH = 1.5 + Math.random() * 1.5
-        const trunk = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.15, 0.25, trunkH, 6),
-          treeTrunkMat
-        )
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, trunkH, 6), treeTrunkMat)
         trunk.position.y = trunkH / 2
         trunk.castShadow = true
         treeGroup.add(trunk)
-
-        // Cone-shaped leaves (like the screenshot)
         const leafMat = treeLeafMats[i % 3]
         const leafH = 2 + Math.random() * 2
         const leafR = 1 + Math.random() * 0.8
-        const leaves = new THREE.Mesh(
-          new THREE.ConeGeometry(leafR, leafH, 6),
-          leafMat
-        )
+        const leaves = new THREE.Mesh(new THREE.ConeGeometry(leafR, leafH, 6), leafMat)
         leaves.position.y = trunkH + leafH * 0.35
         leaves.castShadow = true
         treeGroup.add(leaves)
-
-        // Sometimes add a second smaller cone on top
         if (Math.random() > 0.4) {
-          const topLeaf = new THREE.Mesh(
-            new THREE.ConeGeometry(leafR * 0.6, leafH * 0.6, 6),
-            leafMat
-          )
+          const topLeaf = new THREE.Mesh(new THREE.ConeGeometry(leafR * 0.6, leafH * 0.6, 6), leafMat)
           topLeaf.position.y = trunkH + leafH * 0.7
           topLeaf.castShadow = true
           treeGroup.add(topLeaf)
         }
-
-        const xPos = side * (7 + Math.random() * 15)
-        const zPos = -i * 6 - Math.random() * 4
-        treeGroup.position.set(xPos, 0, zPos)
+        treeGroup.position.set(side * (7 + Math.random() * 15), 0, -i * 6 - Math.random() * 4)
         this.scene.add(treeGroup)
         this.trees.push(treeGroup)
       }
     }
 
-    // ─── Runner Character ───────────────────────
     this.runnerGroup = new THREE.Group()
-
-    // Red cap
     const capMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 })
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.35, 0.15, 12), capMat)
     cap.position.y = 2.55
     this.runnerGroup.add(cap)
     this.runnerParts.cap = cap
-
-    // Cap brim
     const brim = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.25), capMat)
     brim.position.set(0, 2.48, 0.18)
     this.runnerGroup.add(brim)
-
-    // Head
     const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5c7a1, roughness: 0.6 })
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), skinMat)
     head.position.y = 2.35
     head.castShadow = true
     this.runnerGroup.add(head)
     this.runnerParts.head = head
-
-    // Eyes
     const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xffffff })
     const eyePupil = new THREE.MeshStandardMaterial({ color: 0x222222 })
     for (const ex of [-0.1, 0.1]) {
@@ -251,16 +213,12 @@ class CityRunEngine {
       ep.position.set(ex, 2.38, 0.29)
       this.runnerGroup.add(ep)
     }
-
-    // Body — green t-shirt
     const shirtMat = new THREE.MeshStandardMaterial({ color: 0x22883a, roughness: 0.6 })
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.4), shirtMat)
     body.position.y = 1.65
     body.castShadow = true
     this.runnerGroup.add(body)
     this.runnerParts.body = body
-
-    // Backpack
     const packMat = new THREE.MeshStandardMaterial({ color: 0x3344aa, roughness: 0.5 })
     const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.25), packMat)
     pack.position.set(0, 1.7, -0.32)
@@ -271,8 +229,6 @@ class CityRunEngine {
     const packStrap2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.05), packMat)
     packStrap2.position.set(0.15, 1.8, -0.18)
     this.runnerGroup.add(packStrap2)
-
-    // Arms
     const armMat = new THREE.MeshStandardMaterial({ color: 0xf5c7a1, roughness: 0.6 })
     for (const ax of [-0.48, 0.48]) {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.16), armMat)
@@ -281,16 +237,12 @@ class CityRunEngine {
       this.runnerGroup.add(arm)
       this.runnerParts[`arm${ax > 0 ? 'R' : 'L'}`] = arm
     }
-
-    // Hands
     const handMat = new THREE.MeshStandardMaterial({ color: 0xf0b888, roughness: 0.5 })
     for (const hx of [-0.48, 0.48]) {
       const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), handMat)
       hand.position.set(hx, 1.15, 0)
       this.runnerGroup.add(hand)
     }
-
-    // Blue pants
     const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.6 })
     for (const lx of [-0.15, 0.15]) {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.22), pantsMat)
@@ -299,19 +251,15 @@ class CityRunEngine {
       this.runnerGroup.add(leg)
       this.runnerParts[`leg${lx > 0 ? 'R' : 'L'}`] = leg
     }
-
-    // Shoes
     const shoeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
     for (const sx of [-0.15, 0.15]) {
       const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.3), shoeMat)
       shoe.position.set(sx, 0.45, 0.04)
       this.runnerGroup.add(shoe)
     }
-
     this.runnerGroup.position.set(0, 0, 0)
     this.scene.add(this.runnerGroup)
 
-    // Resize handler
     const onResize = () => {
       const nw = container.clientWidth || window.innerWidth
       const nh = container.clientHeight || window.innerHeight
@@ -327,6 +275,7 @@ class CityRunEngine {
 
   start() {
     this.speed = 0.3
+    this.baseSpeed = 0.3
     this.frame = 0
     this.currentLane = 1
     this.targetLane = 1
@@ -336,6 +285,7 @@ class CityRunEngine {
     this.isSliding = false
     this.slideTimer = 0
     this.quizCooldown = 0
+    this.quizActive = false
     this.obstacles.forEach(o => this.scene.remove(o.mesh))
     this.coins.forEach(c => this.scene.remove(c.mesh))
     this.particles.forEach(p => this.scene.remove(p.mesh))
@@ -344,6 +294,16 @@ class CityRunEngine {
     this.particles = []
     this.worldOffset = 0
     this.run()
+  }
+
+  setQuizActive(active: boolean) {
+    this.quizActive = active
+    // Slow down during quiz
+    if (active) {
+      this.baseSpeed = Math.max(0.15, this.speed * 0.4)
+    } else {
+      this.baseSpeed = Math.min(1.2, 0.3 + this.worldOffset * 0.0001)
+    }
   }
 
   switchLane(dir: number) {
@@ -355,7 +315,7 @@ class CityRunEngine {
     if (!this.isJumping && !this.isSliding) {
       this.isJumping = true
       this.jumpVelocity = 0.25
-      if (jumpSound) jumpSound()
+      SFX.jump()
     }
   }
 
@@ -369,61 +329,57 @@ class CityRunEngine {
   stop() {
     this.alive = false
     cancelAnimationFrame(this.animId)
-    const container = this.renderer?.domElement?.parentElement
     if ((this as any)._onResize) window.removeEventListener('resize', (this as any)._onResize)
   }
 
   getSpeed() { return this.speed }
+
+  destroyAllObstacles() {
+    for (const obs of this.obstacles) {
+      this.spawnParticles(obs.mesh.position.x, 1.5, obs.z, 0x44ff44, 8)
+      this.scene.remove(obs.mesh)
+    }
+    this.obstacles = []
+  }
 
   private run = () => {
     if (!this.alive || !THREE) return
     this.animId = requestAnimationFrame(this.run)
 
     this.frame++
-    this.speed = Math.min(1.2, this.speed + 0.0002)
+    // Smooth speed towards base
+    this.speed += (this.baseSpeed - this.speed) * 0.05
+    this.baseSpeed = Math.min(1.2, this.baseSpeed + 0.00015)
     this.worldOffset += this.speed
     this.animPhase += this.speed * 2
 
-    // Smooth lane
     const diff = this.targetLane - this.currentLane
     if (Math.abs(diff) > 0.01) this.currentLane += diff * 0.15
     else this.currentLane = this.targetLane
 
-    // Jump physics
     if (this.isJumping) {
       this.jumpY += this.jumpVelocity
       this.jumpVelocity -= 0.012
-      if (this.jumpY <= 0) {
-        this.jumpY = 0
-        this.isJumping = false
-        this.jumpVelocity = 0
-      }
+      if (this.jumpY <= 0) { this.jumpY = 0; this.isJumping = false; this.jumpVelocity = 0 }
     }
-
-    // Slide timer
     if (this.isSliding) {
       this.slideTimer--
       if (this.slideTimer <= 0) this.isSliding = false
     }
 
-    // Runner position & animation
     if (this.runnerGroup) {
       const tx = this.LANE_X[this.targetLane]
       this.runnerGroup.position.x += (tx - this.runnerGroup.position.x) * 0.15
       this.runnerGroup.position.y = this.jumpY
-
-      // Slide — crouch the character
       if (this.isSliding) {
         this.runnerGroup.scale.y = 0.5
         this.runnerGroup.position.y = Math.max(this.jumpY, 0)
       } else {
         this.runnerGroup.scale.y += (1 - this.runnerGroup.scale.y) * 0.2
       }
-
       const t = this.animPhase
       const bob = Math.sin(t) * 0.08
       const legSwing = Math.sin(t) * 0.5
-
       if (this.runnerParts.body) this.runnerParts.body.position.y = 1.65 + bob
       if (this.runnerParts.head) this.runnerParts.head.position.y = 2.35 + bob
       if (this.runnerParts.cap) this.runnerParts.cap.position.y = 2.55 + bob
@@ -433,13 +389,11 @@ class CityRunEngine {
       if (this.runnerParts.armR) this.runnerParts.armR.rotation.x = this.isSliding ? -0.3 : legSwing * 0.8
     }
 
-    // Move track planks
     for (const plank of this.trackPlanks) {
       plank.position.z += this.speed
       if (plank.position.z > 15) plank.position.z -= 280
     }
 
-    // Move obstacles
     for (const obs of this.obstacles) {
       obs.z += this.speed
       obs.mesh.position.z = obs.z
@@ -449,7 +403,6 @@ class CityRunEngine {
       return true
     })
 
-    // Move coins
     for (const c of this.coins) {
       c.z += this.speed
       c.mesh.position.z = c.z
@@ -460,14 +413,15 @@ class CityRunEngine {
       return true
     })
 
-    // Spawn obstacles
-    const gap = Math.max(10, 22 - this.speed * 10)
-    if (this.frame > 80 && Math.random() < 0.025 + this.speed * 0.008) {
-      const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : 0
-      if (far < -gap) this.spawnObstacle()
+    // Spawn obstacles (skip if quiz is active to give player a break)
+    if (!this.quizActive) {
+      const gap = Math.max(10, 22 - this.speed * 10)
+      if (this.frame > 80 && Math.random() < 0.025 + this.speed * 0.008) {
+        const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : 0
+        if (far < -gap) this.spawnObstacle()
+      }
     }
 
-    // Spawn coins
     if (this.frame % 18 === 0 && Math.random() < 0.5) {
       const far = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : 0
       if (far < -12) this.spawnCoin()
@@ -478,9 +432,7 @@ class CityRunEngine {
     for (const obs of this.obstacles) {
       if (obs.hit) continue
       if (Math.abs(obs.z) < 1.5 && obs.lane === rl) {
-        // Jump over low obstacles
         if (obs.jumpable && this.jumpY > 0.8) continue
-        // Slide under high obstacles
         if (!obs.jumpable && this.isSliding) continue
         obs.hit = true
         this.onHit()
@@ -496,18 +448,16 @@ class CityRunEngine {
       }
     }
 
-    // Quiz
+    // Quiz trigger — after enough distance, trigger a quiz
     if (this.quizCooldown > 0) this.quizCooldown--
-    if (this.frame > 300 && this.quizCooldown <= 0 && Math.random() < 0.003) {
+    if (this.frame > 300 && this.quizCooldown <= 0 && !this.quizActive && Math.random() < 0.004) {
       this.onQuiz()
-      this.quizCooldown = 500
+      this.quizCooldown = 600
     }
 
-    // Camera follow
     this.camera.position.x += (this.runnerGroup.position.x * 0.3 - this.camera.position.x) * 0.05
     this.camera.position.y = 5 + this.jumpY * 0.3 + Math.sin(this.frame * 0.05) * 0.1
 
-    // Particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i]
       p.mesh.position.x += p.vx
@@ -532,14 +482,12 @@ class CityRunEngine {
     let jumpable = false
 
     if (type === 'barrier') {
-      // Low barrier — can jump over
       jumpable = true
       mesh = new THREE.Mesh(
         new THREE.BoxGeometry(2.5, 0.8, 0.4),
         new THREE.MeshStandardMaterial({ color: 0xdd6600, roughness: 0.4 })
       )
       mesh.castShadow = true
-      // Stripes
       const stripeMat = new THREE.MeshStandardMaterial({ color: 0xffdd00 })
       for (let s = -0.8; s <= 0.8; s += 0.5) {
         const st = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.42), stripeMat)
@@ -555,7 +503,6 @@ class CityRunEngine {
       mesh.castShadow = true
       mesh.position.set(this.LANE_X[lane], 0.55, -130)
     } else {
-      // Rock — can slide under if it's a high obstacle
       mesh = new THREE.Mesh(
         new THREE.DodecahedronGeometry(0.6, 0),
         new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7, metalness: 0.2 })
@@ -620,8 +567,6 @@ class CityRunEngine {
   }
 }
 
-let jumpSound = SFX.jump
-
 // ─── React Component ──────────────────────────────────────────────────
 
 export default function KnowledgeRunnerPage() {
@@ -646,6 +591,8 @@ export default function KnowledgeRunnerPage() {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
   const [showExplanation, setShowExplanation] = useState(false)
   const [slowMotion, setSlowMotion] = useState(true)
+  const [quizActive, setQuizActive] = useState(false)
+  const [quizResult, setQuizResult] = useState<'correct' | 'wrong' | null>(null)
 
   const currentQ = questions[currentQIndex] || questions[0]
 
@@ -658,7 +605,7 @@ export default function KnowledgeRunnerPage() {
   const loadQuestions = async () => {
     setLoading(true)
     try {
-      const res = await libraryApi.generatePracticeQuestions(resourceId)
+      const res = await libraryApi.generatePracticeQuestions(resourceId, 'medium', 10, 'mcq')
       const data = res.data
       const raw = Array.isArray(data) ? data : data?.questions || []
       let qList = raw.map((item: any) => ({
@@ -667,11 +614,13 @@ export default function KnowledgeRunnerPage() {
         correctIndex: item.correct_index ?? item.answerIndex ?? 0,
         explanation: item.explanation || ''
       }))
+      // Filter to only questions with 4 options
+      qList = qList.filter((q: Question) => q.options.length === 4)
       if (qList.length < 3) {
         qList = [
-          { question: `What is a key concept in ${resource?.title || 'this material'}?`, options: ['Core Principles', 'Random Guess', 'Skip It', 'None'], correctIndex: 0, explanation: 'Core principles drive understanding.' },
-          { question: 'Best method for retention?', options: ['Active Recall', 'Skimming', 'Highlighting', 'Cramming'], correctIndex: 0, explanation: 'Active recall is scientifically proven.' },
-          { question: 'How to handle complex topics?', options: ['Break It Down', 'Skip to Easy', 'Memorize', 'Ignore'], correctIndex: 0, explanation: 'Decomposition builds mastery.' },
+          { question: 'What is the main topic of this material?', options: ['Core Concepts', 'Random Guess', 'Nothing', 'None of these'], correctIndex: 0, explanation: 'Focus on the core concepts covered.' },
+          { question: 'Best way to retain information?', options: ['Active Recall', 'Skimming', 'Highlighting', 'Cramming'], correctIndex: 0, explanation: 'Active recall is scientifically proven.' },
+          { question: 'How should you approach difficult topics?', options: ['Break Them Down', 'Skip to Easy', 'Memorize Only', 'Ignore Them'], correctIndex: 0, explanation: 'Breaking down builds mastery.' },
         ]
       }
       setQuestions(qList)
@@ -680,7 +629,7 @@ export default function KnowledgeRunnerPage() {
       setQuestions([
         { question: 'What is effective studying?', options: ['Active Engagement', 'Passive Reading', 'Memorizing', 'Skimming'], correctIndex: 0, explanation: 'Active engagement works.' },
         { question: 'Best retention technique?', options: ['Spaced Repetition', 'Cramming', 'Highlighting', 'Reading Once'], correctIndex: 0, explanation: 'Spaced repetition is proven.' },
-        { question: 'How to learn deeply?', options: ['Practice & Apply', 'Just Read', 'Copy Notes', 'Watch Passively'], correctIndex: 0, explanation: 'Application cements knowledge.' },
+        { question: 'How to learn deeply?', options: ['Practice and Apply', 'Just Read', 'Copy Notes', 'Watch Passively'], correctIndex: 0, explanation: 'Application cements knowledge.' },
       ])
       setGameState('intro')
     } finally {
@@ -711,16 +660,20 @@ export default function KnowledgeRunnerPage() {
         if (soundEnabled) SFX.coin()
       },
       onQuiz: () => {
-        if (slowMotion) engine.stop()
-        setGameState('quiz')
+        // Trigger quiz — game slows down but keeps running
+        setQuizActive(true)
         setSelectedAnswer(null)
         setShowExplanation(false)
+        setQuizResult(null)
+        engine.setQuizActive(true)
+        if (soundEnabled) SFX.quizGate()
       },
     })
 
     if (ok) {
       setScore(0); setLives(3); setCombo(0); setMaxCombo(0)
       setCurrentQIndex(0); setSelectedAnswer(null); setShowExplanation(false)
+      setQuizActive(false); setQuizResult(null)
       setGameState('playing')
       engine.start()
       const ticker = setInterval(() => {
@@ -728,7 +681,7 @@ export default function KnowledgeRunnerPage() {
       }, 200)
       ;(engine as any)._ticker = ticker
     }
-  }, [soundEnabled, slowMotion])
+  }, [soundEnabled])
 
   const resumeGame = useCallback(() => {
     setGameState('playing')
@@ -740,12 +693,17 @@ export default function KnowledgeRunnerPage() {
     setSelectedAnswer(idx)
     const q = questions[currentQIndex]
     if (!q) return
+
     if (idx === q.correctIndex) {
       setScore(s => s + 300 * (combo + 1))
       setCombo(c => { const n = c + 1; setMaxCombo(m => Math.max(m, n)); return n })
+      setQuizResult('correct')
       if (soundEnabled) SFX.correct()
+      // Destroy all obstacles as a reward
+      engineRef.current?.destroyAllObstacles()
     } else {
       setCombo(0)
+      setQuizResult('wrong')
       setLives(l => {
         const n = l - 1
         if (soundEnabled) SFX.wrong()
@@ -757,22 +715,22 @@ export default function KnowledgeRunnerPage() {
   }, [selectedAnswer, questions, currentQIndex, combo, soundEnabled])
 
   const advanceAfterQuiz = useCallback(() => {
-    setShowExplanation(false); setSelectedAnswer(null)
+    setShowExplanation(false)
+    setSelectedAnswer(null)
+    setQuizResult(null)
+    setQuizActive(false)
+    engineRef.current?.setQuizActive(false)
+
     if (lives <= 0) { setGameState('gameover'); return }
-    if (currentQIndex < questions.length - 1) setCurrentQIndex(i => i + 1)
-    else {
+    if (currentQIndex < questions.length - 1) {
+      setCurrentQIndex(i => i + 1)
+    } else {
       setGameState('victory')
       authApi.awardXp(50, 'Knowledge Runner Victory', resourceId).catch(() => {})
       toast.success('Mission Complete! +50 XP Awarded!')
       return
     }
-    if (slowMotion) {
-      setGameState('playing')
-      engineRef.current?.start()
-    } else {
-      setGameState('playing')
-    }
-  }, [lives, currentQIndex, questions.length, resourceId, slowMotion])
+  }, [lives, currentQIndex, questions.length, resourceId])
 
   // Keyboard
   useEffect(() => {
@@ -784,15 +742,17 @@ export default function KnowledgeRunnerPage() {
         if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') { e.preventDefault(); eng.jump() }
         if (e.key === 'ArrowDown' || e.key === 's') eng.slide()
         if (e.key === 'Escape') { eng.stop(); setGameState('paused') }
+        // Quiz answer keys (1-4) — game keeps running
+        if (quizActive && e.key >= '1' && e.key <= '4') {
+          handleAnswer(parseInt(e.key) - 1)
+        }
       } else if (gameState === 'paused' && e.key === 'Escape') {
         resumeGame()
-      } else if (gameState === 'quiz' && e.key >= '1' && e.key <= '4') {
-        handleAnswer(parseInt(e.key) - 1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [gameState, handleAnswer, resumeGame])
+  }, [gameState, handleAnswer, resumeGame, quizActive])
 
   // Touch
   useEffect(() => {
@@ -835,7 +795,7 @@ export default function KnowledgeRunnerPage() {
       <div ref={containerRef} className="absolute inset-0" style={{ touchAction: 'none' }} />
 
       {/* HUD */}
-      {(gameState === 'playing' || gameState === 'quiz') && (
+      {(gameState === 'playing' || quizActive) && (
         <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
           <div className="flex items-center justify-between px-4 py-3 bg-black/20 backdrop-blur-sm pointer-events-auto">
             <div className="flex items-center gap-3">
@@ -884,57 +844,71 @@ export default function KnowledgeRunnerPage() {
         </div>
       )}
 
-      {/* Quiz Modal */}
+      {/* Quiz Overlay — game keeps running behind this */}
       <AnimatePresence>
-        {gameState === 'quiz' && currentQ && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.85, y: 30 }}
-              className="bg-[#0f172a]/95 border border-cyan-500/30 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-[0_0_60px_rgba(6,182,212,0.15)]">
-              <div className="text-center">
-                <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-[11px] font-black uppercase tracking-widest">
-                  ⚡ Question {currentQIndex + 1}/{questions.length}
-                </span>
-                <h2 className="text-lg md:text-xl font-black text-white mt-3 leading-snug">{currentQ.question}</h2>
-              </div>
-              <div className="grid grid-cols-1 gap-2.5">
-                {currentQ.options.map((opt, i) => {
-                  const isCorrect = i === currentQ.correctIndex
-                  const isSelected = selectedAnswer === i
-                  let style = 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                  if (selectedAnswer !== null) {
-                    if (isCorrect) style = 'bg-green-500/20 border-green-500/50 text-green-400'
-                    else if (isSelected) style = 'bg-red-500/20 border-red-500/50 text-red-400'
-                    else style = 'bg-white/5 border-white/5 text-white/30'
-                  }
-                  return (
-                    <button key={i} onClick={() => handleAnswer(i)} disabled={selectedAnswer !== null}
-                      className={`px-4 py-3 rounded-xl border text-left text-sm font-bold transition-all ${style}`}>
-                      <span className="text-[10px] font-black text-slate-500 mr-2">{i + 1}.</span>{opt}
+        {quizActive && currentQ && (
+          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
+            className="absolute bottom-0 left-0 right-0 z-40 pointer-events-auto">
+            <div className="mx-auto max-w-2xl p-4 pb-6 md:pb-4">
+              <div className="bg-[#0f172a]/95 border border-cyan-500/30 rounded-2xl p-5 shadow-[0_0_60px_rgba(6,182,212,0.15)] backdrop-blur-xl">
+                {/* Question header */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-[11px] font-black uppercase tracking-widest">
+                    ⚡ Question {currentQIndex + 1}/{questions.length}
+                  </span>
+                  {quizResult && (
+                    <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest ${
+                      quizResult === 'correct'
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {quizResult === 'correct' ? '✅ Correct!' : '❌ Wrong!'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Question text */}
+                <h2 className="text-base md:text-lg font-black text-white leading-snug mb-4">{currentQ.question}</h2>
+
+                {/* 4 Options as big tap buttons */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {currentQ.options.map((opt, i) => {
+                    const isCorrect = i === currentQ.correctIndex
+                    const isSelected = selectedAnswer === i
+                    let style = 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                    if (selectedAnswer !== null) {
+                      if (isCorrect) style = 'bg-green-500/20 border-green-500/50 text-green-400'
+                      else if (isSelected) style = 'bg-red-500/20 border-red-500/50 text-red-400'
+                      else style = 'bg-white/5 border-white/5 text-white/30'
+                    }
+                    return (
+                      <button key={i} onClick={() => handleAnswer(i)} disabled={selectedAnswer !== null}
+                        className={`px-3 py-3 rounded-xl border text-left text-sm font-bold transition-all ${style}`}>
+                        <span className="text-[10px] font-black text-slate-500 mr-2">{i + 1}.</span>{opt}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Explanation + Continue */}
+                {showExplanation && (
+                  <>
+                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                      className={`mt-3 p-3 rounded-xl text-sm font-medium ${
+                        selectedAnswer === currentQ.correctIndex
+                          ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+                          : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                      }`}>
+                      {currentQ.explanation && <p className="text-xs opacity-80">{currentQ.explanation}</p>}
+                    </motion.div>
+                    <button onClick={advanceAfterQuiz}
+                      className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-black text-sm shadow-lg shadow-cyan-500/20 hover:scale-[1.02] active:scale-95 transition-all">
+                      CONTINUE RUNNING →
                     </button>
-                  )
-                })}
+                  </>
+                )}
               </div>
-              {showExplanation && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                  className={`p-3.5 rounded-xl text-sm font-medium ${
-                    selectedAnswer === currentQ.correctIndex
-                      ? 'bg-green-500/10 border border-green-500/30 text-green-300'
-                      : 'bg-red-500/10 border border-red-500/30 text-red-300'
-                  }`}>
-                  <p className="font-black mb-1">
-                    {selectedAnswer === currentQ.correctIndex ? '✅ Correct!' : `❌ Wrong — Answer: ${currentQ.options[currentQ.correctIndex]}`}
-                  </p>
-                  {currentQ.explanation && <p className="text-xs opacity-80">{currentQ.explanation}</p>}
-                </motion.div>
-              )}
-              {showExplanation && (
-                <button onClick={advanceAfterQuiz}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-black text-sm shadow-lg shadow-cyan-500/20 hover:scale-[1.02] active:scale-95 transition-all">
-                  CONTINUE RUNNING →
-                </button>
-              )}
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -948,8 +922,10 @@ export default function KnowledgeRunnerPage() {
               className="bg-[#0f172a]/90 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl">
               <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-lg">City Run</h1>
               <p className="text-slate-300 text-sm leading-relaxed">
+                Dodge obstacles, collect coins, and answer questions!<br/>
                 Use ← → to switch lanes, ↑ or Space to jump, ↓ to slide.<br/>
-                Answer each question by running into the lane holding the correct option.
+                <span className="text-cyan-400 font-bold">Answer questions with keys 1-4 or tap the options.</span><br/>
+                <span className="text-green-400 font-bold">Correct answers destroy all obstacles!</span>
               </p>
               <label className="flex items-center justify-center gap-2 text-sm text-slate-300 cursor-pointer">
                 <input type="checkbox" checked={slowMotion} onChange={e => setSlowMotion(e.target.checked)}

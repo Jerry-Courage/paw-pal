@@ -2002,20 +2002,32 @@ class AIService:
             ]}
         return {}
 
-    def generate_practice_questions(self, resource, difficulty: str = 'medium', count: int = 5) -> list:
-        """Generate exam-style practice questions with detailed model answers."""
+    def generate_practice_questions(self, resource, difficulty: str = 'medium', count: int = 5, format: str = 'mcq') -> list:
+        """Generate exam-style practice questions. format='mcq' for multiple choice, 'short_answer' for essay."""
         context = self._get_resource_context(resource)
-        # Keep context tight — Groq has a smaller context window, 413 at 8k chars
         context_snippet = (context[:3000] if context else resource.title)
-        prompt = (
-            f"Generate exactly {count} {difficulty}-difficulty practice questions for '{resource.title}'.\n\n"
-            f"Content:\n{context_snippet}\n\n"
-            f"Return ONLY a JSON array of exactly {count} objects. Each object:\n"
-            '{"question":"...","type":"short_answer","hint":"...","model_answer":"..."}\n'
-            "Start with [ and end with ]."
-        )
+
+        if format == 'mcq':
+            prompt = (
+                f"Generate exactly {count} {difficulty}-difficulty multiple choice questions for '{resource.title}'.\n\n"
+                f"Content:\n{context_snippet}\n\n"
+                "Each question MUST have exactly 4 options with ONE correct answer.\n"
+                "Questions must be SHORT (under 20 words). Options must be SHORT (under 15 words each).\n\n"
+                "Return ONLY a JSON array of exactly {count} objects. Each object:\n"
+                '{"question":"Short question text?","options":["Option A","Option B","Option C","Option D"],"correct_index":0,"explanation":"Brief explanation"}\n'
+                "correct_index is 0-3 indicating which option is correct.\n"
+                "Start with [ and end with ]."
+            )
+        else:
+            prompt = (
+                f"Generate exactly {count} {difficulty}-difficulty practice questions for '{resource.title}'.\n\n"
+                f"Content:\n{context_snippet}\n\n"
+                f"Return ONLY a JSON array of exactly {count} objects. Each object:\n"
+                '{"question":"...","type":"short_answer","hint":"...","model_answer":"..."}\n'
+                "Start with [ and end with ]."
+            )
+
         result = self._parse_json(self.chat_sync([{'role': 'user', 'content': prompt}]), [])
-        # If model returned a dict instead of list, try to extract the list
         if isinstance(result, dict):
             for k, v in result.items():
                 if isinstance(v, list) and len(v) > 0:
