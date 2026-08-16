@@ -401,7 +401,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       const wsUrl = `${protocol}//${host}/ws/examprep/${resourceId}/?token=${token}`
       const ws = new WebSocket(wsUrl)
       masteryWsRef.current = ws
-      const audioCtx = new AudioContext({ sampleRate: 24000 })
+      const audioCtx = new AudioContext({ sampleRate: 16000 })
       masteryAudioCtxRef.current = audioCtx
       let playbackQueue: AudioBuffer[] = []
       let isPlaying = false
@@ -421,11 +421,23 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
         if (typeof event.data === 'string') {
           try {
             const msg = JSON.parse(event.data)
-            if (msg.type === 'ai_text') {
+            if (msg.type === 'transcript_ai') {
               setMasteryTranscript(p => [...p, { role: 'ai', text: msg.text, ts: Date.now() }])
               setTimeout(() => { masteryScrollRef.current?.scrollTo({ top: 9999, behavior: 'smooth' }) }, 50)
-            } else if (msg.type === 'user_text') {
+            } else if (msg.type === 'transcript_user') {
               setMasteryTranscript(p => [...p, { role: 'user', text: msg.text, ts: Date.now() }])
+            } else if (msg.type === 'audio') {
+              // Decode base64 PCM and play
+              const binary = atob(msg.data)
+              const bytes = new Uint8Array(binary.length)
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+              const pcmData = new Int16Array(bytes.buffer)
+              const floatData = new Float32Array(pcmData.length)
+              for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 32768
+              const audioBuf = audioCtx.createBuffer(1, floatData.length, 16000)
+              audioBuf.getChannelData(0).set(floatData)
+              playbackQueue.push(audioBuf)
+              playNext()
             } else if (msg.type === 'session_report') {
               setMasteryScore(msg.score || 75)
               setMasteryFeedback(msg.summary || 'Great session! You demonstrated solid understanding.')
@@ -442,15 +454,6 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               try { localStorage.removeItem(`study_${resourceId}_section`); localStorage.removeItem(`study_${resourceId}_xp`); localStorage.removeItem(`study_${resourceId}_completed`) } catch {}
             }
           } catch {}
-        } else if (event.data instanceof Blob) {
-          const arrBuf = await event.data.arrayBuffer()
-          const pcmData = new Int16Array(arrBuf)
-          const floatData = new Float32Array(pcmData.length)
-          for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 32768
-          const audioBuf = audioCtx.createBuffer(1, floatData.length, 24000)
-          audioBuf.getChannelData(0).set(floatData)
-          playbackQueue.push(audioBuf)
-          playNext()
         }
       }
 
@@ -465,17 +468,21 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
           resource_title: resource?.title || 'this topic',
         }))
         // Start mic
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 24000, channelCount: 1 } })
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })
         masteryStreamRef.current = stream
-        const micCtx = new AudioContext({ sampleRate: 24000 })
+        const micCtx = new AudioContext({ sampleRate: 16000 })
         const source = micCtx.createMediaStreamSource(stream)
-        const processor = micCtx.createScriptProcessor(4096, 1, 1)
+        const processor = micCtx.createScriptProcessor(2048, 1, 1)
         processor.onaudioprocess = (e) => {
           if (masteryMuted || !masteryWsRef.current || masteryWsRef.current.readyState !== WebSocket.OPEN) return
           const float32 = e.inputBuffer.getChannelData(0)
           const int16 = new Int16Array(float32.length)
           for (let i = 0; i < float32.length; i++) int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768))
-          masteryWsRef.current.send(int16.buffer)
+          // Send as base64 JSON (matches ExamPrepConsumer protocol)
+          const bytes = new Uint8Array(int16.buffer)
+          let binary = ''
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+          masteryWsRef.current.send(JSON.stringify({ type: 'audio', data: btoa(binary) }))
         }
         source.connect(processor)
         processor.connect(micCtx.destination)
