@@ -28,7 +28,7 @@ export default function AssignmentCard({ assignment: a, view, onClick, onDelete,
     return (
       <div 
         onClick={onClick} 
-        className="group flex items-center gap-4 px-6 py-4 rounded-2xl bg-[#111] hover:bg-[#161616] border border-white/5 hover:border-white/10 transition-all cursor-pointer shadow-sm"
+        className="group flex items-center gap-4 px-6 py-4 rounded-2xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/10 hover:border-outline-variant/20 transition-all cursor-pointer shadow-sm"
       >
         <div className={cn('flex items-center justify-center w-10 h-10 rounded-xl border transition-all group-hover:scale-105', cfg.color)}>
           <Icon className={cn('w-5 h-5', a.status === 'processing' && 'animate-spin')} />
@@ -57,7 +57,7 @@ export default function AssignmentCard({ assignment: a, view, onClick, onDelete,
   return (
     <div 
       onClick={onClick} 
-      className="group relative bg-[#111] rounded-3xl p-6 border border-white/5 hover:border-white/10 hover:-translate-y-1 transition-all cursor-pointer flex flex-col min-h-[180px] shadow-lg overflow-hidden"
+      className="group relative bg-surface-container rounded-3xl p-6 border border-outline-variant/10 hover:border-outline-variant/20 hover:-translate-y-1 transition-all cursor-pointer flex flex-col min-h-[180px] shadow-lg overflow-hidden"
     >
       {/* Background Glow */}
       <div className="absolute -top-12 -right-12 w-24 h-24 bg-orange-500/5 blur-3xl rounded-full group-hover:bg-orange-500/10 transition-all duration-500" />

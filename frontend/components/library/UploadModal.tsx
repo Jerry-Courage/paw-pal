@@ -193,7 +193,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
   // ── STEP 2: Full-screen feature selection ────────────────────────
   if (step === 'features' && stage === 'idle') {
     return (
-      <div className="fixed inset-0 bg-[#0d0d0d] z-[100] flex flex-col animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-background z-[100] flex flex-col animate-in fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
           <button onClick={() => setStep('upload')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
@@ -274,11 +274,11 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
   // ── Progress overlay (uploading / building / complete) ────────────
   if (stage !== 'idle') {
     return (
-      <div className="fixed inset-0 bg-[#0d0d0d] z-[100] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+      <div className="fixed inset-0 bg-background z-[100] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
         <div className="w-full max-w-md space-y-8">
           <div className="relative mx-auto w-24 h-24">
             <div className="absolute inset-0 bg-orange-500/20 rounded-full animate-ping opacity-30" />
-            <div className="relative bg-[#1a1a1a] rounded-full w-full h-full flex items-center justify-center border border-white/10">
+            <div className="relative bg-surface-container rounded-full w-full h-full flex items-center justify-center border border-outline-variant/10">
               {stage === 'complete'
                 ? <CheckCircle2 className="w-12 h-12 text-emerald-400 animate-in zoom-in duration-300" />
                 : <Sparkles className="w-10 h-10 text-orange-400 animate-pulse" />}
@@ -326,7 +326,7 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
   return (
     <>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-[#111] rounded-t-[1.5rem] sm:rounded-2xl w-full max-w-lg shadow-2xl border border-white/8 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-t-[1.5rem] sm:rounded-2xl w-full max-w-lg shadow-2xl border border-outline-variant/10 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">

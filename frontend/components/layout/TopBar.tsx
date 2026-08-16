@@ -20,7 +20,7 @@ export default function TopBar({ onMenuClick, onToggleSidebar, isSidebarOpen }: 
 
   return (
     <header
-      className="h-14 bg-[#111] border-b border-white/5 fixed top-0 left-0 right-0 z-40 flex items-center px-4 md:px-5 gap-3 flex-shrink-0"
+      className="h-14 bg-surface-container-lowest border-b border-outline-variant/10 fixed top-0 left-0 right-0 z-40 flex items-center px-4 md:px-5 gap-3 flex-shrink-0"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       {/* Mobile: hamburger + logo */}

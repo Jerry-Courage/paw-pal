@@ -104,7 +104,7 @@ function Avatar({ state, text, onDismiss }: { state: AvState; text: string; onDi
           {/* Waveform overlay when speaking */}
           {state === 'speaking' && (
             <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-0.5 h-5 px-1 pb-0.5"
-              style={{ background: 'linear-gradient(to top, rgba(30,32,34,0.85), transparent)' }}>
+              style={{ background: 'rgb(var(--surface-container-low) / 0.85)' }}>
               {bars.map((h, i) => (
                 <div key={i} style={{
                   width: 2, height: h, background: '#ffb68d', borderRadius: 2,
@@ -118,22 +118,22 @@ function Avatar({ state, text, onDismiss }: { state: AvState; text: string; onDi
 
         {/* Status dot */}
         <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background"
-          style={{ background: state === 'speaking' ? '#ffb68d' : state === 'thinking' ? '#bfc2ff' : '#4ade80' }} />
+          style={{ background: state === 'speaking' ? 'rgb(var(--primary))' : state === 'thinking' ? 'rgb(var(--secondary))' : '#4ade80' }} />
       </div>
 
       {/* ── Speech bubble ── */}
       <div
         className="relative rounded-[1.25rem] rounded-bl-sm p-4 shadow-2xl border max-w-[260px] transition-all duration-300"
         style={{
-          background: '#1e2022',
-          borderColor: state === 'speaking' ? 'rgba(255,182,141,0.3)' : state === 'thinking' ? 'rgba(191,194,255,0.25)' : 'rgba(86,67,56,0.4)',
+          background: 'rgb(var(--surface-container))',
+          borderColor: state === 'speaking' ? 'rgb(var(--primary) / 0.3)' : state === 'thinking' ? 'rgb(var(--secondary) / 0.25)' : 'rgb(var(--outline-variant) / 0.4)',
         }}
       >
         {state === 'thinking' ? (
           <div className="flex items-center gap-2 py-0.5">
             {[0,1,2].slice(0, dots).map(i => (
               <div key={i} className="w-2 h-2 rounded-full animate-bounce"
-                style={{ background: '#bfc2ff', animationDelay: `${i * 0.15}s` }} />
+                style={{ background: 'rgb(var(--secondary))', animationDelay: `${i * 0.15}s` }} />
             ))}
             <span className="text-[12px] text-on-surface-variant ml-1">Thinking…</span>
           </div>
@@ -292,7 +292,7 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
       onWheel={onWheel}
       className={cn('relative w-full h-full overflow-hidden select-none touch-none', dragging ? 'cursor-grabbing' : 'cursor-grab')}
-      style={{ background: '#0e0e10' }}
+      style={{ background: 'rgb(var(--background))' }}
     >
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
@@ -361,8 +361,8 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
             {b.subs.map((s, j) => (
               <div key={j} className="absolute nc" style={{ left:s.x, top:s.y, transform:'translate(-50%,-50%)', zIndex:10 }}>
                 <div className="nc" onClick={() => { setActiveNode({type:'sub',bi:i,si:j}); onNodeClick(s.text, `Subtopic "${s.text}" which is part of "${b.topic}" in the mind map about "${data.center}"`, 'sub') }}
-                  style={{ width:SX*2, height:SX*2, borderRadius:'50%', background:'#1e2022', boxShadow:`0 0 14px ${b.color.glow}, 0 4px 12px rgba(0,0,0,0.5)`, display:'flex', alignItems:'center', justifyContent:'center', border: activeNode?.type==='sub'&&activeNode.bi===i&&activeNode.si===j?`2.5px solid ${b.color.bg}`:`1.5px solid ${b.color.bg}55`, cursor:'pointer', transition:'transform 0.15s' }}>
-                  <span style={{ fontSize:9, fontWeight:700, textAlign:'center', color:'#e2e2e5', lineHeight:1.2, padding:'0 5px' }}>{s.text}</span>
+                  style={{ width:SX*2, height:SX*2, borderRadius:'50%', background:'rgb(var(--surface-container))', boxShadow:`0 0 14px ${b.color.glow}, 0 4px 12px rgba(0,0,0,0.5)`, display:'flex', alignItems:'center', justifyContent:'center', border: activeNode?.type==='sub'&&activeNode.bi===i&&activeNode.si===j?`2.5px solid ${b.color.bg}`:`1.5px solid ${b.color.bg}55`, cursor:'pointer', transition:'transform 0.15s' }}>
+                  <span style={{ fontSize:9, fontWeight:700, textAlign:'center', color:'rgb(var(--on-surface))', lineHeight:1.2, padding:'0 5px' }}>{s.text}</span>
                 </div>
               </div>
             ))}
@@ -372,7 +372,7 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
 
       {/* ── Zoom controls — bottom left ─────────────────────────────── */}
       <div className="absolute bottom-6 left-6 z-50 flex items-center gap-1 p-1 rounded-full shadow-xl pointer-events-auto"
-        style={{ background:'rgba(30,32,34,0.92)', backdropFilter:'blur(8px)', border:'1px solid rgba(86,67,56,0.4)' }}>
+        style={{ background:'rgb(var(--surface-container) / 0.92)', backdropFilter:'blur(8px)', border:'1px solid rgb(var(--outline-variant) / 0.4)' }}>
         <button onClick={() => setZoom(z=>Math.max(z/1.2,0.25))} className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
           <span className="material-symbols-outlined text-[18px]">remove</span>
         </button>
@@ -398,7 +398,7 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
         <div className="absolute left-6 z-50" style={{ bottom: '88px' }}>
           <button onClick={() => { setAvDismissed(false); setAvState('idle'); setAvText('Tap any node and I\'ll explain it!') }}
             className="w-14 h-14 rounded-full shadow-xl flex items-center justify-center border-2 border-outline-variant/40 hover:border-primary/40 transition-all"
-            style={{ background:'linear-gradient(135deg,#1e2022,#282a2c)' }}
+            style={{ background:'linear-gradient(135deg, rgb(var(--surface-container)), rgb(var(--surface-container-high)))' }}
             title="Show FlowAI">
             <span className="material-symbols-outlined text-primary text-[24px]" style={{ fontVariationSettings:"'FILL' 1" }}>smart_toy</span>
           </button>
@@ -408,9 +408,9 @@ export default function NeuralMindMap({ data, resourceTitle, resourceId }: Neura
       {/* ── Study Guide — bottom right ───────────────────────────────── */}
       {showGuide && (
         <div className="absolute bottom-6 right-6 z-50 w-68 pointer-events-auto" style={{ maxWidth: 280 }}>
-          <div className="rounded-[1.5rem] p-4 shadow-2xl border" style={{ background:'rgba(30,32,34,0.95)', backdropFilter:'blur(8px)', borderColor:'rgba(86,67,56,0.4)' }}>
+          <div className="rounded-[1.5rem] p-4 shadow-2xl border" style={{ background:'rgb(var(--surface-container) / 0.95)', backdropFilter:'blur(8px)', borderColor:'rgb(var(--outline-variant) / 0.4)' }}>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-[0.75rem] flex items-center justify-center" style={{ background:'rgba(255,182,141,0.12)' }}>
+              <div className="w-8 h-8 rounded-[0.75rem] flex items-center justify-center" style={{ background:'rgb(var(--primary) / 0.12)' }}>
                 <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings:"'FILL' 1" }}>menu_book</span>
               </div>
               <p className="font-bold text-on-surface text-[14px]">Study Guide</p>

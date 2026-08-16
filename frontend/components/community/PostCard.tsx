@@ -45,7 +45,7 @@ export default function PostCard({ post, onLike }: { post: any; onLike: () => vo
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-      className="bg-[#1a1a1a] rounded-2xl mb-3 overflow-hidden hover:border-white/10 transition-all">
+      className="bg-surface-container rounded-2xl mb-3 overflow-hidden hover:border-outline-variant/20 transition-all">
       <div className="p-5">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
@@ -54,7 +54,7 @@ export default function PostCard({ post, onLike }: { post: any; onLike: () => vo
               <div className="w-9 h-9 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 text-xs font-black">
                 {getInitials(post.author?.first_name || post.author?.username || 'U')}
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-[#1a1a1a] rounded-full" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-surface-container rounded-full" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -84,7 +84,7 @@ export default function PostCard({ post, onLike }: { post: any; onLike: () => vo
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowOptions(false)} />
                   <motion.div initial={{ opacity: 0, scale: 0.95, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -8 }}
-                    className="absolute right-0 mt-1 w-44 bg-[#111] border border-white/8 rounded-2xl shadow-2xl z-20 overflow-hidden p-1.5">
+                    className="absolute right-0 mt-1 w-44 bg-surface-container-lowest border border-outline-variant/10 rounded-2xl shadow-2xl z-20 overflow-hidden p-1.5">
                     <button onClick={() => { setShowOptions(false); toast.success('Reported to community mods') }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:bg-white/5 hover:text-white transition-all">
                       <Flag className="w-3.5 h-3.5" /> Report Post

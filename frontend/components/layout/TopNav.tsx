@@ -45,7 +45,7 @@ export default function TopNav() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0f0f0f]/90 backdrop-blur-2xl">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-2xl">
         {/* Safe area spacer */}
         <div style={{ height: 'env(safe-area-inset-top)' }} />
         
@@ -121,7 +121,7 @@ export default function TopNav() {
               </button>
 
               {/* Dropdown */}
-              <div className="absolute right-0 top-full mt-2 w-52 bg-[#161616] border border-white/[0.06] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-150 animate-in fade-in slide-in-from-top-2">
+              <div className="absolute right-0 top-full mt-2 w-52 bg-surface-container-low border border-outline-variant/10 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-150 animate-in fade-in slide-in-from-top-2">
                 <div className="px-4 py-3.5 border-b border-white/5 bg-white/[0.01]">
                   <p className="text-xs font-black text-white truncate">{name}</p>
                   <p className="text-[10px] text-slate-500 truncate mt-0.5">{session?.user?.email}</p>
@@ -161,7 +161,7 @@ export default function TopNav() {
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="fixed top-0 left-0 h-full w-72 bg-[#111] border-r border-white/[0.06] z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-250">
+          <div className="fixed top-0 left-0 h-full w-72 bg-surface-container-lowest border-r border-outline-variant/10 z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-250">
             {/* Drawer header */}
             <div
               className="flex items-center justify-between px-5 border-b border-white/[0.06]"

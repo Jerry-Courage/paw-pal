@@ -227,7 +227,7 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
         </div>
 
         {/* ── Stage timeline ── */}
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 space-y-1">
+        <div className="bg-surface-container-lowest border border-outline-variant/10 rounded-2xl p-4 space-y-1">
           {STAGES.map((stage, i) => {
             const isDone = i < currentStageIdx
             const isActive = i === currentStageIdx

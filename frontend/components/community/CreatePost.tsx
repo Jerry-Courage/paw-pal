@@ -35,7 +35,7 @@ export default function CreatePost({ session, resources }: { session: any; resou
   const initials = getInitials(session?.user?.name || 'Me')
 
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl mb-4 overflow-hidden p-4">
+    <div className="bg-surface-container rounded-2xl mb-4 overflow-hidden p-4">
       <div className="flex gap-3">
         <div className="w-10 h-10 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 text-sm font-black shrink-0">
           {initials}
@@ -88,8 +88,8 @@ export default function CreatePost({ session, resources }: { session: any; resou
                         <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
                         <select value={resourceId} onChange={e => setResourceId(e.target.value)}
                           className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/8 rounded-xl text-xs text-white focus:outline-none focus:border-orange-500/30 transition-all appearance-none">
-                          <option value="" className="bg-[#1a1a1a]">Link a Library Resource</option>
-                          {resources.map((r: any) => <option key={r.id} value={r.id} className="bg-[#1a1a1a]">{r.title}</option>)}
+                          <option value="" className="bg-surface-container">Link a Library Resource</option>
+                          {resources.map((r: any) => <option key={r.id} value={r.id} className="bg-surface-container">{r.title}</option>)}
                         </select>
                       </div>
                     )}

@@ -135,7 +135,7 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 60, opacity: 0 }}
           transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-          className="w-full sm:max-w-md bg-[#111] rounded-t-[2rem] sm:rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl"
+          className="w-full sm:max-w-md bg-surface-container-lowest rounded-t-[2rem] sm:rounded-2xl border border-outline-variant/10 overflow-hidden shadow-2xl"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}

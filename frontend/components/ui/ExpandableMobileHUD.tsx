@@ -84,7 +84,7 @@ export default function ExpandableMobileHUD({
     <>
       {/* Loading overlay */}
       {isGenerating && (
-        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0d0d0d]/90 backdrop-blur-xl">
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background/90 backdrop-blur-xl">
           <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-[1.5rem] flex items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-orange-400 animate-pulse" />
           </div>
@@ -102,11 +102,11 @@ export default function ExpandableMobileHUD({
       <div className={cn('fixed bottom-20 left-0 right-0 flex justify-center z-[120] lg:hidden pointer-events-none', className)}>
         <button
           onClick={() => setIsOpen(true)}
-          className="pointer-events-auto flex items-center gap-2.5 px-5 py-3 rounded-full bg-[#1a1a1a] border border-white/10 shadow-2xl shadow-black/60 active:scale-95 transition-all"
+          className="pointer-events-auto flex items-center gap-2.5 px-5 py-3 rounded-full bg-surface-container border border-outline-variant/10 shadow-2xl shadow-black/60 active:scale-95 transition-all"
         >
           <div className="flex -space-x-1.5">
             {tools.slice(0, 4).map(t => (
-              <div key={t.id} className={cn('w-5 h-5 rounded-full border-2 border-[#1a1a1a] flex items-center justify-center', t.color)}>
+              <div key={t.id} className={cn('w-5 h-5 rounded-full border-2 border-surface-container flex items-center justify-center', t.color)}>
                 <t.icon className="w-2.5 h-2.5 text-white" />
               </div>
             ))}
@@ -136,7 +136,7 @@ export default function ExpandableMobileHUD({
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-[130] lg:hidden bg-[#111] rounded-t-3xl border-t border-white/8 shadow-2xl"
+              className="fixed bottom-0 left-0 right-0 z-[130] lg:hidden bg-surface-container-lowest rounded-t-3xl border-t border-outline-variant/10 shadow-2xl"
               style={{ maxHeight: '80vh' }}
             >
               {/* Handle */}
@@ -182,7 +182,7 @@ export default function ExpandableMobileHUD({
                       onClick={() => handleToolClick(tool)}
                       disabled={!!isGenerating}
                       className={cn(
-                        'flex items-center gap-3 p-3.5 rounded-2xl bg-[#1a1a1a] border border-white/5 text-left active:scale-[0.97] transition-all',
+                        'flex items-center gap-3 p-3.5 rounded-2xl bg-surface-container border border-outline-variant/10 text-left active:scale-[0.97] transition-all',
                         isGenerating && isGenerating !== tool.id ? 'opacity-40' : ''
                       )}
                     >

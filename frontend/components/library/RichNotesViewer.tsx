@@ -147,7 +147,7 @@ export default function RichNotesViewer({
   }
 
   return (
-    <div className="w-full h-full text-[#e2e2e2]">
+    <div className="w-full h-full text-on-surface">
       
       {/* ── Header with Title / Controls ─────────────────────────────────── */}
       <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-white/[0.06]">

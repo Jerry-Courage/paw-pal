@@ -139,7 +139,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         </div>
 
         {/* Modal Card Container */}
-        <div className="relative z-10 w-full max-w-lg bg-[#141416] border border-white/10 rounded-[2.5rem] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden my-auto p-6 sm:p-10">
+        <div className="relative z-10 w-full max-w-lg bg-surface-container-lowest border border-outline-variant/10 rounded-[2.5rem] shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden my-auto p-6 sm:p-10">
           
           {/* Top Indicator & Step Counter */}
           <div className="flex items-center justify-between mb-6 sm:mb-8 shrink-0">
