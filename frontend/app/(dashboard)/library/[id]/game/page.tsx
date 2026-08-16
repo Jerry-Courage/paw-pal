@@ -33,13 +33,17 @@ const SFX = {
 }
 
 let THREE: typeof import('three') | null = null
+let GLTFLoaderRef: any = null
 let threeLoaded = false
 let threeLoading: Promise<void> | null = null
 
 async function ensureThree() {
   if (threeLoaded && THREE) return
   if (threeLoading) { await threeLoading; return }
-  threeLoading = import('three').then(mod => { THREE = mod; threeLoaded = true }).catch(e => { console.error('Three.js load failed:', e); threeLoading = null })
+  threeLoading = Promise.all([
+    import('three').then(mod => { THREE = mod }),
+    import('three/addons/loaders/GLTFLoader.js').then(mod => { GLTFLoaderRef = mod.GLTFLoader }),
+  ]).then(() => { threeLoaded = true }).catch(e => { console.error('Three.js load failed:', e); threeLoading = null })
   await threeLoading
 }
 
@@ -83,6 +87,8 @@ class CityRunEngine {
   private invincibleTimer = 0
   private isMobile = false
   private lowQuality = false
+  private mixer: any = null
+  private runAction: any = null
 
   async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onEnemy: () => void }) {
     await ensureThree()
@@ -366,6 +372,9 @@ class CityRunEngine {
     this.runnerGroup.position.set(0, 0, 0)
     this.scene.add(this.runnerGroup)
 
+    // Try to load GLB model — replaces box runner if successful
+    this.loadGLBModel()
+
     const onResize = () => {
       const nw = container.clientWidth || window.innerWidth
       const nh = container.clientHeight || window.innerHeight
@@ -425,6 +434,46 @@ class CityRunEngine {
   grantInvincibility(frames: number = 60) {
     this.invincible = true
     this.invincibleTimer = frames
+  }
+
+  private loadGLBModel() {
+    if (!THREE || !GLTFLoaderRef) return
+    const loader = new GLTFLoaderRef()
+    loader.load('/dancing_running_man.glb', (gltf: any) => {
+      // Remove box runner
+      if (this.runnerGroup) this.scene.remove(this.runnerGroup)
+      if (this.mixer) { this.mixer.stopAllAction(); this.mixer = null }
+
+      const model = gltf.scene
+      // Scale to ~2.5 units tall
+      const box = new THREE!.Box3().setFromObject(model)
+      const size = box.getSize(new THREE!.Vector3())
+      const height = size.y
+      const scale = 2.5 / height
+      model.scale.setScalar(scale)
+      // Center horizontally, feet on ground
+      const center = box.getCenter(new THREE!.Vector3())
+      model.position.set(0, -center.y * scale + (height * scale) / 2, 0)
+      model.traverse((child: any) => {
+        if (child.isMesh) { child.castShadow = true; child.receiveShadow = true }
+      })
+
+      this.runnerGroup = model as any
+      this.scene.add(this.runnerGroup)
+
+      // Setup animation
+      if (gltf.animations && gltf.animations.length > 0) {
+        this.mixer = new THREE!.AnimationMixer(this.runnerGroup)
+        const runNames = ['run', 'running', 'jog', 'sprint', 'runloop', 'runcycle', 'walk']
+        let clip = gltf.animations.find((a: any) => runNames.some(n => a.name.toLowerCase().includes(n)))
+        if (!clip) clip = gltf.animations[0]
+        this.runAction = this.mixer.clipAction(clip)
+        this.runAction.play()
+      }
+      this.runnerParts = {}
+    }, undefined, (err: any) => {
+      console.warn('GLB load failed, using box runner:', err)
+    })
   }
 
   switchLane(dir: number) {
@@ -507,19 +556,28 @@ class CityRunEngine {
       } else {
         this.runnerGroup.scale.y += (1 - this.runnerGroup.scale.y) * 0.2
       }
-      const t = this.animPhase
-      const bob = Math.sin(t) * 0.06
-      const legSwing = Math.sin(t) * 0.6
-      const armSwing = Math.sin(t) * 0.7
 
-      if (this.runnerParts.torso) this.runnerParts.torso.position.y = 1.55 + bob
-      if (this.runnerParts.head) this.runnerParts.head.position.y = 2.25 + bob
-      if (this.runnerParts.legL) this.runnerParts.legL.rotation.x = this.isSliding ? 0.8 : legSwing
-      if (this.runnerParts.legR) this.runnerParts.legR.rotation.x = this.isSliding ? -0.3 : -legSwing
-      if (this.runnerParts.shoeL) this.runnerParts.shoeL.rotation.x = this.isSliding ? 0.6 : legSwing * 0.5
-      if (this.runnerParts.shoeR) this.runnerParts.shoeR.rotation.x = this.isSliding ? -0.2 : -legSwing * 0.5
-      if (this.runnerParts.armL) this.runnerParts.armL.rotation.x = this.isSliding ? 0.3 : -armSwing
-      if (this.runnerParts.armR) this.runnerParts.armR.rotation.x = this.isSliding ? -0.3 : armSwing
+      // GLB model animation
+      if (this.mixer) {
+        this.mixer.update(1 / 60)
+      }
+
+      // Box runner animation (only if GLB not loaded)
+      if (!this.mixer) {
+        const t = this.animPhase
+        const bob = Math.sin(t) * 0.06
+        const legSwing = Math.sin(t) * 0.6
+        const armSwing = Math.sin(t) * 0.7
+
+        if (this.runnerParts.torso) this.runnerParts.torso.position.y = 1.55 + bob
+        if (this.runnerParts.head) this.runnerParts.head.position.y = 2.25 + bob
+        if (this.runnerParts.legL) this.runnerParts.legL.rotation.x = this.isSliding ? 0.8 : legSwing
+        if (this.runnerParts.legR) this.runnerParts.legR.rotation.x = this.isSliding ? -0.3 : -legSwing
+        if (this.runnerParts.shoeL) this.runnerParts.shoeL.rotation.x = this.isSliding ? 0.6 : legSwing * 0.5
+        if (this.runnerParts.shoeR) this.runnerParts.shoeR.rotation.x = this.isSliding ? -0.2 : -legSwing * 0.5
+        if (this.runnerParts.armL) this.runnerParts.armL.rotation.x = this.isSliding ? 0.3 : -armSwing
+        if (this.runnerParts.armR) this.runnerParts.armR.rotation.x = this.isSliding ? -0.3 : armSwing
+      }
     }
 
     // Move track
@@ -768,6 +826,7 @@ class CityRunEngine {
   dispose() {
     this.alive = false
     cancelAnimationFrame(this.animId)
+    if (this.mixer) { this.mixer.stopAllAction(); this.mixer = null }
     if ((this as any)._onResize) window.removeEventListener('resize', (this as any)._onResize)
     if (this.renderer) {
       this.renderer.dispose()
