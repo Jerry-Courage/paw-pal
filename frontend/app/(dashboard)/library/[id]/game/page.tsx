@@ -81,6 +81,8 @@ class CityRunEngine {
   private quizActive = false
   private invincible = false
   private invincibleTimer = 0
+  private isMobile = false
+  private lowQuality = false
 
   async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onEnemy: () => void }) {
     await ensureThree()
@@ -89,6 +91,8 @@ class CityRunEngine {
     this.onCoin = cbs.onCoin
     this.onEnemy = cbs.onEnemy
     this.alive = true
+    this.isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.innerWidth < 768)
+    this.lowQuality = this.isMobile || (navigator.hardwareConcurrency || 4) <= 4
 
     const w = container.clientWidth || window.innerWidth
     const h = container.clientHeight || window.innerHeight
@@ -101,11 +105,13 @@ class CityRunEngine {
     this.camera.position.set(0, 5, 10)
     this.camera.lookAt(0, 1.5, -15)
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
+    this.renderer = new THREE.WebGLRenderer({ antialias: !this.lowQuality })
     this.renderer.setSize(w, h)
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = 2
+    this.renderer.setPixelRatio(this.lowQuality ? 1 : Math.min(window.devicePixelRatio, 2))
+    this.renderer.shadowMap.enabled = !this.lowQuality
+    if (!this.lowQuality) {
+      this.renderer.shadowMap.type = 2
+    }
     this.renderer.toneMapping = 4
     this.renderer.toneMappingExposure = 1.4
     container.appendChild(this.renderer.domElement)
@@ -113,14 +119,16 @@ class CityRunEngine {
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.7))
     const sun = new THREE.DirectionalLight(0xfff5e0, 1.8)
     sun.position.set(10, 20, 10)
-    sun.castShadow = true
-    sun.shadow.mapSize.set(2048, 2048)
-    sun.shadow.camera.near = 1
-    sun.shadow.camera.far = 80
-    sun.shadow.camera.left = -20
-    sun.shadow.camera.right = 20
-    sun.shadow.camera.top = 20
-    sun.shadow.camera.bottom = -20
+    if (!this.lowQuality) {
+      sun.castShadow = true
+      sun.shadow.mapSize.set(1024, 1024)
+      sun.shadow.camera.near = 1
+      sun.shadow.camera.far = 80
+      sun.shadow.camera.left = -20
+      sun.shadow.camera.right = 20
+      sun.shadow.camera.top = 20
+      sun.shadow.camera.bottom = -20
+    }
     this.scene.add(sun)
     const fill = new THREE.DirectionalLight(0xaaddff, 0.4)
     fill.position.set(-5, 5, -5)
@@ -150,7 +158,8 @@ class CityRunEngine {
     }
 
     const tieMat = new THREE.MeshStandardMaterial({ color: 0x6B4226, roughness: 0.8 })
-    for (let i = 0; i < 80; i++) {
+    const plankCount = this.lowQuality ? 30 : 80
+    for (let i = 0; i < plankCount; i++) {
       const tie = new THREE.Mesh(new THREE.BoxGeometry(6, 0.08, 0.3), tieMat)
       tie.position.set(0, 0.04, -i * 3.5)
       tie.receiveShadow = true
@@ -159,7 +168,8 @@ class CityRunEngine {
     }
 
     const markerMat = new THREE.MeshStandardMaterial({ color: 0xdddd44, emissive: 0xcccc22, emissiveIntensity: 0.3 })
-    for (let i = 0; i < 50; i++) {
+    const markerCount = this.lowQuality ? 20 : 50
+    for (let i = 0; i < markerCount; i++) {
       for (const mx of [-1.5, 1.5]) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 1.5), markerMat)
         m.position.set(mx, 0.16, -i * 5)
@@ -175,8 +185,9 @@ class CityRunEngine {
       new THREE.MeshStandardMaterial({ color: 0x3a8c3a, roughness: 0.7 }),
       new THREE.MeshStandardMaterial({ color: 0x1d6a1d, roughness: 0.7 }),
     ]
+    const treeCount = this.lowQuality ? 15 : 40
     for (const side of [-1, 1]) {
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < treeCount; i++) {
         const treeGroup = new THREE.Group()
         const trunkH = 1.5 + Math.random() * 1.5
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, trunkH, 6), treeTrunkMat)
@@ -424,7 +435,7 @@ class CityRunEngine {
   jump() {
     if (!this.isJumping && !this.isSliding) {
       this.isJumping = true
-      this.jumpVelocity = 0.25
+      this.jumpVelocity = 0.3
       SFX.jump()
     }
   }
@@ -587,7 +598,7 @@ class CityRunEngine {
     for (const obs of this.obstacles) {
       if (obs.hit) continue
       if (Math.abs(obs.z) < 1.5 && obs.lane === rl) {
-        if (obs.jumpable && this.jumpY > 0.8) continue
+        if (obs.jumpable && this.jumpY > 1.2) continue
         if (!obs.jumpable && this.isSliding) continue
         obs.hit = true
         this.invincible = true
@@ -660,6 +671,7 @@ class CityRunEngine {
       }
       mesh.position.set(this.LANE_X[lane], 0.5, -45)
     } else if (type === 'crate') {
+      jumpable = true
       mesh = new THREE.Mesh(
         new THREE.BoxGeometry(0.9, 0.9, 0.9),
         new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.5 })
@@ -667,6 +679,7 @@ class CityRunEngine {
       mesh.castShadow = true
       mesh.position.set(this.LANE_X[lane], 0.55, -45)
     } else {
+      jumpable = true
       mesh = new THREE.Mesh(
         new THREE.DodecahedronGeometry(0.6, 0),
         new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7, metalness: 0.2 })
@@ -800,6 +813,7 @@ export default function KnowledgeRunnerPage() {
   const [quizResult, setQuizResult] = useState<'correct' | 'wrong' | null>(null)
   const [questionHistory, setQuestionHistory] = useState<AnswerRecord[]>([])
   const [showReview, setShowReview] = useState(false)
+  const [isPortrait, setIsPortrait] = useState(false)
 
   const currentQ = questions[currentQIndex] || questions[0]
 
@@ -845,8 +859,28 @@ export default function KnowledgeRunnerPage() {
 
   useEffect(() => { loadQuestions() }, [])
 
+  // Detect portrait orientation on mobile
+  useEffect(() => {
+    const check = () => setIsPortrait(window.innerHeight > window.innerWidth && 'ontouchstart' in window)
+    check()
+    window.addEventListener('resize', check)
+    window.addEventListener('orientationchange', () => setTimeout(check, 100))
+    return () => {
+      window.removeEventListener('resize', check)
+      window.removeEventListener('orientationchange', check)
+    }
+  }, [])
+
   const startGame = useCallback(async () => {
     if (!containerRef.current) return
+    // Try to lock landscape orientation on mobile
+    try {
+      if (screen.orientation?.lock) await screen.orientation.lock('landscape')
+    } catch {}
+    // Try fullscreen
+    try {
+      if (containerRef.current.requestFullscreen) await containerRef.current.requestFullscreen()
+    } catch {}
     engineRef.current?.dispose()
     const engine = new CityRunEngine()
     engineRef.current = engine
@@ -966,8 +1000,11 @@ export default function KnowledgeRunnerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [gameState, handleAnswer, resumeGame, quizActive])
 
-  // Touch
+  // Touch (desktop only — mobile uses on-screen buttons)
   useEffect(() => {
+    const isTouchDevice = 'ontouchstart' in window && window.innerWidth < 768
+    if (isTouchDevice) return
+
     let sx = 0, sy = 0
     const onStart = (e: TouchEvent) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY }
     const onEnd = (e: TouchEvent) => {
@@ -1001,41 +1038,59 @@ export default function KnowledgeRunnerPage() {
     )
   }
 
+  // Portrait orientation hint for mobile
+  if (isPortrait && gameState === 'playing') {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white z-50 p-8 text-center">
+        <div className="text-6xl mb-6">📱↻</div>
+        <h2 className="text-2xl font-black mb-3">Rotate Your Device</h2>
+        <p className="text-white/60 text-sm leading-relaxed max-w-xs">
+          City Run plays best in landscape mode. Rotate your phone sideways for the full experience.
+        </p>
+        <button onClick={() => setIsPortrait(false)}
+          className="mt-6 px-6 py-3 rounded-xl bg-white/10 border border-white/20 text-sm font-bold hover:bg-white/20 transition-all">
+          Play Anyway
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className="fixed inset-0 bg-black text-white overflow-hidden select-none z-50">
+    <div className="fixed inset-0 bg-black text-white overflow-hidden select-none z-50"
+      onTouchMove={(e) => { if (gameState === 'playing') e.preventDefault() }}>
       <div ref={containerRef} className="absolute inset-0" style={{ touchAction: 'none' }} />
 
       {/* HUD */}
       {(gameState === 'playing' || quizActive) && (
         <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
-          <div className="flex items-center justify-between px-4 py-3 bg-black/20 backdrop-blur-sm pointer-events-auto">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 bg-black/20 backdrop-blur-sm pointer-events-auto">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button onClick={() => { engineRef.current?.stop(); setGameState('paused') }}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-colors backdrop-blur">
-                <ArrowLeft className="w-4 h-4" /> Exit
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-[11px] sm:text-xs font-bold transition-colors backdrop-blur">
+                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Exit</span>
               </button>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="px-3 py-1.5 rounded-xl bg-black/30 backdrop-blur text-amber-400 text-sm font-black">
-                <Trophy className="w-4 h-4 inline mr-1" />{score}
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-black/30 backdrop-blur text-amber-400 text-xs sm:text-sm font-black">
+                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-0.5 sm:mr-1" />{score}
               </div>
               {combo > 1 && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-purple-500/30 backdrop-blur text-purple-300 text-sm font-black animate-pulse">
+                <div className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-purple-500/30 backdrop-blur text-purple-300 text-xs sm:text-sm font-black animate-pulse">
                   x{combo}
                 </div>
               )}
-              <div className="flex items-center gap-0.5 px-2 py-1.5 rounded-xl bg-black/30 backdrop-blur">
+              <div className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-xl bg-black/30 backdrop-blur">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Heart key={i} className={`w-4 h-4 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/20'}`} />
+                  <Heart key={i} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/20'}`} />
                 ))}
               </div>
               <button onClick={() => setSoundEnabled(!soundEnabled)}
-                className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors backdrop-blur">
-                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                className="p-1.5 sm:p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors backdrop-blur">
+                {soundEnabled ? <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               </button>
             </div>
           </div>
-          <div className="absolute top-16 left-4 px-2 py-1 rounded-lg bg-black/30 backdrop-blur text-[10px] font-bold text-white/60">
+          <div className="absolute top-14 sm:top-16 left-2 sm:left-4 px-2 py-1 rounded-lg bg-black/30 backdrop-blur text-[10px] font-bold text-white/60 hidden sm:block">
             SPEED: {speed.toFixed(1)}x
           </div>
         </div>
@@ -1043,15 +1098,15 @@ export default function KnowledgeRunnerPage() {
 
       {/* Mobile Controls */}
       {gameState === 'playing' && (
-        <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center gap-2 px-4 md:hidden pointer-events-auto">
+        <div className="absolute bottom-4 sm:bottom-6 left-0 right-0 z-30 flex justify-center gap-2 px-3 sm:px-4 md:hidden pointer-events-auto">
           <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.switchLane(-1) }}
-            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">⬅️</button>
+            className="flex-1 py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm border-2 bg-white/10 border-white/20 text-white active:scale-90 active:bg-white/30 transition-all backdrop-blur select-none">⬅️</button>
           <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.jump() }}
-            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">⬆️ Jump</button>
+            className="flex-[2] py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm border-2 bg-cyan-500/20 border-cyan-400/40 text-cyan-300 active:scale-90 active:bg-cyan-500/40 transition-all backdrop-blur select-none">⬆️ Jump</button>
           <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.slide() }}
-            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">⬇️ Slide</button>
+            className="flex-[2] py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm border-2 bg-amber-500/20 border-amber-400/40 text-amber-300 active:scale-90 active:bg-amber-500/40 transition-all backdrop-blur select-none">⬇️ Slide</button>
           <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.switchLane(1) }}
-            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">➡️</button>
+            className="flex-1 py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm border-2 bg-white/10 border-white/20 text-white active:scale-90 active:bg-white/30 transition-all backdrop-blur select-none">➡️</button>
         </div>
       )}
 
@@ -1060,26 +1115,26 @@ export default function KnowledgeRunnerPage() {
         {quizActive && currentQ && (
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
             className="absolute bottom-0 left-0 right-0 z-40 pointer-events-auto">
-            <div className="mx-auto max-w-2xl p-4 pb-6 md:pb-4">
-              <div className="bg-[#0f172a]/95 border border-red-500/30 rounded-2xl p-5 shadow-[0_0_60px_rgba(255,0,60,0.15)] backdrop-blur-xl">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-[11px] font-black uppercase tracking-widest">
-                    ⚔️ Enemy Encounter — Question {currentQIndex + 1}/{questions.length}
+            <div className="mx-auto max-w-2xl p-3 sm:p-4 pb-20 sm:pb-6 md:pb-4">
+              <div className="bg-[#0f172a]/95 border border-red-500/30 rounded-2xl p-4 sm:p-5 shadow-[0_0_60px_rgba(255,0,60,0.15)] backdrop-blur-xl">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <span className="px-2 sm:px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-[10px] sm:text-[11px] font-black uppercase tracking-widest">
+                    ⚔️ Enemy {currentQIndex + 1}/{questions.length}
                   </span>
                   {quizResult && (
-                    <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest ${
+                    <span className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-widest ${
                       quizResult === 'correct'
                         ? 'bg-green-500/20 text-green-400'
                         : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {quizResult === 'correct' ? '💀 Enemy Defeated!' : '💔 Wrong!'}
+                      {quizResult === 'correct' ? '💀 Defeated!' : '💔 Wrong!'}
                     </span>
                   )}
                 </div>
 
-                <h2 className="text-base md:text-lg font-black text-white leading-snug mb-4">{currentQ.question}</h2>
+                <h2 className="text-sm sm:text-base md:text-lg font-black text-white leading-snug mb-3 sm:mb-4">{currentQ.question}</h2>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   {currentQ.options.map((opt, i) => {
                     const isCorrect = i === currentQ.correctIndex
                     const isSelected = selectedAnswer === i
@@ -1091,7 +1146,7 @@ export default function KnowledgeRunnerPage() {
                     }
                     return (
                       <button key={i} onClick={() => handleAnswer(i)} disabled={selectedAnswer !== null}
-                        className={`px-3 py-3 rounded-xl border text-left text-sm font-bold transition-all ${style}`}>
+                        className={`px-3 py-3 sm:py-3 rounded-xl border text-left text-sm font-bold transition-all ${style}`}>
                         <span className="text-[10px] font-black text-slate-500 mr-2">{i + 1}.</span>{opt}
                       </button>
                     )
@@ -1120,13 +1175,14 @@ export default function KnowledgeRunnerPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md p-4">
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
-              className="bg-[#0f172a]/90 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl">
-              <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-lg">City Run</h1>
+              className="bg-[#0f172a]/90 border border-white/10 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 sm:space-y-5 shadow-2xl">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white drop-shadow-lg">City Run</h1>
               <p className="text-slate-300 text-sm leading-relaxed">
                 Dodge obstacles, collect coins, and defeat enemies!<br/>
-                Use ← → to switch lanes, ↑ or Space to jump, ↓ to slide.<br/>
-                <span className="text-red-400 font-bold">Enemies appear on the track — answer correctly to defeat them!</span><br/>
-                <span className="text-cyan-400 font-bold">Answer with keys 1-4 or tap the options.</span>
+                <span className="hidden md:inline">Use ← → to switch lanes, ↑ or Space to jump, ↓ to slide.</span>
+                <span className="md:hidden">Swipe or use the on-screen buttons to move, jump, and slide.</span><br/>
+                <span className="text-red-400 font-bold">Enemies appear — answer correctly to defeat them!</span><br/>
+                <span className="text-cyan-400 font-bold">Tap options or press 1-4 to answer.</span>
               </p>
               <label className="flex items-center justify-center gap-2 text-sm text-slate-300 cursor-pointer">
                 <input type="checkbox" checked={slowMotion} onChange={e => setSlowMotion(e.target.checked)}
@@ -1171,7 +1227,7 @@ export default function KnowledgeRunnerPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
             <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }}
-              className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl my-8">
+              className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-4 sm:p-6 max-w-2xl w-full space-y-4 sm:space-y-5 shadow-2xl my-4 sm:my-8">
 
               <div className="text-center space-y-2">
                 <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
