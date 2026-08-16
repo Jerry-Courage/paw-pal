@@ -13,6 +13,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { normalizeForRendering } from '@/lib/mathFormatting'
 import StudyTimer from '@/components/study/StudyTimer'
+import { useStudyTimer } from '@/hooks/useStudyTimer'
 import SessionStats from '@/components/study/SessionStats'
 import AmbientPlayer from '@/components/study/AmbientPlayer'
 import MysteryBox from '@/components/study/MysteryBox'
@@ -85,6 +86,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
   const router = useRouter()
   const qc = useQueryClient()
+  useStudyTimer(true)
 
   const [sectionIndex, setSectionIndex] = useState(() => {
     if (typeof window === 'undefined') return 0

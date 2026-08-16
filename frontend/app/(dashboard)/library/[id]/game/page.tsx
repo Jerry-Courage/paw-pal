@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { libraryApi, authApi } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -21,351 +21,422 @@ const SFX = {
   wrong: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2658/2658-preview.mp3'); a.volume = 0.25; a.play() } catch {} },
   coin: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'); a.volume = 0.2; a.play() } catch {} },
   hit: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2803/2803-preview.mp3'); a.volume = 0.3; a.play() } catch {} },
+  jump: () => { try { const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'); a.volume = 0.15; a.play() } catch {} },
 }
 
-// ─── Dynamic Three.js loader ──────────────────────────────────────────
 let THREE: typeof import('three') | null = null
-let threePromise: Promise<void> | null = null
+let threeLoaded = false
+let threeLoading: Promise<void> | null = null
 
-function loadThree() {
-  if (THREE) return Promise.resolve()
-  if (threePromise) return threePromise
-  threePromise = import('three').then(mod => {
-    THREE = mod
-  }).catch(err => {
-    console.error('Failed to load Three.js:', err)
-    threePromise = null
-  })
-  return threePromise
+async function ensureThree() {
+  if (threeLoaded && THREE) return
+  if (threeLoading) { await threeLoading; return }
+  threeLoading = import('three').then(mod => { THREE = mod; threeLoaded = true }).catch(e => { console.error('Three.js load failed:', e); threeLoading = null })
+  await threeLoading
 }
 
-// ─── 3D Game Engine ───────────────────────────────────────────────────
+class CityRunEngine {
+  private scene: any = null
+  private camera: any = null
+  private renderer: any = null
+  private animId = 0
+  private alive = false
 
-class RunnerEngine {
-  private scene: any
-  private camera: any
-  private renderer: any
-  private runner: any
-  private runnerParts: any[] = []
-  private laneMarkers: any[] = []
-  private obstacles: { mesh: any; lane: number; z: number; type: string; hit: boolean }[] = []
-  private coins: { mesh: any; lane: number; z: number; collected: boolean }[] = []
-  private trail: any[] = []
-  private particles: { mesh: any; vx: number; vy: number; vz: number; life: number }[] = []
-  private buildings: any[] = []
-  private frame = 0
-  private speed = 0.35
+  // Runner
+  private runnerGroup: any = null
+  private runnerParts: Record<string, any> = {}
   private currentLane = 1
   private targetLane = 1
-  private animId = 0
-  private alive = true
+  private isJumping = false
+  private jumpVelocity = 0
+  private jumpY = 0
+  private isSliding = false
+  private slideTimer = 0
+  private animPhase = 0
+
+  // World
+  private worldOffset = 0
+  private speed = 0.3
+  private frame = 0
+  private trackPlanks: any[] = []
+  private trees: any[] = []
+  private obstacles: { mesh: any; lane: number; z: number; type: string; hit: boolean; jumpable: boolean }[] = []
+  private coins: { mesh: any; lane: number; z: number; collected: boolean }[] = []
+  private particles: { mesh: any; vx: number; vy: number; vz: number; life: number }[] = []
+
+  private LANE_X = [-3, 0, 3]
   private onHit: () => void = () => {}
   private onCoin: () => void = () => {}
   private onQuiz: () => void = () => {}
-  private lastScoreTick = 0
+  private quizCooldown = 0
 
-  private LANE_X = [-3.5, 0, 3.5]
-
-  async init(container: HTMLDivElement, callbacks: { onHit: () => void; onCoin: () => void; onQuiz: () => void }) {
-    await loadThree()
-    if (!THREE || !this.alive) return false
-
-    this.onHit = callbacks.onHit
-    this.onCoin = callbacks.onCoin
-    this.onQuiz = callbacks.onQuiz
+  async init(container: HTMLElement, cbs: { onHit: () => void; onCoin: () => void; onQuiz: () => void }) {
+    await ensureThree()
+    if (!THREE) return false
+    this.onHit = cbs.onHit
+    this.onCoin = cbs.onCoin
+    this.onQuiz = cbs.onQuiz
+    this.alive = true
 
     const w = container.clientWidth || window.innerWidth
     const h = container.clientHeight || window.innerHeight
 
-    // Scene
+    // Scene — bright sky
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x030310)
-    this.scene.fog = new THREE.FogExp2(0x030310, 0.015)
+    this.scene.background = new THREE.Color(0x87ceeb)
+    this.scene.fog = new THREE.Fog(0x87ceeb, 40, 120)
 
-    // Camera
-    this.camera = new THREE.PerspectiveCamera(68, w / h, 0.1, 200)
-    this.camera.position.set(0, 6, 9)
-    this.camera.lookAt(0, 1.5, -25)
+    // Camera — third person behind runner
+    this.camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 200)
+    this.camera.position.set(0, 5, 10)
+    this.camera.lookAt(0, 1.5, -15)
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setSize(w, h)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = 2 // PCFSoftShadowMap
-    this.renderer.toneMapping = 4 // ACESFilmic
-    this.renderer.toneMappingExposure = 1.3
+    this.renderer.shadowMap.type = 2
+    this.renderer.toneMapping = 4
+    this.renderer.toneMappingExposure = 1.4
     container.appendChild(this.renderer.domElement)
 
-    // Lights
-    this.scene.add(new THREE.AmbientLight(0x303050, 2))
+    // ─── Lighting — bright daylight ─────────────
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.7))
 
-    const dir = new THREE.DirectionalLight(0xffffff, 2)
-    dir.position.set(5, 15, 10)
-    dir.castShadow = true
-    dir.shadow.mapSize.set(1024, 1024)
-    dir.shadow.camera.near = 1
-    dir.shadow.camera.far = 60
-    dir.shadow.camera.left = -15
-    dir.shadow.camera.right = 15
-    this.scene.add(dir)
+    const sun = new THREE.DirectionalLight(0xfff5e0, 1.8)
+    sun.position.set(10, 20, 10)
+    sun.castShadow = true
+    sun.shadow.mapSize.set(2048, 2048)
+    sun.shadow.camera.near = 1
+    sun.shadow.camera.far = 80
+    sun.shadow.camera.left = -20
+    sun.shadow.camera.right = 20
+    sun.shadow.camera.top = 20
+    sun.shadow.camera.bottom = -20
+    this.scene.add(sun)
 
-    const rim = new THREE.DirectionalLight(0x4488ff, 1)
-    rim.position.set(-5, 3, -10)
-    this.scene.add(rim)
+    const fill = new THREE.DirectionalLight(0xaaddff, 0.4)
+    fill.position.set(-5, 5, -5)
+    this.scene.add(fill)
 
-    const warm = new THREE.PointLight(0xff6600, 2, 25)
-    warm.position.set(0, 5, -5)
-    this.scene.add(warm)
+    // ─── Ground — green grass ───────────────────
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x4a8c3f, roughness: 0.9 })
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(120, 300), grassMat)
+    grass.rotation.x = -Math.PI / 2
+    grass.position.set(0, -0.05, -100)
+    grass.receiveShadow = true
+    this.scene.add(grass)
 
-    // ─── Road ───────────────────────────────────
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x0c0c1a, roughness: 0.5, metalness: 0.1 })
-    const road = new THREE.Mesh(new THREE.PlaneGeometry(14, 250), roadMat)
-    road.rotation.x = -Math.PI / 2
-    road.position.set(0, -0.01, -100)
-    road.receiveShadow = true
-    this.scene.add(road)
+    // ─── Railroad Track ─────────────────────────
+    // Road bed (gravel)
+    const gravelMat = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.85 })
+    const gravel = new THREE.Mesh(new THREE.BoxGeometry(10, 0.15, 300), gravelMat)
+    gravel.position.set(0, 0, -100)
+    gravel.receiveShadow = true
+    this.scene.add(gravel)
 
-    // Road edges — neon strips
-    const edgeMat = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 3 })
-    for (const side of [-1, 1]) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 250), edgeMat)
-      edge.position.set(side * 7, 0.02, -100)
-      this.scene.add(edge)
+    // Rails
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.7, roughness: 0.3 })
+    for (const rx of [-2.2, 2.2]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 300), railMat)
+      rail.position.set(rx, 0.12, -100)
+      rail.castShadow = true
+      this.scene.add(rail)
     }
 
-    // Lane dividers
-    const divMat = new THREE.MeshStandardMaterial({ color: 0x333355, emissive: 0x1a1a33, emissiveIntensity: 0.8 })
-    for (let li = 0; li < 2; li++) {
-      const x = li === 0 ? -1.75 : 1.75
-      for (let i = 0; i < 60; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.015, 1.8), divMat)
-        m.position.set(x, 0.01, -i * 4)
+    // Cross ties (wooden planks)
+    const tieMat = new THREE.MeshStandardMaterial({ color: 0x6B4226, roughness: 0.8 })
+    for (let i = 0; i < 80; i++) {
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(6, 0.08, 0.3), tieMat)
+      tie.position.set(0, 0.04, -i * 3.5)
+      tie.receiveShadow = true
+      this.scene.add(tie)
+      this.trackPlanks.push(tie)
+    }
+
+    // Lane dividers — subtle markers on the track
+    const markerMat = new THREE.MeshStandardMaterial({ color: 0xdddd44, emissive: 0xcccc22, emissiveIntensity: 0.3 })
+    for (let i = 0; i < 50; i++) {
+      for (const mx of [-1.5, 1.5]) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 1.5), markerMat)
+        m.position.set(mx, 0.16, -i * 5)
         this.scene.add(m)
-        this.laneMarkers.push(m)
+        this.trackPlanks.push(m)
       }
     }
 
-    // ─── Buildings ──────────────────────────────
-    const buildColors = [0x0a0a1a, 0x0d0d22, 0x080818, 0x0b0b20]
-    const windowColors = [0x223355, 0x334466, 0x112244, 0x445577]
+    // ─── Trees ──────────────────────────────────
+    const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.9 })
+    const treeLeafMats = [
+      new THREE.MeshStandardMaterial({ color: 0x2d7a2d, roughness: 0.7 }),
+      new THREE.MeshStandardMaterial({ color: 0x3a8c3a, roughness: 0.7 }),
+      new THREE.MeshStandardMaterial({ color: 0x1d6a1d, roughness: 0.7 }),
+    ]
+
     for (const side of [-1, 1]) {
-      for (let i = 0; i < 35; i++) {
-        const bH = 4 + Math.sin(i * 2.7) * 5 + Math.random() * 4
-        const bW = 2.5 + Math.random() * 2
-        const bD = 3 + Math.random() * 3
-        const bMat = new THREE.MeshStandardMaterial({
-          color: buildColors[i % buildColors.length],
-          roughness: 0.8,
-          metalness: 0.15
-        })
-        const bldg = new THREE.Mesh(new THREE.BoxGeometry(bW, bH, bD), bMat)
-        const xPos = side * (8.5 + Math.random() * 5)
-        bldg.position.set(xPos, bH / 2, -i * 7 - Math.random() * 5)
-        bldg.castShadow = true
-        this.scene.add(bldg)
-        this.buildings.push(bldg)
+      for (let i = 0; i < 40; i++) {
+        const treeGroup = new THREE.Group()
+        const trunkH = 1.5 + Math.random() * 1.5
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.15, 0.25, trunkH, 6),
+          treeTrunkMat
+        )
+        trunk.position.y = trunkH / 2
+        trunk.castShadow = true
+        treeGroup.add(trunk)
 
-        // Windows
-        const wMat = new THREE.MeshStandardMaterial({
-          color: windowColors[i % windowColors.length],
-          emissive: windowColors[i % windowColors.length],
-          emissiveIntensity: 1.5 + Math.random() * 1.5,
-        })
-        const cols = Math.floor(bW / 0.8)
-        const rows = Math.floor(bH / 1.2)
-        for (let c = 0; c < cols; c++) {
-          for (let r = 0; r < rows; r++) {
-            if (Math.random() > 0.6) continue
-            const win = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.45), wMat)
-            win.position.set(
-              xPos + (side > 0 ? -bW / 2 - 0.01 : bW / 2 + 0.01),
-              1 + r * 1.1,
-              bldg.position.z - bD / 2 + 0.5 + c * 0.9
-            )
-            win.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2
-            this.scene.add(win)
-          }
+        // Cone-shaped leaves (like the screenshot)
+        const leafMat = treeLeafMats[i % 3]
+        const leafH = 2 + Math.random() * 2
+        const leafR = 1 + Math.random() * 0.8
+        const leaves = new THREE.Mesh(
+          new THREE.ConeGeometry(leafR, leafH, 6),
+          leafMat
+        )
+        leaves.position.y = trunkH + leafH * 0.35
+        leaves.castShadow = true
+        treeGroup.add(leaves)
+
+        // Sometimes add a second smaller cone on top
+        if (Math.random() > 0.4) {
+          const topLeaf = new THREE.Mesh(
+            new THREE.ConeGeometry(leafR * 0.6, leafH * 0.6, 6),
+            leafMat
+          )
+          topLeaf.position.y = trunkH + leafH * 0.7
+          topLeaf.castShadow = true
+          treeGroup.add(topLeaf)
         }
 
-        // Street lamp between buildings
-        if (Math.random() > 0.5) {
-          const pole = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.04, 0.06, 3.5, 6),
-            new THREE.MeshStandardMaterial({ color: 0x333344, metalness: 0.8 })
-          )
-          const lampX = side * (7.5 + Math.random())
-          pole.position.set(lampX, 1.75, bldg.position.z)
-          this.scene.add(pole)
-
-          const bulb = new THREE.Mesh(
-            new THREE.SphereGeometry(0.15, 8, 8),
-            new THREE.MeshStandardMaterial({ color: 0xffeecc, emissive: 0xffaa44, emissiveIntensity: 3 })
-          )
-          bulb.position.set(lampX, 3.6, bldg.position.z)
-          this.scene.add(bulb)
-
-          const lampLight = new THREE.PointLight(0xffaa44, 0.8, 8)
-          lampLight.position.copy(bulb.position)
-          this.scene.add(lampLight)
-        }
+        const xPos = side * (7 + Math.random() * 15)
+        const zPos = -i * 6 - Math.random() * 4
+        treeGroup.position.set(xPos, 0, zPos)
+        this.scene.add(treeGroup)
+        this.trees.push(treeGroup)
       }
     }
-
-    // Ground
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(120, 300),
-      new THREE.MeshStandardMaterial({ color: 0x050510, roughness: 1 })
-    )
-    ground.rotation.x = -Math.PI / 2
-    ground.position.set(0, -0.05, -120)
-    this.scene.add(ground)
 
     // ─── Runner Character ───────────────────────
-    this.runner = new THREE.Group()
+    this.runnerGroup = new THREE.Group()
 
-    // Body — torso with slight taper
-    const torsoMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xd97706, emissiveIntensity: 0.2, roughness: 0.35, metalness: 0.25 })
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.1, 0.55), torsoMat)
-    torso.position.y = 1.3
-    torso.castShadow = true
-    this.runner.add(torso)
-    this.runnerParts.push(torso)
+    // Red cap
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 })
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.35, 0.15, 12), capMat)
+    cap.position.y = 2.55
+    this.runnerGroup.add(cap)
+    this.runnerParts.cap = cap
+
+    // Cap brim
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.25), capMat)
+    brim.position.set(0, 2.48, 0.18)
+    this.runnerGroup.add(brim)
 
     // Head
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.4, roughness: 0.3, metalness: 0.15 })
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 16), headMat)
-    head.position.y = 2.2
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5c7a1, roughness: 0.6 })
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), skinMat)
+    head.position.y = 2.35
     head.castShadow = true
-    this.runner.add(head)
-    this.runnerParts.push(head)
-
-    // Hair / helmet
-    const helmetMat = new THREE.MeshStandardMaterial({ color: 0x1e1b4b, emissive: 0x111133, emissiveIntensity: 0.5, roughness: 0.3, metalness: 0.4 })
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), helmetMat)
-    helmet.position.y = 2.25
-    this.runner.add(helmet)
+    this.runnerGroup.add(head)
+    this.runnerParts.head = head
 
     // Eyes
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff })
-    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111122 })
-    for (const ex of [-0.13, 0.13]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), eyeMat)
-      eye.position.set(ex, 2.25, 0.3)
-      this.runner.add(eye)
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), pupilMat)
-      pupil.position.set(ex, 2.25, 0.36)
-      this.runner.add(pupil)
+    const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xffffff })
+    const eyePupil = new THREE.MeshStandardMaterial({ color: 0x222222 })
+    for (const ex of [-0.1, 0.1]) {
+      const ew = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), eyeWhite)
+      ew.position.set(ex, 2.38, 0.25)
+      this.runnerGroup.add(ew)
+      const ep = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyePupil)
+      ep.position.set(ex, 2.38, 0.29)
+      this.runnerGroup.add(ep)
     }
 
-    // Mouth — simple smile
-    const smileMat = new THREE.MeshStandardMaterial({ color: 0x92400e })
-    const smile = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.015, 4, 8, Math.PI), smileMat)
-    smile.position.set(0, 2.1, 0.35)
-    smile.rotation.x = Math.PI
-    this.runner.add(smile)
+    // Body — green t-shirt
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x22883a, roughness: 0.6 })
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.4), shirtMat)
+    body.position.y = 1.65
+    body.castShadow = true
+    this.runnerGroup.add(body)
+    this.runnerParts.body = body
 
-    // Legs
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.5, metalness: 0.2 })
-    for (const lx of [-0.18, 0.18]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.75, 0.28), legMat)
-      leg.position.set(lx, 0.42, 0)
-      leg.castShadow = true
-      this.runner.add(leg)
-      this.runnerParts.push(leg)
-    }
+    // Backpack
+    const packMat = new THREE.MeshStandardMaterial({ color: 0x3344aa, roughness: 0.5 })
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.25), packMat)
+    pack.position.set(0, 1.7, -0.32)
+    this.runnerGroup.add(pack)
+    const packStrap1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.05), packMat)
+    packStrap1.position.set(-0.15, 1.8, -0.18)
+    this.runnerGroup.add(packStrap1)
+    const packStrap2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.05), packMat)
+    packStrap2.position.set(0.15, 1.8, -0.18)
+    this.runnerGroup.add(packStrap2)
 
     // Arms
-    const armMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.35, metalness: 0.2 })
-    for (const ax of [-0.55, 0.55]) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.85, 0.22), armMat)
-      arm.position.set(ax, 1.2, 0)
+    const armMat = new THREE.MeshStandardMaterial({ color: 0xf5c7a1, roughness: 0.6 })
+    for (const ax of [-0.48, 0.48]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.16), armMat)
+      arm.position.set(ax, 1.5, 0)
       arm.castShadow = true
-      this.runner.add(arm)
-      this.runnerParts.push(arm)
+      this.runnerGroup.add(arm)
+      this.runnerParts[`arm${ax > 0 ? 'R' : 'L'}`] = arm
+    }
+
+    // Hands
+    const handMat = new THREE.MeshStandardMaterial({ color: 0xf0b888, roughness: 0.5 })
+    for (const hx of [-0.48, 0.48]) {
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), handMat)
+      hand.position.set(hx, 1.15, 0)
+      this.runnerGroup.add(hand)
+    }
+
+    // Blue pants
+    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.6 })
+    for (const lx of [-0.15, 0.15]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.22), pantsMat)
+      leg.position.set(lx, 0.8, 0)
+      leg.castShadow = true
+      this.runnerGroup.add(leg)
+      this.runnerParts[`leg${lx > 0 ? 'R' : 'L'}`] = leg
     }
 
     // Shoes
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4, metalness: 0.3 })
-    for (const sx of [-0.18, 0.18]) {
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.38), shoeMat)
-      shoe.position.set(sx, 0.06, 0.05)
-      this.runner.add(shoe)
+    const shoeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+    for (const sx of [-0.15, 0.15]) {
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.3), shoeMat)
+      shoe.position.set(sx, 0.45, 0.04)
+      this.runnerGroup.add(shoe)
     }
 
-    this.runner.position.set(0, 0, 0)
-    this.scene.add(this.runner)
+    this.runnerGroup.position.set(0, 0, 0)
+    this.scene.add(this.runnerGroup)
 
-    // Trail particles
-    for (let i = 0; i < 20; i++) {
-      const trail = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06 - i * 0.002, 6, 6),
-        new THREE.MeshStandardMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.25 - i * 0.012 })
-      )
-      trail.position.set(0, 0.5, i * 0.4)
-      this.scene.add(trail)
-      this.trail.push(trail)
+    // Resize handler
+    const onResize = () => {
+      const nw = container.clientWidth || window.innerWidth
+      const nh = container.clientHeight || window.innerHeight
+      this.camera.aspect = nw / nh
+      this.camera.updateProjectionMatrix()
+      this.renderer.setSize(nw, nh)
     }
+    window.addEventListener('resize', onResize)
+    ;(this as any)._onResize = onResize
 
     return true
   }
 
   start() {
-    this.speed = 0.35
+    this.speed = 0.3
     this.frame = 0
     this.currentLane = 1
     this.targetLane = 1
+    this.isJumping = false
+    this.jumpVelocity = 0
+    this.jumpY = 0
+    this.isSliding = false
+    this.slideTimer = 0
+    this.quizCooldown = 0
     this.obstacles.forEach(o => this.scene.remove(o.mesh))
     this.coins.forEach(c => this.scene.remove(c.mesh))
     this.particles.forEach(p => this.scene.remove(p.mesh))
     this.obstacles = []
     this.coins = []
     this.particles = []
-    this.animate()
+    this.worldOffset = 0
+    this.run()
   }
 
   switchLane(dir: number) {
-    const newLane = this.targetLane + dir
-    if (newLane >= 0 && newLane <= 2) this.targetLane = newLane
+    const n = this.targetLane + dir
+    if (n >= 0 && n <= 2) this.targetLane = n
+  }
+
+  jump() {
+    if (!this.isJumping && !this.isSliding) {
+      this.isJumping = true
+      this.jumpVelocity = 0.25
+      if (jumpSound) jumpSound()
+    }
+  }
+
+  slide() {
+    if (!this.isSliding && !this.isJumping) {
+      this.isSliding = true
+      this.slideTimer = 30
+    }
   }
 
   stop() {
     this.alive = false
     cancelAnimationFrame(this.animId)
+    const container = this.renderer?.domElement?.parentElement
+    if ((this as any)._onResize) window.removeEventListener('resize', (this as any)._onResize)
   }
 
   getSpeed() { return this.speed }
 
-  private animate = () => {
+  private run = () => {
     if (!this.alive || !THREE) return
-    this.animId = requestAnimationFrame(this.animate)
+    this.animId = requestAnimationFrame(this.run)
 
     this.frame++
-    this.speed = Math.min(1.4, this.speed + 0.00025)
+    this.speed = Math.min(1.2, this.speed + 0.0002)
+    this.worldOffset += this.speed
+    this.animPhase += this.speed * 2
 
     // Smooth lane
     const diff = this.targetLane - this.currentLane
-    if (Math.abs(diff) > 0.01) this.currentLane += diff * 0.12
+    if (Math.abs(diff) > 0.01) this.currentLane += diff * 0.15
     else this.currentLane = this.targetLane
 
-    // Runner movement
-    if (this.runner) {
-      const tx = this.LANE_X[Math.round(this.targetLane)]
-      this.runner.position.x += (tx - this.runner.position.x) * 0.12
+    // Jump physics
+    if (this.isJumping) {
+      this.jumpY += this.jumpVelocity
+      this.jumpVelocity -= 0.012
+      if (this.jumpY <= 0) {
+        this.jumpY = 0
+        this.isJumping = false
+        this.jumpVelocity = 0
+      }
+    }
 
-      // Animation
-      const t = this.frame
-      const bob = Math.sin(t * 0.15) * 0.12
-      const legSwing = Math.sin(t * 0.15) * 0.4
-      // Body bob
-      if (this.runnerParts[0]) this.runnerParts[0].position.y = 1.3 + bob
-      if (this.runnerParts[1]) this.runnerParts[1].position.y = 2.2 + bob
-      // Legs
-      if (this.runnerParts[2]) this.runnerParts[2].rotation.x = legSwing
-      if (this.runnerParts[3]) this.runnerParts[3].rotation.x = -legSwing
-      // Arms
-      if (this.runnerParts[4]) this.runnerParts[4].rotation.x = -legSwing
-      if (this.runnerParts[5]) this.runnerParts[5].rotation.x = legSwing
+    // Slide timer
+    if (this.isSliding) {
+      this.slideTimer--
+      if (this.slideTimer <= 0) this.isSliding = false
+    }
+
+    // Runner position & animation
+    if (this.runnerGroup) {
+      const tx = this.LANE_X[this.targetLane]
+      this.runnerGroup.position.x += (tx - this.runnerGroup.position.x) * 0.15
+      this.runnerGroup.position.y = this.jumpY
+
+      // Slide — crouch the character
+      if (this.isSliding) {
+        this.runnerGroup.scale.y = 0.5
+        this.runnerGroup.position.y = Math.max(this.jumpY, 0)
+      } else {
+        this.runnerGroup.scale.y += (1 - this.runnerGroup.scale.y) * 0.2
+      }
+
+      const t = this.animPhase
+      const bob = Math.sin(t) * 0.08
+      const legSwing = Math.sin(t) * 0.5
+
+      if (this.runnerParts.body) this.runnerParts.body.position.y = 1.65 + bob
+      if (this.runnerParts.head) this.runnerParts.head.position.y = 2.35 + bob
+      if (this.runnerParts.cap) this.runnerParts.cap.position.y = 2.55 + bob
+      if (this.runnerParts.legL) this.runnerParts.legL.rotation.x = this.isSliding ? 0.8 : legSwing
+      if (this.runnerParts.legR) this.runnerParts.legR.rotation.x = this.isSliding ? -0.3 : -legSwing
+      if (this.runnerParts.armL) this.runnerParts.armL.rotation.x = this.isSliding ? 0.3 : -legSwing * 0.8
+      if (this.runnerParts.armR) this.runnerParts.armR.rotation.x = this.isSliding ? -0.3 : legSwing * 0.8
+    }
+
+    // Move track planks
+    for (const plank of this.trackPlanks) {
+      plank.position.z += this.speed
+      if (plank.position.z > 15) plank.position.z -= 280
     }
 
     // Move obstacles
@@ -374,7 +445,7 @@ class RunnerEngine {
       obs.mesh.position.z = obs.z
     }
     this.obstacles = this.obstacles.filter(o => {
-      if (o.z > 15) { this.scene.remove(o.mesh); return false }
+      if (o.z > 12) { this.scene.remove(o.mesh); return false }
       return true
     })
 
@@ -383,60 +454,58 @@ class RunnerEngine {
       c.z += this.speed
       c.mesh.position.z = c.z
       c.mesh.rotation.y += 0.06
-      c.mesh.rotation.x += 0.02
     }
     this.coins = this.coins.filter(c => {
-      if (c.z > 15) { this.scene.remove(c.mesh); return false }
+      if (c.z > 12) { this.scene.remove(c.mesh); return false }
       return true
     })
 
     // Spawn obstacles
-    const minGap = Math.max(10, 22 - this.speed * 10)
-    if (this.frame > 80 && Math.random() < 0.02 + this.speed * 0.008) {
-      const furthest = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : 0
-      if (furthest < -minGap) this.spawnObstacle()
+    const gap = Math.max(10, 22 - this.speed * 10)
+    if (this.frame > 80 && Math.random() < 0.025 + this.speed * 0.008) {
+      const far = this.obstacles.length > 0 ? Math.min(...this.obstacles.map(o => o.z)) : 0
+      if (far < -gap) this.spawnObstacle()
     }
 
     // Spawn coins
-    if (this.frame % 20 === 0 && Math.random() < 0.45) {
-      const furthest = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : 0
-      if (furthest < -12) this.spawnCoin()
+    if (this.frame % 18 === 0 && Math.random() < 0.5) {
+      const far = this.coins.length > 0 ? Math.min(...this.coins.map(c => c.z)) : 0
+      if (far < -12) this.spawnCoin()
     }
 
-    // Collision detection
-    const runnerLane = Math.round(this.currentLane)
+    // Collision
+    const rl = Math.round(this.currentLane)
     for (const obs of this.obstacles) {
       if (obs.hit) continue
-      if (Math.abs(obs.z) < 1.5 && obs.lane === runnerLane) {
+      if (Math.abs(obs.z) < 1.5 && obs.lane === rl) {
+        // Jump over low obstacles
+        if (obs.jumpable && this.jumpY > 0.8) continue
+        // Slide under high obstacles
+        if (!obs.jumpable && this.isSliding) continue
         obs.hit = true
         this.onHit()
-        this.spawnParticles(obs.mesh.position.x, 1.5, 0xef4444, 12)
+        this.spawnParticles(obs.mesh.position.x, 1.5, 0, 0xff4444, 10)
       }
     }
     for (const c of this.coins) {
       if (c.collected) continue
-      if (Math.abs(c.z) < 1.5 && c.lane === runnerLane) {
+      if (Math.abs(c.z) < 1.5 && c.lane === rl) {
         c.collected = true
         this.onCoin()
-        this.spawnParticles(c.mesh.position.x, 1.5, 0xffd700, 6)
+        this.spawnParticles(c.mesh.position.x, 1.8, 0, 0xffd700, 6)
       }
     }
 
-    // Quiz trigger
-    if (this.frame > 350 && this.frame % 500 === 0) {
+    // Quiz
+    if (this.quizCooldown > 0) this.quizCooldown--
+    if (this.frame > 300 && this.quizCooldown <= 0 && Math.random() < 0.003) {
       this.onQuiz()
+      this.quizCooldown = 500
     }
 
-    // Trail
-    for (let i = 0; i < this.trail.length; i++) {
-      const tr = this.trail[i]
-      if (this.runner) {
-        tr.position.x = this.runner.position.x + (Math.random() - 0.5) * 0.08
-        tr.position.z = i * 0.35
-        tr.position.y = 0.5 + Math.sin(this.frame * 0.1 + i) * 0.08
-      }
-      tr.material.opacity = 0.25 - i * 0.012
-    }
+    // Camera follow
+    this.camera.position.x += (this.runnerGroup.position.x * 0.3 - this.camera.position.x) * 0.05
+    this.camera.position.y = 5 + this.jumpY * 0.3 + Math.sin(this.frame * 0.05) * 0.1
 
     // Particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -444,66 +513,67 @@ class RunnerEngine {
       p.mesh.position.x += p.vx
       p.mesh.position.y += p.vy
       p.mesh.position.z += p.vz
-      p.vy -= 0.006
-      p.life -= 0.02
+      p.vy -= 0.008
+      p.life -= 0.025
       p.mesh.material.opacity = p.life
       p.mesh.material.transparent = true
       if (p.life <= 0) { this.scene.remove(p.mesh); this.particles.splice(i, 1) }
     }
 
-    // Camera bob
-    this.camera.position.x += (0 - this.camera.position.x) * 0.05
-    this.camera.position.y = 6 + Math.sin(this.frame * 0.08) * 0.15
-
-    // Render
     this.renderer.render(this.scene, this.camera)
   }
 
   private spawnObstacle() {
     if (!THREE) return
     const lane = Math.floor(Math.random() * 3)
-    const types = ['crate', 'barrier', 'spike']
+    const types = ['barrier', 'crate', 'rock']
     const type = types[Math.floor(Math.random() * types.length)]
     let mesh: any
+    let jumpable = false
 
-    if (type === 'crate') {
-      const s = 0.9 + Math.random() * 0.4
+    if (type === 'barrier') {
+      // Low barrier — can jump over
+      jumpable = true
       mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(s, s, s),
-        new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.5, roughness: 0.3, metalness: 0.5 })
+        new THREE.BoxGeometry(2.5, 0.8, 0.4),
+        new THREE.MeshStandardMaterial({ color: 0xdd6600, roughness: 0.4 })
       )
       mesh.castShadow = true
-    } else if (type === 'barrier') {
-      mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(2.8, 2, 0.4),
-        new THREE.MeshStandardMaterial({ color: 0xff6b00, emissive: 0xff4400, emissiveIntensity: 0.6, roughness: 0.2, metalness: 0.5 })
-      )
-      mesh.castShadow = true
-      const sMat = new THREE.MeshStandardMaterial({ color: 0xffdd00, emissive: 0xffaa00, emissiveIntensity: 1 })
+      // Stripes
+      const stripeMat = new THREE.MeshStandardMaterial({ color: 0xffdd00 })
       for (let s = -0.8; s <= 0.8; s += 0.5) {
-        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.42), sMat)
-        stripe.position.set(s, 0, 0)
-        mesh.add(stripe)
+        const st = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.42), stripeMat)
+        st.position.set(s, 0, 0)
+        mesh.add(st)
       }
-    } else {
+      mesh.position.set(this.LANE_X[lane], 0.5, -130)
+    } else if (type === 'crate') {
       mesh = new THREE.Mesh(
-        new THREE.ConeGeometry(0.65, 1.8, 4),
-        new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0x7700cc, emissiveIntensity: 0.6, roughness: 0.2, metalness: 0.7 })
+        new THREE.BoxGeometry(0.9, 0.9, 0.9),
+        new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.5 })
       )
       mesh.castShadow = true
+      mesh.position.set(this.LANE_X[lane], 0.55, -130)
+    } else {
+      // Rock — can slide under if it's a high obstacle
+      mesh = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.6, 0),
+        new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7, metalness: 0.2 })
+      )
+      mesh.castShadow = true
+      mesh.position.set(this.LANE_X[lane], 0.6, -130)
     }
 
-    mesh.position.set(this.LANE_X[lane], type === 'spike' ? 0.9 : 1, -130)
     this.scene.add(mesh)
-    this.obstacles.push({ mesh, lane, z: -130, type, hit: false })
+    this.obstacles.push({ mesh, lane, z: -130, type, hit: false, jumpable })
   }
 
   private spawnCoin() {
     if (!THREE) return
     const lane = Math.floor(Math.random() * 3)
     const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.35, 0.1, 16),
-      new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 1.5, roughness: 0.15, metalness: 0.9 })
+      new THREE.CylinderGeometry(0.3, 0.3, 0.08, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 1.5, metalness: 0.8, roughness: 0.2 })
     )
     mesh.rotation.x = Math.PI / 2
     mesh.position.set(this.LANE_X[lane], 1.5, -130)
@@ -515,16 +585,16 @@ class RunnerEngine {
     if (!THREE) return
     for (let i = 0; i < count; i++) {
       const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.07, 4, 4),
-        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 3 })
+        new THREE.SphereGeometry(0.06, 4, 4),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2 })
       )
       mesh.position.set(x, y, z)
       this.scene.add(mesh)
       this.particles.push({
         mesh,
-        vx: (Math.random() - 0.5) * 0.35,
-        vy: Math.random() * 0.25 + 0.08,
-        vz: (Math.random() - 0.5) * 0.35,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: Math.random() * 0.2 + 0.05,
+        vz: (Math.random() - 0.5) * 0.3,
         life: 1,
       })
     }
@@ -533,11 +603,10 @@ class RunnerEngine {
   dispose() {
     this.alive = false
     cancelAnimationFrame(this.animId)
+    if ((this as any)._onResize) window.removeEventListener('resize', (this as any)._onResize)
     if (this.renderer) {
       this.renderer.dispose()
-      if (this.renderer.domElement.parentElement) {
-        this.renderer.domElement.parentElement.removeChild(this.renderer.domElement)
-      }
+      this.renderer.domElement.remove()
     }
     if (this.scene) {
       this.scene.traverse((obj: any) => {
@@ -551,18 +620,20 @@ class RunnerEngine {
   }
 }
 
-// ─── Main Component ───────────────────────────────────────────────────
+let jumpSound = SFX.jump
 
-function GameInner() {
+// ─── React Component ──────────────────────────────────────────────────
+
+export default function KnowledgeRunnerPage() {
   const params = useParams()
   const router = useRouter()
   const resourceId = Number(params.id)
   const containerRef = useRef<HTMLDivElement>(null)
-  const engineRef = useRef<RunnerEngine | null>(null)
+  const engineRef = useRef<CityRunEngine | null>(null)
 
   const [resource, setResource] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [threeLoaded, setThreeLoaded] = useState(false)
+  const [engineReady, setEngineReady] = useState(false)
   const [questions, setQuestions] = useState<Question[]>([])
   const [currentQIndex, setCurrentQIndex] = useState(0)
   const [gameState, setGameState] = useState<GameState>('loading')
@@ -570,17 +641,17 @@ function GameInner() {
   const [lives, setLives] = useState(3)
   const [combo, setCombo] = useState(0)
   const [maxCombo, setMaxCombo] = useState(0)
-  const [speed, setSpeed] = useState(0.35)
-  const [distance, setDistance] = useState(0)
+  const [speed, setSpeed] = useState(0.3)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
   const [showExplanation, setShowExplanation] = useState(false)
+  const [slowMotion, setSlowMotion] = useState(true)
 
   const currentQ = questions[currentQIndex] || questions[0]
 
   useEffect(() => {
     libraryApi.getResource(resourceId).then(r => setResource(r.data)).catch(() => {})
-    loadThree().then(() => setThreeLoaded(true))
+    ensureThree().then(() => setEngineReady(true))
     return () => { engineRef.current?.dispose() }
   }, [resourceId])
 
@@ -600,7 +671,7 @@ function GameInner() {
         qList = [
           { question: `What is a key concept in ${resource?.title || 'this material'}?`, options: ['Core Principles', 'Random Guess', 'Skip It', 'None'], correctIndex: 0, explanation: 'Core principles drive understanding.' },
           { question: 'Best method for retention?', options: ['Active Recall', 'Skimming', 'Highlighting', 'Cramming'], correctIndex: 0, explanation: 'Active recall is scientifically proven.' },
-          { question: 'How to handle complex topics?', options: ['Break Down Step-by-Step', 'Skip to Easy', 'Memorize', 'Ignore'], correctIndex: 0, explanation: 'Decomposition builds mastery.' },
+          { question: 'How to handle complex topics?', options: ['Break It Down', 'Skip to Easy', 'Memorize', 'Ignore'], correctIndex: 0, explanation: 'Decomposition builds mastery.' },
         ]
       }
       setQuestions(qList)
@@ -622,7 +693,7 @@ function GameInner() {
   const startGame = useCallback(async () => {
     if (!containerRef.current) return
     engineRef.current?.dispose()
-    const engine = new RunnerEngine()
+    const engine = new CityRunEngine()
     engineRef.current = engine
 
     const ok = await engine.init(containerRef.current, {
@@ -640,6 +711,7 @@ function GameInner() {
         if (soundEnabled) SFX.coin()
       },
       onQuiz: () => {
+        if (slowMotion) engine.stop()
         setGameState('quiz')
         setSelectedAnswer(null)
         setShowExplanation(false)
@@ -648,18 +720,20 @@ function GameInner() {
 
     if (ok) {
       setScore(0); setLives(3); setCombo(0); setMaxCombo(0)
-      setCurrentQIndex(0); setDistance(0)
-      setSelectedAnswer(null); setShowExplanation(false)
+      setCurrentQIndex(0); setSelectedAnswer(null); setShowExplanation(false)
       setGameState('playing')
       engine.start()
-
-      // Speed ticker
       const ticker = setInterval(() => {
         if (engineRef.current) setSpeed(engineRef.current.getSpeed())
       }, 200)
-      return () => clearInterval(ticker)
+      ;(engine as any)._ticker = ticker
     }
-  }, [soundEnabled])
+  }, [soundEnabled, slowMotion])
+
+  const resumeGame = useCallback(() => {
+    setGameState('playing')
+    engineRef.current?.start()
+  }, [])
 
   const handleAnswer = useCallback((idx: number) => {
     if (selectedAnswer !== null) return
@@ -692,8 +766,13 @@ function GameInner() {
       toast.success('Mission Complete! +50 XP Awarded!')
       return
     }
-    setGameState('playing')
-  }, [lives, currentQIndex, questions.length, resourceId])
+    if (slowMotion) {
+      setGameState('playing')
+      engineRef.current?.start()
+    } else {
+      setGameState('playing')
+    }
+  }, [lives, currentQIndex, questions.length, resourceId, slowMotion])
 
   // Keyboard
   useEffect(() => {
@@ -702,26 +781,34 @@ function GameInner() {
       if (gameState === 'playing' && eng) {
         if (e.key === 'ArrowLeft' || e.key === 'a') eng.switchLane(-1)
         if (e.key === 'ArrowRight' || e.key === 'd') eng.switchLane(1)
+        if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') { e.preventDefault(); eng.jump() }
+        if (e.key === 'ArrowDown' || e.key === 's') eng.slide()
         if (e.key === 'Escape') { eng.stop(); setGameState('paused') }
       } else if (gameState === 'paused' && e.key === 'Escape') {
-        setGameState('playing'); startGame()
+        resumeGame()
       } else if (gameState === 'quiz' && e.key >= '1' && e.key <= '4') {
         handleAnswer(parseInt(e.key) - 1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [gameState, handleAnswer, startGame])
+  }, [gameState, handleAnswer, resumeGame])
 
   // Touch
   useEffect(() => {
-    let sx = 0
-    const onStart = (e: TouchEvent) => { sx = e.touches[0].clientX }
+    let sx = 0, sy = 0
+    const onStart = (e: TouchEvent) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY }
     const onEnd = (e: TouchEvent) => {
       if (gameState !== 'playing') return
       const dx = e.changedTouches[0].clientX - sx
-      if (Math.abs(dx) > 40 && engineRef.current) {
-        engineRef.current.switchLane(dx < 0 ? -1 : 1)
+      const dy = e.changedTouches[0].clientY - sy
+      const eng = engineRef.current
+      if (!eng) return
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+        eng.switchLane(dx < 0 ? -1 : 1)
+      } else if (Math.abs(dy) > 40) {
+        if (dy < 0) eng.jump()
+        else eng.slide()
       }
     }
     window.addEventListener('touchstart', onStart, { passive: true })
@@ -729,12 +816,12 @@ function GameInner() {
     return () => { window.removeEventListener('touchstart', onStart); window.removeEventListener('touchend', onEnd) }
   }, [gameState])
 
-  if (loading || !threeLoaded) {
+  if (loading || !engineReady) {
     return (
-      <div className="fixed inset-0 bg-[#030310] flex items-center justify-center text-white z-50">
+      <div className="fixed inset-0 bg-[#87ceeb] flex items-center justify-center text-white z-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-          <p className="font-extrabold text-slate-300 text-lg">
+          <div className="w-16 h-16 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+          <p className="font-extrabold text-white text-lg drop-shadow-md">
             {loading ? 'Loading questions...' : 'Loading 3D engine...'}
           </p>
         </div>
@@ -744,50 +831,56 @@ function GameInner() {
 
   return (
     <div className="fixed inset-0 bg-black text-white overflow-hidden select-none z-50">
-      {/* 3D Container */}
+      {/* 3D Canvas */}
       <div ref={containerRef} className="absolute inset-0" style={{ touchAction: 'none' }} />
 
       {/* HUD */}
       {(gameState === 'playing' || gameState === 'quiz') && (
         <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
-          <div className="flex items-center justify-between px-4 py-3 bg-black/30 backdrop-blur-sm border-b border-white/5 pointer-events-auto">
-            <button onClick={() => { engineRef.current?.stop(); setGameState('paused') }}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors">
-              <ArrowLeft className="w-4 h-4" /> Exit
-            </button>
+          <div className="flex items-center justify-between px-4 py-3 bg-black/20 backdrop-blur-sm pointer-events-auto">
             <div className="flex items-center gap-3">
-              <div className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-black">
-                <Trophy className="w-3.5 h-3.5 inline mr-1" />{score}
+              <button onClick={() => { engineRef.current?.stop(); setGameState('paused') }}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-colors backdrop-blur">
+                <ArrowLeft className="w-4 h-4" /> Exit
+              </button>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="px-3 py-1.5 rounded-xl bg-black/30 backdrop-blur text-amber-400 text-sm font-black">
+                <Trophy className="w-4 h-4 inline mr-1" />{score}
               </div>
               {combo > 1 && (
-                <div className="px-2.5 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-black animate-pulse">
-                  x{combo} COMBO
+                <div className="px-2.5 py-1.5 rounded-xl bg-purple-500/30 backdrop-blur text-purple-300 text-sm font-black animate-pulse">
+                  x{combo}
                 </div>
               )}
-              <div className="flex items-center gap-0.5 px-2 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-0.5 px-2 py-1.5 rounded-xl bg-black/30 backdrop-blur">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Heart key={i} className={`w-3.5 h-3.5 ${i < lives ? 'fill-red-500 text-red-500' : 'text-slate-700'}`} />
+                  <Heart key={i} className={`w-4 h-4 ${i < lives ? 'fill-red-500 text-red-500' : 'text-white/20'}`} />
                 ))}
               </div>
               <button onClick={() => setSoundEnabled(!soundEnabled)}
-                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors">
-                {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors backdrop-blur">
+                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </button>
             </div>
           </div>
-          <div className="absolute top-16 left-4 px-2 py-1 rounded-lg bg-black/50 text-[10px] font-bold text-slate-400">
+          <div className="absolute top-16 left-4 px-2 py-1 rounded-lg bg-black/30 backdrop-blur text-[10px] font-bold text-white/60">
             SPEED: {speed.toFixed(1)}x
           </div>
         </div>
       )}
 
-      {/* Mobile */}
+      {/* Mobile Controls */}
       {gameState === 'playing' && (
-        <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center gap-3 px-4 md:hidden pointer-events-auto">
+        <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center gap-2 px-4 md:hidden pointer-events-auto">
           <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.switchLane(-1) }}
-            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/5 border-white/10 text-white/60 active:scale-95 active:bg-primary/20 active:border-primary active:text-primary transition-all">⬅️ Left</button>
+            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">⬅️</button>
+          <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.jump() }}
+            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">⬆️ Jump</button>
+          <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.slide() }}
+            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">⬇️ Slide</button>
           <button onTouchStart={(e) => { e.preventDefault(); engineRef.current?.switchLane(1) }}
-            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/5 border-white/10 text-white/60 active:scale-95 active:bg-primary/20 active:border-primary active:text-primary transition-all">Right ➡️</button>
+            className="flex-1 py-4 rounded-2xl font-black text-sm border-2 bg-white/10 border-white/20 text-white active:scale-95 active:bg-white/20 transition-all backdrop-blur">➡️</button>
         </div>
       )}
 
@@ -795,12 +888,12 @@ function GameInner() {
       <AnimatePresence>
         {gameState === 'quiz' && currentQ && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.85, y: 30 }}
               className="bg-[#0f172a]/95 border border-cyan-500/30 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-[0_0_60px_rgba(6,182,212,0.15)]">
               <div className="text-center">
                 <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-[11px] font-black uppercase tracking-widest">
-                  ⚡ Quiz Gate — {currentQIndex + 1}/{questions.length}
+                  ⚡ Question {currentQIndex + 1}/{questions.length}
                 </span>
                 <h2 className="text-lg md:text-xl font-black text-white mt-3 leading-snug">{currentQ.question}</h2>
               </div>
@@ -850,25 +943,27 @@ function GameInner() {
       <AnimatePresence>
         {gameState === 'intro' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md p-4">
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
-              className="bg-[#0f172a]/95 border border-primary/30 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-[0_0_80px_rgba(245,158,11,0.15)]">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-amber-400 mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.4)]">
-                <Play className="w-8 h-8 text-black fill-black" />
-              </div>
-              <div>
-                <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[11px] font-black uppercase tracking-widest">3D Knowledge Runner</span>
-                <h1 className="text-2xl md:text-3xl font-black text-white mt-2">{resource?.title || 'Quiz Runner'}</h1>
-                <p className="text-slate-400 text-sm mt-2">Run through the neon city! Dodge crates, barriers and spikes. Collect coins. Smash quiz gates.</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-[11px] font-bold text-slate-400 bg-white/5 p-3 rounded-2xl border border-white/10">
-                <div className="text-center">⬅️ ➡️<br/>Switch Lanes</div>
-                <div className="text-center">🪙<br/>Collect Coins</div>
-                <div className="text-center">⚡<br/>Quiz Gates</div>
-              </div>
+              className="bg-[#0f172a]/90 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl">
+              <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-lg">City Run</h1>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                Use ← → to switch lanes, ↑ or Space to jump, ↓ to slide.<br/>
+                Answer each question by running into the lane holding the correct option.
+              </p>
+              <label className="flex items-center justify-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={slowMotion} onChange={e => setSlowMotion(e.target.checked)}
+                  className="w-4 h-4 rounded accent-primary" />
+                Slow motion — more time to read questions
+              </label>
+              <label className="flex items-center justify-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={soundEnabled} onChange={e => setSoundEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded accent-primary" />
+                Sound effects
+              </label>
               <button onClick={startGame}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-amber-400 text-black font-black text-base shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all">
-                START RUNNING
+                className="w-full py-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white font-black text-lg shadow-xl shadow-blue-500/30 hover:scale-[1.02] active:scale-95 transition-all">
+                Start Game
               </button>
             </motion.div>
           </motion.div>
@@ -879,15 +974,15 @@ function GameInner() {
       <AnimatePresence>
         {gameState === 'paused' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
               className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-8 max-w-sm w-full text-center space-y-5">
               <Pause className="w-12 h-12 text-primary mx-auto" />
               <h2 className="text-2xl font-black text-white">PAUSED</h2>
-              <button onClick={() => startGame()}
-                className="w-full py-3 rounded-xl bg-primary text-black font-black text-sm hover:scale-[1.02] active:scale-95 transition-all">RESUME</button>
+              <button onClick={resumeGame}
+                className="w-full py-3 rounded-xl bg-blue-500 text-white font-black text-sm hover:bg-blue-600 transition-all">Resume</button>
               <button onClick={() => { engineRef.current?.dispose(); router.push(`/library/${resourceId}`) }}
-                className="w-full py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all">EXIT</button>
+                className="w-full py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all">Exit</button>
             </motion.div>
           </motion.div>
         )}
@@ -897,12 +992,12 @@ function GameInner() {
       <AnimatePresence>
         {(gameState === 'gameover' || gameState === 'victory') && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
             <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }}
               className="bg-[#0f172a]/95 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl">
               <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
                 gameState === 'victory'
-                  ? 'bg-gradient-to-br from-amber-500 to-yellow-400 text-black shadow-[0_0_30px_rgba(245,158,11,0.4)]'
+                  ? 'bg-gradient-to-br from-amber-500 to-yellow-400 text-black'
                   : 'bg-gradient-to-br from-red-600 to-rose-800 text-white'
               }`}>
                 {gameState === 'victory' ? <Award className="w-8 h-8" /> : <span className="text-3xl">💀</span>}
@@ -925,28 +1020,20 @@ function GameInner() {
                   <p className="text-[10px] font-bold text-slate-500">MAX COMBO</p>
                 </div>
                 <div className="bg-white/5 p-3 rounded-xl border border-white/10">
-                  <p className="text-2xl font-black text-cyan-400">{Math.floor(distance / 10)}</p>
-                  <p className="text-[10px] font-bold text-slate-500">DISTANCE</p>
+                  <p className="text-2xl font-black text-cyan-400">{questions.length}</p>
+                  <p className="text-[10px] font-bold text-slate-500">QUESTIONS</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => startGame()}
-                  className="flex-1 py-3 rounded-xl bg-primary text-black font-black text-sm hover:scale-[1.02] active:scale-95 transition-all">RUN AGAIN</button>
+                  className="flex-1 py-3 rounded-xl bg-blue-500 text-white font-black text-sm hover:bg-blue-600 transition-all">Run Again</button>
                 <button onClick={() => { engineRef.current?.dispose(); router.push(`/library/${resourceId}`) }}
-                  className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all">EXIT</button>
+                  className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all">Exit</button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <div className="absolute bottom-2 left-0 right-0 text-center text-[10px] text-slate-600 z-20 pointer-events-none">
-        Knowledge Runner 3D • Immersive Arcade Engine
-      </div>
     </div>
   )
-}
-
-export default function KnowledgeRunnerPage() {
-  return <GameInner />
 }
