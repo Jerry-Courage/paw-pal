@@ -1529,30 +1529,28 @@ class AIService:
         resource.save(update_fields=['processing_progress', 'status_text'])
 
         # ─── MACRO-CHUNKING (Turbo Mode) ───
-        # 4K chunks — keep payloads within Groq limits to prevent 413 errors
-        chunk_size = 4000
-        overlap = 300
+        # 2.5K chunks — prompt template is ~3K chars, total payload must stay under Groq's limit
+        chunk_size = 2500
+        overlap = 200
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size - overlap)]
 
         # Multi-Modal Vision Context — send page images for BOTH videos AND PDFs/slides
         # For PDFs: vision_data contains full page renders from PyMuPDF
         # For videos: vision_data contains extracted frames
-        # Cap at 4 images per chunk to stay within token limits
+        # Cap at 2 images per chunk and compress to JPEG to stay within payload limits
         chat_vision_bundle = []
         if vision_data:
             import base64
-            # Pick representative pages spread across the document for first chunk
-            sample_pages = vision_data[:4] if len(vision_data) <= 4 else [
+            # Pick 2 representative images spread across the document
+            sample_pages = [
                 vision_data[0],
-                vision_data[len(vision_data) // 3],
-                vision_data[2 * len(vision_data) // 3],
-                vision_data[-1],
+                vision_data[len(vision_data) // 2] if len(vision_data) > 1 else vision_data[0],
             ]
             for p in sample_pages:
                 b64 = base64.b64encode(p['data']).decode('utf-8')
                 chat_vision_bundle.append({
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{b64}"}
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
                 })
 
         all_sections = []
@@ -1811,6 +1809,11 @@ class AIService:
         """Helper to run individual AI tasks with a watchdog timeout, supporting Multi-Modal inputs."""
         watchdog = ThreadPoolExecutor(max_workers=1)
         
+        # Truncate prompt if excessively long to prevent Groq 413
+        # Groq free-tier has strict payload limits; 10K chars is a safe ceiling
+        if len(prompt) > 10000:
+            prompt = prompt[:10000] + "\n\nReturn ONLY valid JSON."
+        
         user_content = [{"type": "text", "text": prompt}]
         if images:
             user_content += images # Inject base64 video frames/slides
@@ -1855,7 +1858,7 @@ class AIService:
                 b64 = base64.b64encode(p['data']).decode('utf-8')
                 imgs_content.append({
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{b64}"}
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
                 })
             
             persona = "academic scanner" if not is_video else "visual video analyzer"

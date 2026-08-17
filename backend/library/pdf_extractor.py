@@ -81,7 +81,9 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
                 try:
                     zoom_factor = 3 if total_pages <= 30 else 2
                     pix = page.get_pixmap(matrix=fitz.Matrix(zoom_factor, zoom_factor))
-                    content['page_images'].append({'page': i + 1, 'data': pix.tobytes('png')})
+                    # Convert to JPEG bytes for smaller payloads (5-10x smaller than PNG)
+                    jpeg_bytes = pix.tobytes('jpeg')
+                    content['page_images'].append({'page': i + 1, 'data': jpeg_bytes})
                 except Exception as e:
                     logger.warning(f'Page snapshot failed on {i+1}: {e}')
 

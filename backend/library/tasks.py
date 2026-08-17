@@ -439,9 +439,19 @@ def process_resource_task(res_id):
         # ─── VECTORIZATION & AI PROCESSING ───
         logger.info(f"[Task Queue] Processing Study Kit for Resource {res.id} (Context size: {len(text) if text else 'TITLE-ONLY'})")
         
+        def _sanitize_for_json(obj):
+            """Recursively convert sets and other non-serializable types to JSON-safe equivalents."""
+            if isinstance(obj, set):
+                return list(obj)
+            if isinstance(obj, dict):
+                return {k: _sanitize_for_json(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_sanitize_for_json(item) for item in obj]
+            return obj
+        
         if text:
             existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
-            res.ai_concepts = existing_concepts + [{'extracted_text': text[:300000]}]
+            res.ai_concepts = _sanitize_for_json(existing_concepts + [{'extracted_text': text[:300000]}])
             res.status_text = "Vectorizing content for RAG..."
             res.processing_progress = 30
             res.save()
@@ -498,7 +508,7 @@ def process_resource_task(res_id):
                     vision_data=vision_data
                 )
 
-            res.ai_notes_json = kit
+            res.ai_notes_json = _sanitize_for_json(kit)
             res.has_study_kit = True
             res.processing_progress = 100
             res.status_text = "Polishing complete!"
@@ -507,7 +517,7 @@ def process_resource_task(res_id):
         except Exception as e:
             logger.warning(f'[Task Queue] AI Study kit failed for {res.id} (API rate limit / error: {e}). Deploying Fallback Synthesis Kit...')
             kit = get_fallback_study_kit(res, text)
-            res.ai_notes_json = kit
+            res.ai_notes_json = _sanitize_for_json(kit)
             res.has_study_kit = True
             res.processing_progress = 100
             res.status_text = "Study kit ready (Fallback Synthesis Mode)"
