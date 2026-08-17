@@ -174,7 +174,10 @@ export const aiApi = {
   getLiveVisionWsUrl: async () => {
     const token = await getAuthToken()
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    return `${protocol}://${window.location.host}/ws/ai/live-vision/?token=${token}`
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+    const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api\/?$/, '')
+    const host = backendHost || window.location.host
+    return `${protocol}://${host}/ws/ai/live-vision/?token=${token}`
   },
   generateDiagram: (description: string, type: string, message_id?: number) =>
     api.post('/ai/diagram/', { description, type, message_id }),

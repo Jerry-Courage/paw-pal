@@ -389,13 +389,11 @@ function RichContent({ content }: { content: string }) {
 }
 
 // â”€â”€â”€ THINKING INDICATOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ThinkingIndicator({ action, isStreaming }: { action?: 'diagram' | 'image' | null; isStreaming?: boolean }) {
+function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) {
   const states = action === 'diagram'
     ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/5', border: 'border-violet-500/10', label: 'Drafting diagram...' }
     : action === 'image'
     ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/5', border: 'border-pink-500/10', label: 'Synthesizing image...' }
-    : isStreaming
-    ? { icon: Sparkles, color: 'text-primary', bg: 'bg-primary-container/5', border: 'border-orange-500/10', label: '' }
     : { icon: Sparkles, color: 'text-primary', bg: 'bg-primary-container/5', border: 'border-orange-500/10', label: 'Processing...' }
 
   const Icon = states.icon
@@ -577,7 +575,6 @@ function AIChat() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
   const [voiceDictating, setVoiceDictating] = useState(false)
-  const [streamingText, setStreamingText] = useState('')
   
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -778,111 +775,89 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT — SSE Streaming
+        // CHAT
         try {
           const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(query)
           const wantsImage = /generate.*image|image.*of|show.*me|picture.*of|illustrat/i.test(query)
           if (wantsDiagram) setPendingAction('diagram')
           else if (wantsImage) setPendingAction('image')
 
-          // Add placeholder message for streaming
-          const streamMsg: Message = { id: Date.now(), role: 'assistant', content: '', is_streaming: true }
-          setMessages(prev => [...prev, streamMsg])
+          setSending(true)
 
-          let fullContent = ''
-          let sessionId = activeSession?.id
-          let diagramCode: string | null = null
-          let imageUrl: string | null = null
-          let assistantMsgId: number | undefined
+          const response = await aiApi.askAgent(
+            query,
+            contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+            false,
+            undefined,
+            history.map(m => ({ role: m.role, content: m.content })),
+            false,
+            activeSession?.id
+          )
 
-          try {
-            for await (const chunk of aiApi.streamAgentResponse(
-              query,
-              contextType === 'resource' ? `resource_id:${selectedResource}` : '',
-              history.map(m => ({ role: m.role, content: m.content })),
-              false,
-              sessionId
-            )) {
-              if (typeof chunk === 'string') {
-                fullContent += chunk
-                setMessages(prev => {
-                  const updated = [...prev]
-                  updated[updated.length - 1] = { ...updated[updated.length - 1], content: fullContent }
-                  return updated
-                })
-              } else if (chunk.message_id) {
-                assistantMsgId = chunk.message_id
-                sessionId = chunk.session_id || sessionId
-              } else if (chunk.done) {
-                if (chunk.diagram) diagramCode = chunk.diagram
-                if (chunk.image_url) imageUrl = chunk.image_url
-                if (chunk.action?.tool === 'generate_diagram' && chunk.execution_result) {
-                  diagramCode = chunk.execution_result
-                }
-                if (chunk.action?.tool === 'generate_image' && chunk.execution_result) {
-                  imageUrl = chunk.execution_result
-                }
-              }
-            }
-          } catch (streamErr: any) {
-            if (!fullContent) {
-              toast.error('Stream interrupted')
-              setMessages(prev => prev.slice(0, -1))
-              return
-            }
-          }
+          if (response.data && response.data.reply) {
+            const diagramCode =
+              response.data.diagram ||
+              response.data.message?.diagram ||
+              response.data.message?.diagram_code ||
+              (response.data.action?.tool === 'generate_diagram' ? response.data.execution_result : null) ||
+              null
 
-          // Finalize message
-          setMessages(prev => {
-            const updated = [...prev]
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              content: fullContent.split('ACTION:')[0].trim(),
-              diagram: diagramCode || undefined,
+            const imageUrl =
+              response.data.message?.image ||
+              (response.data.action?.tool === 'generate_image' ? response.data.execution_result : null) ||
+              null
+
+            const assistantMsg: Message = {
+              id: Date.now(),
+              role: 'assistant',
+              content: response.data.reply,
               image: imageUrl || undefined,
-              is_streaming: false,
+              diagram: diagramCode || undefined,
             }
-            return updated
-          })
 
-          if (sessionId && (!activeSession || activeSession.id !== sessionId)) {
-            setActiveSession({ id: sessionId, title: query.slice(0, 60) || 'New Chat' })
-            queryClient.invalidateQueries({ queryKey: ['ai-sessions'] })
-          }
+            setMessages(prev => [...prev, assistantMsg])
 
-          // Background diagram/image generation
-          if (wantsDiagram && !diagramCode) {
-            setPendingAction('diagram')
-            aiApi.generateDiagram(query, 'auto', assistantMsgId).then(res => {
-              if (res.data.mermaid) {
-                setMessages(prev => {
-                  const updated = [...prev]
-                  for (let i = updated.length - 1; i >= 0; i--) {
-                    if (updated[i].role === 'assistant') { updated[i] = { ...updated[i], diagram: res.data.mermaid }; break }
-                  }
-                  return updated
-                })
+            if (response.data.session_id) {
+              if (!activeSession || activeSession.id !== response.data.session_id) {
+                setActiveSession({ id: response.data.session_id, title: query.slice(0, 60) || 'New Chat' })
+                queryClient.invalidateQueries({ queryKey: ['ai-sessions'] })
               }
-            }).catch(() => {}).finally(() => setPendingAction(null))
-          } else if (wantsImage && !imageUrl) {
-            setPendingAction('image')
-            aiApi.generateImage(query, assistantMsgId).then(res => {
-              if (res.data.url) {
-                setMessages(prev => {
-                  const updated = [...prev]
-                  for (let i = updated.length - 1; i >= 0; i--) {
-                    if (updated[i].role === 'assistant') { updated[i] = { ...updated[i], image: res.data.url }; break }
-                  }
-                  return updated
-                })
-              }
-            }).catch(() => {}).finally(() => setPendingAction(null))
-          } else {
-            setPendingAction(null)
+            }
+
+            // Background diagram/image generation
+            if (wantsDiagram && !diagramCode) {
+              setPendingAction('diagram')
+              aiApi.generateDiagram(query, 'auto', response.data.message_id || assistantMsg.id).then(res => {
+                if (res.data.mermaid) {
+                  setMessages(prev => {
+                    const updated = [...prev]
+                    for (let i = updated.length - 1; i >= 0; i--) {
+                      if (updated[i].role === 'assistant') { updated[i] = { ...updated[i], diagram: res.data.mermaid }; break }
+                    }
+                    return updated
+                  })
+                }
+              }).catch(() => {}).finally(() => setPendingAction(null))
+            } else if (wantsImage && !imageUrl) {
+              setPendingAction('image')
+              aiApi.generateImage(query, response.data.message_id || assistantMsg.id).then(res => {
+                if (res.data.url) {
+                  setMessages(prev => {
+                    const updated = [...prev]
+                    for (let i = updated.length - 1; i >= 0; i--) {
+                      if (updated[i].role === 'assistant') { updated[i] = { ...updated[i], image: res.data.url }; break }
+                    }
+                    return updated
+                  })
+                }
+              }).catch(() => {}).finally(() => setPendingAction(null))
+            } else {
+              setPendingAction(null)
+            }
           }
         } catch (err: any) {
-          console.error('Agent Error:', err);
-          toast.error(err.message || 'Intelligence Signal Interrupted');
+          console.error('Agent Error:', err)
+          toast.error(err.message || 'Intelligence Signal Interrupted')
         }
       }
 
@@ -1119,17 +1094,7 @@ function AIChat() {
                   onRegenerate={handleRegenerate}
                 />
               ))}
-              {messages.length > 0 && messages[messages.length - 1].is_streaming && (
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-container-high border border-outline-variant/25">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="px-5 py-3.5 rounded-2xl rounded-tl-none border backdrop-blur-md bg-primary-container/5 border-orange-500/10">
-                    <span className="inline-block w-2 h-5 bg-primary animate-pulse rounded-sm" style={{ animationDuration: '0.8s' }} />
-                  </div>
-                </div>
-              )}
-              {sending && !messages[messages.length - 1]?.is_streaming && <ThinkingIndicator action={pendingAction} />}
+              {sending && <ThinkingIndicator action={pendingAction} />}
               <div ref={bottomRef} className="h-4" />
             </div>
           )}
