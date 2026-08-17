@@ -33,7 +33,7 @@ def generate_gemini_tts_file(text, voice, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     clean_text = VoiceSanitizer.clean(text)
     if not clean_text.strip(): clean_text = "..."
-    if len(clean_text) > 1000: clean_text = clean_text[:1000]
+    if len(clean_text) > 5000: clean_text = clean_text[:5000]
 
     api_keys = [
         os.getenv('GOOGLE_STUDIO_API_KEY', ''),
@@ -136,16 +136,23 @@ def call_ai_with_retry(prompt, system_instruction, log_path, max_retries=3):
     return ""
 
 def generate_tts_file(text, voice, output_path, fast_mode=False):
-    # If a Gemini voice is requested and configured, try it, but fall back to edge-tts on failure
-    if voice in GEMINI_VOICES:
-        success = generate_gemini_tts_file(text, voice, output_path)
-        if success: return True
-        # Fallback to stable neural voice
-        voice = 'en-US-AndrewNeural'
-
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     clean_text = VoiceSanitizer.clean(text)
     if not clean_text.strip(): clean_text = "..."
+
+    # Map Gemini voices to Edge-TTS equivalents (Gemini TTS produces WAV, not MP3)
+    GEMINI_TO_EDGE = {
+        'Aoede': 'en-US-JennyNeural',
+        'Puck': 'en-US-ChristopherNeural',
+        'Kore': 'en-US-AvaNeural',
+        'Charon': 'en-US-AndrewNeural',
+        'Fenrir': 'en-US-AndrewNeural',
+        'Leda': 'en-US-AvaNeural',
+        'Zephyr': 'en-US-AvaNeural',
+        'Autonoe': 'en-US-EmmaNeural',
+    }
+    if voice in GEMINI_TO_EDGE:
+        voice = GEMINI_TO_EDGE[voice]
 
     rate = "+10%" if fast_mode else "+0%"
     cmd = [
@@ -158,9 +165,20 @@ def generate_tts_file(text, voice, output_path, fast_mode=False):
     
     for attempt in range(3):
         try:
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=25)
-            if result.returncode == 0:
+            temp_path = output_path + ".tmp"
+            cmd_with_temp = cmd[:-1] + [temp_path]
+            result = subprocess.run(cmd_with_temp, check=False, capture_output=True, text=True, timeout=45)
+            if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 500:
+                os.replace(temp_path, output_path)
                 return True
+            # Clean up partial temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            time.sleep(1)
+        except subprocess.TimeoutExpired:
+            # Clean up partial temp file on timeout
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             time.sleep(1)
         except:
             time.sleep(1)

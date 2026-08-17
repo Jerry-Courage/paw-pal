@@ -130,9 +130,14 @@ def bg_generate_script(session_id, notes):
                 out_dir = os.path.join(settings.MEDIA_ROOT, 'podcasts', str(res_id), str(ses_id))
                 os.makedirs(out_dir, exist_ok=True)
                 f_path = os.path.join(out_dir, f"{h}.mp3")
-                if not os.path.exists(f_path):
-                    from .podcast import generate_tts_file
-                    generate_tts_file(text, voice, f_path)
+                # Check if file exists AND is valid (>500 bytes — partial files are garbage)
+                if os.path.exists(f_path) and os.path.getsize(f_path) > 500:
+                    return
+                # Remove any stale partial file
+                if os.path.exists(f_path):
+                    os.remove(f_path)
+                from .podcast import generate_tts_file
+                generate_tts_file(text, voice, f_path)
             except Exception as e:
                 with open(os.path.join(settings.BASE_DIR, 'podcast_error.log'), 'a') as f:
                     f.write(f"\nTTS Worker Error: {str(e)}")
@@ -269,14 +274,14 @@ class PodcastInitView(APIView):
             except Resource.DoesNotExist:
                 return Response({'error': 'Resource not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            voice_a = request.data.get('voice_a', 'Aoede')
-            voice_b = request.data.get('voice_b', 'Puck')
+            voice_a = request.data.get('voice_a', 'en-US-ChristopherNeural')
+            voice_b = request.data.get('voice_b', 'en-US-JennyNeural')
 
             session = PodcastSession.objects.create(
                 resource=resource,
                 owner=request.user,
-                voice_a=SUPPORTED_VOICES.get(voice_a, 'Aoede'),
-                voice_b=SUPPORTED_VOICES.get(voice_b, 'Puck'),
+                voice_a=SUPPORTED_VOICES.get(voice_a, 'en-US-ChristopherNeural'),
+                voice_b=SUPPORTED_VOICES.get(voice_b, 'en-US-JennyNeural'),
                 status='generating',
                 script_chunks=[]
             )
@@ -389,7 +394,10 @@ class PodcastChunkAudioView(APIView):
         file_hash = hashlib.md5(text_content.encode('utf-8')).hexdigest()
         file_path = os.path.join(out_dir, f"{file_hash}.mp3")
         
-        if not os.path.exists(file_path):
+        if not os.path.exists(file_path) or os.path.getsize(file_path) < 500:
+            # Remove stale partial file if it exists
+            if os.path.exists(file_path):
+                os.remove(file_path)
             success = generate_tts_file(text_content, speaker_id, file_path)
             if not success:
                 return Response({'error': 'TTS failed'}, status=500)
@@ -557,8 +565,13 @@ class PodcastInterruptView(APIView):
                         h = hashlib.md5(chunk_text.strip().encode('utf-8')).hexdigest()
                         f_path = os.path.join(out_dir, f"{h}.mp3")
                         
-                        if not os.path.exists(f_path):
-                            generate_tts_file(chunk_text, v_id, f_path)
+                        # Check if file exists AND is valid (>500 bytes — partial files are garbage)
+                        if os.path.exists(f_path) and os.path.getsize(f_path) > 500:
+                            continue
+                        # Remove any stale partial file
+                        if os.path.exists(f_path):
+                            os.remove(f_path)
+                        generate_tts_file(chunk_text, v_id, f_path)
                 except Exception as e:
                     with open(log_path, 'a') as f: f.write(f"[PREWARM-FATAL] {str(e)}\n")
 
