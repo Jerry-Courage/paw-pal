@@ -24,13 +24,13 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
   const animFrameRef = useRef<number>(0)
   const canvasDrawRef = useRef<number>(0)
 
-  // Playback — single continuous ScriptProcessorNode draining a Float32 queue
+  // Playback state — gapless scheduling via source.start(scheduledTime)
   const playbackCtxRef = useRef<AudioContext | null>(null)
-  const playbackNodeRef = useRef<ScriptProcessorNode | null>(null)
-  const playbackQueueRef = useRef<Float32Array[]>([])
-  const playbackOffsetRef = useRef(0)
+  const nextPlayTimeRef = useRef(0)
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
+  const playDoneTimeoutRef = useRef<any>(null)
 
-  // Mic — separate AudioContext at 48kHz, downsampled to 16kHz for Gemini
+  // Mic state — ScriptProcessorNode with silent gain
   const micCtxRef = useRef<AudioContext | null>(null)
   const micNodeRef = useRef<ScriptProcessorNode | null>(null)
   const micMutedRef = useRef(false)
@@ -56,12 +56,14 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
     if (micStreamRef.current) { micStreamRef.current.getTracks().forEach(t => t.stop()); micStreamRef.current = null }
     if (micNodeRef.current) { micNodeRef.current.disconnect(); micNodeRef.current = null }
     if (micCtxRef.current) { micCtxRef.current.close(); micCtxRef.current = null }
-    if (playbackNodeRef.current) { playbackNodeRef.current.disconnect(); playbackNodeRef.current = null }
+    // Stop all active playback sources
+    activeSourcesRef.current.forEach(s => { try { s.stop() } catch {} })
+    activeSourcesRef.current = []
     if (playbackCtxRef.current) { playbackCtxRef.current.close(); playbackCtxRef.current = null }
+    if (playDoneTimeoutRef.current) clearTimeout(playDoneTimeoutRef.current)
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
     if (canvasDrawRef.current) cancelAnimationFrame(canvasDrawRef.current)
-    playbackQueueRef.current = []
-    playbackOffsetRef.current = 0
+    nextPlayTimeRef.current = 0
   }, [])
 
   const startCamera = useCallback(async () => {
@@ -82,7 +84,15 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
 
   const startMic = useCallback(async () => {
     try {
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: { ideal: 16000 },
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      })
       micStreamRef.current = micStream
 
       const ctx = new AudioContext({ sampleRate: 48000 })
@@ -97,7 +107,13 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
       const processor = ctx.createScriptProcessor(4096, 1, 1)
       micNodeRef.current = processor
       source.connect(processor)
-      processor.connect(ctx.destination)
+
+      // Connect to silent gain — required for onaudioprocess to fire,
+      // but prevents mic audio going to speakers (feedback loop)
+      const silentGain = ctx.createGain()
+      silentGain.gain.value = 0
+      processor.connect(silentGain)
+      silentGain.connect(ctx.destination)
 
       processor.onaudioprocess = (e) => {
         if (micMutedRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
@@ -118,47 +134,42 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
     }
   }, [])
 
-  const startPlaybackEngine = useCallback(() => {
-    if (playbackCtxRef.current) return
-    const ctx = new AudioContext({ sampleRate: 24000 })
-    playbackCtxRef.current = ctx
-    const processor = ctx.createScriptProcessor(4096, 1, 1)
-    playbackNodeRef.current = processor
-    processor.connect(ctx.destination)
-
-    processor.onaudioprocess = (e) => {
-      const output = e.outputBuffer.getChannelData(0)
-      const queue = playbackQueueRef.current
-      let written = 0
-
-      while (written < output.length && queue.length > 0) {
-        const chunk = queue[0]
-        const off = playbackOffsetRef.current
-        const avail = chunk.length - off
-        const toCopy = Math.min(output.length - written, avail)
-        output.set(chunk.subarray(off, off + toCopy), written)
-        written += toCopy
-        playbackOffsetRef.current = off + toCopy
-        if (playbackOffsetRef.current >= chunk.length) {
-          queue.shift()
-          playbackOffsetRef.current = 0
-        }
-      }
-      if (written < output.length) output.fill(0, written)
-    }
-  }, [])
-
   const enqueueAiAudio = useCallback((b64Pcm: string) => {
     if (speakerMuted) return
+
     const raw = atob(b64Pcm)
     const bytes = new Uint8Array(raw.length)
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
     const int16 = new Int16Array(bytes.buffer)
-    const float32 = new Float32Array(int16.length)
+    const pcm = new Float32Array(int16.length)
     for (let i = 0; i < int16.length; i++) {
-      float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7FFF)
+      pcm[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7FFF)
     }
-    playbackQueueRef.current.push(float32)
+
+    const ctx = playbackCtxRef.current || new AudioContext()
+    playbackCtxRef.current = ctx
+
+    const buffer = ctx.createBuffer(1, pcm.length, 24000)
+    buffer.copyToChannel(pcm as any, 0)
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+
+    // Schedule gapless — start exactly when previous chunk ends
+    const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
+    source.start(startAt)
+    nextPlayTimeRef.current = startAt + buffer.duration
+
+    activeSourcesRef.current.push(source)
+    source.onended = () => {
+      activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== source)
+    }
+
+    // Reset playhead after all chunks finish
+    clearTimeout(playDoneTimeoutRef.current)
+    playDoneTimeoutRef.current = setTimeout(() => {
+      nextPlayTimeRef.current = 0
+    }, (nextPlayTimeRef.current - ctx.currentTime) * 1000 + 500)
   }, [speakerMuted])
 
   const drawWaveform = useCallback(() => {
@@ -221,7 +232,6 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
               setAiStatusText('Camera active — show me something!')
               startFrameCapture()
               startMic()
-              startPlaybackEngine()
               break
             case 'ai_audio':
               enqueueAiAudio(msg.data)
@@ -264,7 +274,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
       toast.error('Failed to connect to live vision')
       setState('idle')
     }
-  }, [startFrameCapture, startMic, startPlaybackEngine, enqueueAiAudio, cleanup, state])
+  }, [startFrameCapture, startMic, enqueueAiAudio, cleanup, state])
 
   const endSession = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
