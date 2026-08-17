@@ -169,7 +169,7 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
                             },
                         },
                         'temperature': 0.7,
-                        'maxOutputTokens': 800,
+                        'maxOutputTokens': 4096,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
