@@ -8,7 +8,9 @@ import {
   Sparkles, Send, Plus, Loader2, Paperclip, X,
   Network, GitBranch, Menu, BarChart2, Wand2,
   MessageSquare, Copy, Check, Download, Trash2,
-  Image as ImageIcon, GitMerge, Maximize2
+  Image as ImageIcon, GitMerge, Maximize2,
+  Video, Mic, MicOff, Volume2, VolumeX, Zap,
+  Lightbulb, Brain, Calculator, BookOpen, RefreshCw
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -18,6 +20,8 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { normalizeForRendering } from '@/lib/mathFormatting'
+import dynamic from 'next/dynamic'
+const CameraVisionModal = dynamic(() => import('@/components/ai/CameraVisionModal'), { ssr: false })
 
 // â”€â”€â”€ LIGHTBOX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
@@ -249,6 +253,25 @@ function isMermaidCode(lang: string | undefined, code: string): boolean {
 }
 
 function RichContent({ content }: { content: string }) {
+  const CALLOUT_STYLES: Record<string, { icon: string; bg: string; border: string; label: string }> = {
+    NOTE: { icon: '💡', bg: 'bg-sky-500/5', border: 'border-sky-500/20', label: 'Note' },
+    TIP: { icon: '🔥', bg: 'bg-amber-500/5', border: 'border-amber-500/20', label: 'Tip' },
+    IMPORTANT: { icon: '⚡', bg: 'bg-purple-500/5', border: 'border-purple-500/20', label: 'Important' },
+    WARNING: { icon: '⚠️', bg: 'bg-red-500/5', border: 'border-red-500/20', label: 'Warning' },
+    FORMULA: { icon: '🧮', bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', label: 'Formula' },
+    KEY: { icon: '🗝️', bg: 'bg-primary/5', border: 'border-primary/20', label: 'Key Concept' },
+    EXAMPLE: { icon: '📝', bg: 'bg-violet-500/5', border: 'border-violet-500/20', label: 'Example' },
+    SUMMARY: { icon: '📊', bg: 'bg-pink-500/5', border: 'border-pink-500/20', label: 'Summary' },
+  }
+  const processCallouts = (text: string) => {
+    return text.replace(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|FORMULA|KEY|EXAMPLE|SUMMARY)\]\s*\n((?:>.*\n?)*)/gm,
+      (_match: string, type: string, body: string) => {
+        const style = CALLOUT_STYLES[type] || CALLOUT_STYLES.NOTE
+        const cleanBody = body.replace(/^>\s?/gm, '').trim()
+        return `<div class="${style.bg} ${style.border} border rounded-xl p-4 my-3"><div class="flex items-center gap-2 mb-2"><span class="text-sm">${style.icon}</span><span class="text-xs font-black uppercase tracking-widest text-on-surface/60">${style.label}</span></div><div class="text-sm text-on-surface/80 leading-relaxed">${cleanBody}</div></div>`
+      }
+    )
+  }
   // Split content into text segments and mermaid blocks (```mermaid ... ```)
   const parts: Array<{ type: 'text' | 'mermaid'; content: string }> = []
   // Match ```mermaid, ```graph LR, ```flowchart TD, etc. â€” capture the FULL first line as part of code
@@ -318,9 +341,14 @@ function RichContent({ content }: { content: string }) {
                 return (
                   <div className="my-4 rounded-xl overflow-hidden border border-outline-variant/30">
                     <div className="flex items-center justify-between px-4 py-2 bg-surface-container-high/80 border-b border-outline-variant/20">
-                      <span className="text-[10px] font-black text-on-surface-variant/50 uppercase tracking-widest">
-                        {lang || 'code'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-400/60" />
+                        <span className="w-2 h-2 rounded-full bg-yellow-400/60" />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400/60" />
+                        <span className="text-[10px] font-black text-on-surface-variant/50 uppercase tracking-widest ml-2">
+                          {lang || 'code'}
+                        </span>
+                      </div>
                       <button
                         onClick={() => { navigator.clipboard.writeText(codeStr); toast.success('Copied') }}
                         className="text-[10px] text-on-surface-variant/40 hover:text-primary transition-colors flex items-center gap-1"
@@ -352,7 +380,7 @@ function RichContent({ content }: { content: string }) {
               ),
             }}
           >
-            {normalizeForRendering(part.content)}
+            {normalizeForRendering(processCallouts(part.content))}
           </ReactMarkdown>
         )
       )}
@@ -361,11 +389,13 @@ function RichContent({ content }: { content: string }) {
 }
 
 // â”€â”€â”€ THINKING INDICATOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) {
+function ThinkingIndicator({ action, isStreaming }: { action?: 'diagram' | 'image' | null; isStreaming?: boolean }) {
   const states = action === 'diagram'
     ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/5', border: 'border-violet-500/10', label: 'Drafting diagram...' }
     : action === 'image'
     ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/5', border: 'border-pink-500/10', label: 'Synthesizing image...' }
+    : isStreaming
+    ? { icon: Sparkles, color: 'text-primary', bg: 'bg-primary-container/5', border: 'border-orange-500/10', label: '' }
     : { icon: Sparkles, color: 'text-primary', bg: 'bg-primary-container/5', border: 'border-orange-500/10', label: 'Processing...' }
 
   const Icon = states.icon
@@ -479,7 +509,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
 
         {/* Actions row — only for AI messages */}
         {!isUser && (
-          <div className="flex items-center gap-3 pl-0">
+          <div className="flex items-center gap-3 pl-0 mt-2">
             <button
               onClick={handleCopy}
               className="group/copy flex items-center gap-1.5 text-on-surface-variant/60 hover:text-primary transition-colors text-[10px] font-black uppercase tracking-widest"
@@ -494,11 +524,34 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
                   onClick={() => onRegenerate(index)}
                   className="group/regen flex items-center gap-1.5 text-on-surface-variant/60 hover:text-primary transition-colors text-[10px] font-black uppercase tracking-widest"
                 >
-                  <Wand2 className="w-3 h-3 group-hover/regen:rotate-12 transition-transform" />
+                  <RefreshCw className="w-3 h-3 group-hover/regen:rotate-12 transition-transform" />
                   Regenerate
                 </button>
               </>
             )}
+            <div className="h-1 w-1 rounded-full bg-surface-container-highest" />
+            <button
+              onClick={() => {
+                const u = new SpeechSynthesisUtterance(msg.content.replace(/[*_#`>\[\]!]/g, '').slice(0, 3000))
+                u.rate = 0.95
+                window.speechSynthesis.cancel()
+                window.speechSynthesis.speak(u)
+                toast.success('Reading aloud...')
+              }}
+              className="flex items-center gap-1.5 text-on-surface-variant/60 hover:text-emerald-400 transition-colors text-[10px] font-black uppercase tracking-widest"
+            >
+              <Volume2 className="w-3 h-3" /> Read Aloud
+            </button>
+            <div className="h-1 w-1 rounded-full bg-surface-container-highest" />
+            <button
+              onClick={() => {
+                window.speechSynthesis.cancel()
+                toast.success('Stopped reading')
+              }}
+              className="flex items-center gap-1.5 text-on-surface-variant/60 hover:text-red-400 transition-colors text-[10px] font-black uppercase tracking-widest"
+            >
+              <VolumeX className="w-3 h-3" /> Stop
+            </button>
           </div>
         )}
       </div>
@@ -522,6 +575,9 @@ function AIChat() {
   const [selectedResource, setSelectedResource] = useState<number | null>(null)
   const [activeSession, setActiveSession] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [voiceDictating, setVoiceDictating] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
   
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -722,93 +778,111 @@ function AIChat() {
            } catch(e) {}
         }
       } else {
-        // CHAT
+        // CHAT — SSE Streaming
         try {
           const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(query)
           const wantsImage = /generate.*image|image.*of|show.*me|picture.*of|illustrat/i.test(query)
           if (wantsDiagram) setPendingAction('diagram')
           else if (wantsImage) setPendingAction('image')
 
-          const response = await aiApi.askAgent(
-            query,
-            contextType === 'resource' ? `resource_id:${selectedResource}` : '',
-            false,
-            undefined,
-            history.map(m => ({ role: m.role, content: m.content })),
-            false,
-            activeSession?.id
-          );
+          // Add placeholder message for streaming
+          const streamMsg: Message = { id: Date.now(), role: 'assistant', content: '', is_streaming: true }
+          setMessages(prev => [...prev, streamMsg])
 
-          if (response.data && response.data.reply) {
-            const diagramCode =
-              response.data.diagram ||
-              response.data.message?.diagram ||
-              response.data.message?.diagram_code ||
-              (response.data.action?.tool === 'generate_diagram' ? response.data.execution_result : null) ||
-              null
+          let fullContent = ''
+          let sessionId = activeSession?.id
+          let diagramCode: string | null = null
+          let imageUrl: string | null = null
+          let assistantMsgId: number | undefined
 
-            const imageUrl =
-              response.data.message?.image ||
-              (response.data.action?.tool === 'generate_image' ? response.data.execution_result : null) ||
-              null
-
-            const assistantMsg: Message = {
-              id: Date.now(),
-              role: 'assistant',
-              content: response.data.reply,
-              image: imageUrl || undefined,
-              diagram: diagramCode || undefined,
-            };
-
-            setMessages(prev => [...prev, assistantMsg]);
-
-            if (response.data.session_id) {
-              if (!activeSession || activeSession.id !== response.data.session_id) {
-                setActiveSession({ id: response.data.session_id, title: query.slice(0, 60) || 'New Chat' });
-                queryClient.invalidateQueries({ queryKey: ['ai-sessions'] });
+          try {
+            for await (const chunk of aiApi.streamAgentResponse(
+              query,
+              contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+              history.map(m => ({ role: m.role, content: m.content })),
+              false,
+              sessionId
+            )) {
+              if (typeof chunk === 'string') {
+                fullContent += chunk
+                setMessages(prev => {
+                  const updated = [...prev]
+                  updated[updated.length - 1] = { ...updated[updated.length - 1], content: fullContent }
+                  return updated
+                })
+              } else if (chunk.message_id) {
+                assistantMsgId = chunk.message_id
+                sessionId = chunk.session_id || sessionId
+              } else if (chunk.done) {
+                if (chunk.diagram) diagramCode = chunk.diagram
+                if (chunk.image_url) imageUrl = chunk.image_url
+                if (chunk.action?.tool === 'generate_diagram' && chunk.execution_result) {
+                  diagramCode = chunk.execution_result
+                }
+                if (chunk.action?.tool === 'generate_image' && chunk.execution_result) {
+                  imageUrl = chunk.execution_result
+                }
               }
             }
-
-            if (wantsDiagram && !diagramCode) {
-              setPendingAction('diagram')
-              aiApi.generateDiagram(query, 'auto', response.data.message_id).then(res => {
-                if (res.data.mermaid) {
-                  setMessages(prev => {
-                    const updated = [...prev]
-                    for (let i = updated.length - 1; i >= 0; i--) {
-                      if (updated[i].role === 'assistant') {
-                        updated[i] = { ...updated[i], diagram: res.data.mermaid }
-                        break
-                      }
-                    }
-                    return updated
-                  })
-                }
-              }).catch(() => {}).finally(() => setPendingAction(null))
-            } else if (wantsImage && !imageUrl) {
-              setPendingAction('image')
-              aiApi.generateImage(query, response.data.message_id).then(res => {
-                if (res.data.url) {
-                  setMessages(prev => {
-                    const updated = [...prev]
-                    for (let i = updated.length - 1; i >= 0; i--) {
-                      if (updated[i].role === 'assistant') {
-                        updated[i] = { ...updated[i], image: res.data.url }
-                        break
-                      }
-                    }
-                    return updated
-                  })
-                }
-              }).catch(() => {}).finally(() => setPendingAction(null))
+          } catch (streamErr: any) {
+            if (!fullContent) {
+              toast.error('Stream interrupted')
+              setMessages(prev => prev.slice(0, -1))
+              return
             }
+          }
+
+          // Finalize message
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: fullContent.split('ACTION:')[0].trim(),
+              diagram: diagramCode || undefined,
+              image: imageUrl || undefined,
+              is_streaming: false,
+            }
+            return updated
+          })
+
+          if (sessionId && (!activeSession || activeSession.id !== sessionId)) {
+            setActiveSession({ id: sessionId, title: query.slice(0, 60) || 'New Chat' })
+            queryClient.invalidateQueries({ queryKey: ['ai-sessions'] })
+          }
+
+          // Background diagram/image generation
+          if (wantsDiagram && !diagramCode) {
+            setPendingAction('diagram')
+            aiApi.generateDiagram(query, 'auto', assistantMsgId).then(res => {
+              if (res.data.mermaid) {
+                setMessages(prev => {
+                  const updated = [...prev]
+                  for (let i = updated.length - 1; i >= 0; i--) {
+                    if (updated[i].role === 'assistant') { updated[i] = { ...updated[i], diagram: res.data.mermaid }; break }
+                  }
+                  return updated
+                })
+              }
+            }).catch(() => {}).finally(() => setPendingAction(null))
+          } else if (wantsImage && !imageUrl) {
+            setPendingAction('image')
+            aiApi.generateImage(query, assistantMsgId).then(res => {
+              if (res.data.url) {
+                setMessages(prev => {
+                  const updated = [...prev]
+                  for (let i = updated.length - 1; i >= 0; i--) {
+                    if (updated[i].role === 'assistant') { updated[i] = { ...updated[i], image: res.data.url }; break }
+                  }
+                  return updated
+                })
+              }
+            }).catch(() => {}).finally(() => setPendingAction(null))
+          } else {
+            setPendingAction(null)
           }
         } catch (err: any) {
           console.error('Agent Error:', err);
-          const errMsg = err.response?.data?.error || err.message || 'Intelligence Signal Interrupted';
-          toast.error(errMsg);
-        } finally {
-          setPendingAction(null)
+          toast.error(err.message || 'Intelligence Signal Interrupted');
         }
       }
 
@@ -1011,6 +1085,15 @@ function AIChat() {
               <p className="text-on-surface-variant/60 text-xs sm:text-sm max-w-sm mb-6 sm:mb-8 leading-relaxed">
                 Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
               </p>
+              <div className="flex items-center gap-3 mb-6">
+                <button
+                  onClick={() => setCameraOpen(true)}
+                  className="flex items-center gap-2.5 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Video className="w-4 h-4" />
+                  Live Camera Vision
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-xl">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
@@ -1036,7 +1119,17 @@ function AIChat() {
                   onRegenerate={handleRegenerate}
                 />
               ))}
-              {sending && <ThinkingIndicator action={pendingAction} />}
+              {messages.length > 0 && messages[messages.length - 1].is_streaming && (
+                <div className="flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-container-high border border-outline-variant/25">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="px-5 py-3.5 rounded-2xl rounded-tl-none border backdrop-blur-md bg-primary-container/5 border-orange-500/10">
+                    <span className="inline-block w-2 h-5 bg-primary animate-pulse rounded-sm" style={{ animationDuration: '0.8s' }} />
+                  </div>
+                </div>
+              )}
+              {sending && !messages[messages.length - 1]?.is_streaming && <ThinkingIndicator action={pendingAction} />}
               <div ref={bottomRef} className="h-4" />
             </div>
           )}
@@ -1079,13 +1172,57 @@ function AIChat() {
                 </button>
                 <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
 
+                {/* Voice Dictation Button */}
+                <button
+                  onClick={() => {
+                    if (voiceDictating) {
+                      setVoiceDictating(false)
+                      toast.info('Dictation stopped')
+                      return
+                    }
+                    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+                    if (!SpeechRecognition) {
+                      toast.error('Speech recognition not supported in this browser')
+                      return
+                    }
+                    const recognition = new SpeechRecognition()
+                    recognition.continuous = true
+                    recognition.interimResults = true
+                    recognition.lang = 'en-US'
+                    recognition.onresult = (event: any) => {
+                      let transcript = ''
+                      for (let i = event.resultIndex; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript
+                      }
+                      setInput(transcript)
+                    }
+                    recognition.onerror = () => setVoiceDictating(false)
+                    recognition.onend = () => setVoiceDictating(false)
+                    recognition.start()
+                    setVoiceDictating(true)
+                    // Auto-stop after 30s
+                    setTimeout(() => { recognition.stop(); setVoiceDictating(false) }, 30000)
+                  }}
+                  className={cn('p-2 transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer',
+                    voiceDictating ? 'text-red-400 animate-pulse' : 'text-on-surface-variant/40 hover:text-primary'
+                  )} title="Voice Dictation">
+                  {voiceDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+
+                {/* Camera Vision Button */}
+                <button
+                  onClick={() => setCameraOpen(true)}
+                  className="p-2 text-on-surface-variant/40 hover:text-emerald-400 transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer" title="Live Camera Vision">
+                  <Video className="w-4 h-4" />
+                </button>
+
                 {/* Textarea */}
                 <textarea
                   ref={textareaRef}
                   value={input}
                   onChange={handleInput}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask Flow AI anything..."
+                  placeholder={voiceDictating ? 'Listening...' : 'Ask Flow AI anything...'}
                   className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] text-on-surface placeholder-on-surface-variant/40 py-2 px-1 min-h-[36px] max-h-[120px]"
                   style={{ lineHeight: '1.5' }}
                   rows={1}
@@ -1106,6 +1243,8 @@ function AIChat() {
         </div>
       </div>
 
+      {/* Camera Vision Modal */}
+      {cameraOpen && <CameraVisionModal onClose={() => setCameraOpen(false)} />}
     </div>
   )
 }

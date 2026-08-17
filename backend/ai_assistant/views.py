@@ -505,7 +505,39 @@ class VisionMessageView(APIView):
         history = list(session.messages.order_by('created_at'))
         history_msgs = [{'role': m.role, 'content': m.content} for m in history[-10:]]
 
-        if uploaded_file:
+        # Accept base64 image data from JSON payloads (e.g. camera snapshots)
+        image_b64_data = request.data.get('image')
+        if image_b64_data and not uploaded_file:
+            import base64 as b64_mod
+            import uuid
+            from django.conf import settings
+            from django.core.files.storage import default_storage
+            from django.core.files.base import ContentFile
+
+            if ';base64,' in image_b64_data:
+                mime_part, b64_part = image_b64_data.split(';base64,', 1)
+                mime_type = mime_part.replace('data:', '')
+            else:
+                b64_part = image_b64_data
+                mime_type = 'image/jpeg'
+
+            raw_bytes = b64_mod.b64decode(b64_part)
+            ext = '.jpg' if 'jpeg' in mime_type or 'jpg' in mime_type else f".{mime_type.split('/')[-1].split('+')[0]}"
+            file_name = f"chat_uploads/{uuid.uuid4()}{ext}"
+            path = default_storage.save(file_name, ContentFile(raw_bytes))
+            file_url = f"{settings.MEDIA_URL}{path}"
+
+            messages_to_send = history_msgs + [{
+                'role': 'user',
+                'content': [
+                    { 'type': 'text', 'text': content if content else 'Please analyze this image.' },
+                    { 'type': 'image_url', 'image_url': { 'url': image_b64_data } }
+                ]
+            }]
+            display_content = f"[Camera Snapshot]{chr(10)}{content}" if content else "[Camera Snapshot]"
+            is_vision = True
+
+        elif uploaded_file:
             import os
             import uuid
             from django.conf import settings

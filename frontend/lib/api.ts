@@ -162,13 +162,19 @@ export const aiApi = {
   deleteSession: (id: number) => api.delete(`/ai/sessions/${id}/`),
   sendMessage: (sessionId: number, content: string, config?: any) =>
     api.post(`/ai/sessions/${sessionId}/message/`, { content }, config),
-  sendVisionMessage: (sessionId: number, content: string, file?: File, config?: any) => {
+  sendVisionMessage: (sessionId: number, content: string, file?: File, imageDataUrl?: string, config?: any) => {
     const fd = new FormData()
     if (content) fd.append('content', content)
     if (file) fd.append('file', file)
+    if (imageDataUrl) fd.append('image', imageDataUrl)
     return api.post(`/ai/sessions/${sessionId}/message/vision/`, fd, {
       ...config,
     })
+  },
+  getLiveVisionWsUrl: async () => {
+    const token = await getAuthToken()
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${window.location.host}/ws/ai/live-vision/?token=${token}`
   },
   generateDiagram: (description: string, type: string, message_id?: number) =>
     api.post('/ai/diagram/', { description, type, message_id }),
