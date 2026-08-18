@@ -439,23 +439,25 @@ class AIService:
             for key in groq_keys:
                 for groq_model, groq_timeout in models_to_try:
                     try:
-                        # Guard: aggressively compress messages for Groq's ~6KB payload limit.
+                        # Guard: aggressively compress messages for Groq's ~4KB payload limit.
                         # Strip system prompt entirely (it's ~2KB), keep only last user message.
                         import json as _json
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
-                        if payload_bytes > 6000:
+                        if payload_bytes > 4000:
                             # Build a lean message list: drop system prompt, keep only last user message
                             user_msgs = [m for m in messages if m.get('role') == 'user']
                             last_user = user_msgs[-1] if user_msgs else {'role': 'user', 'content': ''}
-                            # Aggressively truncate the content
+                            # Aggressively truncate the content, strip images for text-only Groq
                             content = last_user.get('content', '')
                             if isinstance(content, str):
                                 content = content[:2000]
                             elif isinstance(content, list):
+                                text_parts = []
                                 for part in content:
                                     if isinstance(part, dict) and part.get('type') == 'text':
-                                        part['text'] = part['text'][:2000]
+                                        text_parts.append({'type': 'text', 'text': part['text'][:2000]})
+                                content = text_parts if text_parts else ''
                             lean_msgs = [{'role': 'user', 'content': content}]
                             groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': max_tokens}
                             new_bytes = len(_json.dumps(groq_payload).encode())
@@ -558,11 +560,11 @@ class AIService:
                     ('openai/gpt-oss-120b', 45),             # 500 t/s — largest model
                 ]:
                     try:
-                        # Guard: aggressively compress messages for Groq's ~6KB payload limit.
+                        # Guard: aggressively compress messages for Groq's ~4KB payload limit.
                         import json as _json
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
-                        if payload_bytes > 6000:
+                        if payload_bytes > 4000:
                             # Build a lean message list: drop system prompt, keep only last user message
                             user_msgs = [m for m in messages if m.get('role') == 'user']
                             last_user = user_msgs[-1] if user_msgs else {'role': 'user', 'content': ''}
@@ -570,9 +572,11 @@ class AIService:
                             if isinstance(content, str):
                                 content = content[:2000]
                             elif isinstance(content, list):
+                                text_parts = []
                                 for part in content:
                                     if isinstance(part, dict) and part.get('type') == 'text':
-                                        part['text'] = part['text'][:2000]
+                                        text_parts.append({'type': 'text', 'text': part['text'][:2000]})
+                                content = text_parts if text_parts else ''
                             lean_msgs = [{'role': 'user', 'content': content}]
                             groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': max_tokens}
                             new_bytes = len(_json.dumps(groq_payload).encode())
@@ -1346,15 +1350,18 @@ class AIService:
                             resp = await client.post(
                                 GROQ_API_URL,
                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                json={'model': model, 'messages': messages, 'max_tokens': 80},
-                                timeout=8,
+                                json={'model': model, 'messages': messages, 'max_tokens': 150},
+                                timeout=10,
                             )
                             if resp.status_code == 200:
                                 result = resp.json()["choices"][0]["message"]["content"].strip()
-                                # Strip <think>...</think> tags (Qwen reasoning leak)
                                 import re as _re
                                 result = _re.sub(r'<think>.*?</think>', '', result, flags=_re.DOTALL).strip()
                                 if result and len(result) > 10:
+                                    leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive', 'Output ONLY']
+                                    if any(sig.lower() in result.lower() for sig in leak_signals):
+                                        logger.warning(f"[StudyNudge] {model} echoed prompt — skipping")
+                                        continue
                                     logger.info(f"[StudyNudge] ✓ {model}")
                                     return result
                     except Exception as e:
@@ -1369,13 +1376,7 @@ class AIService:
 
         if not result:
             return ''
-        result = result.strip()
-        # Sanity check: if the result looks like the prompt leaked back, discard it
-        leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive', 'Output ONLY']
-        if any(sig.lower() in result.lower() for sig in leak_signals):
-            logger.warning("[StudyNudge] Prompt leaked into response — discarding.")
-            return ''
-        return result
+        return result.strip()
 
     def group_chat_assist(self, group_name: str, context: str, question: str) -> str:
         system = (
