@@ -67,7 +67,7 @@ ALLOWED_EXTENSIONS = {
 def _get_max_upload_size():
     from library.hybrid_storage import _r2_configured, CLOUDINARY_LIMIT
     if _r2_configured():
-        return 50 * 1024 * 1024  # 50MB with R2
+        return 200 * 1024 * 1024  # 200MB with R2 (R2 supports up to 5GB)
     return CLOUDINARY_LIMIT      # 10MB Cloudinary only
 
 

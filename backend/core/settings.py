@@ -306,8 +306,8 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ─── File Upload Security ─────────────────────────────────────────────────────
-DATA_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 262144000  # 250MB — matches R2 upload limit
+FILE_UPLOAD_MAX_MEMORY_SIZE = 262144000  # 250MB — matches R2 upload limit
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB (Cloudinary free tier limit)
 ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.pptx', '.txt', '.py', '.js', '.ts', '.jpg', '.jpeg', '.png', '.mp4', '.heic', '.heif']
 API_URL = os.getenv('API_URL', os.getenv('RENDER_EXTERNAL_URL', 'http://localhost:8000'))
