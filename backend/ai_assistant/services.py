@@ -434,11 +434,29 @@ class AIService:
             for key in groq_keys:
                 for groq_model, groq_timeout in models_to_try:
                     try:
+                        # Guard: trim last user message if payload is too large for Groq
+                        import json as _json
+                        groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
+                        payload_bytes = len(_json.dumps(groq_payload).encode())
+                        if payload_bytes > 6000:
+                            for msg in reversed(messages):
+                                if msg.get('role') == 'user':
+                                    content = msg.get('content', '')
+                                    if isinstance(content, str):
+                                        msg['content'] = content[:4000] + "\n\n[Truncated for Groq payload limit]"
+                                    elif isinstance(content, list):
+                                        for part in content:
+                                            if isinstance(part, dict) and part.get('type') == 'text':
+                                                part['text'] = part['text'][:4000] + "\n\n[Truncated for Groq payload limit]"
+                                    break
+                            groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
+                            logger.warning(f"[Groq Chat] Payload {payload_bytes} bytes — trimmed to fit")
+
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
                                 GROQ_API_URL,
                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                                json=groq_payload,
                                 timeout=groq_timeout,
                             )
                             if resp.status_code == 200:
@@ -555,11 +573,31 @@ class AIService:
                     ('openai/gpt-oss-120b', 45),             # 500 t/s — smart fallback
                 ]:
                     try:
+                        # Guard: Groq free-tier has strict payload limits (~6KB safe).
+                        # If messages are too large, trim the last user message.
+                        import json as _json
+                        groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
+                        payload_bytes = len(_json.dumps(groq_payload).encode())
+                        if payload_bytes > 6000:
+                            # Truncate the last user message content to fit
+                            for msg in reversed(messages):
+                                if msg.get('role') == 'user':
+                                    content = msg.get('content', '')
+                                    if isinstance(content, str):
+                                        msg['content'] = content[:4000] + "\n\n[Truncated for Groq payload limit]"
+                                    elif isinstance(content, list):
+                                        for part in content:
+                                            if isinstance(part, dict) and part.get('type') == 'text':
+                                                part['text'] = part['text'][:4000] + "\n\n[Truncated for Groq payload limit]"
+                                    break
+                            groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
+                            logger.warning(f"[Groq Kit] Payload {payload_bytes} bytes — trimmed last message to fit")
+
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
                                 GROQ_API_URL,
                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens},
+                                json=groq_payload,
                                 timeout=groq_timeout,
                             )
                             if resp.status_code == 200:
