@@ -121,6 +121,10 @@ FALLBACK_MODELS = [
 CEREBRAS_API_URL  = "https://api.cerebras.ai/v1/chat/completions"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# Session-level flag: set True when ALL Groq keys return 413 (keys exhausted/rate-limited)
+# Once set, skip Groq entirely for the rest of the server process lifetime
+_GROQ_DEAD = False
+
 # ─── MODEL ROUTING STRATEGY ────────────────────────────────────────────────────
 #
 #  CHAT (fast, conversational — needs speed)
@@ -173,9 +177,14 @@ CONVERSATIONAL GUIDELINES (CRITICAL FOR VOICE & VIBE):
 - BE AWESOME: Use a cool, expressive, and natural tone. Match the student's energy.
 - WITTY BANTER: Use clever academic humor or witty observations when appropriate. Stay lighthearted but focused on the win.
 - PEER-TO-PEER: Speak like a brilliant upper-classman or a study squad leader. Use phrases like "Wait, check this out," "Let's crush this," or "Awesome!"
-- THOROUGH & STRUCTURED: Give detailed, complete explanations. Don't just state facts — explain the why, the how, and the connection. Use examples, step-by-step breakdowns, and real-world analogies. A good answer is thorough but well-organized, not short and vague.
 - STRICT NO EMOJIS: Never use emojis (👋, ✨, etc.). The voice engine can't say them.
 - NO ROBOT SPEECH: Avoid "I will now summarize..." Just say "Here's the lowdown..." or "Check out these key hits..."
+
+RESPONSE LENGTH MATCHING (CRITICAL):
+- Match your response length to the user's message length and intent.
+- Short casual messages (greetings, "hi", "thanks", "cool", one-liners): Reply with 1-2 casual sentences max. Be brief, punchy, and fun. Don't write an essay for "hi".
+- Study questions, homework help, deep topics: Go detailed and thorough. Use structure, examples, step-by-step breakdowns.
+- If the user says something casual like "hi", "hey", "what's up", "thanks", "lol", "nice" — keep it SHORT and natural. Think text message, not essay.
 
 MATH & SCIENCE PROTOCOL:
 - STEP-BY-STEP: When solving math or science problems, ALWAYS use a clear, numbered step-by-step approach. Start with the 'Core Concept' and end with the 'Final Result'.
@@ -423,9 +432,10 @@ class AIService:
             return "Flow AI is temporarily overloaded. Please try again in a moment."
             
         # ── STAGE 0: GROQ (all keys) — fastest inference on the planet ─────
+        global _GROQ_DEAD
         groq_keys = self._groq_keys()
 
-        if groq_keys and not has_images:
+        if groq_keys and not has_images and not _GROQ_DEAD:
             # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
             models_to_try = [
                 ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — proven working
@@ -435,6 +445,8 @@ class AIService:
                 ('qwen/qwen3.6-27b', 8),              # 500 t/s — 413 on chat (last resort)
             ]
             
+            _groq_success = False
+            _groq_429 = False
             for key in groq_keys:
                 for groq_model, groq_timeout in models_to_try:
                     try:
@@ -475,12 +487,19 @@ class AIService:
                                     logger.info(f"[Groq Chat] ✓ {groq_model} (tutor_mode={is_tutor_mode})")
                                     return result
                             elif resp.status_code == 429:
+                                _groq_429 = True
                                 await asyncio.sleep(0.2 if is_tutor_mode else 0.3)
                             elif resp.status_code == 413:
                                 logger.warning(f"[Groq Chat] 413 Payload Too Large for {groq_model} on key {key[:12]}… — trying next model")
                                 break  # skip remaining keys for THIS model, move to next model
                     except Exception as e:
                         logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
+
+        # If we exhausted all keys/models without success, mark Groq as dead for this session
+        # But only if it was 413 (key limit), not 429 (rate limit — keys still work)
+        if not _GROQ_DEAD and not _groq_429:
+            _GROQ_DEAD = True
+            logger.warning("[Groq Chat] All Groq keys/models failed with 413 — marking as dead, skipping Groq for rest of session")
 
         # ── STAGE 2: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ─────
 
@@ -551,7 +570,8 @@ class AIService:
         """
         # ── STAGE 0: GROQ — fastest inference on the planet ────────────────
         groq_keys = self._groq_keys()
-        if groq_keys:
+        _kit_groq_429 = False
+        if groq_keys and not _GROQ_DEAD:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
                     ('openai/gpt-oss-20b', 30),              # 1000 t/s — proven working
@@ -594,9 +614,14 @@ class AIService:
                                     logger.info(f"[Groq Kit] ✓ {groq_model}")
                                     return result
                             elif resp.status_code == 429:
+                                _kit_groq_429 = True
                                 await asyncio.sleep(0.5)
                     except Exception as e:
                         logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
+
+        if not _GROQ_DEAD and not _kit_groq_429 and groq_keys:
+            _GROQ_DEAD = True
+            logger.warning("[Groq Kit] All Groq keys/models failed with 413 — marking as dead for rest of session")
 
         # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ──────
 
