@@ -450,10 +450,11 @@ class AIService:
             for key in groq_keys:
                 for groq_model, groq_timeout in models_to_try:
                     try:
-                        # Guard: aggressively compress messages for Groq's ~4KB payload limit.
-                        # Strip system prompt entirely (it's ~2KB), keep only last user message.
+                        # Guard: Groq models have small context windows (~8K).
+                        # Cap max_tokens to avoid exceeding the model's output limit.
                         import json as _json
-                        groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
+                        safe_max_tokens = min(max_tokens, 1024)
+                        groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
                         if payload_bytes > 4000:
                             # Build a lean message list: drop system prompt, keep only last user message
@@ -470,7 +471,7 @@ class AIService:
                                         text_parts.append({'type': 'text', 'text': part['text'][:2000]})
                                 content = text_parts if text_parts else ''
                             lean_msgs = [{'role': 'user', 'content': content}]
-                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': max_tokens}
+                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': safe_max_tokens}
                             new_bytes = len(_json.dumps(groq_payload).encode())
                             logger.warning(f"[Groq Chat] Payload {payload_bytes}→{new_bytes} bytes — compressed for Groq")
 
@@ -582,9 +583,10 @@ class AIService:
                     ('qwen/qwen3.6-27b', 30),               # 500 t/s — 413 on chat (last resort)
                 ]:
                     try:
-                        # Guard: aggressively compress messages for Groq's ~4KB payload limit.
+                        # Guard: cap max_tokens for Groq's small context windows (~8K).
                         import json as _json
-                        groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
+                        safe_max_tokens = min(max_tokens, 1024)
+                        groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
                         if payload_bytes > 4000:
                             # Build a lean message list: drop system prompt, keep only last user message
@@ -600,7 +602,7 @@ class AIService:
                                         text_parts.append({'type': 'text', 'text': part['text'][:2000]})
                                 content = text_parts if text_parts else ''
                             lean_msgs = [{'role': 'user', 'content': content}]
-                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': max_tokens}
+                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': safe_max_tokens}
                             new_bytes = len(_json.dumps(groq_payload).encode())
                             logger.warning(f"[Groq Kit] Payload {payload_bytes}→{new_bytes} bytes — compressed for Groq")
 
