@@ -111,8 +111,9 @@ class VoiceSanitizer:
         return text
 
 FALLBACK_MODELS = [
-    'models/gemma-4-31b-it',         # SUPREME: Unlimited Tokens
-    'models/gemma-4-26b-a4b-it',     # STABLE: Unlimited Tokens
+    'openai/gpt-4o-mini',
+    'openai/gpt-4o',
+    'anthropic/claude-3-haiku',
     'openrouter/auto',
 ]
 
@@ -423,12 +424,12 @@ class AIService:
         if groq_keys and not has_images:
             # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
             models_to_try = [
+                ('qwen/qwen3.6-27b', 4 if is_tutor_mode else 6),        # 500 t/s — most reliable
                 ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — fastest
-                ('qwen/qwen3.6-27b', 4 if is_tutor_mode else 6),        # 500 t/s — smart
             ] if is_tutor_mode else [
-                ('openai/gpt-oss-120b', 8),          # 500 t/s — smart
+                ('qwen/qwen3.6-27b', 8),              # 500 t/s — most reliable, large context
                 ('openai/gpt-oss-20b', 6),            # 1000 t/s — fastest
-                ('qwen/qwen3.6-27b', 6),              # 500 t/s — reliable fallback
+                ('openai/gpt-oss-120b', 8),           # 500 t/s — largest model
             ]
             
             for key in groq_keys:
@@ -467,40 +468,16 @@ class AIService:
                             elif resp.status_code == 429:
                                 await asyncio.sleep(0.2 if is_tutor_mode else 0.3)
                             elif resp.status_code == 413:
-                                logger.warning(f"[Groq Chat] 413 Payload Too Large for {groq_model} — falling back")
-                                break
+                                logger.warning(f"[Groq Chat] 413 Payload Too Large for {groq_model} on key {key[:12]}… — trying next model")
+                                break  # skip remaining keys for THIS model, move to next model
                     except Exception as e:
                         logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
 
-        # ── STAGE 2: CEREBRAS — 14.4K RPD, high-quota safety net ─────────────
-        cerebras_key = os.getenv('CEREBRAS_API_KEY')
-        if cerebras_key and not has_images:
-            for cerebras_model, cerebras_timeout in [
-                ('gpt-oss-120b', 8),            # ~3000 t/s — fastest production
-                ('gemma-4-31b', 15),            # ~1850 t/s — smart preview
-            ]:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            CEREBRAS_API_URL,
-                            headers={"Authorization": f"Bearer {cerebras_key}", "Content-Type": "application/json"},
-                            json={'model': cerebras_model, 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=cerebras_timeout,
-                        )
-                        if resp.status_code == 200:
-                            result = self._extract_content(resp.json())
-                            if result and result.strip():
-                                logger.info(f"[Cerebras Chat] ✓ {cerebras_model}")
-                                return result
-                        elif resp.status_code == 429:
-                            await asyncio.sleep(0.3)
-                except Exception as e:
-                    logger.warning(f"[Cerebras Chat] {cerebras_model} failed: {e}")
+        # ── STAGE 2: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ─────
 
-        # ── STAGE 3: GOOGLE GEMMA 4 — rotate between both keys ──────────────
+        # ── STAGE 3: GOOGLE GEMINI — rotate between both keys ──────────────
         for g_client in self._google_clients():
-            if has_images: continue
-            for g_model in ['models/gemma-4-26b-a4b-it', 'models/gemma-4-31b-it']:
+            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash']:
                 for attempt in range(3):
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -568,9 +545,9 @@ class AIService:
         if groq_keys:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
+                    ('qwen/qwen3.6-27b', 30),            # 500 t/s — most reliable
                     ('openai/gpt-oss-20b', 30),              # 1000 t/s — absolute fastest
-                    ('qwen/qwen3.6-27b', 30),            # 500 t/s — smart fallback
-                    ('openai/gpt-oss-120b', 45),             # 500 t/s — smart fallback
+                    ('openai/gpt-oss-120b', 45),             # 500 t/s — largest model
                 ]:
                     try:
                         # Guard: Groq free-tier has strict payload limits (~6KB safe).
@@ -610,34 +587,11 @@ class AIService:
                     except Exception as e:
                         logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
 
-        # ── STAGE 1: CEREBRAS — 14.4K RPD, high-quota safety net ──────────
-        cerebras_key = os.getenv('CEREBRAS_API_KEY')
-        if cerebras_key:
-            for cerebras_model, cerebras_timeout in [
-                ('gpt-oss-120b', 120),          # ~3000 t/s — best quality + speed
-                ('gemma-4-31b', 120),           # ~1850 t/s — smart fallback
-            ]:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            CEREBRAS_API_URL,
-                            headers={"Authorization": f"Bearer {cerebras_key}", "Content-Type": "application/json"},
-                            json={'model': cerebras_model, 'messages': messages, 'max_tokens': max_tokens},
-                            timeout=cerebras_timeout,
-                        )
-                        if resp.status_code == 200:
-                            result = self._extract_content(resp.json())
-                            if result and result.strip():
-                                logger.info(f"[Cerebras Kit] ✓ {cerebras_model}")
-                                return result
-                        elif resp.status_code == 429:
-                            await asyncio.sleep(1)
-                except Exception as e:
-                    logger.warning(f"[Cerebras Kit] {cerebras_model} failed: {e}")
+        # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ──────
 
-        # ── STAGE 2: GOOGLE GEMINI & GEMMA — rotate between both keys ────────
+        # ── STAGE 2: GOOGLE GEMINI — rotate between both keys ────────
         for g_client in self._google_clients():
-            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'models/gemma-4-31b-it', 'models/gemma-4-26b-a4b-it']:
+            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash']:
                 for attempt in range(3):
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
