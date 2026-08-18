@@ -1591,7 +1591,7 @@ class AIService:
                 "      \"title\": \"Section Title\",\n"
                 "      \"key_question\": \"[A single question that frames the main concept]?\",\n"
                 "      \"plain_english\": \"[A simple, plain-English explanation a smart 16-year-old could follow]\",\n"
-                "      \"deep_dive\": \"[Deep academic details, mechanisms, processes, examples — use bullet points, tables, bold key terms]\",\n"
+                "      \"deep_dive\": \"[Deep academic details, mechanisms, processes — use bullet points, tables, bold key terms. MUST include 1-2 real-world examples: where this concept appears in everyday life, industry, or history. E.g., 'you see this when...' or 'this is why...']\",\n"
                 "      \"memory_trick\": \"[Acronym, analogy, or mnemonic phrase specific to this concept]\",\n"
                 "      \"quick_summary\": \"[1-2 sentence recap in simplest possible terms]\",\n"
                 "      \"page_refs\": [],\n"
@@ -1608,6 +1608,7 @@ class AIService:
                 "- USE LATEX for all math/physics formulas. Every formula MUST be wrapped in $$...$$ (block) or $...$ (inline).\n"
                 "- For math content: deep_dive must include WORKED EXAMPLES with real numbers.\n"
                 "- For math content: plain_english must explain the concept in words BEFORE showing formulas.\n"
+                "- REAL-WORLD CONNECTIONS: Every deep_dive MUST include at least one real-world example showing where the concept appears in daily life, industry, technology, or history. This anchors the abstract concept to something tangible."
                 f"{image_hint if idx == 0 else ''}\n"
                 f"{math_hint}\n\n"
                 f"SOURCE MATERIAL:\n{chunk_text}\n\n"
@@ -1893,7 +1894,7 @@ class AIService:
                     "      \"title\": \"Section Title\",\n"
                     "      \"key_question\": \"[A single question that frames the main concept]?\",\n"
                     "      \"plain_english\": \"[A simple, plain-English explanation a smart 16-year-old could follow]\",\n"
-                    "      \"deep_dive\": \"[Deep academic details, mechanisms, processes, examples — use bullet points, tables, bold key terms]\",\n"
+                    "      \"deep_dive\": \"[Deep academic details, mechanisms, processes — use bullet points, tables, bold key terms. MUST include 1-2 real-world examples: where this concept appears in everyday life, industry, or history]\",\n"
                     "      \"memory_trick\": \"[Acronym, analogy, or mnemonic phrase specific to this concept]\",\n"
                     "      \"quick_summary\": \"[1-2 sentence recap in simplest possible terms]\",\n"
                     "      \"page_refs\": []\n"
@@ -1906,6 +1907,7 @@ class AIService:
                     "- Every section MUST populate all fields: key_question, plain_english, deep_dive, memory_trick, quick_summary.\n"
                     "- Memory Tricks must be SPECIFIC, not generic placeholders\n"
                     "- USE LATEX ($) for all math/physics formulas\n"
+                    "- REAL-WORLD CONNECTIONS: Every deep_dive MUST include at least one real-world example\n"
                     "- Start with { and end with }. No markdown fences."
                 )
             }
