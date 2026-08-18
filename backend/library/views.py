@@ -228,6 +228,23 @@ class ResourceListCreateView(generics.ListCreateAPIView):
             if _ext in ['.pptx', '.ppt']:
                 resource.resource_type = 'slides'
 
+        # Auto-detect resource_type from URL when no file is present
+        if not resource.file and resource.url:
+            _url = resource.url.lower()
+            if any(x in _url for x in ['youtube.com', 'youtu.be', 'youtube.com/shorts']):
+                resource.resource_type = 'video'
+                if not resource.title or resource.title == resource.url:
+                    resource.title = 'YouTube Video'
+            else:
+                resource.resource_type = 'other'
+                if not resource.title or resource.title == resource.url:
+                    from urllib.parse import urlparse as _urlparse
+                    try:
+                        _netloc = _urlparse(resource.url).netloc
+                        resource.title = _netloc or 'Web Article'
+                    except Exception:
+                        resource.title = 'Web Article'
+
         # Store selected features from the upload request
         raw_features = self.request.data.get('selected_features', '[]')
         try:
@@ -237,7 +254,7 @@ class ResourceListCreateView(generics.ListCreateAPIView):
         resource.selected_features = features if isinstance(features, list) else []
         # Use update_fields to avoid the NOT NULL violation on file_size — the initial
         # serializer.save() inserts the row before file_size is set on the Python object.
-        resource.save(update_fields=['file_size', 'status_text', 'resource_type', 'selected_features', 'storage_backend', 'r2_key'])
+        resource.save(update_fields=['title', 'file_size', 'status_text', 'resource_type', 'selected_features', 'storage_backend', 'r2_key'])
 
         # Run synthesis in a background thread on the same process (shares filesystem)
         def run():

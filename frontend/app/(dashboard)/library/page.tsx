@@ -28,6 +28,8 @@ export default function LibraryPage() {
   const [textMode, setTextMode] = useState(false)
   const [pastedText, setPastedText] = useState('')
   const [pastedTitle, setPastedTitle] = useState('')
+  const [linkMode, setLinkMode] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { data: resourcesData, isLoading } = useQuery({
@@ -125,6 +127,34 @@ export default function LibraryPage() {
     finally { setUploading(false) }
   }
 
+  const handleLinkSubmit = async () => {
+    if (!linkUrl.trim()) return
+    const notesUsed = subStatus?.notes_used ?? 0
+    const notesLimit = subStatus?.notes_limit ?? 5
+    const isPremium = subStatus?.is_premium ?? false
+    if (!isPremium && notesUsed >= notesLimit) { setShowPaywall(true); return }
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('url', linkUrl.trim())
+      fd.append('title', linkUrl.trim())
+      await libraryApi.uploadResource(fd)
+      toast.success("Link added! Generating study kit — we'll notify you when it's ready.", { duration: 6000 })
+      queryClient.invalidateQueries({ queryKey: ['resources'] })
+      refetchSub()
+      setLinkUrl(''); setLinkMode(false)
+    } catch (err: any) {
+      const status = err?.response?.status
+      const data = err?.response?.data
+      if (status === 402 || data?.error === 'free_limit_reached') {
+        setShowPaywall(true)
+      } else {
+        toast.error(data?.error || data?.detail || 'Failed to add link.')
+      }
+    }
+    finally { setUploading(false) }
+  }
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     handleFileUpload(e.dataTransfer.files)
@@ -150,7 +180,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Upload action buttons */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-stack-md mb-stack-lg">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-stack-md mb-stack-lg">
         <div
           className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group"
           onClick={() => fileRef.current?.click()}
@@ -181,12 +211,20 @@ export default function LibraryPage() {
           <span className="text-[13px] text-on-surface-variant mt-1">Notes &amp; Summaries</span>
         </button>
 
-        <div className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group opacity-60">
+        <button onClick={() => { setLinkMode(!linkMode); setTextMode(false) }} className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy group">
           <div className="w-16 h-16 bg-tertiary-container text-on-tertiary-container rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>mic</span>
+            <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>link</span>
           </div>
-          <span className="text-[18px] font-bold text-tertiary">Speak</span>
-          <span className="text-[13px] text-on-surface-variant mt-1">Voice memos (coming soon)</span>
+          <span className="text-[18px] font-bold text-tertiary">Paste Link</span>
+          <span className="text-[13px] text-on-surface-variant mt-1">YouTube &amp; Web Articles</span>
+        </button>
+
+        <div className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group opacity-50">
+          <div className="w-16 h-16 bg-surface-container-highest text-on-surface-variant rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
+            <span className="material-symbols-outlined text-[32px]">mic</span>
+          </div>
+          <span className="text-[18px] font-bold text-on-surface-variant">Speak</span>
+          <span className="text-[13px] text-on-surface-variant mt-1">Voice memos (soon)</span>
         </div>
       </section>
 
@@ -215,6 +253,38 @@ export default function LibraryPage() {
               {uploading ? 'Adding…' : 'Add to Library'}
             </button>
             <button onClick={() => setTextMode(false)} className="bg-surface-container-high text-on-surface-variant font-bold px-stack-md py-stack-sm rounded-[1rem] hover:bg-surface-container-highest transition-all">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Link paste panel */}
+      {linkMode && (
+        <div className="mb-stack-lg bg-surface-container-low rounded-[2rem] p-stack-md border border-tertiary/20 space-y-stack-sm">
+          <div className="flex items-center gap-base">
+            <span className="material-symbols-outlined text-tertiary text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>link</span>
+            <h3 className="font-bold text-on-surface text-[18px]">Paste a Link</h3>
+          </div>
+          <p className="text-[13px] text-on-surface-variant">
+            Paste a YouTube video URL or any web article link. We'll extract the content and generate a study kit.
+          </p>
+          <input
+            className="w-full bg-surface-container-high border border-outline-variant rounded-[1rem] px-stack-md py-3 text-on-surface focus:outline-none focus:border-tertiary transition-all"
+            placeholder="https://youtube.com/watch?v=... or https://example.com/article"
+            value={linkUrl}
+            onChange={e => setLinkUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleLinkSubmit() }}
+          />
+          <div className="flex gap-stack-sm">
+            <button
+              onClick={handleLinkSubmit}
+              disabled={uploading || !linkUrl.trim()}
+              className="bg-tertiary text-on-tertiary font-bold px-stack-lg py-stack-sm rounded-[1rem] btn-3d hover:brightness-110 transition-all disabled:opacity-50"
+            >
+              {uploading ? 'Adding…' : 'Generate Study Kit'}
+            </button>
+            <button onClick={() => { setLinkMode(false); setLinkUrl('') }} className="bg-surface-container-high text-on-surface-variant font-bold px-stack-md py-stack-sm rounded-[1rem] hover:bg-surface-container-highest transition-all">
               Cancel
             </button>
           </div>
