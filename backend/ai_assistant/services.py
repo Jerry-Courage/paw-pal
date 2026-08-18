@@ -573,6 +573,7 @@ class AIService:
                → Google Gemma-4-31b → OpenRouter
         """
         # ── STAGE 0: GROQ — fastest inference on the planet ────────────────
+        global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
         _kit_groq_429 = False
         if groq_keys and _GROQ_413_STREAK < 2:
