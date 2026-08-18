@@ -428,12 +428,11 @@ class AIService:
         if groq_keys and not has_images:
             # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
             models_to_try = [
-                ('qwen/qwen3.6-27b', 4 if is_tutor_mode else 6),        # 500 t/s — most reliable
-                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — fastest
+                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — proven working
             ] if is_tutor_mode else [
-                ('qwen/qwen3.6-27b', 8),              # 500 t/s — most reliable, large context
-                ('openai/gpt-oss-20b', 6),            # 1000 t/s — fastest
+                ('openai/gpt-oss-20b', 6),            # 1000 t/s — proven working
                 ('openai/gpt-oss-120b', 8),           # 500 t/s — largest model
+                ('qwen/qwen3.6-27b', 8),              # 500 t/s — 413 on chat (last resort)
             ]
             
             for key in groq_keys:
@@ -555,9 +554,9 @@ class AIService:
         if groq_keys:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
-                    ('qwen/qwen3.6-27b', 30),            # 500 t/s — most reliable
-                    ('openai/gpt-oss-20b', 30),              # 1000 t/s — absolute fastest
+                    ('openai/gpt-oss-20b', 30),              # 1000 t/s — proven working
                     ('openai/gpt-oss-120b', 45),             # 500 t/s — largest model
+                    ('qwen/qwen3.6-27b', 30),               # 500 t/s — 413 on chat (last resort)
                 ]:
                     try:
                         # Guard: aggressively compress messages for Groq's ~4KB payload limit.
@@ -1344,7 +1343,7 @@ class AIService:
 
         async def _call():
             for key in self._groq_keys():
-                for model in ['qwen/qwen3.6-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']:
+                for model in ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.6-27b']:
                     try:
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
