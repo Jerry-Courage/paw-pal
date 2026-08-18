@@ -123,7 +123,7 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # Session-level flag: set True when ALL Groq keys return 413 (keys exhausted/rate-limited)
 # Once set, skip Groq entirely for the rest of the server process lifetime
-_GROQ_DEAD = False
+_GROQ_413_STREAK = 0  # counts consecutive 413s across requests; resets on success
 
 # ─── MODEL ROUTING STRATEGY ────────────────────────────────────────────────────
 #
@@ -432,10 +432,10 @@ class AIService:
             return "Flow AI is temporarily overloaded. Please try again in a moment."
             
         # ── STAGE 0: GROQ (all keys) — fastest inference on the planet ─────
-        global _GROQ_DEAD
+        global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
 
-        if groq_keys and not has_images and not _GROQ_DEAD:
+        if groq_keys and not has_images and _GROQ_413_STREAK < 2:
             # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
             models_to_try = [
                 ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — proven working
@@ -495,11 +495,14 @@ class AIService:
                     except Exception as e:
                         logger.warning(f"[Groq Chat] {groq_model} failed: {e}")
 
-        # If we exhausted all keys/models without success, mark Groq as dead for this session
-        # But only if it was 413 (key limit), not 429 (rate limit — keys still work)
-        if not _GROQ_DEAD and not _groq_429:
-            _GROQ_DEAD = True
-            logger.warning("[Groq Chat] All Groq keys/models failed with 413 — marking as dead, skipping Groq for rest of session")
+        # If we exhausted all keys/models without success, track the streak
+        # Only skip Groq after 2 consecutive full failures (not just once)
+        if not _groq_429:
+            _GROQ_413_STREAK += 1
+            if _GROQ_413_STREAK >= 2:
+                logger.warning(f"[Groq Chat] {_GROQ_413_STREAK} consecutive full 413 failures — skipping Groq for rest of session")
+        else:
+            _GROQ_413_STREAK = 0  # 429 means keys work, reset streak
 
         # ── STAGE 2: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ─────
 
@@ -571,7 +574,7 @@ class AIService:
         # ── STAGE 0: GROQ — fastest inference on the planet ────────────────
         groq_keys = self._groq_keys()
         _kit_groq_429 = False
-        if groq_keys and not _GROQ_DEAD:
+        if groq_keys and _GROQ_413_STREAK < 2:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
                     ('openai/gpt-oss-20b', 30),              # 1000 t/s — proven working
@@ -619,9 +622,12 @@ class AIService:
                     except Exception as e:
                         logger.warning(f"[Groq Kit] {groq_model} failed: {e}")
 
-        if not _GROQ_DEAD and not _kit_groq_429 and groq_keys:
-            _GROQ_DEAD = True
-            logger.warning("[Groq Kit] All Groq keys/models failed with 413 — marking as dead for rest of session")
+        if not _kit_groq_429 and groq_keys:
+            _GROQ_413_STREAK += 1
+            if _GROQ_413_STREAK >= 2:
+                logger.warning(f"[Groq Kit] {_GROQ_413_STREAK} consecutive full 413 failures — skipping Groq for rest of session")
+        elif _kit_groq_429:
+            _GROQ_413_STREAK = 0
 
         # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ──────
 
