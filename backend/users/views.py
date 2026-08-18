@@ -1,6 +1,9 @@
+import logging
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger('nitemind')
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
@@ -397,11 +400,23 @@ class DeleteAccountView(APIView):
         if not password:
             return Response({'error': 'Password required to delete account.'},
                             status=status.HTTP_400_BAD_REQUEST)
-        if not request.user.check_password(password):
-            return Response({'error': 'Incorrect password.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+
         user = request.user
-        user.delete()
+
+        # OAuth users (Google/GitHub) don't have a usable password — allow
+        # deletion with any non-empty password string as confirmation.
+        if user.has_usable_password():
+            if not user.check_password(password):
+                return Response({'error': 'Incorrect password.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user.delete()
+        except Exception as e:
+            logger.error(f'Delete account failed for {user.id}: {e}')
+            return Response({'error': 'Failed to delete account. Please try again.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         return Response({'detail': 'Account deleted.'})
 
 
