@@ -382,12 +382,12 @@ class AIService:
                 except Exception as e:
                     logger.warning(f"[Google Vision Chat] Failed: {e}")
 
-            # 2. Try Groq vision models
+            # 2. Try Groq models (qwen3.6 supports multimodal via OpenAI format)
             for groq_key in self._groq_keys():
                 try:
                     async with httpx.AsyncClient() as client:
                         payload: dict = {
-                            'model': 'llama-3.2-90b-vision-preview',
+                            'model': 'qwen/qwen3.6-27b',
                             'messages': messages,
                             'max_tokens': max_tokens,
                         }
@@ -423,12 +423,12 @@ class AIService:
         if groq_keys and not has_images:
             # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
             models_to_try = [
-                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),   # 1000 t/s — fastest
-                ('llama-3.1-8b-instant', 4 if is_tutor_mode else 6), # 560 t/s — fast
+                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — fastest
+                ('qwen/qwen3.6-27b', 4 if is_tutor_mode else 6),        # 500 t/s — smart
             ] if is_tutor_mode else [
                 ('openai/gpt-oss-120b', 8),          # 500 t/s — smart
                 ('openai/gpt-oss-20b', 6),            # 1000 t/s — fastest
-                ('llama-3.1-8b-instant', 6),          # 560 t/s — reliable
+                ('qwen/qwen3.6-27b', 6),              # 500 t/s — reliable fallback
             ]
             
             for key in groq_keys:
@@ -551,7 +551,7 @@ class AIService:
             for key in groq_keys:
                 for groq_model, groq_timeout in [
                     ('openai/gpt-oss-20b', 30),              # 1000 t/s — absolute fastest
-                    ('llama-3.1-8b-instant', 30),            # 560 t/s — fast + reliable
+                    ('qwen/qwen3.6-27b', 30),            # 500 t/s — smart fallback
                     ('openai/gpt-oss-120b', 45),             # 500 t/s — smart fallback
                 ]:
                     try:
@@ -702,7 +702,7 @@ class AIService:
         """Sub-second chat bridge using Groq directly for interruptions."""
         groq_keys = self._groq_keys()
         if not groq_keys: return "Groq Key missing."
-        target_model = 'llama-3.3-70b-versatile'
+        target_model = 'openai/gpt-oss-120b'
         
         for groq_key in groq_keys:
             try:
@@ -786,7 +786,7 @@ class AIService:
                 for key in groq_keys:
                     for groq_model in [
                         'openai/gpt-oss-20b',          # 1000 t/s — absolute fastest
-                        'llama-3.1-8b-instant',        # 560 t/s  — fast + reliable
+                        'qwen/qwen3.6-27b',            # 500 t/s — smart fallback
                     ]:
                         try:
                             async with httpx.AsyncClient() as client:
@@ -1340,7 +1340,7 @@ class AIService:
 
         async def _call():
             for key in self._groq_keys():
-                for model in ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']:
+                for model in ['qwen/qwen3.6-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']:
                     try:
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
