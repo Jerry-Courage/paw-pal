@@ -669,7 +669,7 @@ export default function WorkspaceCollaborationStudio() {
             ) : (
               <>
                 {messages.map((ms, i) => {
-                  const isMe = ms.author?.id === session?.user?.id
+                  const isMe = String(ms.author?.id) === String(session?.user?.id)
                   const showAvatar = i === 0 || messages[i-1]?.author?.id !== ms.author?.id || messages[i-1]?.is_ai !== ms.is_ai
                   const prevDate = i > 0 ? new Date(messages[i-1].created_at).toDateString() : null
                   const currDate = new Date(ms.created_at).toDateString()
