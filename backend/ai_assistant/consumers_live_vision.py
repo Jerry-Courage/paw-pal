@@ -16,7 +16,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
 
-GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
+GEMINI_LIVE_MODEL = 'gemini-2.0-flash-live'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
@@ -251,7 +251,7 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
         try:
             import time
             now = time.time()
-            if now - self._last_frame_time < 1.0:
+            if now - self._last_frame_time < 0.3:
                 return
             self._last_frame_time = now
 

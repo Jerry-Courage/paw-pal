@@ -95,7 +95,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
       })
       micStreamRef.current = micStream
 
-      const ctx = new AudioContext({ sampleRate: 48000 })
+      const ctx = new AudioContext({ sampleRate: 16000 })
       micCtxRef.current = ctx
       const source = ctx.createMediaStreamSource(micStream)
 
@@ -104,7 +104,13 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
       source.connect(analyser)
       analyserRef.current = analyser
 
-      const processor = ctx.createScriptProcessor(4096, 1, 1)
+      // Polling loop to resume suspended AudioContext (browser autoplay policy)
+      const resumeInterval = setInterval(() => {
+        if (!processorRef.current) { clearInterval(resumeInterval); return }
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      }, 500)
+
+      const processor = ctx.createScriptProcessor(2048, 1, 1)
       micNodeRef.current = processor
       source.connect(processor)
 
@@ -118,10 +124,10 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
       processor.onaudioprocess = (e) => {
         if (micMutedRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         const input = e.inputBuffer.getChannelData(0)
-        const outputLen = Math.floor(input.length / 3)
-        const pcm16 = new Int16Array(outputLen)
-        for (let i = 0; i < outputLen; i++) {
-          const s = Math.max(-1, Math.min(1, input[i * 3]))
+        // AudioContext runs at 16kHz natively — no downsampling needed
+        const pcm16 = new Int16Array(input.length)
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]))
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
         }
         const bytes = new Uint8Array(pcm16.buffer)
