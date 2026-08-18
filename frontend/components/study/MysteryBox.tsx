@@ -83,7 +83,7 @@ function playBoxSound() {
 
 export default function MysteryBox({ onClaim, onClose }: MysteryBoxProps) {
   const [phase, setPhase] = useState<'idle' | 'shaking' | 'revealing' | 'reward'>('idle')
-  const [reward, setReward] = useState(pickReward())
+  const [reward] = useState(pickReward())
   const [particles, setParticles] = useState<{ id: number; x: number; y: number; color: string; delay: number }[]>([])
   const [claimed, setClaimed] = useState(false)
   const timerRef = useRef<NodeJS.Timeout>()
@@ -106,16 +106,12 @@ export default function MysteryBox({ onClaim, onClose }: MysteryBoxProps) {
       setPhase('shaking')
       playBoxSound()
 
-      // After shaking, reveal
       setTimeout(() => {
         setPhase('revealing')
-        setReward(pickReward())
         playRevealSound(reward.xp >= 200 ? 3 : reward.xp >= 100 ? 2 : reward.xp >= 50 ? 1 : 0)
 
-        // Show particles
         setParticles(generateParticles())
 
-        // After reveal, show reward
         setTimeout(() => {
           setPhase('reward')
         }, 1500)
