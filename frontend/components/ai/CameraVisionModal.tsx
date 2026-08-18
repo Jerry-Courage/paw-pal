@@ -333,9 +333,9 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
       </div>
 
       {/* AI Status Badge */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20">
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 safe-top">
         <div className={cn(
-          'flex items-center gap-3 px-5 py-2.5 rounded-full backdrop-blur-xl border transition-all duration-300',
+          'flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-xl border transition-all duration-300 text-xs',
           state === 'listening' && 'bg-emerald-500/15 border-emerald-500/30',
           state === 'analyzing' && 'bg-amber-500/15 border-amber-500/30',
           state === 'speaking' && 'bg-primary/15 border-primary/30',
@@ -344,7 +344,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
         )}>
           <div className="relative">
             <div className={cn(
-              'w-3 h-3 rounded-full',
+              'w-2 h-2 rounded-full',
               state === 'listening' && 'bg-emerald-400 animate-pulse',
               state === 'analyzing' && 'bg-amber-400 animate-pulse',
               state === 'speaking' && 'bg-primary animate-pulse',
@@ -352,22 +352,22 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
               state === 'ended' && 'bg-red-400',
             )} />
             {state === 'listening' && (
-              <div className="absolute inset-0 w-3 h-3 rounded-full bg-emerald-400 animate-ping opacity-40" />
+              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-40" />
             )}
           </div>
-          <span className="text-xs font-bold text-white/90 tracking-wide">{aiStatusText}</span>
+          <span className="font-bold text-white/90 tracking-wide">{aiStatusText}</span>
         </div>
       </div>
 
       {/* Waveform visualizer */}
       {(state === 'listening' || state === 'speaking') && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-end gap-1 h-8">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-end gap-0.5 h-6">
           {waveformBars.map((bar, i) => (
             <div
               key={i}
-              className="w-1 rounded-full transition-all duration-75"
+              className="w-0.5 rounded-full transition-all duration-75"
               style={{
-                height: `${Math.max(4, bar * 32)}px`,
+                height: `${Math.max(3, bar * 24)}px`,
                 backgroundColor: state === 'speaking'
                   ? `rgba(255, 140, 50, ${0.4 + bar * 0.6})`
                   : `rgba(52, 211, 153, ${0.3 + bar * 0.7})`,
@@ -377,18 +377,18 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
         </div>
       )}
 
-      {/* Subtitles overlay */}
+      {/* Subtitles overlay — positioned above bottom controls */}
       {showSubtitles && subtitles.length > 0 && (
-        <div className="absolute bottom-32 left-0 right-0 z-20 px-6 pointer-events-none">
-          <div className="max-w-2xl mx-auto space-y-2">
-            {subtitles.slice(-4).map((sub, i) => (
+        <div className="absolute bottom-28 md:bottom-32 left-0 right-0 z-20 px-3 md:px-6 pointer-events-none safe-bottom">
+          <div className="max-w-xl mx-auto space-y-1.5">
+            {subtitles.slice(-3).map((sub, i) => (
               <div
                 key={sub.ts + i}
                 className={cn(
-                  'px-4 py-2 rounded-xl text-sm font-medium backdrop-blur-md animate-fade-in transition-all',
+                  'px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium backdrop-blur-md animate-fade-in transition-all',
                   sub.role === 'ai'
-                    ? 'bg-black/60 text-white border border-white/10 ml-0 mr-12'
-                    : 'bg-primary/20 text-primary border border-primary/20 ml-12 mr-0'
+                    ? 'bg-black/60 text-white border border-white/10 ml-0 mr-8 md:mr-12'
+                    : 'bg-primary/20 text-primary border border-primary/20 ml-8 md:ml-12 mr-0'
                 )}
               >
                 {sub.text}
@@ -398,91 +398,91 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
         </div>
       )}
 
-      {/* Top-right controls */}
-      <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
+      {/* Top-right controls — safe area aware */}
+      <div className="absolute top-3 right-3 z-20 safe-top flex items-center gap-1.5">
         <button
           onClick={() => setShowSubtitles(!showSubtitles)}
-          className={cn('p-2.5 rounded-full backdrop-blur-md border transition-all', showSubtitles ? 'bg-white/10 border-white/20' : 'bg-black/30 border-white/5')}
+          className={cn('p-2 rounded-full backdrop-blur-md border transition-all', showSubtitles ? 'bg-white/10 border-white/20' : 'bg-black/30 border-white/5')}
         >
-          <MessageSquare className="w-4 h-4 text-white" />
+          <MessageSquare className="w-3.5 h-3.5 text-white" />
         </button>
         <button
           onClick={() => setFullscreen(!fullscreen)}
-          className="p-2.5 rounded-full bg-black/30 backdrop-blur-md border border-white/10 transition-all"
+          className="p-2 rounded-full bg-black/30 backdrop-blur-md border border-white/10 transition-all hidden md:flex"
         >
-          {fullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
+          {fullscreen ? <Minimize2 className="w-3.5 h-3.5 text-white" /> : <Maximize2 className="w-3.5 h-3.5 text-white" />}
         </button>
         <button
           onClick={endSession}
-          className="p-2.5 rounded-full bg-red-500/80 backdrop-blur-md border border-red-500/30 transition-all hover:bg-red-500"
+          className="p-2 rounded-full bg-red-500/80 backdrop-blur-md border border-red-500/30 transition-all hover:bg-red-500"
         >
-          <X className="w-4 h-4 text-white" />
+          <X className="w-3.5 h-3.5 text-white" />
         </button>
       </div>
 
       {/* Bottom controls */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-6">
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-3 md:p-5 safe-bottom">
         {/* Text input bar */}
-        <div className="max-w-xl mx-auto mb-4 flex gap-2">
+        <div className="max-w-lg mx-auto mb-3 flex gap-2">
           <input
             ref={inputRef}
             type="text"
             value={textInput}
             onChange={e => setTextInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') sendTextQuery() }}
-            placeholder="Type a question while showing something..."
-            className="flex-1 px-4 py-2.5 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 text-white text-sm placeholder-white/40 outline-none focus:border-primary/40 transition-all"
+            placeholder="Type a question..."
+            className="flex-1 min-w-0 px-3 md:px-4 py-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 text-white text-xs md:text-sm placeholder-white/40 outline-none focus:border-primary/40 transition-all"
           />
           <button
             onClick={sendTextQuery}
             disabled={!textInput.trim()}
-            className="px-4 py-2.5 rounded-xl bg-primary/80 text-white text-sm font-bold disabled:opacity-30 transition-all"
+            className="px-3 md:px-4 py-2 rounded-xl bg-primary/80 text-white text-xs md:text-sm font-bold disabled:opacity-30 transition-all shrink-0"
           >
             Ask
           </button>
         </div>
 
         {/* Main controls row */}
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center gap-2 md:gap-4">
           <button
             onClick={() => setMicMuted(!micMuted)}
             className={cn(
-              'p-4 rounded-full backdrop-blur-md border transition-all',
+              'p-3 md:p-4 rounded-full backdrop-blur-md border transition-all',
               micMuted ? 'bg-red-500/20 border-red-500/30' : 'bg-white/10 border-white/20 hover:bg-white/20'
             )}
           >
-            {micMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-white" />}
+            {micMuted ? <MicOff className="w-4 h-4 md:w-5 md:h-5 text-red-400" /> : <Mic className="w-4 h-4 md:w-5 md:h-5 text-white" />}
           </button>
 
           <button
             onClick={flipCamera}
-            className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all"
+            className="p-3 md:p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all"
           >
-            <FlipHorizontal className="w-5 h-5 text-white" />
+            <FlipHorizontal className="w-4 h-4 md:w-5 md:h-5 text-white" />
           </button>
 
           <button
             onClick={endSession}
-            className="p-5 rounded-full bg-red-500 hover:bg-red-600 transition-all shadow-lg shadow-red-500/30"
+            className="p-4 md:p-5 rounded-full bg-red-500 hover:bg-red-600 transition-all shadow-lg shadow-red-500/30"
           >
-            <X className="w-6 h-6 text-white" />
+            <X className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </button>
 
           <button
             onClick={() => setSpeakerMuted(!speakerMuted)}
             className={cn(
-              'p-4 rounded-full backdrop-blur-md border transition-all',
+              'p-3 md:p-4 rounded-full backdrop-blur-md border transition-all',
               speakerMuted ? 'bg-red-500/20 border-red-500/30' : 'bg-white/10 border-white/20 hover:bg-white/20'
             )}
           >
-            {speakerMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5 text-white" />}
+            {speakerMuted ? <VolumeX className="w-4 h-4 md:w-5 md:h-5 text-red-400" /> : <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-white" />}
           </button>
 
           <button
             onClick={captureAndSendFrame}
-            className="p-4 rounded-full bg-primary/80 backdrop-blur-md border border-primary/30 hover:bg-primary transition-all"
+            className="p-3 md:p-4 rounded-full bg-primary/80 backdrop-blur-md border border-primary/30 hover:bg-primary transition-all"
           >
-            <Camera className="w-5 h-5 text-white" />
+            <Camera className="w-4 h-4 md:w-5 md:h-5 text-white" />
           </button>
         </div>
       </div>
