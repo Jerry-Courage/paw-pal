@@ -290,6 +290,10 @@ class AIService:
             if not content:
                 details = msg.get('reasoning_details', [])
                 content = ' '.join(d.get('text', '') for d in details if d.get('text'))
+            # Strip <think>...</think> tags (Qwen reasoning leak)
+            if content:
+                import re as _re
+                content = _re.sub(r'<think>.*?</think>', '', content, flags=_re.DOTALL).strip()
             return content or ''
         except (KeyError, IndexError, TypeError) as e:
             logger.error(f"[AI Extract Error]: {e} - Data: {data}")
@@ -1343,6 +1347,9 @@ class AIService:
                             )
                             if resp.status_code == 200:
                                 result = resp.json()["choices"][0]["message"]["content"].strip()
+                                # Strip <think>...</think> tags (Qwen reasoning leak)
+                                import re as _re
+                                result = _re.sub(r'<think>.*?</think>', '', result, flags=_re.DOTALL).strip()
                                 if result and len(result) > 10:
                                     logger.info(f"[StudyNudge] ✓ {model}")
                                     return result
@@ -2148,8 +2155,11 @@ class AIService:
         if response.status_code == 200:
             try:
                 content = response.json()['choices'][0]['message']['content']
+                # Strip <think>...</think> tags (Qwen reasoning leak)
+                import re as _re
+                content = _re.sub(r'<think>.*?</think>', '', content or '', flags=_re.DOTALL).strip()
                 logger.info('[_call_groq_vision] ✓ qwen/qwen3.6-27b')
-                return content or ''
+                return content
             except (KeyError, IndexError):
                 return ''
         else:
