@@ -439,23 +439,27 @@ class AIService:
             for key in groq_keys:
                 for groq_model, groq_timeout in models_to_try:
                     try:
-                        # Guard: trim last user message if payload is too large for Groq
+                        # Guard: aggressively compress messages for Groq's ~6KB payload limit.
+                        # Strip system prompt entirely (it's ~2KB), keep only last user message.
                         import json as _json
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
                         if payload_bytes > 6000:
-                            for msg in reversed(messages):
-                                if msg.get('role') == 'user':
-                                    content = msg.get('content', '')
-                                    if isinstance(content, str):
-                                        msg['content'] = content[:4000] + "\n\n[Truncated for Groq payload limit]"
-                                    elif isinstance(content, list):
-                                        for part in content:
-                                            if isinstance(part, dict) and part.get('type') == 'text':
-                                                part['text'] = part['text'][:4000] + "\n\n[Truncated for Groq payload limit]"
-                                    break
-                            groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
-                            logger.warning(f"[Groq Chat] Payload {payload_bytes} bytes — trimmed to fit")
+                            # Build a lean message list: drop system prompt, keep only last user message
+                            user_msgs = [m for m in messages if m.get('role') == 'user']
+                            last_user = user_msgs[-1] if user_msgs else {'role': 'user', 'content': ''}
+                            # Aggressively truncate the content
+                            content = last_user.get('content', '')
+                            if isinstance(content, str):
+                                content = content[:2000]
+                            elif isinstance(content, list):
+                                for part in content:
+                                    if isinstance(part, dict) and part.get('type') == 'text':
+                                        part['text'] = part['text'][:2000]
+                            lean_msgs = [{'role': 'user', 'content': content}]
+                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': max_tokens}
+                            new_bytes = len(_json.dumps(groq_payload).encode())
+                            logger.warning(f"[Groq Chat] Payload {payload_bytes}→{new_bytes} bytes — compressed for Groq")
 
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
@@ -554,25 +558,25 @@ class AIService:
                     ('openai/gpt-oss-120b', 45),             # 500 t/s — largest model
                 ]:
                     try:
-                        # Guard: Groq free-tier has strict payload limits (~6KB safe).
-                        # If messages are too large, trim the last user message.
+                        # Guard: aggressively compress messages for Groq's ~6KB payload limit.
                         import json as _json
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
                         if payload_bytes > 6000:
-                            # Truncate the last user message content to fit
-                            for msg in reversed(messages):
-                                if msg.get('role') == 'user':
-                                    content = msg.get('content', '')
-                                    if isinstance(content, str):
-                                        msg['content'] = content[:4000] + "\n\n[Truncated for Groq payload limit]"
-                                    elif isinstance(content, list):
-                                        for part in content:
-                                            if isinstance(part, dict) and part.get('type') == 'text':
-                                                part['text'] = part['text'][:4000] + "\n\n[Truncated for Groq payload limit]"
-                                    break
-                            groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': max_tokens}
-                            logger.warning(f"[Groq Kit] Payload {payload_bytes} bytes — trimmed last message to fit")
+                            # Build a lean message list: drop system prompt, keep only last user message
+                            user_msgs = [m for m in messages if m.get('role') == 'user']
+                            last_user = user_msgs[-1] if user_msgs else {'role': 'user', 'content': ''}
+                            content = last_user.get('content', '')
+                            if isinstance(content, str):
+                                content = content[:2000]
+                            elif isinstance(content, list):
+                                for part in content:
+                                    if isinstance(part, dict) and part.get('type') == 'text':
+                                        part['text'] = part['text'][:2000]
+                            lean_msgs = [{'role': 'user', 'content': content}]
+                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': max_tokens}
+                            new_bytes = len(_json.dumps(groq_payload).encode())
+                            logger.warning(f"[Groq Kit] Payload {payload_bytes}→{new_bytes} bytes — compressed for Groq")
 
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
