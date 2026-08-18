@@ -437,23 +437,23 @@ class AIService:
 
         if groq_keys and not has_images and _GROQ_413_STREAK < 2:
             # TUTOR MODE: Only try the absolute fastest Groq models with ultra-short timeouts
+            # (model, timeout, max_output_tokens) — each model has different context window limits
             models_to_try = [
-                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6),       # 1000 t/s — proven working
+                ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6, 1024),
             ] if is_tutor_mode else [
-                ('openai/gpt-oss-20b', 6),            # 1000 t/s — proven working
-                ('openai/gpt-oss-120b', 8),           # 500 t/s — largest model
-                ('qwen/qwen3.6-27b', 8),              # 500 t/s — 413 on chat (last resort)
+                ('openai/gpt-oss-20b', 6, 1024),        # 8K context → 1K output
+                ('openai/gpt-oss-120b', 8, 4096),       # 128K context → 4K output
+                ('qwen/qwen3.6-27b', 8, 4096),          # 131K context → 4K output
             ]
             
             _groq_success = False
             _groq_429 = False
             for key in groq_keys:
-                for groq_model, groq_timeout in models_to_try:
+                for groq_model, groq_timeout, groq_max_tokens in models_to_try:
                     try:
-                        # Guard: Groq models have small context windows (~8K).
-                        # Cap max_tokens to avoid exceeding the model's output limit.
+                        # Cap max_tokens per model to stay within context window
                         import json as _json
-                        safe_max_tokens = min(max_tokens, 1024)
+                        safe_max_tokens = min(max_tokens, groq_max_tokens)
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
                         if payload_bytes > 4000:
@@ -577,15 +577,15 @@ class AIService:
         _kit_groq_429 = False
         if groq_keys and _GROQ_413_STREAK < 2:
             for key in groq_keys:
-                for groq_model, groq_timeout in [
-                    ('openai/gpt-oss-20b', 30),              # 1000 t/s — proven working
-                    ('openai/gpt-oss-120b', 45),             # 500 t/s — largest model
-                    ('qwen/qwen3.6-27b', 30),               # 500 t/s — 413 on chat (last resort)
+                for groq_model, groq_timeout, groq_max_tokens in [
+                    ('openai/gpt-oss-20b', 30, 1024),        # 8K context → 1K output
+                    ('openai/gpt-oss-120b', 45, 4096),       # 128K context → 4K output
+                    ('qwen/qwen3.6-27b', 30, 4096),          # 131K context → 4K output
                 ]:
                     try:
-                        # Guard: cap max_tokens for Groq's small context windows (~8K).
+                        # Cap max_tokens per model to stay within context window
                         import json as _json
-                        safe_max_tokens = min(max_tokens, 1024)
+                        safe_max_tokens = min(max_tokens, groq_max_tokens)
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
                         if payload_bytes > 4000:
