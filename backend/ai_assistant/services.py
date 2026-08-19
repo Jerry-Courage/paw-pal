@@ -2297,9 +2297,9 @@ class AIService:
     def generate_image(self, prompt: str, model: str = 'turbo') -> str:
         """
         Generates an image from a text prompt using a resilient multi-tier fallback strategy.
-        Tier 0: Google Gemini 3.1 Flash (image generation)
-        Tier 1: Pollinations AI (Generative, Free, Fast)
-        Tier 2: Lexica.art (Search-based retrieval)
+        Tier 0: Pollinations AI (Generative, Free, Fast — primary on free tier)
+        Tier 1: Lexica.art (Search-based retrieval)
+        Tier 2: Google Gemini (requires paid quota)
         """
         log_path = os.path.join(settings.BASE_DIR, 'vision_debug.log')
         style = self._get_style_suffix(prompt)
@@ -2307,14 +2307,79 @@ class AIService:
 
         logger.info(f"[ImageGen:Service] Starting generation | prompt_preview={prompt[:60]!r}")
 
-        # --- TIER 0: GOOGLE GEMINI IMAGE GENERATION ---
+        # --- TIER 0: POLLINATIONS AI (Instant Generative, Free) ---
+        models_to_try = [('flux', 45), ('turbo', 35)]
+        for poll_model, poll_timeout in models_to_try:
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(f"[GEN-SIGNAL] Tier 0 ({poll_model}): Attempting for: {prompt[:50]}...\n")
+                logger.info(f"[ImageGen:Service] Tier 0 (Pollinations/{poll_model}) attempting")
+
+                import requests
+
+                current_prompt = prompt if poll_model == 'flux' else prompt.split(',')[0]
+                encoded_prompt = requests.utils.quote(f"{current_prompt}. {style}")
+                poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}&seed={abs(hash(prompt)) % 9999}"
+
+                res = requests.get(poll_url, timeout=poll_timeout)
+                if res.status_code == 200 and len(res.content) > 1000:
+                    encoded = base64.b64encode(res.content).decode('utf-8')
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success ({poll_model})\n")
+                    logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Pollinations/{poll_model}) | size={len(res.content)}")
+                    return f"data:image/jpeg;base64,{encoded}"
+                else:
+                    logger.warning(f"[ImageGen:Service] Tier 0 bad response (Pollinations/{poll_model}) | status={res.status_code} size={len(res.content)}")
+            except Exception as e:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 ({poll_model}) Failed: {str(e)}\n")
+                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Pollinations/{poll_model}) | error={str(e)[:200]}")
+
+        # --- TIER 1: LEXICA.ART (High Quality Search) ---
+        clean_prompt = re.sub(r'[^\w\s]', '', prompt)
+        words = [w for w in clean_prompt.split() if len(w) > 3]
+
+        search_strategies = [
+            "+".join(words[:6]),
+            "+".join(words[:3]),
+            "+".join(words[:1])
+        ]
+
+        for keywords in search_strategies:
+            if not keywords: continue
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 1: Attempting Lexica ({keywords})...\n")
+                logger.info(f"[ImageGen:Service] Tier 1 (Lexica) attempting | keywords={keywords!r}")
+                lexica_url = f"https://lexica.art/api/v1/search?q={keywords}"
+
+                res = requests.get(lexica_url, timeout=10)
+                if res.status_code == 200:
+                    images = res.json().get('images', [])
+                    if images:
+                        import random
+                        best_match = random.choice(images[:3])
+                        img_url = best_match.get('src')
+                        img_res = requests.get(img_url, timeout=10)
+                        if img_res.status_code == 200:
+                            encoded = base64.b64encode(img_res.content).decode('utf-8')
+                            with open(log_path, 'a', encoding='utf-8') as f:
+                                f.write(f"[OK] Tier 1 Success (Lexica: {keywords})\n")
+                            logger.info(f"[ImageGen:Service] Tier 1 SUCCESS (Lexica) | keywords={keywords!r}")
+                            return f"data:image/jpeg;base64,{encoded}"
+                    else:
+                        logger.warning(f"[ImageGen:Service] Tier 1 Lexica returned no images | keywords={keywords!r}")
+                else:
+                    logger.warning(f"[ImageGen:Service] Tier 1 Lexica bad status | status={res.status_code} keywords={keywords!r}")
+            except Exception as e:
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 1 ({keywords}) Failed: {str(e)}\n")
+                logger.warning(f"[ImageGen:Service] Tier 1 FAILED (Lexica/{keywords}) | error={str(e)[:200]}")
+
+        # --- TIER 2: GOOGLE GEMINI (requires paid quota) ---
         if self.google_client:
             image_models = ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-2.5-flash-preview-image']
             for img_model in image_models:
                 try:
                     with open(log_path, 'a', encoding='utf-8') as f:
-                        f.write(f"[GEN-SIGNAL] Tier 0 ({img_model}): Attempting for: {prompt[:50]}...\n")
-                    logger.info(f"[ImageGen:Service] Tier 0 ({img_model}) attempting")
+                        f.write(f"[GEN-SIGNAL] Tier 2 ({img_model}): Attempting for: {prompt[:50]}...\n")
+                    logger.info(f"[ImageGen:Service] Tier 2 ({img_model}) attempting")
 
                     response = self.google_client.models.generate_content(
                         model=img_model,
@@ -2330,80 +2395,15 @@ class AIService:
                                     img_bytes = img_bytes.encode('utf-8')
                                 encoded = base64.b64encode(img_bytes).decode('utf-8')
                                 mime = getattr(part.inline_data, 'mime_type', 'image/png')
-                                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success ({img_model})\n")
-                                logger.info(f"[ImageGen:Service] Tier 0 SUCCESS ({img_model})")
+                                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 2 Success ({img_model})\n")
+                                logger.info(f"[ImageGen:Service] Tier 2 SUCCESS ({img_model})")
                                 return f"data:{mime};base64,{encoded}"
 
-                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 ({img_model}) No image in response\n")
-                    logger.warning(f"[ImageGen:Service] Tier 0 FAILED ({img_model}) | No image in response")
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 ({img_model}) No image in response\n")
+                    logger.warning(f"[ImageGen:Service] Tier 2 FAILED ({img_model}) | No image in response")
                 except Exception as e:
-                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 ({img_model}) Failed: {str(e)}\n")
-                    logger.warning(f"[ImageGen:Service] Tier 0 FAILED ({img_model}) | error={str(e)[:200]}")
-
-        # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
-        models_to_try = [('flux', 45), ('turbo', 35)]
-        for poll_model, poll_timeout in models_to_try:
-            try:
-                with open(log_path, 'a', encoding='utf-8') as f:
-                    f.write(f"[GEN-SIGNAL] Tier 1 ({poll_model}): Attempting for: {prompt[:50]}...\n")
-                logger.info(f"[ImageGen:Service] Tier 1 (Pollinations/{poll_model}) attempting")
-
-                import requests
-
-                current_prompt = prompt if poll_model == 'flux' else prompt.split(',')[0]
-                encoded_prompt = requests.utils.quote(f"{current_prompt}. {style}")
-                poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={poll_model}&seed={abs(hash(prompt)) % 9999}"
-
-                res = requests.get(poll_url, timeout=poll_timeout)
-                if res.status_code == 200 and len(res.content) > 1000:
-                    encoded = base64.b64encode(res.content).decode('utf-8')
-                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 1 Success ({poll_model})\n")
-                    logger.info(f"[ImageGen:Service] Tier 1 SUCCESS (Pollinations/{poll_model}) | size={len(res.content)}")
-                    return f"data:image/jpeg;base64,{encoded}"
-                else:
-                    logger.warning(f"[ImageGen:Service] Tier 1 bad response (Pollinations/{poll_model}) | status={res.status_code} size={len(res.content)}")
-            except Exception as e:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 1 ({poll_model}) Failed: {str(e)}\n")
-                logger.warning(f"[ImageGen:Service] Tier 1 FAILED (Pollinations/{poll_model}) | error={str(e)[:200]}")
-
-        # --- TIER 2: LEXICA.ART (High Quality Search) ---
-        clean_prompt = re.sub(r'[^\w\s]', '', prompt)
-        words = [w for w in clean_prompt.split() if len(w) > 3]
-
-        search_strategies = [
-            "+".join(words[:6]),
-            "+".join(words[:3]),
-            "+".join(words[:1])
-        ]
-
-        for keywords in search_strategies:
-            if not keywords: continue
-            try:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[GEN-SIGNAL] Tier 2: Attempting Lexica ({keywords})...\n")
-                logger.info(f"[ImageGen:Service] Tier 2 (Lexica) attempting | keywords={keywords!r}")
-                lexica_url = f"https://lexica.art/api/v1/search?q={keywords}"
-
-                res = requests.get(lexica_url, timeout=10)
-                if res.status_code == 200:
-                    images = res.json().get('images', [])
-                    if images:
-                        import random
-                        best_match = random.choice(images[:3])
-                        img_url = best_match.get('src')
-                        img_res = requests.get(img_url, timeout=10)
-                        if img_res.status_code == 200:
-                            encoded = base64.b64encode(img_res.content).decode('utf-8')
-                            with open(log_path, 'a', encoding='utf-8') as f:
-                                f.write(f"[OK] Tier 2 Success (Lexica: {keywords})\n")
-                            logger.info(f"[ImageGen:Service] Tier 2 SUCCESS (Lexica) | keywords={keywords!r}")
-                            return f"data:image/jpeg;base64,{encoded}"
-                    else:
-                        logger.warning(f"[ImageGen:Service] Tier 2 Lexica returned no images | keywords={keywords!r}")
-                else:
-                    logger.warning(f"[ImageGen:Service] Tier 2 Lexica bad status | status={res.status_code} keywords={keywords!r}")
-            except Exception as e:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 ({keywords}) Failed: {str(e)}\n")
-                logger.warning(f"[ImageGen:Service] Tier 2 FAILED (Lexica/{keywords}) | error={str(e)[:200]}")
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 2 ({img_model}) Failed: {str(e)}\n")
+                    logger.warning(f"[ImageGen:Service] Tier 2 FAILED ({img_model}) | error={str(e)[:200]}")
 
         # --- TIER 3: POLLINATIONS FALLBACK (different models) ---
         for poll_model, poll_timeout in [('stable-diffusion', 30), ('dall-e-3', 20)]:
