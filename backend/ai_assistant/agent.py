@@ -104,6 +104,11 @@ The available tools are:
 6. generate_diagram:
    - Use when the user asks for a diagram, flowchart, mind map, or visual representation of a process/concept.
    - Parameters: {"description": "what the diagram should show", "type": "auto|flowchart|mindmap|sequence|classDiagram"}
+7. web_search:
+   - Use when the user asks about current events, recent news, facts you're unsure about, or anything requiring up-to-date information from the internet.
+   - Also use when you're not confident about a factual answer — search first, then answer.
+   - Parameters: {"query": "the search query"}
+   - NEVER say "I don't have access to the internet" or "I can't search the web". You CAN search. Use this tool.
 
 Example response: "Sure! I'll put that Biology session on your calendar for 3 PM tomorrow. ACTION: {"tool": "schedule_study_session", "parameters": {"title": "Biology Session", "start_time": "2026-04-10T15:00:00"}}"
 """
@@ -437,6 +442,39 @@ class FlowAgent:
                     mermaid_code = '\n'.join(lines).strip()
                     logger.info(f"[Agent] Diagram generation SUCCESS | length={len(mermaid_code)}")
                 return mermaid_code
+
+            elif tool == 'web_search':
+                query = params.get('query', '')
+                if not query:
+                    return "Error: No search query provided."
+                logger.info(f"[Agent] Web search: {query[:80]}")
+                try:
+                    import requests as _req
+                    resp = await asyncio.to_thread(
+                        _req.get,
+                        'https://api.duckduckgo.com/',
+                        params={'q': query, 'format': 'json', 'no_html': 1, 'skip_disambig': 1},
+                        timeout=8,
+                    )
+                    data = resp.json()
+                    results = []
+                    if data.get('AbstractText'):
+                        results.append(data['AbstractText'])
+                    for r in (data.get('RelatedTopics') or [])[:5]:
+                        if isinstance(r, dict) and r.get('Text'):
+                            results.append(r['Text'])
+                    if results:
+                        return '\n\n'.join(results[:5])
+                    # Fallback: try infobox
+                    infobox = data.get('Infobox', {})
+                    if infobox and infobox.get('content'):
+                        parts = [f"{e.get('label', '')}: {e.get('value', '')}" for e in infobox['content'] if e.get('value')]
+                        if parts:
+                            return '\n'.join(parts[:10])
+                    return f"Search completed but no strong results found for: {query}"
+                except Exception as se:
+                    logger.warning(f"[Agent] Web search failed: {se}")
+                    return f"Search temporarily unavailable for: {query}"
 
             return f"Unknown tool: {tool}"
         except Exception as e:
