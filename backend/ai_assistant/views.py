@@ -1161,30 +1161,37 @@ class TextToSpeechView(APIView):
             return Response({'error': 'TTS not configured'}, status=503)
 
         try:
-            url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
-            payload = {
-                'contents': [{'parts': [{'text': text}]}],
-                'generationConfig': {
-                    'responseModalities': ['AUDIO'],
-                    'speechConfig': {
-                        'voiceConfig': {
-                            'prebuiltVoiceConfig': {'voiceName': voice}
+            # Try stable TTS model first, fallback to preview
+            tts_models = ['gemini-2.5-flash-tts', 'gemini-2.5-flash-preview-tts']
+            audio_b64 = ''
+            for tts_model in tts_models:
+                url = f'https://generativelanguage.googleapis.com/v1beta/models/{tts_model}:generateContent?key={api_key}'
+                payload = {
+                    'contents': [{'parts': [{'text': text}]}],
+                    'generationConfig': {
+                        'responseModalities': ['AUDIO'],
+                        'speechConfig': {
+                            'voiceConfig': {
+                                'prebuiltVoiceConfig': {'voiceName': voice}
+                            }
                         }
                     }
                 }
-            }
-            resp = req_lib.post(url, json=payload, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-
-            # Extract base64 audio from response
-            audio_b64 = (
-                data.get('candidates', [{}])[0]
-                .get('content', {})
-                .get('parts', [{}])[0]
-                .get('inlineData', {})
-                .get('data', '')
-            )
+                resp = req_lib.post(url, json=payload, timeout=30)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    audio_b64 = (
+                        data.get('candidates', [{}])[0]
+                        .get('content', {})
+                        .get('parts', [{}])[0]
+                        .get('inlineData', {})
+                        .get('data', '')
+                    )
+                    if audio_b64:
+                        break
+                # If first model fails, try next
+                logger.warning(f'[TTS] {tts_model} returned {resp.status_code}, trying next...')
+            
             if not audio_b64:
                 return Response({'error': 'No audio in response'}, status=500)
 

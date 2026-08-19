@@ -16,8 +16,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
 
-# Use the native audio model — better quality, lower latency
-GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
+# Native audio dialog — Unlimited RPM, stable GA release
+GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-dialog'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'

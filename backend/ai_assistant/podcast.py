@@ -49,56 +49,62 @@ def generate_gemini_tts_file(text, voice, output_path):
 
     for attempt in range(max_retries):
         api_key = api_keys[key_index % len(api_keys)]
-        try:
-            url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={api_key}'
-            payload = {
-                'contents': [{'parts': [{'text': clean_text}]}],
-                'generationConfig': {
-                    'responseModalities': ['AUDIO'],
-                    'speechConfig': {
-                        'voiceConfig': {
-                            'prebuiltVoiceConfig': {'voiceName': voice}
+        # Try stable TTS model first, fallback to preview
+        tts_models = ['gemini-2.5-flash-tts', 'gemini-2.5-flash-preview-tts']
+        for tts_model in tts_models:
+            try:
+                url = f'https://generativelanguage.googleapis.com/v1beta/models/{tts_model}:generateContent?key={api_key}'
+                payload = {
+                    'contents': [{'parts': [{'text': clean_text}]}],
+                    'generationConfig': {
+                        'responseModalities': ['AUDIO'],
+                        'speechConfig': {
+                            'voiceConfig': {
+                                'prebuiltVoiceConfig': {'voiceName': voice}
+                            }
                         }
                     }
                 }
-            }
-            resp = req.post(url, json=payload, timeout=30)
-            if resp.status_code == 429:
-                key_index += 1
-                time.sleep(base_delay * (2 ** attempt))
+                resp = req.post(url, json=payload, timeout=30)
+                if resp.status_code == 429:
+                    key_index += 1
+                    time.sleep(base_delay * (2 ** attempt))
+                    continue
+
+                resp.raise_for_status()
+                data = resp.json()
+                audio_b64 = (
+                    data.get('candidates', [{}])[0]
+                    .get('content', {})
+                    .get('parts', [{}])[0]
+                    .get('inlineData', {})
+                    .get('data', '')
+                )
+                if not audio_b64: return False
+
+                pcm_bytes = base64.b64decode(audio_b64)
+                sample_rate = 24000
+                num_channels = 1
+                bits_per_sample = 16
+                data_size = len(pcm_bytes)
+                byte_rate = sample_rate * num_channels * bits_per_sample // 8
+                block_align = num_channels * bits_per_sample // 8
+
+                wav_header = struct.pack(
+                    '<4sI4s4sIHHIIHH4sI',
+                    b'RIFF', 36 + data_size, b'WAVE', b'fmt ', 16, 1,
+                    num_channels, sample_rate, byte_rate, block_align,
+                    bits_per_sample, b'data', data_size
+                )
+                with open(output_path, 'wb') as f:
+                    f.write(wav_header + pcm_bytes)
+                return True
+            except Exception as e:
+                logger.warning(f'[TTS] {tts_model} failed: {e}')
                 continue
-
-            resp.raise_for_status()
-            data = resp.json()
-            audio_b64 = (
-                data.get('candidates', [{}])[0]
-                .get('content', {})
-                .get('parts', [{}])[0]
-                .get('inlineData', {})
-                .get('data', '')
-            )
-            if not audio_b64: return False
-
-            pcm_bytes = base64.b64decode(audio_b64)
-            sample_rate = 24000
-            num_channels = 1
-            bits_per_sample = 16
-            data_size = len(pcm_bytes)
-            byte_rate = sample_rate * num_channels * bits_per_sample // 8
-            block_align = num_channels * bits_per_sample // 8
-
-            wav_header = struct.pack(
-                '<4sI4s4sIHHIIHH4sI',
-                b'RIFF', 36 + data_size, b'WAVE', b'fmt ', 16, 1,
-                num_channels, sample_rate, byte_rate, block_align,
-                bits_per_sample, b'data', data_size
-            )
-            with open(output_path, 'wb') as f:
-                f.write(wav_header + pcm_bytes)
-            return True
-        except:
-            key_index += 1
-            time.sleep(base_delay * (2 ** attempt))
+        # All TTS models failed for this key, try next key
+        key_index += 1
+        time.sleep(base_delay * (2 ** attempt))
     return False
 
 def json_repair(json_str):

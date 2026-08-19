@@ -387,14 +387,32 @@ class AIService:
                     
                     response = await asyncio.wait_for(
                         g_client.aio.models.generate_content(
+                            model='gemini-3.5-flash', contents=contents, config={'max_output_tokens': max_tokens}
+                        ), timeout=25
+                    )
+                    if response.text:
+                        logger.info(f"[Google Vision Chat] ✓ gemini-3.5-flash")
+                        return response.text
+                except Exception as e:
+                    logger.warning(f"[Google Vision Chat] Failed: {e}")
+
+            # Fallback to 3.1-flash-lite
+            for g_client in self._google_clients():
+                try:
+                    contents, sys_instr = self._to_gemini_format(messages)
+                    if sys_instr and contents and contents[0].get('role') == 'user':
+                        contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                    
+                    response = await asyncio.wait_for(
+                        g_client.aio.models.generate_content(
                             model='gemini-3.1-flash-lite', contents=contents, config={'max_output_tokens': max_tokens}
                         ), timeout=25
                     )
                     if response.text:
-                        logger.info(f"[Google Vision Chat] ✓ gemini-3.1-flash-lite")
+                        logger.info(f"[Google Vision Chat] ✓ gemini-3.1-flash-lite (fallback)")
                         return response.text
                 except Exception as e:
-                    logger.warning(f"[Google Vision Chat] Failed: {e}")
+                    logger.warning(f"[Google Vision Chat] Fallback failed: {e}")
 
             # 2. Try Groq models (qwen3.6 supports multimodal via OpenAI format)
             for groq_key in self._groq_keys():
@@ -509,7 +527,7 @@ class AIService:
 
         # ── STAGE 3: GOOGLE GEMINI — rotate between both keys ──────────────
         for g_client in self._google_clients():
-            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash']:
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
                 for attempt in range(3):
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -636,7 +654,7 @@ class AIService:
 
         # ── STAGE 2: GOOGLE GEMINI — rotate between both keys ────────
         for g_client in self._google_clients():
-            for g_model in ['gemini-3.1-flash-lite', 'gemini-3.5-flash']:
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
                 for attempt in range(3):
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
@@ -793,7 +811,7 @@ class AIService:
                     mime = audio_file.content_type if hasattr(audio_file, 'content_type') else 'audio/mpeg'
 
                 response = self.google_client_beta.models.generate_content(
-                    model='models/gemini-3.1-flash-lite',
+                    model='models/gemini-3.5-flash-lite',
                     contents=[
                         {'role': 'user', 'parts': [
                             {'inline_data': {'data': base64.b64encode(audio_data).decode('utf-8'), 'mime_type': mime}},
@@ -980,7 +998,7 @@ class AIService:
         task_type = 'RETRIEVAL_QUERY' if is_query else 'RETRIEVAL_DOCUMENT'
         
         # --- PRIMARY: Gemini Embedding 2 (The Elite Signal) ---
-        for model_id in ['models/gemini-embedding-2-preview', 'models/gemini-embedding-001']:
+        for model_id in ['models/gemini-embedding-2', 'models/gemini-embedding-2-preview', 'models/gemini-embedding-001']:
             try:
                 if isinstance(content, str):
                     # Single string — one API call
@@ -2108,7 +2126,7 @@ class AIService:
         
         # ── 1. Google Gemini (rotate both keys) ───────────────────────────────
         for g_client in self._google_clients():
-            for model_attempt in ['models/gemini-3.1-flash-lite', 'models/gemini-3.5-flash']:
+                for model_attempt in ['models/gemini-3.5-flash', 'models/gemini-3.6-flash', 'models/gemini-3.1-flash-lite']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
                     result = self._call_google_studio_vision(messages, model_name=model_attempt, client=g_client)
@@ -2206,7 +2224,7 @@ class AIService:
             logger.warning(f'[_call_groq_vision] qwen3.6-27b error {response.status_code}: {response.text[:200]}')
             return ''
 
-    def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-2.0-flash', client=None) -> str:
+    def _call_google_studio_vision(self, messages: list, model_name: str = 'gemini-3.5-flash', client=None) -> str:
         """Helper to call Google AI Studio directly using the NEW SDK."""
         g_client = client or self.google_client
         if not g_client:
@@ -2462,7 +2480,7 @@ class AIService:
         
         # Use Flash 2.0 as primary, fallback to Triple-Engine if rate limited
         try:
-            response = self.chat_sync(messages, forced_model='google/gemini-2.0-flash-001')
+            response = self.chat_sync(messages, forced_model='google/gemini-3.5-flash')
             if not response:
                 raise ValueError("Empty response from primary model")
         except Exception as e:
@@ -2481,7 +2499,7 @@ class AIService:
                 {'role': 'system', 'content': "Be extremely concise. Professional tone."},
                 {'role': 'assistant', 'content': response},
                 {'role': 'user', 'content': overview_prompt},
-            ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
+            ], forced_model='google/gemini-3.5-flash-lite')
         except Exception as e:
             logger.warning(f"[Synthesis] Overview primary failed: {e}")
             overview = self.chat_sync([
@@ -2499,7 +2517,7 @@ class AIService:
             outline_raw = self.chat_sync([
                 {'role': 'assistant', 'content': response},
                 {'role': 'user', 'content': outline_prompt},
-            ], forced_model='google/gemini-2.0-flash-lite-preview-02-05:free')
+            ], forced_model='google/gemini-3.5-flash-lite')
         except Exception as e:
             logger.warning(f"[Synthesis] Outline primary failed: {e}")
             outline_raw = self.chat_sync([
@@ -2543,7 +2561,7 @@ class AIService:
         # Use Gemini 2.0 Flash Lite for ultra-low latency conversational responses
         raw_response = self.chat_sync(
             messages, 
-            forced_model='google/gemini-2.0-flash-lite-preview-02-05:free'
+            forced_model='google/gemini-3.5-flash-lite'
         )
         logger.info(f"[Agent] Raw response received ({len(raw_response)} chars)")
         
@@ -2606,7 +2624,7 @@ class AIService:
         raw_response = self.chat_sync([
             {'role': 'system', 'content': "You are a high-fidelity document rewriter. Return only the requested draft and comment. Do not repeat instructions."},
             {'role': 'user', 'content': prompt}
-        ], forced_model='google/gemini-2.0-flash-001')
+        ], forced_model='google/gemini-3.5-flash')
         return self._process_structured_response(assignment, raw_response, "I've applied the High-Intensity 'Vanish v2.5' protocol.")
 
     def remove_plagiarism(self, assignment) -> dict:
@@ -2634,7 +2652,7 @@ class AIService:
         raw_response = self.chat_sync([
             {'role': 'system', 'content': "You are an expert document rewriter. You never explain your process; you only provide the requested output markers."},
             {'role': 'user', 'content': prompt}
-        ], forced_model='google/gemini-2.0-flash-001')
+        ], forced_model='google/gemini-3.5-flash')
         return self._process_structured_response(assignment, raw_response, "I've engaged the Radical 'Originality Shield v3'.")
 
     def _process_structured_response(self, assignment, raw_response: str, default_comment: str) -> dict:
@@ -2706,7 +2724,7 @@ class AIService:
             raw_response = self.chat_sync([
                 {'role': 'system', 'content': "You are a JSON-only response engine. Return only valid, minified JSON. Do not use markdown blocks."},
                 {'role': 'user', 'content': prompt}
-            ], forced_model='google/gemini-2.0-flash-001')
+            ], forced_model='google/gemini-3.5-flash')
 
             import json
             import re
