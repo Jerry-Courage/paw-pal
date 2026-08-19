@@ -149,7 +149,7 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
     # ── Gemini session ────────────────────────────────────────────────────
 
     async def _start_gemini_session(self, custom_prompt: str = ''):
-        api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
+        api_key = os.getenv('GOOGLE_STUDIO_API_KEY_2', '')
         if not api_key:
             await self._send({'type': 'error', 'message': 'Google API key not configured'})
             return
