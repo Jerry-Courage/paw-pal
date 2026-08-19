@@ -777,12 +777,7 @@ export default function PersonalisedLearningPage() {
               </motion.div>
             </div>
 
-            {/* AI subtitle */}
-            {displayedWords.length > 0 && (
-              <p className="text-sm text-white/60 text-center max-w-md leading-relaxed px-4">
-                {displayedWords.join(' ')}
-              </p>
-            )}
+
 
             {/* Status */}
             <p className="text-sm font-black text-white uppercase tracking-widest mb-1 mt-3">
