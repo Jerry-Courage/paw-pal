@@ -601,6 +601,17 @@ function AIChat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Cleanup voice recognition on unmount
+  useEffect(() => {
+    return () => {
+      ;(window as any)._voiceDictating = false
+      if ((window as any)._voiceRecognition) {
+        try { (window as any)._voiceRecognition.stop() } catch {}
+        (window as any)._voiceRecognition = null
+      }
+    }
+  }, [])
+
   const startNew = () => {
     setMessages([])
     setActiveSession(null)
@@ -873,7 +884,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-20 md:bottom-0 md:left-64 mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface">
+    <div className="fixed inset-x-0 top-0 md:bottom-0 md:left-64 mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface" style={{ bottom: 'max(3.5rem, calc(3.5rem + env(safe-area-inset-bottom)))' }}>
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -1077,7 +1088,7 @@ function AIChat() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl px-3 sm:px-4 py-8 sm:py-12 space-y-12 sm:space-y-20 animate-fade-in">
+            <div className="max-w-4xl px-3 sm:px-4 pt-8 pb-24 sm:pb-28 space-y-12 sm:space-y-20 animate-fade-in">
               {messages.map((msg, i) => (
                 <MessageBubble 
                   key={i} 
@@ -1132,9 +1143,13 @@ function AIChat() {
 
                 {/* Voice Dictation Button */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (voiceDictating) {
                       setVoiceDictating(false)
+                      if ((window as any)._voiceRecognition) {
+                        try { (window as any)._voiceRecognition.stop() } catch {}
+                        (window as any)._voiceRecognition = null
+                      }
                       toast.info('Dictation stopped')
                       return
                     }
@@ -1143,28 +1158,68 @@ function AIChat() {
                       toast.error('Speech recognition not supported in this browser')
                       return
                     }
+                    // Request mic permission explicitly first
+                    try {
+                      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+                      stream.getTracks().forEach(t => t.stop())
+                    } catch {
+                      toast.error('Microphone permission denied. Please allow mic access in your browser settings.')
+                      return
+                    }
                     const recognition = new SpeechRecognition()
                     recognition.continuous = true
                     recognition.interimResults = true
                     recognition.lang = 'en-US'
+                    recognition.maxAlternatives = 1
+                    let finalTranscript = input || ''
                     recognition.onresult = (event: any) => {
-                      let transcript = ''
+                      let interimTranscript = ''
                       for (let i = event.resultIndex; i < event.results.length; i++) {
-                        transcript += event.results[i][0].transcript
+                        if (event.results[i].isFinal) {
+                          finalTranscript += event.results[i][0].transcript + ' '
+                          setInput(finalTranscript.trim())
+                        } else {
+                          interimTranscript += event.results[i][0].transcript
+                        }
                       }
-                      setInput(transcript)
+                      if (interimTranscript) setInput((finalTranscript + interimTranscript).trim())
                     }
                     recognition.onerror = (e: any) => {
-                      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+                      if (e.error === 'no-speech' || e.error === 'aborted') return
+                      if (e.error === 'not-allowed') {
+                        toast.error('Microphone permission denied')
+                      } else {
                         toast.error(`Voice error: ${e.error}`)
                       }
                       setVoiceDictating(false)
                     }
-                    recognition.onend = () => setVoiceDictating(false)
-                    recognition.start()
-                    setVoiceDictating(true)
-                    // Auto-stop after 30s
-                    setTimeout(() => { recognition.stop(); setVoiceDictating(false) }, 30000)
+                    recognition.onend = () => {
+                      // Auto-restart if still in dictation mode (mobile browsers kill it frequently)
+                      if ((window as any)._voiceDictating && (window as any)._voiceRecognition) {
+                        try {
+                          setTimeout(() => {
+                            if ((window as any)._voiceDictating) {
+                              (window as any)._voiceRecognition.start()
+                            }
+                          }, 300)
+                        } catch {
+                          setVoiceDictating(false)
+                        }
+                      } else {
+                        setVoiceDictating(false)
+                      }
+                    }
+                    ;(window as any)._voiceRecognition = recognition
+                    ;(window as any)._voiceDictating = true
+                    try {
+                      recognition.start()
+                      setVoiceDictating(true)
+                      toast.info('Listening... speak now')
+                    } catch {
+                      toast.error('Could not start speech recognition')
+                      setVoiceDictating(false)
+                      ;(window as any)._voiceDictating = false
+                    }
                   }}
                   className={cn('p-2 transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer',
                     voiceDictating ? 'text-red-400 animate-pulse' : 'text-on-surface-variant/40 hover:text-primary'
