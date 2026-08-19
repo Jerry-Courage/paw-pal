@@ -93,6 +93,18 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
         logger.info(f'[LiveVision] Browser disconnected: code={close_code}')
 
     async def receive(self, text_data=None, bytes_data=None):
+        # Handle binary frames (audio — 4-byte header + raw PCM16)
+        if bytes_data:
+            if len(bytes_data) >= 5 and bytes_data[0] == 0x01:
+                pcm_bytes = bytes_data[4:]
+                if pcm_bytes and self.gemini_ws and self.session_active and hasattr(self, 'audio_queue'):
+                    audio_b64 = base64.b64encode(pcm_bytes).decode('ascii')
+                    try:
+                        self.audio_queue.put_nowait(audio_b64)
+                    except asyncio.QueueFull:
+                        pass
+            return
+
         if not text_data:
             return
         try:
