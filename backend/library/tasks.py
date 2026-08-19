@@ -117,9 +117,13 @@ def process_resource_task(res_id):
         total_pages = 0
         
         # ─── DOCUMENT EXTRACTION (PDF, DOCX, TXT, etc) ───
-        if res.file:
+        # Handle both Cloudinary (res.file set) and R2 (res.file empty, storage_backend='r2')
+        _is_r2 = getattr(res, 'storage_backend', '') == 'r2' and getattr(res, 'r2_key', '')
+        _has_file_backend = res.file or _is_r2
+        if _has_file_backend:
             import os
-            ext = os.path.splitext(res.file.name)[1].lower()
+            raw_name = res.file.name if res.file else (res.r2_key or '')
+            ext = os.path.splitext(raw_name)[1].lower()
 
             # Cloudinary strips extensions from stored file names — infer from resource_type or title
             if not ext:
@@ -307,6 +311,12 @@ def process_resource_task(res_id):
                     logger.error(f"[Task Queue] Extraction failed for {res.id}: {extraction.get('error')}")
             except Exception as e:
                 logger.error(f'[Task Queue] Document extract failed for {res.id}: {e}')
+                # Surface download/read failures as user-visible error
+                if 'Could not read file' in str(e) or 'ConnectionError' in str(e) or 'Timeout' in str(e):
+                    res.status = 'failed'
+                    res.status_text = f"❌ Could not read file from storage. Please re-upload."
+                    res.save(update_fields=['status', 'status_text'])
+                    return
 
         # ─── YOUTUBE EXTRACTION ───
         elif res.resource_type == 'video' and res.url:
@@ -437,6 +447,14 @@ def process_resource_task(res_id):
                 logger.error(f'[Task Queue] URL extraction failed for {res.id}: {e}')
 
         # ─── VECTORIZATION & AI PROCESSING ───
+        # If a file was supposed to be processed but nothing was extracted, it's likely a read failure
+        if _has_file_backend and not text and not vision_data and not page_image_map:
+            logger.error(f"[Task Queue] File read but no content extracted for {res.id} (backend={getattr(res, 'storage_backend', 'cloudinary')}) — likely storage read failure")
+            res.status = 'failed'
+            res.status_text = "❌ File could not be read. Please re-upload."
+            res.save(update_fields=['status', 'status_text'])
+            return
+
         logger.info(f"[Task Queue] Processing Study Kit for Resource {res.id} (Context size: {len(text) if text else 'TITLE-ONLY'})")
         
         def _sanitize_for_json(obj):
