@@ -2126,7 +2126,7 @@ class AIService:
         
         # ── 1. Google Gemini (rotate both keys) ───────────────────────────────
         for g_client in self._google_clients():
-                for model_attempt in ['models/gemini-3.5-flash', 'models/gemini-3.6-flash', 'models/gemini-3.1-flash-lite']:
+            for model_attempt in ['models/gemini-3.5-flash', 'models/gemini-3.6-flash', 'models/gemini-3.1-flash-lite']:
                 try:
                     with open(log_path, 'a') as f: f.write(f"[VISION-SIGNAL] Attempting Direct Google: {model_attempt}\n")
                     result = self._call_google_studio_vision(messages, model_name=model_attempt, client=g_client)
