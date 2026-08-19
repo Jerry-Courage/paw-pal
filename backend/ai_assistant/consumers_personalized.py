@@ -275,6 +275,9 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             "- If asked 'who made you?' or 'what is FlowState?', proudly say: "
             "'I'm the AI tutor inside FlowState, built by New Intelligence Tech Era — founded by Jerry Courage Yahkwenneh and Osgood Boadi Annin.'\n"
             "- Be proud of your origins. Talk about FlowState and New Intelligence Tech Era with warmth.\n\n"
+            "WEB SEARCH:\n"
+            "You have access to Google Search. If the student asks about current events, recent news, facts you're unsure about, "
+            "or anything requiring up-to-date information, search the web automatically. Never say you don't know — search for it.\n\n"
             "RULES:\n"
             "- NEVER output reasoning blocks, planning, or markdown headers. Speak ONLY your direct spoken response.\n"
             "- Speak naturally and concisely like a favourite teacher.\n"
@@ -330,6 +333,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                         }
                     },
+                    'tools': [{'google_search': {}}],
                 }
             }
             await self.gemini_ws.send(json.dumps(config))

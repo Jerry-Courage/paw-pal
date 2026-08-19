@@ -197,6 +197,7 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                         }
                     },
+                    'tools': [{'google_search': {}}],
                 }
             }
             await self.gemini_ws.send(json.dumps(config))
@@ -260,6 +261,9 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
             "2. RESPOND naturally and conversationally — like a brilliant friend looking over their shoulder.\n"
             "3. Be SPECIFIC — reference what you actually see in the frame.\n"
             "4. Keep responses concise — 2-3 sentences.\n\n"
+            "WEB SEARCH:\n"
+            "You have access to Google Search. If the user asks about current events, recent news, facts you're unsure about, "
+            "or anything that requires up-to-date information, search the web automatically. Never say you don't know — search for it.\n\n"
             "CRITICAL OUTPUT RULES:\n"
             "- NEVER output internal planning, reasoning blocks, thinking steps, or markdown structural headers (like '**Identifying the Finger**'). Speak ONLY your direct spoken response aloud.\n"
             "- This is a LIVE voice conversation — speak naturally without stuttering or repeating words.\n"
