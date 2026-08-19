@@ -2307,36 +2307,38 @@ class AIService:
 
         logger.info(f"[ImageGen:Service] Starting generation | prompt_preview={prompt[:60]!r}")
 
-        # --- TIER 0: GOOGLE GEMINI 3.1 FLASH IMAGE GENERATION ---
+        # --- TIER 0: GOOGLE GEMINI IMAGE GENERATION ---
         if self.google_client:
-            try:
-                with open(log_path, 'a', encoding='utf-8') as f:
-                    f.write(f"[GEN-SIGNAL] Tier 0 (Gemini Flash Image): Attempting for: {prompt[:50]}...\n")
-                logger.info(f"[ImageGen:Service] Tier 0 (Gemini 3.1 Flash Image) attempting")
+            image_models = ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-2.5-flash-preview-image']
+            for img_model in image_models:
+                try:
+                    with open(log_path, 'a', encoding='utf-8') as f:
+                        f.write(f"[GEN-SIGNAL] Tier 0 ({img_model}): Attempting for: {prompt[:50]}...\n")
+                    logger.info(f"[ImageGen:Service] Tier 0 ({img_model}) attempting")
 
-                response = self.google_client.models.generate_content(
-                    model='gemini-3.1-flash-image',
-                    contents=full_enhanced_prompt,
-                    config={'response_modalities': ['IMAGE', 'TEXT']}
-                )
+                    response = self.google_client.models.generate_content(
+                        model=img_model,
+                        contents=full_enhanced_prompt,
+                        config={'response_modalities': ['IMAGE', 'TEXT']}
+                    )
 
-                if response and response.candidates:
-                    for part in response.candidates[0].content.parts:
-                        if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                            img_bytes = part.inline_data.data
-                            if isinstance(img_bytes, str):
-                                img_bytes = img_bytes.encode('utf-8')
-                            encoded = base64.b64encode(img_bytes).decode('utf-8')
-                            mime = getattr(part.inline_data, 'mime_type', 'image/png')
-                            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success (Gemini Flash Image)\n")
-                            logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Gemini 3.1 Flash Image)")
-                            return f"data:{mime};base64,{encoded}"
+                    if response and response.candidates:
+                        for part in response.candidates[0].content.parts:
+                            if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
+                                img_bytes = part.inline_data.data
+                                if isinstance(img_bytes, str):
+                                    img_bytes = img_bytes.encode('utf-8')
+                                encoded = base64.b64encode(img_bytes).decode('utf-8')
+                                mime = getattr(part.inline_data, 'mime_type', 'image/png')
+                                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success ({img_model})\n")
+                                logger.info(f"[ImageGen:Service] Tier 0 SUCCESS ({img_model})")
+                                return f"data:{mime};base64,{encoded}"
 
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Gemini Flash Image) No image in response\n")
-                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Gemini Flash Image) | No image in response")
-            except Exception as e:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Gemini Flash Image) Failed: {str(e)}\n")
-                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Gemini Flash Image) | error={str(e)[:200]}")
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 ({img_model}) No image in response\n")
+                    logger.warning(f"[ImageGen:Service] Tier 0 FAILED ({img_model}) | No image in response")
+                except Exception as e:
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 ({img_model}) Failed: {str(e)}\n")
+                    logger.warning(f"[ImageGen:Service] Tier 0 FAILED ({img_model}) | error={str(e)[:200]}")
 
         # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
         models_to_try = [('flux', 45), ('turbo', 35)]
