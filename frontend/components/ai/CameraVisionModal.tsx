@@ -257,6 +257,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
               setState('listening')
               setAiStatusText('Listening — speak or show me something!')
               startFrameCapture()
+              startMic()
               break
             case 'ai_audio':
               enqueueAiAudio(msg.data)
