@@ -346,9 +346,6 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
-                            'endOfSpeechSensitivity': 'END_SENSITIVITY_MEDIUM',
-                            'silenceDurationMs': 500,
                         }
                     },
                 }

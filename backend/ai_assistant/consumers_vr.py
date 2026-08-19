@@ -147,7 +147,6 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 800,  # 800ms gives natural word pauses without false cutoffs
                         }
                     },
                 }
