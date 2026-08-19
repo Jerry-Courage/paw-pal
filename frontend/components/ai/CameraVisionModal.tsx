@@ -273,10 +273,21 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
         setState('idle')
       }
 
-      ws.onclose = () => {
-        if (state !== 'ended') {
-          setState('idle')
-          setAiStatusText('Disconnected')
+      ws.onclose = (e) => {
+        if (state !== 'ended' && state !== 'idle') {
+          // Auto-reconnect once on unexpected close
+          if (e.code !== 1000 && !wsRef.current?._reconnecting) {
+            wsRef.current._reconnecting = true
+            setAiStatusText('Reconnecting...')
+            setTimeout(() => {
+              if (state !== 'ended' && state !== 'idle') {
+                startSession()
+              }
+            }, 2000)
+          } else {
+            setState('idle')
+            setAiStatusText('Disconnected')
+          }
         }
       }
     } catch (err) {
