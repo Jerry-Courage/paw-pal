@@ -293,10 +293,12 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
 
             msg = {
                 'realtimeInput': {
-                    'video': {
-                        'data': b64_data,
-                        'mimeType': mime_type,
-                    }
+                    'mediaChunks': [
+                        {
+                            'data': b64_data,
+                            'mimeType': mime_type,
+                        }
+                    ]
                 }
             }
             await self.gemini_ws.send(json.dumps(msg))
@@ -313,10 +315,12 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
                     audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=1.0)
                     msg = {
                         'realtimeInput': {
-                            'audio': {
-                                'data': audio_b64,
-                                'mimeType': 'audio/pcm;rate=16000'
-                            }
+                            'mediaChunks': [
+                                {
+                                    'data': audio_b64,
+                                    'mimeType': 'audio/pcm;rate=16000'
+                                }
+                            ]
                         }
                     }
                     await self.gemini_ws.send(json.dumps(msg))

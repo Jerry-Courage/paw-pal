@@ -190,10 +190,12 @@ class VRTutorConsumer(AsyncWebsocketConsumer):
         try:
             msg = {
                 'realtimeInput': {
-                    'audio': {
-                        'data': audio_b64,
-                        'mimeType': 'audio/pcm;rate=16000'
-                    }
+                    'mediaChunks': [
+                        {
+                            'data': audio_b64,
+                            'mimeType': 'audio/pcm;rate=16000'
+                        }
+                    ]
                 }
             }
             await self.gemini_ws.send(json.dumps(msg))
