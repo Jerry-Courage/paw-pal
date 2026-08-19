@@ -802,19 +802,17 @@ export default function PersonalisedLearningPage() {
               {isMicMuted ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               {isMicMuted ? 'Unmute' : 'Mute'}
             </button>
-            {textFallbackMode && (
-              <button
-                onClick={() => setShowTextInput(v => !v)}
-                className={cn(
-                  "w-12 h-12 rounded-2xl border-2 flex items-center justify-center transition-all shrink-0",
-                  showTextInput
-                    ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
-                    : "bg-white/5 border-white/[0.08] text-white/60"
-                )}
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            )}
+            <button
+              onClick={() => setShowTextInput(v => !v)}
+              className={cn(
+                "w-12 h-12 rounded-2xl border-2 flex items-center justify-center transition-all shrink-0",
+                showTextInput
+                  ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
+                  : "bg-white/5 border-white/[0.08] text-white/60"
+              )}
+            >
+              <Send className="w-5 h-5" />
+            </button>
             <button
               onClick={endSession}
               className="px-8 py-4 rounded-2xl bg-white text-black font-black text-sm uppercase tracking-wider hover:bg-zinc-200 active:scale-95 transition-all"
@@ -825,7 +823,7 @@ export default function PersonalisedLearningPage() {
 
           {/* Text input overlay (toggled) */}
           <AnimatePresence>
-            {showTextInput && textFallbackMode && (
+            {showTextInput && (
               <motion.div
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
