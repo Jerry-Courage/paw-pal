@@ -892,7 +892,11 @@ class AgentView(APIView):
                 image_keywords = ['generate an image', 'create an image', 'draw', 'picture of',
                                   'image of', 'show me a', 'illustration of', 'diagram of',
                                   'labelled image', 'labeled image', 'visualize', 'generate image',
-                                  'make an image', 'can i get an image', 'picture', 'photo of']
+                                  'make an image', 'can i get an image', 'picture', 'photo of',
+                                  'pic of', 'pic of a', 'image of a', 'picture of a',
+                                  'need an image', 'need a picture', 'need a pic',
+                                  'want an image', 'want a picture', 'want a pic',
+                                  'can you generate', 'can you draw', 'can you create']
                 q_lower = query.lower()
                 if any(kw in q_lower for kw in image_keywords):
                     action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
@@ -1026,7 +1030,11 @@ class AgentStreamView(APIView):
                     image_keywords = ['generate an image', 'create an image', 'draw', 'picture of',
                                       'image of', 'show me a', 'illustration of', 'diagram of',
                                       'labelled image', 'labeled image', 'visualize', 'generate image',
-                                      'make an image', 'can i get an image', 'picture', 'photo of']
+                                      'make an image', 'can i get an image', 'picture', 'photo of',
+                                      'pic of', 'pic of a', 'image of a', 'picture of a',
+                                      'need an image', 'need a picture', 'need a pic',
+                                      'want an image', 'want a picture', 'want a pic',
+                                      'can you generate', 'can you draw', 'can you create']
                     q_lower = query.lower()
                     if any(kw in q_lower for kw in image_keywords):
                         action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
