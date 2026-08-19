@@ -461,13 +461,6 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
         ) : (
           /* AI: ChatGPT-style — clean, no bubble, full width */
           <div className="w-full">
-            {/* AI image attachment from user upload */}
-            {msg.image && (
-              <div className="mb-4 rounded-2xl overflow-hidden border border-outline-variant/50 shadow-lg max-w-md">
-                <img src={msg.image} alt="attachment" className="max-w-full h-auto max-h-72 object-contain" />
-              </div>
-            )}
-
             {/* Main content — no bubble, just structured text */}
             <div className="text-[16px] leading-relaxed w-full">
               <RichContent content={msg.content} />
