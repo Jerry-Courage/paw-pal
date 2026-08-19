@@ -346,6 +346,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
+                            'silenceDurationMs': 200,
                         }
                     },
                 }
@@ -356,9 +357,9 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
             # Wait for setupComplete — retry recv on timeout instead of giving up immediately
             setup_ready = False
-            for i in range(5):
+            for i in range(3):
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=20)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=5)
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True
@@ -366,8 +367,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     else:
                         logger.info(f'[PersonalisedVoice] Received non-setup msg: {list(setup_data.keys())}')
                 except asyncio.TimeoutError:
-                    logger.warning(f'[PersonalisedVoice] Setup recv timeout (attempt {i + 1}/5)')
-                    if i < 4:
+                    logger.warning(f'[PersonalisedVoice] Setup recv timeout (attempt {i + 1}/3)')
+                    if i < 2:
                         continue
                     break
 
@@ -520,7 +521,10 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 await self._send({'type': 'audio', 'data': inline['data']})
                 self.ai_audio_b64_chunks.append(inline['data'])
             if part.get('text'):
-                self.transcript_log.append(('ai', part['text']))
+                txt = part['text'].strip()
+                if txt:
+                    self.transcript_log.append(('ai', txt))
+                    await self._send({'type': 'transcript_ai', 'text': txt})
 
         input_transcript = server_content.get('inputTranscription', {})
         if input_transcript.get('text'):
