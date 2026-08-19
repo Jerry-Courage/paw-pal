@@ -2,8 +2,12 @@ import axios from 'axios'
 import { getSession, signOut } from 'next-auth/react'
 
 export const getAuthToken = async () => {
-  const session = await getSession()
-  return session?.accessToken || null
+  for (let i = 0; i < 3; i++) {
+    const session = await getSession()
+    if ((session as any)?.accessToken) return (session as any).accessToken
+    await new Promise(r => setTimeout(r, 400))
+  }
+  return null
 }
 
 const api = axios.create({
