@@ -2312,41 +2312,50 @@ class AIService:
         cf_account = getattr(settings, 'CFLARE_AI_ACCOUNT_ID', '')
         cf_token = getattr(settings, 'CFLARE_AI_API_TOKEN', '')
         if cf_account and cf_token:
-            try:
-                import requests as cf_requests
-                with open(log_path, 'a', encoding='utf-8') as f:
-                    f.write(f"[GEN-SIGNAL] Tier 0 (Cloudflare FLUX): Attempting for: {prompt[:50]}...\n")
-                logger.info(f"[ImageGen:Service] Tier 0 (Cloudflare FLUX.1-schnell) attempting")
+            import requests as cf_requests
+            import time as _time
+            cf_url = f"https://api.cloudflare.com/client/v4/accounts/{cf_account}/ai/run/@cf/black-forest-labs/flux-1-schnell"
+            for cf_attempt in range(3):
+                try:
+                    with open(log_path, 'a', encoding='utf-8') as f:
+                        f.write(f"[GEN-SIGNAL] Tier 0 (Cloudflare FLUX): Attempt {cf_attempt+1}/3 for: {prompt[:50]}...\n")
+                    logger.info(f"[ImageGen:Service] Tier 0 (Cloudflare FLUX.1-schnell) attempt {cf_attempt+1}/3")
 
-                cf_url = f"https://api.cloudflare.com/client/v4/accounts/{cf_account}/ai/run/@cf/black-forest-labs/flux-1-schnell"
-                cf_res = cf_requests.post(
-                    cf_url,
-                    headers={
-                        'Authorization': f'Bearer {cf_token}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'prompt': full_enhanced_prompt,
-                    },
-                    timeout=30,
-                )
+                    cf_res = cf_requests.post(
+                        cf_url,
+                        headers={
+                            'Authorization': f'Bearer {cf_token}',
+                            'Content-Type': 'application/json',
+                        },
+                        json={
+                            'prompt': full_enhanced_prompt,
+                        },
+                        timeout=60,
+                    )
 
-                if cf_res.status_code == 200:
-                    cf_data = cf_res.json()
-                    if cf_data.get('success') and cf_data.get('result', {}).get('image'):
-                        img_b64 = cf_data['result']['image']
-                        with open(log_path, 'a', encoding='utf-8') as f:
-                            f.write(f"[OK] Tier 0 Success (Cloudflare FLUX)\n")
-                        logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Cloudflare FLUX.1-schnell)")
-                        return f"data:image/jpeg;base64,{img_b64}"
+                    if cf_res.status_code == 200:
+                        cf_data = cf_res.json()
+                        if cf_data.get('success') and cf_data.get('result', {}).get('image'):
+                            img_b64 = cf_data['result']['image']
+                            with open(log_path, 'a', encoding='utf-8') as f:
+                                f.write(f"[OK] Tier 0 Success (Cloudflare FLUX) on attempt {cf_attempt+1}\n")
+                            logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Cloudflare FLUX.1-schnell) on attempt {cf_attempt+1}")
+                            return f"data:image/jpeg;base64,{img_b64}"
+                        else:
+                            err_msg = cf_data.get('errors', [{}])[0].get('message', 'unknown')
+                            logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Cloudflare FLUX) | api_error={err_msg}")
+                            break
+                    elif cf_res.status_code == 429:
+                        logger.warning(f"[ImageGen:Service] Tier 0 (Cloudflare FLUX) 429 rate limit, retrying in 2s... (attempt {cf_attempt+1}/3)")
+                        _time.sleep(2)
+                        continue
                     else:
-                        err_msg = cf_data.get('errors', [{}])[0].get('message', 'unknown')
-                        logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Cloudflare FLUX) | api_error={err_msg}")
-                else:
-                    logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Cloudflare FLUX) | status={cf_res.status_code} body={cf_res.text[:200]}")
-            except Exception as e:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Cloudflare FLUX) Failed: {str(e)}\n")
-                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Cloudflare FLUX) | error={str(e)[:200]}")
+                        logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Cloudflare FLUX) | status={cf_res.status_code} body={cf_res.text[:200]}")
+                        break
+                except Exception as e:
+                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Cloudflare FLUX) Failed: {str(e)}\n")
+                    logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Cloudflare FLUX) | error={str(e)[:200]}")
+                    break
 
         # --- TIER 1: POLLINATIONS AI (Instant Generative, Free) ---
         models_to_try = [('flux', 45), ('turbo', 35)]
