@@ -889,18 +889,39 @@ class AgentView(APIView):
             
             # AUTO-DETECT: If the model didn't trigger image gen but the query clearly asks for it
             if not action:
-                image_keywords = ['generate an image', 'create an image', 'draw', 'picture of',
-                                  'image of', 'show me a', 'illustration of', 'diagram of',
-                                  'labelled image', 'labeled image', 'visualize', 'generate image',
-                                  'make an image', 'can i get an image', 'picture', 'photo of',
-                                  'pic of', 'pic of a', 'image of a', 'picture of a',
-                                  'need an image', 'need a picture', 'need a pic',
-                                  'want an image', 'want a picture', 'want a pic',
-                                  'can you generate', 'can you draw', 'can you create']
+                import re as _re
                 q_lower = query.lower()
-                if any(kw in q_lower for kw in image_keywords):
+                # Broad regex patterns — catches almost any image request phrasing
+                image_patterns = [
+                    r'\b(image|img|pic|picture|photo|photo|snapshot)\b.*\bof\b',
+                    r'\b(of|of a|of an|of the)\b.*(image|pic|picture|photo|drawing|illustration)',
+                    r'\b(generate|create|make|draw|sketch|design|produce)\b.*(image|pic|picture|photo|illustration|diagram|art)',
+                    r'\b(image|pic|picture|photo|illustration|diagram)\b',
+                    r'\b(visuali[sz]e|depict|render|show me)\b',
+                    r'\b(labelled|labeled)\b.*\b(image|diagram|picture)\b',
+                    r'\b(need|want|get|give|send|show|display)\b.*(image|pic|picture|photo|illustration)',
+                    r'\b(can you|could you|please)\b.*(image|pic|picture|photo|draw|generate|create)',
+                    r'\b(what does|how does|what would).*(look like|look like)\b',
+                ]
+                model_refused = any(w in reply.lower() for w in [
+                    "i can't", "i cannot", "i'm unable", "i am unable",
+                    "i don't have", "i do not have", "not able to",
+                    "i'm not able", "i am not able", "unable to generate",
+                    "can't generate", "cannot generate", "can't create",
+                    "can't provide", "cannot provide", "can't make",
+                ])
+                query_has_image_intent = (
+                    any(_re.search(p, q_lower) for p in image_patterns)
+                    or 'image' in q_lower or 'pic' in q_lower or 'photo' in q_lower
+                    or 'draw' in q_lower or 'picture' in q_lower
+                    or 'illustration' in q_lower or 'diagram' in q_lower
+                )
+                if query_has_image_intent:
                     action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
-                    logger.info(f"[AgentView] Auto-detected image request, forcing generate_image tool")
+                    logger.info(f"[AgentView] Auto-detected image request via patterns, forcing generate_image tool")
+                elif model_refused and query_has_image_intent:
+                    action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
+                    logger.info(f"[AgentView] Model refused but query has image intent, forcing generate_image tool")
             
             execution_result = None
             if action:
@@ -1027,19 +1048,29 @@ class AgentStreamView(APIView):
 
                 # AUTO-DETECT: If no action but query clearly asks for image
                 if not action:
-                    image_keywords = ['generate an image', 'create an image', 'draw', 'picture of',
-                                      'image of', 'show me a', 'illustration of', 'diagram of',
-                                      'labelled image', 'labeled image', 'visualize', 'generate image',
-                                      'make an image', 'can i get an image', 'picture', 'photo of',
-                                      'pic of', 'pic of a', 'image of a', 'picture of a',
-                                      'need an image', 'need a picture', 'need a pic',
-                                      'want an image', 'want a picture', 'want a pic',
-                                      'can you generate', 'can you draw', 'can you create']
+                    import re as _re
                     q_lower = query.lower()
-                    if any(kw in q_lower for kw in image_keywords):
+                    image_patterns = [
+                        r'\b(image|img|pic|picture|photo|snapshot)\b.*\bof\b',
+                        r'\b(of|of a|of an|of the)\b.*(image|pic|picture|photo|drawing|illustration)',
+                        r'\b(generate|create|make|draw|sketch|design|produce)\b.*(image|pic|picture|photo|illustration|diagram|art)',
+                        r'\b(image|pic|picture|photo|illustration|diagram)\b',
+                        r'\b(visuali[sz]e|depict|render|show me)\b',
+                        r'\b(labelled|labeled)\b.*\b(image|diagram|picture)\b',
+                        r'\b(need|want|get|give|send|show|display)\b.*(image|pic|picture|photo|illustration)',
+                        r'\b(can you|could you|please)\b.*(image|pic|picture|photo|draw|generate|create)',
+                        r'\b(what does|how does|what would).*(look like)\b',
+                    ]
+                    query_has_image_intent = (
+                        any(_re.search(p, q_lower) for p in image_patterns)
+                        or 'image' in q_lower or 'pic' in q_lower or 'photo' in q_lower
+                        or 'draw' in q_lower or 'picture' in q_lower
+                        or 'illustration' in q_lower or 'diagram' in q_lower
+                    )
+                    if query_has_image_intent:
                         action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
                         execution_result = await agent.execute_action(action)
-                        logger.info(f"[AgentStreamView] Auto-detected image request, forcing generate_image tool")
+                        logger.info(f"[AgentStreamView] Auto-detected image request via patterns, forcing generate_image tool")
                 
                 # Update the placeholder with final content + any generated media
                 def update_msg():
