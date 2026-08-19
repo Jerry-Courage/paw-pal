@@ -16,7 +16,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
 
-GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview'
+GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
@@ -149,43 +149,28 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
     # ── Gemini session ────────────────────────────────────────────────────
 
     async def _start_gemini_session(self, custom_prompt: str = ''):
-        api_keys = [
-            os.getenv('GOOGLE_STUDIO_API_KEY', ''),
-            os.getenv('GOOGLE_STUDIO_API_KEY_2', ''),
-            os.getenv('GOOGLE_STUDIO_API_KEY_3', ''),
-        ]
-        api_keys = [k.strip() for k in api_keys if k and k.strip()]
-        if not api_keys:
+        api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
+        if not api_key:
             await self._send({'type': 'error', 'message': 'Google API key not configured'})
             return
 
         system_prompt = custom_prompt or self._default_system_prompt()
 
-        connected = False
-        last_error = None
-        for api_key in api_keys:
-            ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
-            try:
-                logger.info(f'[LiveVision] Connecting to Gemini with key ending in ...{api_key[-6:]}...')
-                self.gemini_ws = await asyncio.wait_for(
-                    websockets.connect(
-                        ws_url,
-                        ping_interval=20,
-                        ping_timeout=10,
-                        max_size=10 * 1024 * 1024,
-                    ),
-                    timeout=20,
-                )
-                connected = True
-                break
-            except Exception as e:
-                last_error = e
-                logger.warning(f'[LiveVision] Connection failed with key: {e}')
-                continue
-
-        if not connected:
-            logger.error(f'[LiveVision] All connection attempts failed across all keys: {last_error}')
-            await self._send({'type': 'error', 'message': f'Failed to connect: {str(last_error)}'})
+        ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
+        try:
+            logger.info(f'[LiveVision] Connecting to Gemini...')
+            self.gemini_ws = await asyncio.wait_for(
+                websockets.connect(
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    max_size=10 * 1024 * 1024,
+                ),
+                timeout=15,
+            )
+        except Exception as e:
+            logger.error(f'[LiveVision] Connection failed: {e}')
+            await self._send({'type': 'error', 'message': 'Could not connect to voice server. Please try again.'})
             return
 
         try:
@@ -220,9 +205,9 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
             self.audio_send_task = asyncio.create_task(self._drain_audio_queue())
 
             setup_ready = False
-            for i in range(5):
+            for i in range(2):
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=20)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=3)
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True
@@ -230,8 +215,8 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
                     else:
                         logger.info(f'[LiveVision] Received non-setup msg: {list(setup_data.keys())}')
                 except asyncio.TimeoutError:
-                    logger.warning(f'[LiveVision] Setup recv timeout (attempt {i + 1}/5)')
-                    if i < 4:
+                    logger.warning(f'[LiveVision] Setup recv timeout (attempt {i + 1}/2)')
+                    if i < 1:
                         continue
                     break
 
