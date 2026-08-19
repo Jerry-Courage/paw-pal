@@ -922,7 +922,24 @@ class AgentView(APIView):
             
             execution_result = None
             if action:
-                execution_result = async_to_sync(agent.execute_action)(action)
+                # GUARD: Skip image generation if the query clearly isn't asking for an image
+                if action.get('tool') == 'generate_image':
+                    q_lower = query.lower().strip()
+                    non_image_queries = [
+                        'who created', 'who made', 'who built', 'who designed', 'who developed',
+                        'who founded', 'who started', 'who is', 'who are', 'what is', 'what are',
+                        'explain', 'define', 'summarize', 'describe', 'tell me about',
+                        'how do', 'how does', 'how to', 'why do', 'why does', 'why is',
+                        'help me', 'thanks', 'thank you', 'hello', 'hi', 'hey',
+                        'what did i', 'what did we', 'remember', 'forget',
+                    ]
+                    if any(q_lower.startswith(p) or f' {p}' in q_lower for p in non_image_queries):
+                        logger.info(f"[AgentView] Skipping image gen — query is not an image request: {query[:60]}")
+                        action = None
+                    else:
+                        execution_result = async_to_sync(agent.execute_action)(action)
+                else:
+                    execution_result = async_to_sync(agent.execute_action)(action)
 
             display_reply = reply.split('ACTION:')[0].strip()
             # When image was generated (auto-detected or model-triggered), clean up the reply
@@ -1067,7 +1084,23 @@ class AgentStreamView(APIView):
                 action = agent._extract_action(full_reply)
                 execution_result = None
                 if action:
-                    execution_result = await agent.execute_action(action)
+                    if action.get('tool') == 'generate_image':
+                        q_lower_st = query.lower().strip()
+                        non_image_queries_st = [
+                            'who created', 'who made', 'who built', 'who designed', 'who developed',
+                            'who founded', 'who started', 'who is', 'who are', 'what is', 'what are',
+                            'explain', 'define', 'summarize', 'describe', 'tell me about',
+                            'how do', 'how does', 'how to', 'why do', 'why does', 'why is',
+                            'help me', 'thanks', 'thank you', 'hello', 'hi', 'hey',
+                            'what did i', 'what did we', 'remember', 'forget',
+                        ]
+                        if any(q_lower_st.startswith(p) or f' {p}' in q_lower_st for p in non_image_queries_st):
+                            logger.info(f"[AgentStreamView] Skipping image gen — not an image request: {query[:60]}")
+                            action = None
+                        else:
+                            execution_result = await agent.execute_action(action)
+                    else:
+                        execution_result = await agent.execute_action(action)
 
                 # AUTO-DETECT: If no action but query clearly asks for image
                 if not action:

@@ -336,12 +336,10 @@ class FlowAgent:
         action_match = re.search(r"ACTION:\s*({.*})", text, re.DOTALL)
         if action_match:
             action_part = action_match.group(1).strip()
-            return self._self_healing_json_parse(action_part)
-        
-        # Secondary check: search for any JSON-like glob if ACTION tag failed
-        json_match = re.search(r"({.*})", text, re.DOTALL)
-        if json_match:
-            return self._self_healing_json_parse(json_match.group(1).strip())
+            result = self._self_healing_json_parse(action_part)
+            # Validate: only return actions with known tool names
+            if result and result.get('tool') in ('generate_image', 'generate_diagram', 'web_search', 'schedule_study_session', 'create_assignment', 'add_deadline', 'create_workspace'):
+                return result
         return None
 
     def _self_healing_json_parse(self, text):
