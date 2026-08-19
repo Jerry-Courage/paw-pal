@@ -203,7 +203,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             await self._start_gemini_session()
 
         elif msg_type == 'audio':
-            if self.gemini_ws and self.session_active and self.gemini_ws.open:
+            if self.gemini_ws and self.session_active:
                 audio_b64 = msg.get('data', '')
                 if audio_b64 and hasattr(self, 'audio_queue'):
                     await self.audio_queue.put(audio_b64)
@@ -214,7 +214,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 self.transcript_log.append(('user', text))
                 await self._send({'type': 'transcript_user', 'text': text})
 
-                if self.text_fallback_mode or not self.gemini_ws or not self.gemini_ws.open:
+                if self.text_fallback_mode or not self.gemini_ws:
                     await self._reply_with_text_fallback(text)
                 else:
                     try:
@@ -239,7 +239,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         """
         if len(data) < 4 or data[0] != 0x01:
             return  # Unknown binary frame type
-        if not self.gemini_ws or not self.session_active or not self.gemini_ws.open:
+        if not self.gemini_ws or not self.session_active:
             return
 
         pcm_bytes = data[4:]  # Skip 4-byte header
@@ -423,7 +423,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
     async def _send_audio_to_gemini(self, audio_b64: str):
         try:
-            if not self.gemini_ws or not self.gemini_ws.open:
+            if not self.gemini_ws:
                 return
             msg = {
                 'realtimeInput': {

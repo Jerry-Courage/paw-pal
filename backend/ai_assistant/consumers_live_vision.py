@@ -109,11 +109,11 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
             await self._start_gemini_session(system_prompt)
 
         elif msg_type == 'camera_frame':
-            if self.gemini_ws and self.session_active and self.gemini_ws.open:
+            if self.gemini_ws and self.session_active:
                 await self._send_frame_to_gemini(msg.get('data', ''))
 
         elif msg_type == 'audio':
-            if self.gemini_ws and self.session_active and self.gemini_ws.open:
+            if self.gemini_ws and self.session_active:
                 audio_b64 = msg.get('data', '')
                 if audio_b64:
                     try:
@@ -125,7 +125,7 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
             text = msg.get('text', '').strip()
             if not text:
                 return
-            if self.session_active and self.gemini_ws and self.gemini_ws.open:
+            if self.session_active and self.gemini_ws:
                 await self._send({'type': 'user_transcript', 'text': text})
                 await self._send_text_to_gemini(text)
             else:
