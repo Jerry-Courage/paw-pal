@@ -33,6 +33,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
   // Mic state — ScriptProcessorNode with silent gain
   const micCtxRef = useRef<AudioContext | null>(null)
   const micNodeRef = useRef<ScriptProcessorNode | null>(null)
+  const processorRef = useRef<ScriptProcessorNode | null>(null)
   const micMutedRef = useRef(false)
 
   const [state, setState] = useState<LiveState>('idle')
@@ -55,6 +56,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
     if (micStreamRef.current) { micStreamRef.current.getTracks().forEach(t => t.stop()); micStreamRef.current = null }
     if (micNodeRef.current) { micNodeRef.current.disconnect(); micNodeRef.current = null }
+    if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null }
     if (micCtxRef.current) { micCtxRef.current.close(); micCtxRef.current = null }
     // Stop all active playback sources
     activeSourcesRef.current.forEach(s => { try { s.stop() } catch {} })
@@ -112,6 +114,7 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
 
       const processor = ctx.createScriptProcessor(2048, 1, 1)
       micNodeRef.current = processor
+      processorRef.current = processor
       source.connect(processor)
 
       // Connect to silent gain — required for onaudioprocess to fire,

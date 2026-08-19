@@ -887,6 +887,17 @@ class AgentView(APIView):
             from asgiref.sync import async_to_sync
             reply, action = async_to_sync(agent.process_request)(query, context, history=history, is_tutor_mode=is_tutor)
             
+            # AUTO-DETECT: If the model didn't trigger image gen but the query clearly asks for it
+            if not action:
+                image_keywords = ['generate an image', 'create an image', 'draw', 'picture of',
+                                  'image of', 'show me a', 'illustration of', 'diagram of',
+                                  'labelled image', 'labeled image', 'visualize', 'generate image',
+                                  'make an image', 'can i get an image', 'picture', 'photo of']
+                q_lower = query.lower()
+                if any(kw in q_lower for kw in image_keywords):
+                    action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
+                    logger.info(f"[AgentView] Auto-detected image request, forcing generate_image tool")
+            
             execution_result = None
             if action:
                 execution_result = async_to_sync(agent.execute_action)(action)
@@ -1009,6 +1020,18 @@ class AgentStreamView(APIView):
                 execution_result = None
                 if action:
                     execution_result = await agent.execute_action(action)
+
+                # AUTO-DETECT: If no action but query clearly asks for image
+                if not action:
+                    image_keywords = ['generate an image', 'create an image', 'draw', 'picture of',
+                                      'image of', 'show me a', 'illustration of', 'diagram of',
+                                      'labelled image', 'labeled image', 'visualize', 'generate image',
+                                      'make an image', 'can i get an image', 'picture', 'photo of']
+                    q_lower = query.lower()
+                    if any(kw in q_lower for kw in image_keywords):
+                        action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
+                        execution_result = await agent.execute_action(action)
+                        logger.info(f"[AgentStreamView] Auto-detected image request, forcing generate_image tool")
                 
                 # Update the placeholder with final content + any generated media
                 def update_msg():

@@ -2297,10 +2297,9 @@ class AIService:
     def generate_image(self, prompt: str, model: str = 'turbo') -> str:
         """
         Generates an image from a text prompt using a resilient multi-tier fallback strategy.
-        Tier 0: Google Imagen 4
+        Tier 0: Google Gemini 3.1 Flash (image generation)
         Tier 1: Pollinations AI (Generative, Free, Fast)
         Tier 2: Lexica.art (Search-based retrieval)
-        Tier 3: OpenRouter (Generative, Paid)
         """
         log_path = os.path.join(settings.BASE_DIR, 'vision_debug.log')
         style = self._get_style_suffix(prompt)
@@ -2308,28 +2307,36 @@ class AIService:
 
         logger.info(f"[ImageGen:Service] Starting generation | prompt_preview={prompt[:60]!r}")
 
-        # --- TIER 0: GOOGLE IMAGEN 4 (Premium Generative) ---
+        # --- TIER 0: GOOGLE GEMINI 3.1 FLASH IMAGE GENERATION ---
         if self.google_client:
             try:
                 with open(log_path, 'a', encoding='utf-8') as f:
-                    f.write(f"[GEN-SIGNAL] Tier 0 (Imagen 4): Attempting for: {prompt[:50]}...\n")
-                logger.info(f"[ImageGen:Service] Tier 0 (Imagen 4) attempting")
+                    f.write(f"[GEN-SIGNAL] Tier 0 (Gemini Flash Image): Attempting for: {prompt[:50]}...\n")
+                logger.info(f"[ImageGen:Service] Tier 0 (Gemini 3.1 Flash Image) attempting")
 
-                response = self.google_client.models.generate_images(
-                    model='imagen-4.0-generate-001',
-                    prompt=full_enhanced_prompt,
-                    config={'number_of_images': 1}
+                response = self.google_client.models.generate_content(
+                    model='gemini-3.1-flash-image',
+                    contents=full_enhanced_prompt,
+                    config={'response_modalities': ['IMAGE', 'TEXT']}
                 )
 
-                if response and hasattr(response, 'generated_images') and response.generated_images:
-                    img_data = response.generated_images[0].image_bytes
-                    encoded = base64.b64encode(img_data).decode('utf-8')
-                    with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success (Imagen 4)\n")
-                    logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Imagen 4)")
-                    return f"data:image/png;base64,{encoded}"
+                if response and response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
+                            img_bytes = part.inline_data.data
+                            if isinstance(img_bytes, str):
+                                img_bytes = img_bytes.encode('utf-8')
+                            encoded = base64.b64encode(img_bytes).decode('utf-8')
+                            mime = getattr(part.inline_data, 'mime_type', 'image/png')
+                            with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[OK] Tier 0 Success (Gemini Flash Image)\n")
+                            logger.info(f"[ImageGen:Service] Tier 0 SUCCESS (Gemini 3.1 Flash Image)")
+                            return f"data:{mime};base64,{encoded}"
+
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Gemini Flash Image) No image in response\n")
+                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Gemini Flash Image) | No image in response")
             except Exception as e:
-                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Imagen 4) Failed: {str(e)}\n")
-                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Imagen 4) | error={str(e)[:200]}")
+                with open(log_path, 'a', encoding='utf-8') as f: f.write(f"[FAIL] Tier 0 (Gemini Flash Image) Failed: {str(e)}\n")
+                logger.warning(f"[ImageGen:Service] Tier 0 FAILED (Gemini Flash Image) | error={str(e)[:200]}")
 
         # --- TIER 1: POLLINATIONS AI (Instant Generative) ---
         models_to_try = [('flux', 45), ('turbo', 35)]
