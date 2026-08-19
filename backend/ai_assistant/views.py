@@ -879,6 +879,9 @@ class AgentView(APIView):
             # Save User Message
             ChatMessage.objects.create(session=session, role='user', content=query)
             
+            # Pull history from DATABASE (authoritative source) — avoids frontend stale closure bugs
+            history = _get_history(session, exclude_last=True)
+            
             # Explicitly access request.user to ensure authentication is finalized in sync context
             current_user = request.user
             
@@ -1034,6 +1037,9 @@ class AgentStreamView(APIView):
 
         # 1. Save User Message immediately
         ChatMessage.objects.create(session=session, role='user', content=query)
+        
+        # Pull history from DATABASE (authoritative source) — avoids frontend stale closure bugs
+        history = _get_history(session, exclude_last=True)
         
         # 2. Create placeholder for Assistant Message early to provide ID for visuals
         assistant_msg = ChatMessage.objects.create(session=session, role='assistant', content="")

@@ -2,7 +2,7 @@ import json
 import logging
 import time
 import re
-import re
+import asyncio
 from django.utils import timezone
 from django.core.cache import cache
 from asgiref.sync import sync_to_async
@@ -230,6 +230,46 @@ class FlowAgent:
             # NATIVE ASYNC: No more sync_to_async overhead
             library_context = await self.ai.perform_global_search(user_query, self.user)
             logger.info(f"[Perf] Library Search (RAG) took {time.time() - start_rag:.3f}s")
+
+        # AUTO-DETECT WEB SEARCH: Pre-fetch results if query clearly asks to search the web
+        web_search_context = ""
+        q_lower = user_query.lower()
+        web_search_patterns = [
+            r'\bsearch\b.*\bweb\b', r'\bsearch\b.*\bfor\b', r'\blook\s+up\b',
+            r'\bgoogle\b', r'\bwhat.{0,20}is\b.*\bhttps?://',
+            r'\bhttps?://\S+', r'\bwww\.\S+',
+            r'\bwhat.{0,30}(latest|recent|current|newest|today|now)\b',
+            r'\bnews\b.*\babout\b', r'\btell me about\b.*\bhttp',
+        ]
+        is_url = bool(re.match(r'^https?://', user_query.strip())) or bool(re.match(r'^[\w.-]+\.(com|org|net|edu|io|co)', user_query.strip()))
+        has_web_intent = is_url or any(re.search(p, q_lower) for p in web_search_patterns)
+        if has_web_intent:
+            logger.info(f"[Agent] Web search auto-detected for: {user_query[:60]}")
+            try:
+                import requests as _req
+                resp = await asyncio.to_thread(
+                    _req.get,
+                    'https://api.duckduckgo.com/',
+                    params={'q': user_query, 'format': 'json', 'no_html': 1, 'skip_disambig': 1},
+                    timeout=8,
+                )
+                data = resp.json()
+                results = []
+                if data.get('AbstractText'):
+                    results.append(data['AbstractText'])
+                for r in (data.get('RelatedTopics') or [])[:5]:
+                    if isinstance(r, dict) and r.get('Text'):
+                        results.append(r['Text'])
+                if not results:
+                    infobox = data.get('Infobox', {})
+                    if infobox and infobox.get('content'):
+                        parts = [f"{e.get('label', '')}: {e.get('value', '')}" for e in infobox['content'] if e.get('value')]
+                        results = parts[:10]
+                if results:
+                    web_search_context = "\n\nWEB SEARCH RESULTS:\n" + "\n\n".join(results[:5])
+                    logger.info(f"[Agent] Web search fetched {len(results[:5])} results")
+            except Exception as we:
+                logger.warning(f"[Agent] Web search auto-fetch failed: {we}")
         
         now = timezone.now()
         current_time_str = now.strftime("%A, %B %d, %Y at %H:%M")
@@ -241,7 +281,7 @@ class FlowAgent:
             mode_indicator = "MODE: FREE — No document assigned. You are in free conversational mode. Chat about anything, be entertaining, engage casually."
 
         messages = [
-            {'role': 'system', 'content': f"{base_prompt}\n\n{mode_indicator}\n\n{TOOLS_SYSTEM_PROMPT}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}"},
+            {'role': 'system', 'content': f"{base_prompt}\n\n{mode_indicator}\n\n{TOOLS_SYSTEM_PROMPT}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}\n{web_search_context}"},
         ]
         if history and isinstance(history, list):
             messages.extend(self._truncate_history(history, max_messages=50, max_chars=12000))

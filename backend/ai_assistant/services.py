@@ -476,24 +476,43 @@ class AIService:
                         safe_max_tokens = min(max_tokens, groq_max_tokens)
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
-                        if payload_bytes > 4000:
-                            # Build a lean message list: drop system prompt, keep only last user message
-                            user_msgs = [m for m in messages if m.get('role') == 'user']
-                            last_user = user_msgs[-1] if user_msgs else {'role': 'user', 'content': ''}
-                            # Aggressively truncate the content, strip images for text-only Groq
-                            content = last_user.get('content', '')
-                            if isinstance(content, str):
-                                content = content[:2000]
-                            elif isinstance(content, list):
-                                text_parts = []
-                                for part in content:
-                                    if isinstance(part, dict) and part.get('type') == 'text':
-                                        text_parts.append({'type': 'text', 'text': part['text'][:2000]})
-                                content = text_parts if text_parts else ''
-                            lean_msgs = [{'role': 'user', 'content': content}]
-                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': safe_max_tokens}
+
+                        # Model-aware payload limits (in bytes) — NEVER drop system prompt
+                        # gpt-oss-120b: 128K ctx ≈ 512KB, gpt-oss-20b: 8K ctx ≈ 32KB, qwen: 131K ctx ≈ 524KB
+                        if 'gpt-oss-20b' in groq_model:
+                            payload_limit = 28000   # ~7K tokens for 8K context model
+                        else:
+                            payload_limit = 200000  # plenty of room for 128K+ models
+
+                        if payload_bytes > payload_limit:
+                            # Smart compression: ALWAYS keep system prompt + tools, trim old history
+                            system_msgs = [m for m in messages if m.get('role') == 'system']
+                            non_system = [m for m in messages if m.get('role') != 'system']
+
+                            # Truncate system prompt to essential parts (keep tools + identity)
+                            sys_content = '\n\n'.join(m.get('content', '') for m in system_msgs)
+                            # Keep first 3000 chars of system prompt (identity + tools) + last 1000 (tools reminder)
+                            if len(sys_content) > 4000:
+                                sys_content = sys_content[:3000] + '\n\n...(earlier instructions truncated)...\n\n' + sys_content[-1000:]
+                            compressed = [{'role': 'system', 'content': sys_content}]
+
+                            # Keep last 10 non-system messages (most recent context)
+                            for msg in non_system[-10:]:
+                                c = msg.get('content', '')
+                                if isinstance(c, str) and len(c) > 2000:
+                                    c = c[:2000]
+                                elif isinstance(c, list):
+                                    # Strip images for text-only Groq, keep text parts
+                                    text_parts = []
+                                    for part in c:
+                                        if isinstance(part, dict) and part.get('type') == 'text':
+                                            text_parts.append({'type': 'text', 'text': part['text'][:2000]})
+                                    c = text_parts if text_parts else ''
+                                compressed.append({'role': msg['role'], 'content': c})
+
+                            groq_payload = {'model': groq_model, 'messages': compressed, 'max_tokens': safe_max_tokens}
                             new_bytes = len(_json.dumps(groq_payload).encode())
-                            logger.warning(f"[Groq Chat] Payload {payload_bytes}→{new_bytes} bytes — compressed for Groq")
+                            logger.warning(f"[Groq Chat] Payload {payload_bytes}→{new_bytes} bytes — compressed for {groq_model} (system prompt + tools PRESERVED)")
 
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
@@ -609,23 +628,33 @@ class AIService:
                         safe_max_tokens = min(max_tokens, groq_max_tokens)
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
                         payload_bytes = len(_json.dumps(groq_payload).encode())
-                        if payload_bytes > 4000:
-                            # Build a lean message list: drop system prompt, keep only last user message
-                            user_msgs = [m for m in messages if m.get('role') == 'user']
-                            last_user = user_msgs[-1] if user_msgs else {'role': 'user', 'content': ''}
-                            content = last_user.get('content', '')
-                            if isinstance(content, str):
-                                content = content[:2000]
-                            elif isinstance(content, list):
-                                text_parts = []
-                                for part in content:
-                                    if isinstance(part, dict) and part.get('type') == 'text':
-                                        text_parts.append({'type': 'text', 'text': part['text'][:2000]})
-                                content = text_parts if text_parts else ''
-                            lean_msgs = [{'role': 'user', 'content': content}]
-                            groq_payload = {'model': groq_model, 'messages': lean_msgs, 'max_tokens': safe_max_tokens}
+
+                        if 'gpt-oss-20b' in groq_model:
+                            payload_limit = 28000
+                        else:
+                            payload_limit = 200000
+
+                        if payload_bytes > payload_limit:
+                            system_msgs = [m for m in messages if m.get('role') == 'system']
+                            non_system = [m for m in messages if m.get('role') != 'system']
+                            sys_content = '\n\n'.join(m.get('content', '') for m in system_msgs)
+                            if len(sys_content) > 4000:
+                                sys_content = sys_content[:3000] + '\n\n...(earlier instructions truncated)...\n\n' + sys_content[-1000:]
+                            compressed = [{'role': 'system', 'content': sys_content}]
+                            for msg in non_system[-10:]:
+                                c = msg.get('content', '')
+                                if isinstance(c, str) and len(c) > 2000:
+                                    c = c[:2000]
+                                elif isinstance(c, list):
+                                    text_parts = []
+                                    for part in c:
+                                        if isinstance(part, dict) and part.get('type') == 'text':
+                                            text_parts.append({'type': 'text', 'text': part['text'][:2000]})
+                                    c = text_parts if text_parts else ''
+                                compressed.append({'role': msg['role'], 'content': c})
+                            groq_payload = {'model': groq_model, 'messages': compressed, 'max_tokens': safe_max_tokens}
                             new_bytes = len(_json.dumps(groq_payload).encode())
-                            logger.warning(f"[Groq Kit] Payload {payload_bytes}→{new_bytes} bytes — compressed for Groq")
+                            logger.warning(f"[Groq Kit] Payload {payload_bytes}→{new_bytes} bytes — compressed for {groq_model} (system prompt PRESERVED)")
 
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
