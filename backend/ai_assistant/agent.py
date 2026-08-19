@@ -247,29 +247,68 @@ class FlowAgent:
             logger.info(f"[Agent] Web search auto-detected for: {user_query[:60]}")
             try:
                 import requests as _req
+                from urllib.parse import quote_plus
+
+                # Use DuckDuckGo HTML search for actual results (Instant Answer API returns nothing for specific domains)
+                search_url = f"https://html.duckduckgo.com/html/"
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
                 resp = await asyncio.to_thread(
-                    _req.get,
-                    'https://api.duckduckgo.com/',
-                    params={'q': user_query, 'format': 'json', 'no_html': 1, 'skip_disambig': 1},
-                    timeout=8,
+                    _req.post,
+                    search_url,
+                    data={'q': user_query, 'b': ''},
+                    headers=headers,
+                    timeout=10,
                 )
-                data = resp.json()
                 results = []
-                if data.get('AbstractText'):
-                    results.append(data['AbstractText'])
-                for r in (data.get('RelatedTopics') or [])[:5]:
-                    if isinstance(r, dict) and r.get('Text'):
-                        results.append(r['Text'])
+                # Parse result titles and snippets from HTML
+                import re as _re
+                title_matches = _re.findall(r'class="result__a"[^>]*>(.*?)</a>', resp.text)
+                snippet_matches = _re.findall(r'class="result__snippet">(.*?)</[a-z]', resp.text, _re.DOTALL)
+                url_matches = _re.findall(r'class="result__url"[^>]*>(.*?)</a>', resp.text)
+
+                for i in range(min(len(title_matches), 5)):
+                    title = _re.sub(r'<[^>]+>', '', title_matches[i]).strip()
+                    snippet = _re.sub(r'<[^>]+>', '', snippet_matches[i]).strip() if i < len(snippet_matches) else ''
+                    url = _re.sub(r'<[^>]+>', '', url_matches[i]).strip() if i < len(url_matches) else ''
+                    entry = f"**{title}**"
+                    if url:
+                        entry += f"\nURL: {url}"
+                    if snippet:
+                        entry += f"\n{snippet}"
+                    results.append(entry)
+
+                # Fallback to Instant Answer API if HTML scrape got nothing
                 if not results:
-                    infobox = data.get('Infobox', {})
-                    if infobox and infobox.get('content'):
-                        parts = [f"{e.get('label', '')}: {e.get('value', '')}" for e in infobox['content'] if e.get('value')]
-                        results = parts[:10]
+                    ia_resp = await asyncio.to_thread(
+                        _req.get,
+                        'https://api.duckduckgo.com/',
+                        params={'q': user_query, 'format': 'json', 'no_html': 1, 'skip_disambig': 1},
+                        timeout=8,
+                    )
+                    ia_data = ia_resp.json()
+                    if ia_data.get('AbstractText'):
+                        results.append(ia_data['AbstractText'])
+                    for r in (ia_data.get('RelatedTopics') or [])[:3]:
+                        if isinstance(r, dict) and r.get('Text'):
+                            results.append(r['Text'])
+
                 if results:
-                    web_search_context = "\n\nWEB SEARCH RESULTS:\n" + "\n\n".join(results[:5])
-                    logger.info(f"[Agent] Web search fetched {len(results[:5])} results")
+                    web_search_context = (
+                        "\n\n[IMPORTANT: The following web search results were ALREADY fetched for the user. "
+                        "Present them directly in your response. Do NOT say you will search — the results are below.]\n\n"
+                        "WEB SEARCH RESULTS:\n" + "\n\n---\n\n".join(results)
+                    )
+                    logger.info(f"[Agent] Web search fetched {len(results)} results")
+                else:
+                    web_search_context = (
+                        "\n\n[Web search was performed but no strong results were found for this query. "
+                        "Let the user know and suggest they try different keywords.]"
+                    )
             except Exception as we:
                 logger.warning(f"[Agent] Web search auto-fetch failed: {we}")
+                web_search_context = (
+                    "\n\n[Web search is temporarily unavailable. Let the user know briefly.]"
+                )
         
         now = timezone.now()
         current_time_str = now.strftime("%A, %B %d, %Y at %H:%M")
