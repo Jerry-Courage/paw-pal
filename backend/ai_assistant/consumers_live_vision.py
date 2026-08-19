@@ -16,7 +16,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('nitemind')
 
-GEMINI_LIVE_MODEL = 'gemini-3-flash-live'
+GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview'
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
