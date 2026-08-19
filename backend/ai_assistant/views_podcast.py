@@ -394,7 +394,7 @@ class PodcastChunkAudioView(APIView):
         file_hash = hashlib.md5(text_content.encode('utf-8')).hexdigest()
         file_path = os.path.join(out_dir, f"{file_hash}.mp3")
         
-        if not os.path.exists(file_path) or os.path.getsize(file_path) < 500:
+        if not os.path.exists(file_path) or os.path.getsize(file_path) < 1000:
             # Remove stale partial file if it exists
             if os.path.exists(file_path):
                 os.remove(file_path)

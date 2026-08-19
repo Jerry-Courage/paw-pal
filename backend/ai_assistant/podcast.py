@@ -169,25 +169,29 @@ def generate_tts_file(text, voice, output_path, fast_mode=False):
         "--write-media", output_path
     ]
     
+    # Estimate min size: ~50 bytes per word is typical for MP3
+    word_count = len(clean_text.split())
+    min_size = max(1000, word_count * 50)
+    
     for attempt in range(3):
         try:
             temp_path = output_path + ".tmp"
             cmd_with_temp = cmd[:-1] + [temp_path]
-            result = subprocess.run(cmd_with_temp, check=False, capture_output=True, text=True, timeout=45)
-            if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 500:
+            result = subprocess.run(cmd_with_temp, check=False, capture_output=True, text=True, timeout=120)
+            if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > min_size:
                 os.replace(temp_path, output_path)
                 return True
             # Clean up partial temp file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            time.sleep(1)
+            time.sleep(2)
         except subprocess.TimeoutExpired:
             # Clean up partial temp file on timeout
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            time.sleep(1)
+            time.sleep(2)
         except:
-            time.sleep(1)
+            time.sleep(2)
     return False
 
 def generate_podcast_script(notes_json, length_pref=15, available_images=None, name_a="Host A", name_b="Host B", system_instruction=None):

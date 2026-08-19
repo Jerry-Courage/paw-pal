@@ -273,6 +273,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (!audio || !state.sessionId) return
 
     const handleEnded = () => {
+      // Guard: if audio played less than 1 second, it was likely a truncated file — don't advance
+      if (audio.currentTime < 1.0 && audio.duration > 1.0) {
+        console.warn('Audio ended prematurely (played', audio.currentTime.toFixed(1), 's of', audio.duration.toFixed(1), 's) — retrying same chunk')
+        // Retry the same chunk after a brief delay
+        setTimeout(() => {
+          if (sessionIdRef.current) handleNextChunk(currentIndexRef.current, true)
+        }, 500)
+        return
+      }
       const next = currentIndexRef.current + 1
       if (next < totalChunksRef.current) {
         handleNextChunk(next, true)

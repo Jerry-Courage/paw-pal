@@ -186,27 +186,43 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                     logger.warning(f'[Upload] PPTX→PDF conversion failed, falling back to raw upload: {e}')
 
             if ext in ['.pptx', '.ppt', '.doc', '.docx', '.mp4']:
-                # Original path: direct Cloudinary raw upload
-                try:
-                    import cloudinary.uploader
-                    result = cloudinary.uploader.upload(
-                        uploaded_file,
-                        resource_type='raw',
-                        folder='resources',
-                    )
-                    cloudinary_id = result.get('public_id', '')
-                    if cloudinary_id and not os.path.splitext(cloudinary_id)[1]:
-                        cloudinary_id = cloudinary_id + ext
-                    serializer.validated_data.pop('file', None)
-                    resource = serializer.save(
-                        owner=self.request.user,
-                        file_size=file_size_bytes,
-                    )
-                    resource.file.name = cloudinary_id
-                    resource.save(update_fields=['file', 'file_size'])
-                except Exception as e:
-                    logger.error(f'[Cloudinary Raw Upload] Failed for {uploaded_file.name}: {e}')
-                    resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+                # Try R2 first (handles large files better), fall back to Cloudinary raw
+                from .hybrid_storage import _r2_configured, _upload_to_r2
+                if _r2_configured() and file_size_bytes > 10 * 1024 * 1024:
+                    try:
+                        storage_backend, r2_key, _ = _upload_to_r2(uploaded_file, uploaded_file.name)
+                        serializer.validated_data.pop('file', None)
+                        resource = serializer.save(
+                            owner=self.request.user,
+                            file_size=file_size_bytes,
+                            storage_backend=storage_backend,
+                            r2_key=r2_key,
+                        )
+                        logger.info(f'[Upload] PPTX→R2 for {uploaded_file.name}: {r2_key}')
+                    except Exception as e:
+                        logger.error(f'[R2 Upload] Failed for {uploaded_file.name}: {e}')
+                        resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
+                else:
+                    try:
+                        import cloudinary.uploader
+                        result = cloudinary.uploader.upload(
+                            uploaded_file,
+                            resource_type='raw',
+                            folder='resources',
+                        )
+                        cloudinary_id = result.get('public_id', '')
+                        if cloudinary_id and not os.path.splitext(cloudinary_id)[1]:
+                            cloudinary_id = cloudinary_id + ext
+                        serializer.validated_data.pop('file', None)
+                        resource = serializer.save(
+                            owner=self.request.user,
+                            file_size=file_size_bytes,
+                        )
+                        resource.file.name = cloudinary_id
+                        resource.save(update_fields=['file', 'file_size'])
+                    except Exception as e:
+                        logger.error(f'[Cloudinary Raw Upload] Failed for {uploaded_file.name}: {e}')
+                        resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)
             else:
                 # Converted to PDF — fall through to default MediaCloudinaryStorage path
                 resource = serializer.save(owner=self.request.user, file_size=file_size_bytes)

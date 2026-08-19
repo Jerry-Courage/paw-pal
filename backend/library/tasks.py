@@ -194,11 +194,14 @@ def process_resource_task(res_id):
                         if len(large_objs) > MAX_DIAGRAM_SCANS:
                             logger.info(f'[Task] Capping diagram scans: {len(large_objs)} large images found, scanning top {MAX_DIAGRAM_SCANS}')
 
+                        scan_count = len(large_objs[:MAX_DIAGRAM_SCANS])
+
                         def get_desc(idx_item_tuple):
                             idx, item = idx_item_tuple
                             if item['is_large'] and id(item) in scan_set:
                                 try:
-                                    res.status_text = f"👁️ Scanning Diagram {idx+1}/{len(image_objs)}..."
+                                    scanned = sum(1 for o in image_objs[:idx+1] if o['is_large'] and id(o) in scan_set)
+                                    res.status_text = f"👁️ Scanning Diagram {scanned}/{scan_count}..."
                                     res.save(update_fields=['status_text'])
                                     ai = AIService()
                                     desc = ai.describe_image_for_notes(item['data'], item['page'], item['ext'])
@@ -212,10 +215,13 @@ def process_resource_task(res_id):
                         try:
                             import time as _time
                             with ThreadPoolExecutor(max_workers=1) as executor:
+                                scanned_count = 0
                                 for i, item in enumerate(image_objs):
-                                    if i > 0:
+                                    if scanned_count > 0 and item['is_large'] and id(item) in scan_set:
                                         _time.sleep(13)  # 13s gap → ~4.5 calls/min, safely under 5 RPM
-                                    executor.submit(get_desc, (i, item)).result()
+                                    result = executor.submit(get_desc, (i, item)).result()
+                                    if item['is_large'] and id(item) in scan_set:
+                                        scanned_count += 1
                         except RuntimeError:
                             # Catch interpreter shutdown errors during reloads
                             logger.info("[Task Queue] Parallel execution interrupted by shutdown.")
