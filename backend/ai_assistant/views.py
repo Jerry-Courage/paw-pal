@@ -928,6 +928,12 @@ class AgentView(APIView):
                 execution_result = async_to_sync(agent.execute_action)(action)
 
             display_reply = reply.split('ACTION:')[0].strip()
+            # Strip URLs from reply when image was generated — model often outputs wikimedia/unsplash links
+            if execution_result and action and action.get('tool') == 'generate_image':
+                import re as _re
+                display_reply = _re.sub(r'https?://\S+', '', display_reply).strip()
+                if not display_reply:
+                    display_reply = "Here's the image you asked for!"
             speech_text = VoiceSanitizer.clean(display_reply)
             
             voice_enabled = request.data.get('voice_enabled') in [True, 'true']
@@ -1071,6 +1077,13 @@ class AgentStreamView(APIView):
                         action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
                         execution_result = await agent.execute_action(action)
                         logger.info(f"[AgentStreamView] Auto-detected image request via patterns, forcing generate_image tool")
+                
+                # Strip URLs from reply when image was generated — model often outputs wikimedia/unsplash links
+                if action and action.get('tool') == 'generate_image' and execution_result:
+                    import re as _re
+                    display_reply = _re.sub(r'https?://\S+', '', display_reply).strip()
+                    if not display_reply:
+                        display_reply = "Here's the image you asked for!"
                 
                 # Update the placeholder with final content + any generated media
                 def update_msg():
