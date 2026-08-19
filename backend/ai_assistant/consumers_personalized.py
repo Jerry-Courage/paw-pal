@@ -219,8 +219,14 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 else:
                     try:
                         realtime_msg = {
-                            'realtimeInput': {
-                                'text': text
+                            'clientContent': {
+                                'turns': [
+                                    {
+                                        'role': 'user',
+                                        'parts': [{'text': text}]
+                                    }
+                                ],
+                                'turnComplete': True
                             }
                         }
                         await self.gemini_ws.send(json.dumps(realtime_msg))
@@ -263,70 +269,35 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             f"({ctx['xp']} XP, {ctx['streak']}-day streak). Education: {ctx['education']}.\n"
             f"PERFORMANCE: {ctx['performance_str']}\n"
             f"Materials:\n{ctx['materials_str']}\nHistory: {ctx['history_str']}\n\n"
-            "CRITICAL OUTPUT RULES:\n"
-            "- NEVER output internal planning, reasoning blocks, thinking steps, or markdown structural headers (like '**Defining Methods**'). Speak ONLY your direct spoken response aloud.\n"
-            "- Speak smoothly, naturally, and concisely without stuttering or repeating words.\n"
-            "- This is a LIVE voice conversation — speak naturally like a favourite teacher, not like a textbook or planning document.\n"
-            "- Note: The student can also send text messages to you using the text input button if they prefer not to speak or are in a quiet place.\n\n"
-            "PERSONALITY:\n"
-            "- Warm, encouraging, and patient like a favourite teacher.\n"
-            "- Use the student's name naturally.\n"
-            "- Adapt language to their level.\n\n"
+            "RULES:\n"
+            "- NEVER output reasoning blocks, planning, or markdown headers. Speak ONLY your direct spoken response.\n"
+            "- Speak naturally and concisely like a favourite teacher.\n"
+            "- The student can also send text via text input.\n\n"
             "HOW TO RESPOND:\n"
-            "Casual chat (greetings, quick questions): Keep it short, 1-2 sentences.\n\n"
-            "Teaching mode (when they say 'teach me X', 'explain photosynthesis', 'what is X', or ask to study a topic):\n"
-            "1. Start by acknowledging the topic (e.g. photosynthesis) and briefly outline what you'll cover.\n"
-            "2. Break it into clear steps or sections. Explain each one thoroughly with relatable analogies and real-world examples.\n"
-            "3. After explaining a key concept, ask a quick check-in question like 'Does that make sense?' or 'Want me to go deeper?'\n"
-            "4. Connect the topic to their study materials when relevant.\n"
-            "5. At the end, give a brief recap of what was covered.\n\n"
-            "Tutoring mode (homework help, revision): Guide them with questions rather than giving answers directly. Give hints and let them think.\n\n"
-            "Analysis mode (progress, strengths, gaps): Give honest, specific feedback using PERFORMANCE data.\n\n"
-            "Always be encouraging. If they get something wrong, explain why positively."
+            "Casual chat: Keep it short, 1-2 sentences.\n"
+            "Teaching mode: Acknowledge topic → clear steps with analogies → check-in questions → recap.\n"
+            "Tutoring mode: Guide with questions, give hints, don't give answers directly.\n"
+            "Analysis mode: Honest feedback using PERFORMANCE data.\n\n"
+            "Always be encouraging. Use their name naturally."
         )
-
-        api_keys = [
-            os.getenv('GOOGLE_STUDIO_API_KEY', ''),
-            os.getenv('GOOGLE_STUDIO_API_KEY_2', ''),
-            os.getenv('GOOGLE_STUDIO_API_KEY_3', ''),
-        ]
-        api_keys = [k.strip() for k in api_keys if k and k.strip()]
-        if not api_keys:
-            await self._send({'type': 'error', 'message': 'Google API key not configured'})
-            return
 
         voice_name = self.voice_override or 'Aoede'
 
-        connected = False
-        last_error = None
-        for api_key in api_keys:
-            ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
-            try:
-                logger.info(f'[PersonalisedVoice] Connecting to Gemini with key ending in ...{api_key[-6:]}...')
-                self.gemini_ws = await asyncio.wait_for(
-                    websockets.connect(
-                        ws_url,
-                        ping_interval=20,
-                        ping_timeout=10,
-                        max_size=10 * 1024 * 1024,
-                    ),
-                    timeout=20,
-                )
-                connected = True
-                break
-            except Exception as e:
-                last_error = e
-                logger.warning(f'[PersonalisedVoice] Connection failed with key: {e}')
-                continue
-
-        if not connected:
-            logger.error(f'[PersonalisedVoice] All connection attempts failed across all keys: {last_error}')
-            self.session_active = True
-            self.text_fallback_mode = True
-            self.text_fallback_reason = str(last_error)
-            await self._send({'type': 'ready'})
-            await self._send({'type': 'status', 'message': 'Voice server offline. Text coaching mode is active.'})
-            await self._reply_with_text_fallback(f"Hi {ctx['username']}! Ready to study?")
+        ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
+        try:
+            logger.info(f'[PersonalisedVoice] Connecting to Gemini...')
+            self.gemini_ws = await asyncio.wait_for(
+                websockets.connect(
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    max_size=10 * 1024 * 1024,
+                ),
+                timeout=15,
+            )
+        except Exception as e:
+            logger.error(f'[PersonalisedVoice] Connection failed: {e}')
+            await self._send({'type': 'error', 'message': 'Could not connect to voice server. Please try again.'})
             return
 
         try:
@@ -351,20 +322,19 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     'realtimeInputConfig': {
                         'automaticActivityDetection': {
                             'disabled': False,
-                            'silenceDurationMs': 200,
                         }
                     },
                 }
             }
             await self.gemini_ws.send(json.dumps(config))
 
-            initial_instruction = f"Hi {ctx['username']}! Ready to study?"
+            initial_instruction = f"Hi {ctx['username']}! I'm ready. What would you like to study?"
 
             # Wait for setupComplete — retry recv on timeout instead of giving up immediately
             setup_ready = False
-            for i in range(3):
+            for i in range(2):
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=5)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=3)
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True
@@ -372,8 +342,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                     else:
                         logger.info(f'[PersonalisedVoice] Received non-setup msg: {list(setup_data.keys())}')
                 except asyncio.TimeoutError:
-                    logger.warning(f'[PersonalisedVoice] Setup recv timeout (attempt {i + 1}/3)')
-                    if i < 2:
+                    logger.warning(f'[PersonalisedVoice] Setup recv timeout (attempt {i + 1}/2)')
+                    if i < 1:
                         continue
                     break
 
@@ -442,7 +412,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         try:
             while self.session_active:
                 try:
-                    audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=1.0)
+                    audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=0.1)
                     await self._send_audio_to_gemini(audio_b64)
                     self.audio_queue.task_done()
                 except asyncio.TimeoutError:

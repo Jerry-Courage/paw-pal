@@ -391,7 +391,7 @@ export default function PersonalisedLearningPage() {
       // Capture audio from the worklet's output port
       // The worklet passes through gated audio — we read it via a ScriptProcessorNode
       // that listens to the worklet output (smallest buffer for lowest latency)
-      const captureNode = ctx.createScriptProcessor(1024, 1, 1)
+      const captureNode = ctx.createScriptProcessor(512, 1, 1)
       processorRef.current = captureNode
 
       // Connect worklet output to capture node (for encoding)
@@ -449,7 +449,7 @@ export default function PersonalisedLearningPage() {
       if (ctx.state === 'suspended') ctx.resume().catch(() => {})
 
       const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(1024, 1, 1)
+      const processor = ctx.createScriptProcessor(512, 1, 1)
       processorRef.current = processor
 
       processor.onaudioprocess = (e) => {
