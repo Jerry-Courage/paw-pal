@@ -1597,7 +1597,7 @@ class AIService:
 
         # ─── PRE-GENERATE PROMPTS ───
         prompts = []
-        for idx, chunk_text in enumerate(chunks[:12]):
+        for idx, chunk_text in enumerate(chunks[:30]):
             # VERSION TAG: 3.1-PREMIUM (Ultra-Readability)
             prompt = (
                 f"You are FlowAI Study Architect — an expert at creating study materials that combine academic depth with memory science.\n"
