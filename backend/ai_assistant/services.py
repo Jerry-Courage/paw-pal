@@ -579,9 +579,9 @@ class AIService:
         if groq_keys and _GROQ_413_STREAK < 2:
             for key in groq_keys:
                 for groq_model, groq_timeout, groq_max_tokens in [
-                    ('openai/gpt-oss-20b', 30, 1024),        # 8K context → 1K output
-                    ('openai/gpt-oss-120b', 45, 4096),       # 128K context → 4K output
+                    ('openai/gpt-oss-120b', 45, 4096),       # 128K context → 4K output (study kits need large output)
                     ('qwen/qwen3.6-27b', 30, 4096),          # 131K context → 4K output
+                    ('openai/gpt-oss-20b', 30, 1024),        # 8K context → 1K output (last resort, too small for kits)
                 ]:
                     try:
                         # Cap max_tokens per model to stay within context window
