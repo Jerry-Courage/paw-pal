@@ -891,49 +891,60 @@ class AgentView(APIView):
             if not action:
                 import re as _re
                 q_lower = query.lower()
-                # Broad regex patterns — catches almost any image request phrasing
                 image_patterns = [
-                    r'\b(image|img|pic|picture|photo|photo|snapshot)\b.*\bof\b',
+                    r'\b(image|img|pic|picture|photo|snapshot)\b.*\bof\b',
                     r'\b(of|of a|of an|of the)\b.*(image|pic|picture|photo|drawing|illustration)',
                     r'\b(generate|create|make|draw|sketch|design|produce)\b.*(image|pic|picture|photo|illustration|diagram|art)',
-                    r'\b(image|pic|picture|photo|illustration|diagram)\b',
+                    r'\b(labelled|labeled)\b',
                     r'\b(visuali[sz]e|depict|render|show me)\b',
-                    r'\b(labelled|labeled)\b.*\b(image|diagram|picture)\b',
                     r'\b(need|want|get|give|send|show|display)\b.*(image|pic|picture|photo|illustration)',
                     r'\b(can you|could you|please)\b.*(image|pic|picture|photo|draw|generate|create)',
-                    r'\b(what does|how does|what would).*(look like|look like)\b',
+                    r'\b(what does|how does|what would).*(look like)\b',
+                    r'\bi need (a |an |one )\b',
+                    r'\bi want (a |an |one )\b',
+                    r'\bhow about\b',
+                    r'\bone (of|on|for)\b.*\bthat\b',
+                    r'\bgive me (a |an |one )\b',
                 ]
-                model_refused = any(w in reply.lower() for w in [
-                    "i can't", "i cannot", "i'm unable", "i am unable",
-                    "i don't have", "i do not have", "not able to",
-                    "i'm not able", "i am not able", "unable to generate",
-                    "can't generate", "cannot generate", "can't create",
-                    "can't provide", "cannot provide", "can't make",
-                ])
                 query_has_image_intent = (
                     any(_re.search(p, q_lower) for p in image_patterns)
                     or 'image' in q_lower or 'pic' in q_lower or 'photo' in q_lower
                     or 'draw' in q_lower or 'picture' in q_lower
                     or 'illustration' in q_lower or 'diagram' in q_lower
+                    or 'labelled' in q_lower or 'labeled' in q_lower
                 )
                 if query_has_image_intent:
                     action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
-                    logger.info(f"[AgentView] Auto-detected image request via patterns, forcing generate_image tool")
-                elif model_refused and query_has_image_intent:
-                    action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
-                    logger.info(f"[AgentView] Model refused but query has image intent, forcing generate_image tool")
+                    logger.info(f"[AgentView] Auto-detected image request, forcing generate_image tool")
             
             execution_result = None
             if action:
                 execution_result = async_to_sync(agent.execute_action)(action)
 
             display_reply = reply.split('ACTION:')[0].strip()
-            # Strip URLs from reply when image was generated — model often outputs wikimedia/unsplash links
+            # When image was generated (auto-detected or model-triggered), clean up the reply
             if execution_result and action and action.get('tool') == 'generate_image':
                 import re as _re
+                # Strip URLs from reply
                 display_reply = _re.sub(r'https?://\S+', '', display_reply).strip()
-                if not display_reply:
-                    display_reply = "Here's the image you asked for!"
+                # Strip refusal phrases — replace with positive response
+                refusal_patterns = [
+                    r"(?i)i('m| am) sorry.*?can't.*?image.*",
+                    r"(?i)i('m| am) unable.*?generate.*",
+                    r"(?i)i don't.*?ability.*?image.*",
+                    r"(?i)however,?\s*i can.*?description.*",
+                    r"(?i)if you('d| would) like.*?search.*",
+                ]
+                is_refusal = any(_re.search(p, display_reply) for p in refusal_patterns)
+                is_refusal = is_refusal or any(w in display_reply.lower() for w in [
+                    "i can't", "i cannot", "i'm unable", "i am unable",
+                    "i don't have", "i do not have", "unable to generate",
+                    "can't generate", "cannot generate", "can't create",
+                    "can't provide", "cannot provide", "can't make",
+                    "i'm sorry",
+                ])
+                if is_refusal or len(display_reply) > 200:
+                    display_reply = "Here's your image!"
             speech_text = VoiceSanitizer.clean(display_reply)
             
             voice_enabled = request.data.get('voice_enabled') in [True, 'true']
@@ -1060,30 +1071,52 @@ class AgentStreamView(APIView):
                         r'\b(image|img|pic|picture|photo|snapshot)\b.*\bof\b',
                         r'\b(of|of a|of an|of the)\b.*(image|pic|picture|photo|drawing|illustration)',
                         r'\b(generate|create|make|draw|sketch|design|produce)\b.*(image|pic|picture|photo|illustration|diagram|art)',
-                        r'\b(image|pic|picture|photo|illustration|diagram)\b',
+                        r'\b(labelled|labeled)\b',
                         r'\b(visuali[sz]e|depict|render|show me)\b',
-                        r'\b(labelled|labeled)\b.*\b(image|diagram|picture)\b',
                         r'\b(need|want|get|give|send|show|display)\b.*(image|pic|picture|photo|illustration)',
                         r'\b(can you|could you|please)\b.*(image|pic|picture|photo|draw|generate|create)',
                         r'\b(what does|how does|what would).*(look like)\b',
+                        r'\bi need (a |an |one )\b',
+                        r'\bi want (a |an |one )\b',
+                        r'\bhow about\b',
+                        r'\bone (of|on|for)\b.*\bthat\b',
+                        r'\bgive me (a |an |one )\b',
                     ]
                     query_has_image_intent = (
                         any(_re.search(p, q_lower) for p in image_patterns)
                         or 'image' in q_lower or 'pic' in q_lower or 'photo' in q_lower
                         or 'draw' in q_lower or 'picture' in q_lower
                         or 'illustration' in q_lower or 'diagram' in q_lower
+                        or 'labelled' in q_lower or 'labeled' in q_lower
                     )
                     if query_has_image_intent:
                         action = {'tool': 'generate_image', 'parameters': {'prompt': query}}
                         execution_result = await agent.execute_action(action)
-                        logger.info(f"[AgentStreamView] Auto-detected image request via patterns, forcing generate_image tool")
+                        logger.info(f"[AgentStreamView] Auto-detected image request, forcing generate_image tool")
                 
-                # Strip URLs from reply when image was generated — model often outputs wikimedia/unsplash links
+                # When image was generated, clean up the reply
                 if action and action.get('tool') == 'generate_image' and execution_result:
                     import re as _re
+                    # Strip URLs
                     display_reply = _re.sub(r'https?://\S+', '', display_reply).strip()
-                    if not display_reply:
-                        display_reply = "Here's the image you asked for!"
+                    # Strip refusal phrases
+                    refusal_patterns = [
+                        r"(?i)i('m| am) sorry.*?can't.*?image.*",
+                        r"(?i)i('m| am) unable.*?generate.*",
+                        r"(?i)i don't.*?ability.*?image.*",
+                        r"(?i)however,?\s*i can.*?description.*",
+                        r"(?i)if you('d| would) like.*?search.*",
+                    ]
+                    is_refusal = any(_re.search(p, display_reply) for p in refusal_patterns)
+                    is_refusal = is_refusal or any(w in display_reply.lower() for w in [
+                        "i can't", "i cannot", "i'm unable", "i am unable",
+                        "i don't have", "i do not have", "unable to generate",
+                        "can't generate", "cannot generate", "can't create",
+                        "can't provide", "cannot provide", "can't make",
+                        "i'm sorry",
+                    ])
+                    if is_refusal or len(display_reply) > 200:
+                        display_reply = "Here's your image!"
                 
                 # Update the placeholder with final content + any generated media
                 def update_msg():

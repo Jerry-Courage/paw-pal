@@ -782,7 +782,7 @@ function AIChat() {
         // CHAT
         try {
           const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(query)
-          const wantsImage = /generate.*image|image.*of|show.*me|picture.*of|illustrat/i.test(query)
+          const wantsImage = /image|pic|picture|photo|illustrat|draw|labelled|labeled|sketch|show.*me|what.*look like|generate|create|visuali[sz]e|depict/i.test(query)
           if (wantsDiagram) setPendingAction('diagram')
           else if (wantsImage) setPendingAction('image')
 
