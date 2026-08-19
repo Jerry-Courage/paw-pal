@@ -203,7 +203,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             await self._start_gemini_session()
 
         elif msg_type == 'audio':
-            if self.gemini_ws and self.session_active:
+            if self.gemini_ws and self.session_active and self.gemini_ws.open:
                 audio_b64 = msg.get('data', '')
                 if audio_b64 and hasattr(self, 'audio_queue'):
                     await self.audio_queue.put(audio_b64)
@@ -214,7 +214,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 self.transcript_log.append(('user', text))
                 await self._send({'type': 'transcript_user', 'text': text})
 
-                if self.text_fallback_mode or not self.gemini_ws:
+                if self.text_fallback_mode or not self.gemini_ws or not self.gemini_ws.open:
                     await self._reply_with_text_fallback(text)
                 else:
                     try:
@@ -239,7 +239,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         """
         if len(data) < 4 or data[0] != 0x01:
             return  # Unknown binary frame type
-        if not self.gemini_ws or not self.session_active:
+        if not self.gemini_ws or not self.session_active or not self.gemini_ws.open:
             return
 
         pcm_bytes = data[4:]  # Skip 4-byte header
@@ -268,6 +268,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             "- Use the student's name naturally.\n"
             "- Adapt language to their level.\n\n"
             "HOW TO RESPOND:\n"
+            "CRITICAL: Speak naturally and at length. When teaching, do NOT stop mid-explanation. Complete your full thought before pausing. "
+            "Take natural breaths between sentences — brief pauses are fine, but don't cut yourself off.\n\n"
             "Casual chat (greetings, quick questions): Keep it short, 1-2 sentences.\n\n"
             "Teaching mode (when they say 'teach me X', 'explain X', 'what is X', or ask to study a topic):\n"
             "1. Start by acknowledging the topic and briefly say what you'll cover.\n"
@@ -276,7 +278,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             "4. After explaining a key concept, ask a quick check-in question like 'Does that make sense?' or 'Want me to go deeper on that?'\n"
             "5. Connect the topic to their study materials when relevant.\n"
             "6. At the end, give a brief recap of what was covered.\n"
-            "You can speak at length when teaching — don't cut explanations short.\n\n"
+            "Speak at length when teaching — cover the full topic without stopping. Don't cut explanations short.\n\n"
             "Tutoring mode (homework help, practice questions, revision):\n"
             "- Guide them with questions rather than giving answers directly.\n"
             "- Give hints and let them think.\n"
@@ -316,7 +318,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                             },
                         },
                         'temperature': 0.7,
-                        'maxOutputTokens': 2000,
+                        'maxOutputTokens': 8192,
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -325,8 +327,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                         'automaticActivityDetection': {
                             'disabled': False,
                             'startOfSpeechSensitivity': 'START_SENSITIVITY_HIGH',
-                            'endOfSpeechSensitivity': 'END_SENSITIVITY_HIGH',
-                            'silenceDurationMs': 200,
+                            'endOfSpeechSensitivity': 'END_SENSITIVITY_MEDIUM',
+                            'silenceDurationMs': 500,
                         }
                     },
                 }
@@ -421,6 +423,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
     async def _send_audio_to_gemini(self, audio_b64: str):
         try:
+            if not self.gemini_ws or not self.gemini_ws.open:
+                return
             msg = {
                 'realtimeInput': {
                     'audio': {
