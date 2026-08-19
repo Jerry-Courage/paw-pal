@@ -149,19 +149,24 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
     # ── Gemini session ────────────────────────────────────────────────────
 
     async def _start_gemini_session(self, custom_prompt: str = ''):
-        api_key = os.getenv('GOOGLE_STUDIO_API_KEY', '')
-        if not api_key:
+        api_keys = [
+            os.getenv('GOOGLE_STUDIO_API_KEY', ''),
+            os.getenv('GOOGLE_STUDIO_API_KEY_2', ''),
+            os.getenv('GOOGLE_STUDIO_API_KEY_3', ''),
+        ]
+        api_keys = [k.strip() for k in api_keys if k and k.strip()]
+        if not api_keys:
             await self._send({'type': 'error', 'message': 'Google API key not configured'})
             return
 
         system_prompt = custom_prompt or self._default_system_prompt()
-        ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
 
-        # Try connecting up to 2 times
+        connected = False
         last_error = None
-        for attempt in range(2):
+        for api_key in api_keys:
+            ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
             try:
-                logger.info(f'[LiveVision] Connecting to Gemini (attempt {attempt + 1})...')
+                logger.info(f'[LiveVision] Connecting to Gemini with key ending in ...{api_key[-6:]}...')
                 self.gemini_ws = await asyncio.wait_for(
                     websockets.connect(
                         ws_url,
@@ -169,16 +174,17 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
                         ping_timeout=10,
                         max_size=10 * 1024 * 1024,
                     ),
-                    timeout=30,
+                    timeout=20,
                 )
+                connected = True
                 break
             except Exception as e:
                 last_error = e
-                logger.warning(f'[LiveVision] Connection attempt {attempt + 1} failed: {e}')
-                if attempt == 0:
-                    await asyncio.sleep(2)
-        else:
-            logger.error(f'[LiveVision] All connection attempts failed: {last_error}')
+                logger.warning(f'[LiveVision] Connection failed with key: {e}')
+                continue
+
+        if not connected:
+            logger.error(f'[LiveVision] All connection attempts failed across all keys: {last_error}')
             await self._send({'type': 'error', 'message': f'Failed to connect: {str(last_error)}'})
             return
 
