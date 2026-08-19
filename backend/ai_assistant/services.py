@@ -459,8 +459,8 @@ class AIService:
             models_to_try = [
                 ('openai/gpt-oss-20b', 4 if is_tutor_mode else 6, 1024),
             ] if is_tutor_mode else [
-                ('openai/gpt-oss-20b', 6, 1024),        # 8K context → 1K output
-                ('openai/gpt-oss-120b', 8, 4096),       # 128K context → 4K output
+                ('openai/gpt-oss-120b', 8, 4096),       # 128K context → 4K output first (prevents text cutoffs)
+                ('openai/gpt-oss-20b', 6, 1024),        # 8K context → 1K output fallback
                 ('qwen/qwen3.6-27b', 8, 4096),          # 131K context → 4K output
             ]
             
