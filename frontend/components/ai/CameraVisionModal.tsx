@@ -19,7 +19,6 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const micStreamRef = useRef<MediaStream | null>(null)
   const canvasDrawRef = useRef<number>(0)
 
   const playbackCtxRef = useRef<AudioContext | null>(null)
@@ -46,7 +45,6 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
   const cleanup = useCallback(() => {
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
-    if (micStreamRef.current) { micStreamRef.current.getTracks().forEach(t => t.stop()); micStreamRef.current = null }
     if (workletNodeRef.current) { workletNodeRef.current.disconnect(); workletNodeRef.current = null }
     if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null }
     if (micCtxRef.current) { micCtxRef.current.close().catch(() => {}); micCtxRef.current = null }
@@ -58,25 +56,10 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
     nextPlayTimeRef.current = 0
   }, [])
 
-  const startCamera = useCallback(async () => {
+  const startCameraAndMic = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-      }
-    } catch {
-      toast.error('Camera access denied.')
-    }
-  }, [facingMode])
-
-  const startMic = useCallback(async (stream: MediaStream) => {
-    try {
-      const micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: { ideal: 16000 },
           channelCount: 1,
@@ -85,15 +68,19 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
           autoGainControl: true,
         }
       })
-      micStreamRef.current = micStream
+      streamRef.current = stream
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
 
       const ctx = new AudioContext({ sampleRate: 16000 })
       micCtxRef.current = ctx
       if (ctx.state === 'suspended') await ctx.resume().catch(() => {})
 
-      const source = ctx.createMediaStreamSource(micStream)
+      const source = ctx.createMediaStreamSource(stream)
 
-      // Try AudioWorklet first (modern browsers)
       try {
         await ctx.audioWorklet.addModule('/noise-gate-processor.js')
         const worklet = new AudioWorkletNode(ctx, 'noise-gate', {
@@ -131,13 +118,11 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
           frame.set(bytes, header.length)
           wsRef.current.send(frame)
         }
-
         return
       } catch {
-        // AudioWorklet not available, fall through to ScriptProcessor
+        // Fallback to ScriptProcessor
       }
 
-      // Fallback: ScriptProcessorNode
       const processor = ctx.createScriptProcessor(2048, 1, 1)
       processorRef.current = processor
       source.connect(processor)
@@ -164,10 +149,10 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
         frame.set(bytes, header.length)
         wsRef.current.send(frame)
       }
-    } catch (err) {
-      console.warn('[CameraVision] Mic access denied:', err)
+    } catch {
+      toast.error('Camera or microphone access denied. Please allow permissions.')
     }
-  }, [])
+  }, [facingMode])
 
   const enqueueAiAudio = useCallback((b64Pcm: string) => {
     if (speakerMuted) return
@@ -257,7 +242,6 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
               setState('listening')
               setAiStatusText('Listening — speak or show me something!')
               startFrameCapture()
-              startMic()
               break
             case 'ai_audio':
               enqueueAiAudio(msg.data)
@@ -322,10 +306,10 @@ export default function CameraVisionModal({ onClose }: { onClose: () => void }) 
   }, [])
 
   useEffect(() => {
-    startCamera()
+    startCameraAndMic()
     connectWebSocket()
     return () => cleanup()
-  }, [facingMode])
+  }, [facingMode, startCameraAndMic, connectWebSocket, cleanup])
 
   return (
     <div className="fixed inset-0 z-[999] bg-black flex flex-col overflow-hidden">
