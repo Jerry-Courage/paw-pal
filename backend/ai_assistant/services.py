@@ -2327,7 +2327,6 @@ class AIService:
                     },
                     json={
                         'prompt': full_enhanced_prompt,
-                        'seed': abs(hash(prompt)) % 10000,
                     },
                     timeout=30,
                 )
