@@ -157,17 +157,32 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
         system_prompt = custom_prompt or self._default_system_prompt()
         ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
 
-        try:
-            self.gemini_ws = await asyncio.wait_for(
-                websockets.connect(
-                    ws_url,
-                    ping_interval=20,
-                    ping_timeout=10,
-                    max_size=10 * 1024 * 1024,
-                ),
-                timeout=10,
-            )
+        # Try connecting up to 2 times
+        last_error = None
+        for attempt in range(2):
+            try:
+                logger.info(f'[LiveVision] Connecting to Gemini (attempt {attempt + 1})...')
+                self.gemini_ws = await asyncio.wait_for(
+                    websockets.connect(
+                        ws_url,
+                        ping_interval=20,
+                        ping_timeout=10,
+                        max_size=10 * 1024 * 1024,
+                    ),
+                    timeout=30,
+                )
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(f'[LiveVision] Connection attempt {attempt + 1} failed: {e}')
+                if attempt == 0:
+                    await asyncio.sleep(2)
+        else:
+            logger.error(f'[LiveVision] All connection attempts failed: {last_error}')
+            await self._send({'type': 'error', 'message': f'Failed to connect: {str(last_error)}'})
+            return
 
+        try:
             config = {
                 'setup': {
                     'model': f'models/{GEMINI_LIVE_MODEL}',
@@ -202,21 +217,26 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
             self.audio_send_task = asyncio.create_task(self._drain_audio_queue())
 
             setup_ready = False
-            for _ in range(5):
+            for i in range(5):
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=20)
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True
                         break
+                    else:
+                        logger.info(f'[LiveVision] Received non-setup msg: {list(setup_data.keys())}')
                 except asyncio.TimeoutError:
+                    logger.warning(f'[LiveVision] Setup recv timeout (attempt {i + 1}/5)')
+                    if i < 4:
+                        continue
                     break
 
             if not setup_ready:
+                logger.error('[LiveVision] Gemini setup timed out')
                 self.session_active = True
                 await self._send({'type': 'ready'})
                 await self._send({'type': 'status', 'state': 'listening'})
-                logger.warning('[LiveVision] Gemini setup timed out, using text fallback')
                 return
 
             self.session_active = True
@@ -226,11 +246,8 @@ class LiveVisionConsumer(AsyncWebsocketConsumer):
 
             self.gemini_task = asyncio.create_task(self._receive_from_gemini())
 
-        except asyncio.TimeoutError:
-            logger.error('[LiveVision] Timeout connecting to Gemini')
-            await self._send({'type': 'error', 'message': 'Connection timed out. Try again.'})
         except Exception as e:
-            logger.error(f'[LiveVision] Failed to connect: {e}')
+            logger.error(f'[LiveVision] Session setup failed: {e}', exc_info=True)
             await self._send({'type': 'error', 'message': f'Failed to start session: {str(e)}'})
 
     def _default_system_prompt(self) -> str:

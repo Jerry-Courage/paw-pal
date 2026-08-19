@@ -294,17 +294,37 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         ws_url = f'{GEMINI_LIVE_WS_URL}?key={api_key}'
         voice_name = self.voice_override or 'Aoede'
 
-        try:
-            self.gemini_ws = await asyncio.wait_for(
-                websockets.connect(
-                    ws_url,
-                    ping_interval=20,
-                    ping_timeout=10,
-                    max_size=10 * 1024 * 1024,
-                ),
-                timeout=10,
-            )
+        # Try connecting up to 2 times before giving up
+        last_error = None
+        for attempt in range(2):
+            try:
+                logger.info(f'[PersonalisedVoice] Connecting to Gemini (attempt {attempt + 1})...')
+                self.gemini_ws = await asyncio.wait_for(
+                    websockets.connect(
+                        ws_url,
+                        ping_interval=20,
+                        ping_timeout=10,
+                        max_size=10 * 1024 * 1024,
+                    ),
+                    timeout=30,
+                )
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(f'[PersonalisedVoice] Connection attempt {attempt + 1} failed: {e}')
+                if attempt == 0:
+                    await asyncio.sleep(2)
+        else:
+            logger.error(f'[PersonalisedVoice] All connection attempts failed: {last_error}')
+            self.session_active = True
+            self.text_fallback_mode = True
+            self.text_fallback_reason = str(last_error)
+            await self._send({'type': 'ready'})
+            await self._send({'type': 'status', 'message': 'Voice server offline. Text coaching mode is active.'})
+            await self._reply_with_text_fallback(f"Hi {ctx['username']}! Ready to study?")
+            return
 
+        try:
             config = {
                 'setup': {
                     'model': f'models/{GEMINI_LIVE_MODEL}',
@@ -337,25 +357,34 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
             initial_instruction = f"Hi {ctx['username']}! Ready to study?"
 
-            # Wait for setupComplete before marking session active
+            # Wait for setupComplete — retry recv on timeout instead of giving up immediately
             setup_ready = False
-            for _ in range(5):
+            for i in range(5):
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=20)
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True
                         break
+                    else:
+                        logger.info(f'[PersonalisedVoice] Received non-setup msg: {list(setup_data.keys())}')
                 except asyncio.TimeoutError:
+                    logger.warning(f'[PersonalisedVoice] Setup recv timeout (attempt {i + 1}/5)')
+                    if i < 4:
+                        continue
                     break
 
             if not setup_ready:
+                logger.error('[PersonalisedVoice] Gemini setup timed out after all attempts')
+                try:
+                    await self.gemini_ws.close()
+                except Exception:
+                    pass
                 self.session_active = True
                 self.text_fallback_mode = True
                 self.text_fallback_reason = 'live voice setup timed out'
-                logger.warning('[PersonalisedVoice] Live setup timed out; enabling fast text fallback')
                 await self._send({'type': 'ready'})
-                await self._send({'type': 'status', 'message': 'The live voice model is warming up. You can still chat and receive fast text replies.'})
+                await self._send({'type': 'status', 'message': 'Voice server offline. Text coaching mode is active.'})
                 await self._reply_with_text_fallback(initial_instruction)
                 return
 
@@ -372,15 +401,14 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             await self._send_text_to_gemini(initial_instruction)
 
         except Exception as e:
-            logger.error(f'[PersonalisedVoice] Failed to connect: {e}')
+            logger.error(f'[PersonalisedVoice] Session setup failed: {e}', exc_info=True)
             # Graceful text fallback on initial connection failure
             self.session_active = True
             self.text_fallback_mode = True
             self.text_fallback_reason = str(e)
-            logger.warning('[PersonalisedVoice] Live voice connection failed; fell back to text mode')
             await self._send({'type': 'ready'})
             await self._send({'type': 'status', 'message': 'Voice server offline. Text coaching mode is active.'})
-            await self._reply_with_text_fallback(initial_instruction)
+            await self._reply_with_text_fallback(f"Hi {ctx['username']}! Ready to study?")
 
     async def _reply_with_text_fallback(self, text: str):
         try:
