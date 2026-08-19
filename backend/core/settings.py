@@ -206,6 +206,9 @@ R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
 R2_BUCKET_NAME = os.getenv('R2_BUCKET_NAME', '')
 R2_CUSTOM_DOMAIN = os.getenv('R2_CUSTOM_DOMAIN', '')  # optional CDN domain
 
+CFLARE_AI_ACCOUNT_ID = os.getenv('CFLARE_AI_ACCOUNT_ID', R2_ACCOUNT_ID)
+CFLARE_AI_API_TOKEN = os.getenv('CFLARE_AI_API_TOKEN', '')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ─── REST Framework ───────────────────────────────────────────────────────────
