@@ -465,14 +465,16 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 except Exception as e:
                     logger.warning(f'[PersonalisedVoice] Error handling message: {e}')
         except websockets.exceptions.ConnectionClosed as e:
-            logger.info(f'[PersonalisedVoice] Gemini connection closed: {e.code}')
+            logger.warning(f'[PersonalisedVoice] Gemini connection closed: code={e.code}')
             if self.session_active:
+                self.session_active = False
                 await self._send({'type': 'error', 'message': 'AI connection dropped.'})
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f'[PersonalisedVoice] Receive error: {e}')
             if self.session_active:
+                self.session_active = False
                 await self._send({'type': 'error', 'message': 'Connection to AI lost.'})
 
     async def _handle_gemini_message(self, data: dict):

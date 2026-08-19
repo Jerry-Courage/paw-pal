@@ -77,6 +77,9 @@ export default function PersonalisedLearningPage() {
   const netMonitorRef = useRef<NetworkQualityMonitor | null>(null)
   const adaptiveSettingsRef = useRef<AdaptiveSettings | null>(null)
   const [networkQuality, setNetworkQuality] = useState<string>('good')
+  const [textFallbackMode, setTextFallbackMode] = useState(false)
+  const [showTextInput, setShowTextInput] = useState(false)
+  const [userTextInput, setUserTextInput] = useState('')
   const sendCounterRef = useRef(0)
 
   useEffect(() => { isMicMutedRef.current = isMicMuted }, [isMicMuted])
@@ -220,6 +223,12 @@ export default function PersonalisedLearningPage() {
     setIsMicAvailable(true)
     setTranscript([])
     setSessionDuration(0)
+    setTextFallbackMode(false)
+    setShowTextInput(false)
+    setUserTextInput('')
+    setCurrentAiText('')
+    setDisplayedWords([])
+    prevWordCountRef.current = 0
 
     let micPermissionOk = true
     try {
@@ -307,6 +316,9 @@ export default function PersonalisedLearningPage() {
             return [...prev, { role, text: msg.text, ts: Date.now() }]
           })
         } else if (msg.type === 'status') {
+          if (msg.message?.includes('Text coaching mode')) {
+            setTextFallbackMode(true)
+          }
           toast.info(msg.message, { duration: 4000 })
         } else if (msg.type === 'session_report') {
           clearTimeout(endSessionTimeoutRef.current)
@@ -516,6 +528,23 @@ export default function PersonalisedLearningPage() {
     }
   }
 
+  const sendTextMessage = () => {
+    const text = userTextInput.trim()
+    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'text_message', text }))
+    setUserTextInput('')
+  }
+
+  const resetState = () => {
+    setTextFallbackMode(false)
+    setShowTextInput(false)
+    setUserTextInput('')
+    setCurrentAiText('')
+    setDisplayedWords([])
+    prevWordCountRef.current = 0
+    if (wordIntervalRef.current) clearInterval(wordIntervalRef.current)
+  }
+
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-[#0a0014] via-[#050508] to-[#0a0014] text-white flex flex-col overflow-hidden select-none" style={{ paddingTop: 'env(safe-area-inset-top, 20px)' }}>
 
@@ -665,12 +694,14 @@ export default function PersonalisedLearningPage() {
         <div className="flex-1 flex flex-col relative overflow-hidden">
 
           {/* Top bar */}
-          <div className="flex items-center justify-between px-4 py-3 pt-8">
+          <div className="flex items-center justify-between px-4 py-3 pt-8 shrink-0">
             <button onClick={endSession} className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3">
-              {/* Network quality indicator */}
+              {textFallbackMode && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[9px] font-bold uppercase tracking-wider">Text Mode</span>
+              )}
               <div className={cn(
                 "flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider",
                 networkQuality === 'excellent' ? 'bg-emerald-500/15 text-emerald-400' :
@@ -746,8 +777,15 @@ export default function PersonalisedLearningPage() {
               </motion.div>
             </div>
 
+            {/* AI subtitle */}
+            {displayedWords.length > 0 && (
+              <p className="text-sm text-white/60 text-center max-w-md leading-relaxed px-4">
+                {displayedWords.join(' ')}
+              </p>
+            )}
+
             {/* Status */}
-            <p className="text-sm font-black text-white uppercase tracking-widest mb-1">
+            <p className="text-sm font-black text-white uppercase tracking-widest mb-1 mt-3">
               {isAiSpeaking ? 'Tutor Speaking' : isMicMuted ? 'Mic Muted' : 'Listening'}
             </p>
             <p className="text-xs text-white/30">
@@ -756,7 +794,7 @@ export default function PersonalisedLearningPage() {
           </div>
 
           {/* Bottom controls */}
-          <div className="px-5 pb-8 pt-4 flex items-center gap-3" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
+          <div className="px-5 pb-8 pt-4 flex items-center gap-3 shrink-0" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
             <button
               onClick={() => setIsMicMuted(v => !v)}
               className={cn(
@@ -769,6 +807,19 @@ export default function PersonalisedLearningPage() {
               {isMicMuted ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               {isMicMuted ? 'Unmute' : 'Mute'}
             </button>
+            {textFallbackMode && (
+              <button
+                onClick={() => setShowTextInput(v => !v)}
+                className={cn(
+                  "w-12 h-12 rounded-2xl border-2 flex items-center justify-center transition-all shrink-0",
+                  showTextInput
+                    ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
+                    : "bg-white/5 border-white/[0.08] text-white/60"
+                )}
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            )}
             <button
               onClick={endSession}
               className="px-8 py-4 rounded-2xl bg-white text-black font-black text-sm uppercase tracking-wider hover:bg-zinc-200 active:scale-95 transition-all"
@@ -776,6 +827,64 @@ export default function PersonalisedLearningPage() {
               End
             </button>
           </div>
+
+          {/* Text input overlay (toggled) */}
+          <AnimatePresence>
+            {showTextInput && textFallbackMode && (
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="absolute inset-x-0 bottom-0 z-50 bg-[#0a0014]/95 backdrop-blur-lg border-t border-white/[0.06] px-4 pt-4 pb-6"
+                style={{ paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))' }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Text Chat</p>
+                  <button onClick={() => setShowTextInput(false)} className="text-white/40 hover:text-white/70">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-2 mb-3">
+                  {transcript.map((entry, i) => (
+                    <div key={i} className={cn("flex", entry.role === 'user' ? 'justify-end' : 'justify-start')}>
+                      <div className={cn(
+                        "max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed",
+                        entry.role === 'user'
+                          ? "bg-violet-600 text-white rounded-br-sm"
+                          : "bg-white/[0.06] text-white/80 border border-white/[0.06] rounded-bl-sm"
+                      )}>
+                        {entry.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <form onSubmit={e => { e.preventDefault(); sendTextMessage() }} className="flex items-end gap-2">
+                  <input
+                    value={userTextInput}
+                    onChange={e => setUserTextInput(e.target.value)}
+                    placeholder="Ask your tutor anything..."
+                    className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-violet-500/40 transition-colors"
+                    rows={1}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        sendTextMessage()
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!userTextInput.trim()}
+                    className="p-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
         </div>
       )}
