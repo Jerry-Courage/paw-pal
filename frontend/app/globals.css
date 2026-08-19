@@ -113,6 +113,12 @@
   /* ensure total bar height = content + inset, not just inset */
   min-height: calc(3.5rem + env(safe-area-inset-bottom));
 }
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
 /* ── Squishy button effects ─────────────────────────────────────── */
 .btn-squishy {

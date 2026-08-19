@@ -1154,7 +1154,12 @@ function AIChat() {
                       }
                       setInput(transcript)
                     }
-                    recognition.onerror = () => setVoiceDictating(false)
+                    recognition.onerror = (e: any) => {
+                      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+                        toast.error(`Voice error: ${e.error}`)
+                      }
+                      setVoiceDictating(false)
+                    }
                     recognition.onend = () => setVoiceDictating(false)
                     recognition.start()
                     setVoiceDictating(true)
