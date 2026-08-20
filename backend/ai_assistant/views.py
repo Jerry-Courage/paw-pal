@@ -1380,3 +1380,90 @@ class TextToSpeechView(APIView):
         except Exception as e:
             logger.error(f'[TTS] Error: {e}')
             return Response({'error': str(e)}, status=500)
+
+
+class EdgeTTSView(APIView):
+    """
+    POST /api/ai/edge-tts/
+    Body: { "text": "...", "voice": "en-US-JennyNeural" }
+    Returns: audio/mpeg binary (MP3)
+    
+    Uses Microsoft Edge TTS for natural-sounding voices.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    VOICES = {
+        'jenny': 'en-US-JennyNeural',
+        'aria': 'en-US-AriaNeural',
+        'guy': 'en-US-GuyNeural',
+        'davis': 'en-US-DavisNeural',
+        'tony': 'en-US-TonyNeural',
+        'nancy': 'en-US-NancyNeural',
+        'sara': 'en-US-SaraNeural',
+        'andrew': 'en-US-AndrewNeural',
+        'emma': 'en-US-EmmaNeural',
+        'brian': 'en-US-BrianNeural',
+    }
+    DEFAULT_VOICE = 'en-US-JennyNeural'
+
+    def post(self, request):
+        text = request.data.get('text', '').strip()
+        voice = request.data.get('voice', 'jenny')
+
+        if not text:
+            return Response({'error': 'text is required'}, status=400)
+        
+        # Sanitize for TTS
+        from .services import VoiceSanitizer
+        text = VoiceSanitizer.clean(text)
+        if not text.strip():
+            text = "Hmm, let me think about that."
+
+        # Cap text length
+        if len(text) > 2000:
+            text = text[:2000]
+
+        # Resolve voice name
+        edge_voice = self.VOICES.get(voice.lower(), voice)
+        if not edge_voice.startswith('en-'):
+            edge_voice = self.DEFAULT_VOICE
+
+        try:
+            import edge_tts
+            import asyncio
+            import tempfile
+
+            async def _generate():
+                communicate = edge_tts.Communicate(text, edge_voice)
+                tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+                tmp.close()
+                await communicate.save(tmp.path)
+                return tmp.path
+
+            # Run edge-tts in a thread pool to avoid blocking
+            loop = asyncio.new_event_loop()
+            try:
+                mp3_path = loop.run_until_complete(_generate())
+            finally:
+                loop.close()
+
+            # Read and return the MP3 file
+            with open(mp3_path, 'rb') as f:
+                audio_data = f.read()
+            
+            # Clean up
+            try:
+                os.remove(mp3_path)
+            except:
+                pass
+
+            if not audio_data or len(audio_data) < 500:
+                return Response({'error': 'TTS generation failed'}, status=500)
+
+            from django.http import HttpResponse
+            return HttpResponse(audio_data, content_type='audio/mpeg')
+
+        except Exception as e:
+            logger.error(f'[Edge TTS] Error: {e}')
+            return Response({'error': str(e)}, status=500)

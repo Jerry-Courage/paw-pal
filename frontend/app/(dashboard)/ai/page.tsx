@@ -524,12 +524,26 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
             )}
             <div className="h-1 w-1 rounded-full bg-surface-container-highest" />
             <button
-              onClick={() => {
-                const u = new SpeechSynthesisUtterance(msg.content.replace(/[*_#`>\[\]!]/g, '').slice(0, 3000))
-                u.rate = 0.95
+              onClick={async () => {
                 window.speechSynthesis.cancel()
-                window.speechSynthesis.speak(u)
-                toast.success('Reading aloud...')
+                const text = msg.content.replace(/[*_#`>\[\]!]/g, '').slice(0, 2000)
+                if (!text.trim()) return
+                toast.success('Reading aloud with Microsoft voices...')
+                try {
+                  const { ttsApi } = await import('@/lib/api')
+                  const res = await ttsApi.edgeSpeak(text, 'jenny')
+                  const blob = new Blob([res.data], { type: 'audio/mpeg' })
+                  const url = URL.createObjectURL(blob)
+                  const audio = new Audio(url)
+                  audio.onended = () => URL.revokeObjectURL(url)
+                  audio.onerror = () => URL.revokeObjectURL(url)
+                  await audio.play()
+                } catch {
+                  // Fallback to browser TTS
+                  const u = new SpeechSynthesisUtterance(text)
+                  u.rate = 0.95
+                  window.speechSynthesis.speak(u)
+                }
               }}
               className="flex items-center gap-1.5 text-on-surface-variant/60 hover:text-emerald-400 transition-colors text-[10px] font-black uppercase tracking-widest"
             >

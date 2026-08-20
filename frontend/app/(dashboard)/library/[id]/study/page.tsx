@@ -267,17 +267,40 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const progress = total > 0 ? Math.round((completed.size / total) * 100) : 0
   const correctCount = submitted ? questions.filter((q, i) => selected[i] === q.correct).length : 0
   const passed = questions.length > 0 && correctCount >= Math.ceil(questions.length * 0.6)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const readAloud = () => {
-    if (isReading) { window.speechSynthesis.cancel(); setIsReading(false); return }
+  const readAloud = async () => {
+    if (isReading) {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+      window.speechSynthesis.cancel()
+      setIsReading(false)
+      return
+    }
     if (!current) return
-    const text = getSectionContent(current).replace(/\*\*/g, '').replace(/#{1,6} /g, '').slice(0, 1500)
-    const utt = new SpeechSynthesisUtterance(text)
-    utt.rate = 0.95; utt.onend = () => setIsReading(false)
-    window.speechSynthesis.speak(utt); setIsReading(true)
+    const text = getSectionContent(current).replace(/\*\*/g, '').replace(/#{1,6} /g, '').slice(0, 2000)
+    if (!text.trim()) return
+    setIsReading(true)
+    try {
+      const { ttsApi } = await import('@/lib/api')
+      const res = await ttsApi.edgeSpeak(text, 'jenny')
+      const blob = new Blob([res.data], { type: 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { setIsReading(false); URL.revokeObjectURL(url); audioRef.current = null }
+      audio.onerror = () => { setIsReading(false); URL.revokeObjectURL(url); audioRef.current = null }
+      await audio.play()
+    } catch (e) {
+      // Fallback to browser TTS if Edge TTS fails
+      try {
+        const utt = new SpeechSynthesisUtterance(text)
+        utt.rate = 0.95; utt.onend = () => setIsReading(false)
+        window.speechSynthesis.speak(utt)
+      } catch { setIsReading(false) }
+    }
   }
-  useEffect(() => () => window.speechSynthesis.cancel(), [])
-  useEffect(() => { window.speechSynthesis.cancel(); setIsReading(false) }, [sectionIndex])
+  useEffect(() => () => { window.speechSynthesis.cancel(); if (audioRef.current) audioRef.current.pause() }, [])
+  useEffect(() => { window.speechSynthesis.cancel(); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null } setIsReading(false) }, [sectionIndex])
 
   const handleNext = async () => {
     if (!current) return
