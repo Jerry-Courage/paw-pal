@@ -67,7 +67,7 @@ export default function MobileNav() {
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-low border-t border-outline-variant/20 flex justify-around items-start pt-3 nav-safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-container-low border-t border-outline-variant/20 flex justify-around items-center pt-3 nav-safe-bottom">
         {BOTTOM_ITEMS.map(item => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (
@@ -89,20 +89,6 @@ export default function MobileNav() {
             </Link>
           )
         })}
-        {/* Center FAB */}
-        <Link
-          href="/library"
-          className="-mt-8 w-14 h-14 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center shadow-lg border-4 border-background active:scale-90 transition-transform"
-        >
-          <span className="material-symbols-outlined text-[28px]">add</span>
-        </Link>
-        <button
-          onClick={() => setDrawerOpen(true)}
-          className="flex flex-col items-center gap-[2px] text-on-surface-variant"
-        >
-          <span className="material-symbols-outlined text-[24px]">more_horiz</span>
-          <span className="text-[9px] font-bold">More</span>
-        </button>
       </nav>
 
       {/* Mobile drawer overlay */}
