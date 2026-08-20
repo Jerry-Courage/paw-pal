@@ -19,7 +19,7 @@ import { workspaceApi } from '@/lib/api'
 const NAV_ITEMS = [
   { href: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/library',     icon: BookOpen,        label: 'Library' },
-  { href: '/planner',     icon: Calendar,        label: 'Planner' },
+  { href: '/learn',       icon: BookOpen,        label: 'Learn' },
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab' },
   { href: '/ai',          icon: Sparkles,        label: 'AI' },
