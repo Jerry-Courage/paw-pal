@@ -637,22 +637,55 @@ class AIService:
 
     async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
         """
-        Study Kit Chat — optimised for SPEED + QUALITY.
-        Chain: Groq (speed) → Gemini (quality fallback) → OpenRouter
+        Study Kit Chat — optimised for QUALITY (study kits need large, detailed output).
+        Chain: Gemini (quality + large context) → Groq (speed fallback) → OpenRouter
+        Study kits have huge prompts that exceed Groq's 6KB payload limit, so Gemini goes first.
         """
-        # ── STAGE 0: GROQ — fastest inference ────────────────────────────
+        # ── STAGE 0: GOOGLE GEMINI — quality first for study kits ─────────
+        for g_client in self._google_clients():
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
+                for attempt in range(2):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=45
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Kit] {g_model} timed out (45s)")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
+                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
+                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+                            break
+
+        # ── STAGE 1: GROQ — speed fallback (may truncate large kits) ──────
         global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
         _kit_groq_429 = False
         if groq_keys and _GROQ_413_STREAK < 2:
             for key in groq_keys:
                 for groq_model, groq_timeout, groq_max_tokens in [
-                    ('openai/gpt-oss-120b', 45, 4096),       # 128K context → 4K output (study kits need large output)
-                    ('qwen/qwen3.6-27b', 30, 4096),          # 131K context → 4K output
-                    ('openai/gpt-oss-20b', 30, 1024),        # 8K context → 1K output (last resort, too small for kits)
+                    ('openai/gpt-oss-120b', 45, 4096),
+                    ('qwen/qwen3.6-27b', 30, 4096),
+                    ('openai/gpt-oss-20b', 30, 1024),
                 ]:
                     try:
-                        # Cap max_tokens per model to stay within context window
                         import json as _json
                         safe_max_tokens = min(max_tokens, groq_max_tokens)
                         groq_payload = {'model': groq_model, 'messages': messages, 'max_tokens': safe_max_tokens}
@@ -684,8 +717,6 @@ class AIService:
                                     c = text_parts if text_parts else ''
                                 compressed.append({'role': msg['role'], 'content': c})
                             groq_payload = {'model': groq_model, 'messages': compressed, 'max_tokens': safe_max_tokens}
-                            new_bytes = len(_json.dumps(groq_payload).encode())
-                            logger.warning(f"[Groq Kit] Payload {payload_bytes}→{new_bytes} bytes — compressed for {groq_model} (system prompt PRESERVED)")
 
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
@@ -707,45 +738,10 @@ class AIService:
 
         if not _kit_groq_429 and groq_keys:
             _GROQ_413_STREAK += 1
-            if _GROQ_413_STREAK >= 2:
-                logger.warning(f"[Groq Kit] {_GROQ_413_STREAK} consecutive full 413 failures — skipping Groq for rest of session")
         elif _kit_groq_429:
             _GROQ_413_STREAK = 0
 
-        # ── STAGE 2: GOOGLE GEMINI — quality fallback ────────────────────
-        for g_client in self._google_clients():
-            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(2):
-                    try:
-                        contents, sys_instr = self._to_gemini_format(messages)
-                        if sys_instr and contents and contents[0].get('role') == 'user':
-                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        response = await asyncio.wait_for(
-                            g_client.aio.models.generate_content(
-                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=30
-                        )
-                        if response.text:
-                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
-                            return response.text
-                    except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Kit] {g_model} timed out ({30}s)")
-                        break
-                    except Exception as e:
-                        err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
-                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/2")
-                            await asyncio.sleep(1)
-                            continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
-                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/2")
-                            await asyncio.sleep(1)
-                            continue
-                        else:
-                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
-                            break
-
-        # ── STAGE 4: OPENROUTER (Final Ultimate Resiliency Fallback) ─────────
+        # ── STAGE 2: OPENROUTER (Final Fallback) ─────────────────────────
         if self.api_key:
             try:
                 async with httpx.AsyncClient() as client:

@@ -528,16 +528,10 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
                 window.speechSynthesis.cancel()
                 const text = msg.content.replace(/[*_#`>\[\]!]/g, '').slice(0, 2000)
                 if (!text.trim()) return
-                // Start browser TTS instantly
-                const u = new SpeechSynthesisUtterance(text)
-                u.rate = 0.95
-                window.speechSynthesis.speak(u)
-                toast.success('Reading aloud...')
-                // Generate Edge TTS in background (better quality)
+                toast.success('Generating voice...')
                 try {
                   const { ttsApi } = await import('@/lib/api')
                   const res = await ttsApi.edgeSpeak(text, 'andrew')
-                  window.speechSynthesis.cancel()
                   const blob = new Blob([res.data], { type: 'audio/mpeg' })
                   const url = URL.createObjectURL(blob)
                   const audio = new Audio(url)
@@ -545,7 +539,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
                   audio.onerror = () => URL.revokeObjectURL(url)
                   await audio.play()
                 } catch {
-                  // Browser TTS is already playing, keep it
+                  toast.error('Voice generation failed')
                 }
               }}
               className="flex items-center gap-1.5 text-on-surface-variant/60 hover:text-emerald-400 transition-colors text-[10px] font-black uppercase tracking-widest"

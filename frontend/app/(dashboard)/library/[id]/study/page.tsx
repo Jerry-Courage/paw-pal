@@ -284,31 +284,21 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     const text = getSectionContent(current).replace(/\*\*/g, '').replace(/#{1,6} /g, '').slice(0, 2000)
     if (!text.trim()) return
     setIsReading(true)
-
-    // Start browser TTS instantly (no delay)
-    try {
-      const utt = new SpeechSynthesisUtterance(text)
-      utt.rate = 0.95
-      utt.onend = () => { if (!audioRef.current) setIsReading(false) }
-      window.speechSynthesis.speak(utt)
-    } catch {}
-
-    // Generate Edge TTS in background (better quality)
     setIsGeneratingAudio(true)
+
     try {
       const { ttsApi } = await import('@/lib/api')
       const res = await ttsApi.edgeSpeak(text, readVoice.toLowerCase())
-      // Cancel browser TTS and switch to Edge audio
-      window.speechSynthesis.cancel()
       const blob = new Blob([res.data], { type: 'audio/mpeg' })
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onended = () => { setIsReading(false); setIsGeneratingAudio(false); URL.revokeObjectURL(url); audioRef.current = null }
-      audio.onerror = () => { setIsReading(false); setIsGeneratingAudio(false); URL.revokeObjectURL(url); audioRef.current = null }
+      setIsGeneratingAudio(false)
+      audio.onended = () => { setIsReading(false); URL.revokeObjectURL(url); audioRef.current = null }
+      audio.onerror = () => { setIsReading(false); URL.revokeObjectURL(url); audioRef.current = null }
       await audio.play()
     } catch (e) {
-      // Edge TTS failed — browser TTS is already playing, keep it
+      setIsReading(false)
       setIsGeneratingAudio(false)
     }
   }
@@ -944,11 +934,13 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                         <option value="Guy">Guy</option>
                       </select>
                       <button onClick={readAloud}
-                        className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
-                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>
-                          {isGeneratingAudio && isReading ? 'hourglass_top' : 'volume_up'}
-                        </span>
-                        {isReading ? (isGeneratingAudio ? 'Loading HD…' : 'Stop') : 'Listen'}
+                        className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isGeneratingAudio ? 'bg-primary/10 border-primary/30 text-primary' : isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
+                        {isGeneratingAudio ? (
+                          <span className="material-symbols-outlined text-[16px] sm:text-[18px] animate-spin">autorenew</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
+                        )}
+                        {isGeneratingAudio ? 'Generating…' : isReading ? 'Stop' : 'Listen'}
                       </button>
                     </div>
                     <button onClick={handleNext} disabled={loadingQuiz}
