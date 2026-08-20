@@ -125,6 +125,20 @@ def process_resource_task(res_id):
             raw_name = res.file.name if res.file else (res.r2_key or '')
             ext = os.path.splitext(raw_name)[1].lower()
 
+            # macOS metadata files (._ prefix) — infer real extension from title/resource_type
+            if ext.startswith('._'):
+                logger.warning(f'[Task Queue] macOS metadata file detected for {res.id}: {raw_name}')
+                if res.resource_type == 'pdf' or (res.title or '').lower().endswith('.pdf'):
+                    ext = '.pdf'
+                elif res.resource_type == 'slides' or (res.title or '').lower().endswith(('.pptx', '.ppt')):
+                    ext = '.pptx'
+                elif res.resource_type == 'video':
+                    ext = '.mp4'
+                else:
+                    title_ext = os.path.splitext(res.title or '')[1].lower()
+                    ext = title_ext if title_ext else '.pdf'
+                logger.info(f'[Task Queue] Inferred {ext!r} from metadata file for {res.id}')
+
             # Cloudinary strips extensions from stored file names — infer from resource_type or title
             if not ext:
                 if res.resource_type == 'pdf' or (res.title or '').lower().endswith('.pdf'):

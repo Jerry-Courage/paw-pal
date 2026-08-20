@@ -13,6 +13,25 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
     
     try:
         ext = extension.lower()
+
+        # macOS metadata files (._ prefix) — detect real type from magic bytes
+        if ext.startswith('._') or ext.startswith('._-'):
+            if file_bytes[:5] == b'%PDF-':
+                ext = '.pdf'
+            elif file_bytes[:4] == b'PK\x03\x04':
+                if b'word/' in file_bytes[:1000]:
+                    ext = '.docx'
+                elif b'ppt/' in file_bytes[:1000]:
+                    ext = '.pptx'
+                else:
+                    ext = '.docx'
+            elif file_bytes[:4] == b'{\x00\x00\x00' or file_bytes[:1] == b'[':
+                ext = '.json'
+            else:
+                content['status'] = 'error'
+                content['error'] = f'macOS metadata file (._ prefix) — not a real document'
+                return content
+            logger.info(f'[Extractor] macOS metadata file detected, inferred type: {ext}')
         if ext == '.pdf':
             from .pdf_extractor import extract_pdf_content
             pdf_data = extract_pdf_content(file_bytes=file_bytes)

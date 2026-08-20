@@ -103,6 +103,9 @@ class ResourceListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         uploaded_file = request.FILES.get('file')
         if uploaded_file:
+            # Reject macOS metadata files (._ prefix) — they're junk resource forks
+            if uploaded_file.name.startswith('._'):
+                return Response({'error': 'macOS metadata files (._) are not supported.'}, status=status.HTTP_400_BAD_REQUEST)
             ext = os.path.splitext(uploaded_file.name)[1].lower()
             if ext not in ALLOWED_EXTENSIONS:
                 return Response({'error': f'File type {ext} not allowed.'}, status=status.HTTP_400_BAD_REQUEST)
