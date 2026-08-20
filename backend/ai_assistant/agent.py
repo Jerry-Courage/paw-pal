@@ -250,6 +250,10 @@ class FlowAgent:
             r'\bhttps?://\S+', r'\bwww\.\S+',
             r'\bwhat.{0,30}(latest|recent|current|newest|today|now)\b',
             r'\bnews\b.*\babout\b', r'\btell me about\b.*\bhttp',
+            r'\bweb\s+search\b', r'\bcan\s+you\s+search\b',
+            r'\bdo\s+you\s+(have|can|know)\b.*\b(search|web)\b',
+            r'\bsearch\s+the\b', r'\bfind\s+(me\s+)?(info|information)\b',
+            r'\bwhat.{0,10}(is|are)\b.*\b(latest|newest|recent)\b',
         ]
         is_url = bool(re.match(r'^https?://', user_query.strip())) or bool(re.match(r'^[\w.-]+\.(com|org|net|edu|io|co)', user_query.strip()))
         has_web_intent = is_url or any(re.search(p, q_lower) for p in web_search_patterns)
