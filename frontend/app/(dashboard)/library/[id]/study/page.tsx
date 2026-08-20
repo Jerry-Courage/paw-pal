@@ -18,6 +18,8 @@ import SessionStats from '@/components/study/SessionStats'
 import AmbientPlayer from '@/components/study/AmbientPlayer'
 import MysteryBox from '@/components/study/MysteryBox'
 import StudyAIAssistant from '@/components/study/StudyAIAssistant'
+import dynamic from 'next/dynamic'
+const MermaidDiagram = dynamic(() => import('@/components/ai/MermaidDiagram'), { ssr: false })
 
 type QuizQuestion = { question: string; options: string[]; correct: string; explanation: string }
 type WrittenQuestion = { question: string; hint?: string; model_answer: string }
@@ -138,6 +140,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const [mobileStudyOpen, setMobileStudyOpen] = useState(false)
   const [showBreakPopup, setShowBreakPopup] = useState(false)
   const [breakIsLong, setBreakIsLong] = useState(false)
+  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set())
+  const [selfTaught, setSelfTaught] = useState<Set<number>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(`study_${resourceId}_selfTaught`)
+      if (raw) return new Set(JSON.parse(raw) as number[])
+    } catch {}
+    return new Set()
+  })
 
   // Mystery box state
   const [showMysteryBox, setShowMysteryBox] = useState(false)
@@ -305,6 +316,36 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   const goToSection = (i: number) => {
     setSectionIndex(i); setPhase('reading'); setQuestions([]); setSelected({}); setSubmitted(false)
     setWrittenQ(null); setWrittenAnswer(''); setWrittenGrade(null); setWrittenFeedback('')
+  }
+
+  const handleSelfTaught = () => {
+    if (!current) return
+    const newSelfTaught = new Set(selfTaught)
+    const newCompleted = new Set(completed)
+    newSelfTaught.add(sectionIndex)
+    newCompleted.add(sectionIndex)
+    setSelfTaught(newSelfTaught)
+    setCompleted(newCompleted)
+    const newXP = totalXP + XP_PER_SECTION
+    setTotalXP(newXP)
+    setSessionXP(s => s + XP_PER_SECTION)
+    try { localStorage.setItem(`study_${resourceId}_selfTaught`, JSON.stringify([...newSelfTaught])) } catch {}
+    try { localStorage.setItem(`study_${resourceId}_completed`, JSON.stringify([...newCompleted])) } catch {}
+    toast.success(`Nice! Section mastered independently. +${XP_PER_SECTION} XP`, { duration: 2000 })
+    authApi.awardXp(XP_PER_SECTION, `Study Mode: Section ${sectionIndex + 1} self-taught`, resourceId).catch(() => {})
+    qc.invalidateQueries({ queryKey: ['progress', resourceId] })
+    if (sectionIndex < total - 1) {
+      setTimeout(() => goToSection(sectionIndex + 1), 800)
+    }
+  }
+
+  const toggleExpanded = (idx: number) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
   }
 
   const resetProgress = () => {
@@ -748,18 +789,41 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
-                {/* Deep Dive */}
+                {/* Deep Dive — Expandable */}
                 {current.deep_dive && (
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
-                    <div className="flex items-center gap-2 mb-3">
+                    <button onClick={() => toggleExpanded(sectionIndex)}
+                      className="flex items-center gap-2 mb-3 group w-full text-left">
                       <span className="material-symbols-outlined text-tertiary text-[16px]">school</span>
                       <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">
                         {hasMath(current.deep_dive) ? 'Step-by-Step Derivation' : 'Deep Dive'}
                       </span>
-                    </div>
-                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.deep_dive)}</ReactMarkdown>
-                    </div>
+                      <span className="material-symbols-outlined text-tertiary/60 text-[14px] ml-auto transition-transform group-hover:text-tertiary"
+                        style={{ transform: expandedSections.has(sectionIndex) ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                        expand_more
+                      </span>
+                    </button>
+                    {expandedSections.has(sectionIndex) ? (
+                      <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed animate-in slide-in-from-top-2 duration-300">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            code({ className, children, ...props }) {
+                              const match = /language-mermaid/.exec(className || '')
+                              if (match) {
+                                return <MermaidDiagram code={String(children).replace(/\n$/, '')} />
+                              }
+                              return <code className={className} {...props}>{children}</code>
+                            }
+                          }}
+                        >{prepareForMarkdown(current.deep_dive)}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-[12px] text-on-surface-variant/60 italic">
+                        Tap to expand the detailed breakdown...
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -811,6 +875,14 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                     <span className="material-symbols-outlined text-[16px] sm:text-[18px]">arrow_back</span> Prev
                   </button>
                   <div className="flex items-center gap-2 sm:gap-3">
+                    {!completed.has(sectionIndex) && !selfTaught.has(sectionIndex) && (
+                      <button onClick={handleSelfTaught}
+                        className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-green-500/30 text-green-400 text-[12px] sm:text-[13px] font-bold hover:bg-green-500/10 transition-all">
+                        <span className="material-symbols-outlined text-[14px] sm:text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                        <span className="hidden sm:inline">I got this</span>
+                        <span className="sm:hidden">Got it</span>
+                      </button>
+                    )}
                     <button onClick={readAloud}
                       className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
                       <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
