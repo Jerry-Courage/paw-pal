@@ -578,20 +578,24 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   if (isLoading) return (
     <div className="fixed inset-0 bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-full border-2 border-primary-container border-t-transparent animate-spin" />
-        <p className="text-on-surface-variant text-sm">Loading study mode…</p>
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-amber-500 flex items-center justify-center animate-pulse">
+          <span className="text-[32px]">📚</span>
+        </div>
+        <p className="text-on-surface-variant text-sm font-medium">Loading your study session...</p>
       </div>
     </div>
   )
 
   if (!resource || total === 0) return (
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-6 px-6 text-center">
-      <span className="material-symbols-outlined text-[64px] text-on-surface-variant/30">auto_stories</span>
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-amber-500/10 flex items-center justify-center">
+        <span className="text-[48px]">📖</span>
+      </div>
       <div>
         <p className="text-on-surface font-bold text-lg mb-2">No study notes available yet</p>
-        <p className="text-on-surface-variant text-sm max-w-sm">Go back to the resource hub and make sure your study kit has been generated.</p>
+        <p className="text-on-surface-variant text-sm max-w-sm">Go back to the resource hub and generate your study kit first.</p>
       </div>
-      <Link href={`/library/${resourceId}`} className="flex items-center gap-2 bg-primary-container text-on-primary-container font-bold px-6 py-3 rounded-full shadow-[0_4px_0_0_#763300] hover:brightness-110 transition-all">
+      <Link href={`/library/${resourceId}`} className="flex items-center gap-2 bg-gradient-to-r from-primary to-amber-500 text-white font-bold px-6 py-3 rounded-full shadow-lg shadow-primary/30 hover:scale-105 transition-all">
         <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Resource
       </Link>
     </div>
@@ -716,15 +720,16 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 <button key={i} onClick={() => canClick && goToSection(i)} disabled={!canClick}
                   title={isLocked ? 'Complete this section first' : undefined}
                   className={cn('flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[13px] font-semibold transition-all',
-                    isDone ? 'bg-primary-container text-on-primary-container shadow-[0_3px_0_0_#763300] hover:brightness-110' :
-                    isActive ? 'bg-surface-container-high border-2 border-primary text-on-surface' :
+                    isDone ? 'bg-gradient-to-r from-emerald-500/15 to-green-500/10 border border-emerald-500/20 text-emerald-300' :
+                    isActive ? 'bg-gradient-to-r from-primary/15 to-amber-500/10 border-2 border-primary text-on-surface shadow-lg shadow-primary/10' :
                     isLocked ? 'text-on-surface-variant/30 cursor-not-allowed' :
                     'text-on-surface-variant hover:bg-surface-container-high'
                   )}>
                   <span className="text-[16px] shrink-0">
-                    {isDone ? '✅' : isActive ? '▶️' : sec.icon || '🔒'}
+                    {isDone ? '✅' : isActive ? '📖' : sec.icon || '🔒'}
                   </span>
                   <span className="truncate">{sec.title || `Section ${i + 1}`}</span>
+                  {isActive && <span className="ml-auto material-symbols-outlined text-primary text-[14px]">chevron_right</span>}
                 </button>
               )
             })}
@@ -766,13 +771,20 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                     <span className="text-[11px] font-black text-primary-container uppercase tracking-widest">Section {sectionIndex + 1} of {total}</span>
                   </div>
                   <h2 className="text-[20px] sm:text-[26px] font-bold text-on-surface leading-tight">{current.title}</h2>
+                  {/* Section progress mini bar */}
+                  <div className="flex items-center gap-2 mt-3 mb-1">
+                    <div className="flex-1 h-1 bg-surface-container-high rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-primary to-amber-400 rounded-full transition-all" style={{ width: `${((sectionIndex + 1) / total) * 100}%` }} />
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant font-medium">{sectionIndex + 1}/{total}</span>
+                  </div>
                 </div>
 
                 {/* Maths Formula Box — shown when section contains formulas */}
                 {hasMath(current.deep_dive || '') || hasMath(current.plain_english || '') ? (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-violet-500/[0.06] border border-violet-500/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-violet-500/10 to-purple-500/5 border border-violet-500/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="material-symbols-outlined text-violet-400 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>functions</span>
+                      <span className="text-[18px]">📐</span>
                       <span className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Key Formulas</span>
                     </div>
                     <div className="space-y-3">
@@ -789,14 +801,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Key Question */}
                 {current.key_question && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-secondary/10 border border-secondary/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-sky-500/10 to-blue-500/5 border border-sky-500/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-secondary text-[16px]">help_outline</span>
-                      <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Key Question</span>
+                      <span className="text-[18px]">🤔</span>
+                      <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Think About This</span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[16px] font-bold text-on-surface">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.key_question)}</ReactMarkdown>
                     </div>
+                    <p className="text-[11px] text-sky-400/60 mt-2 italic">Try answering before moving on!</p>
                   </div>
                 )}
 
@@ -804,13 +817,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 {current.plain_english && (
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">
-                        {hasMath(current.deep_dive || current.plain_english || '') ? 'In Plain English — No Jargon' : 'Simple Analogy / Plain English'}
+                      <span className="text-[18px]">💡</span>
+                      <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                        {hasMath(current.deep_dive || current.plain_english || '') ? 'No Jargon — Just English' : 'In Simple Words'}
                       </span>
                     </div>
-                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed text-on-surface/90">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.plain_english)}</ReactMarkdown>
+                    <div className="bg-gradient-to-br from-amber-500/5 to-orange-500/5 border border-amber-500/15 rounded-[1rem] p-4 sm:p-5">
+                      <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed text-on-surface/90">
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.plain_english)}</ReactMarkdown>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -820,33 +835,36 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                     <button onClick={() => toggleExpanded(sectionIndex)}
                       className="flex items-center gap-2 mb-3 group w-full text-left">
-                      <span className="material-symbols-outlined text-tertiary text-[16px]">school</span>
-                      <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">
-                        {hasMath(current.deep_dive) ? 'Step-by-Step Derivation' : 'Deep Dive'}
+                      <span className="text-[18px]">{hasMath(current.deep_dive) ? '📐' : '🔬'}</span>
+                      <span className="text-[10px] font-black text-violet-400 uppercase tracking-widest">
+                        {hasMath(current.deep_dive) ? 'Step-by-Step Math' : 'Deep Dive — Go Deeper'}
                       </span>
-                      <span className="material-symbols-outlined text-tertiary/60 text-[14px] ml-auto transition-transform group-hover:text-tertiary"
+                      <span className="material-symbols-outlined text-violet-400/60 text-[14px] ml-auto transition-transform group-hover:text-violet-400"
                         style={{ transform: expandedSections.has(sectionIndex) ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                         expand_more
                       </span>
                     </button>
                     {expandedSections.has(sectionIndex) ? (
-                      <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed animate-in slide-in-from-top-2 duration-300">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkMath]}
-                          rehypePlugins={[rehypeKatex]}
-                          components={{
-                            code({ className, children, ...props }) {
-                              const match = /language-mermaid/.exec(className || '')
-                              if (match) {
-                                return <MermaidDiagram code={String(children).replace(/\n$/, '')} />
+                      <div className="bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/15 rounded-[1rem] p-4 sm:p-5 animate-in slide-in-from-top-2 duration-300">
+                        <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={{
+                              code({ className, children, ...props }) {
+                                const match = /language-mermaid/.exec(className || '')
+                                if (match) {
+                                  return <MermaidDiagram code={String(children).replace(/\n$/, '')} />
+                                }
+                                return <code className={className} {...props}>{children}</code>
                               }
-                              return <code className={className} {...props}>{children}</code>
-                            }
-                          }}
-                        >{prepareForMarkdown(current.deep_dive)}</ReactMarkdown>
+                            }}
+                          >{prepareForMarkdown(current.deep_dive)}</ReactMarkdown>
+                        </div>
                       </div>
                     ) : (
-                      <p className="text-[12px] text-on-surface-variant/60 italic">
+                      <p className="text-[12px] text-violet-400/50 italic flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">touch_app</span>
                         Tap to expand the detailed breakdown...
                       </p>
                     )}
@@ -866,10 +884,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Memory Trick */}
                 {current.memory_trick && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-tertiary/10 border border-tertiary/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-pink-500/10 to-rose-500/5 border border-pink-500/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-tertiary text-[16px]">psychology</span>
-                      <span className="text-[10px] font-black text-tertiary uppercase tracking-widest">Memory Trick</span>
+                      <span className="text-[18px]">🧠</span>
+                      <span className="text-[10px] font-black text-pink-400 uppercase tracking-widest">Memory Trick</span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] text-on-surface italic">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.memory_trick)}</ReactMarkdown>
@@ -879,13 +897,25 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Quick Summary */}
                 {current.quick_summary && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-primary/5 border border-primary/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-emerald-500/10 to-green-500/5 border border-emerald-500/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-primary text-[16px]">summarize</span>
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Quick Summary</span>
+                      <span className="text-[18px]">✅</span>
+                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Key Takeaway</span>
                     </div>
-                    <div className="prose prose-invert max-w-none text-[14px] text-on-surface-variant leading-relaxed">
+                    <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] text-on-surface-variant leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.quick_summary)}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {/* Fun Motivation Box */}
+                {completed.size >= 1 && !completed.has(sectionIndex) && sectionIndex > 0 && (
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/5 border border-amber-500/15 rounded-[1rem]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[16px]">💡</span>
+                      <p className="text-[12px] text-amber-400/80 font-medium italic">
+                        {['You\'re on a roll! Keep that momentum going.', 'Looking good! Your brain is absorbing this.', 'Nice progress! You\'re building real knowledge.', 'Halfway there — the best learners push through!'][sectionIndex % 4]}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -955,9 +985,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
             {/* QUIZ / RESULT */}
             {(phase === 'quiz' || phase === 'result') && questions.length > 0 && (
               <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
-                <div className="p-8">
-                  <div className="flex items-center gap-3 mb-7">
-                    <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>quiz</span>
+                <div className="p-6 sm:p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-amber-500 flex items-center justify-center">
+                      <span className="text-[20px]">🧪</span>
+                    </div>
                     <div>
                       <h4 className="text-[18px] font-bold text-on-surface">Quick Check</h4>
                       <p className="text-[12px] text-on-surface-variant">{current?.title}</p>
@@ -998,16 +1030,16 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   </div>
 
                   {submitted && (
-                    <div className={cn('flex items-center gap-4 p-5 rounded-[1rem] border mt-8', passed ? 'bg-green-500/10 border-green-500/30' : 'bg-error-container/20 border-error/30')}>
-                      <span className={cn('material-symbols-outlined text-[32px]', passed ? 'text-green-400' : 'text-error')} style={{ fontVariationSettings: "'FILL' 1" }}>
-                        {passed ? 'emoji_events' : 'cancel'}
-                      </span>
+                    <div className={cn('flex items-center gap-4 p-5 rounded-[1rem] border mt-8', passed ? 'bg-gradient-to-r from-emerald-500/15 to-green-500/10 border-emerald-500/30' : 'bg-gradient-to-r from-amber-500/10 to-orange-500/5 border-amber-500/30')}>
+                      <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center', passed ? 'bg-emerald-500/20' : 'bg-amber-500/20')}>
+                        <span className="text-[28px]">{passed ? '🎉' : '💪'}</span>
+                      </div>
                       <div>
-                        <p className="font-bold text-on-surface">
-                          {passed ? `${correctCount}/${questions.length} correct — Great job! +${XP_PER_SECTION} XP` : `${correctCount}/${questions.length} correct — Review and try again`}
+                        <p className="font-bold text-on-surface text-[15px]">
+                          {passed ? `${correctCount}/${questions.length} — You nailed it! +${XP_PER_SECTION} XP` : `${correctCount}/${questions.length} — Almost there!`}
                         </p>
                         <p className="text-[12px] text-on-surface-variant mt-0.5">
-                          {passed ? 'You can move to the next section.' : 'Read through the section again before retrying.'}
+                          {passed ? 'Awesome work! Ready for the next section.' : 'Give it another shot — you got this!'}
                         </p>
                       </div>
                     </div>
@@ -1036,31 +1068,33 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
             {/* XP Banner */}
             {completed.size > 0 && phase !== 'mastery' && phase !== 'mastery_complete' && (
-              <div className="bg-surface-container-low border border-outline-variant/30 rounded-[1.5rem] p-6 flex items-center justify-between">
+              <div className="bg-gradient-to-r from-primary/10 to-amber-500/5 border border-primary/20 rounded-[1.5rem] p-5 sm:p-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-secondary-container rounded-full flex items-center justify-center">
-                    <span className="material-symbols-outlined text-on-secondary-container text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>rocket_launch</span>
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+                    <span className="text-[24px]">🚀</span>
                   </div>
                   <div>
-                    <p className="font-bold text-on-surface text-[15px]">Keep going, Explorer!</p>
+                    <p className="font-bold text-on-surface text-[15px]">Keep crushing it!</p>
                     <p className="text-on-surface-variant text-[13px]">{completed.size}/{total} sections done</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[28px] font-bold text-primary leading-none">+{totalXP}</p>
-                  <p className="text-on-surface-variant text-[12px]">XP earned</p>
+                  <p className="text-[28px] font-black text-primary leading-none">{totalXP}</p>
+                  <p className="text-on-surface-variant text-[11px] font-medium">XP earned</p>
                 </div>
               </div>
             )}
             {/* WRITTEN TEST phase */}
             {phase === 'written' && writtenQ && (
               <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
-                <div className="p-8">
+                <div className="p-6 sm:p-8">
                   <div className="flex items-center gap-3 mb-6">
-                    <span className="material-symbols-outlined text-secondary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-secondary to-blue-500 flex items-center justify-center">
+                      <span className="text-[20px]">✍️</span>
+                    </div>
                     <div>
                       <h4 className="text-[18px] font-bold text-on-surface">Written Test</h4>
-                      <p className="text-[12px] text-on-surface-variant">Demonstrate your understanding in your own words</p>
+                      <p className="text-[12px] text-on-surface-variant">Show what you know in your own words</p>
                     </div>
                   </div>
 
@@ -1078,12 +1112,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   />
 
                   {writtenGrade && (
-                    <div className={cn('p-5 rounded-[1rem] border mt-4', writtenGrade === 'got_it' ? 'bg-green-500/10 border-green-500/30' : 'bg-primary/10 border-primary/20')}>
+                    <div className={cn('p-5 rounded-[1rem] border mt-4', writtenGrade === 'got_it' ? 'bg-gradient-to-r from-emerald-500/15 to-green-500/10 border-emerald-500/30' : 'bg-gradient-to-r from-sky-500/10 to-blue-500/5 border-sky-500/30')}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                          {writtenGrade === 'got_it' ? 'check_circle' : 'lightbulb'}
-                        </span>
-                        <p className="font-bold text-on-surface">{writtenGrade === 'got_it' ? 'Great explanation!' : 'Good effort — keep studying!'}</p>
+                        <span className="text-[20px]">{writtenGrade === 'got_it' ? '🌟' : '💡'}</span>
+                        <p className="font-bold text-on-surface">{writtenGrade === 'got_it' ? 'Brilliant explanation!' : 'Good effort — keep learning!'}</p>
                       </div>
                       {writtenFeedback && <p className="text-[13px] text-on-surface-variant leading-relaxed">{writtenFeedback}</p>}
                       <details className="mt-3">
@@ -1117,12 +1149,12 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
             {/* MASTERY CHALLENGE phase */}
             {phase === 'mastery' && (
-              <article className="bg-surface-container rounded-[1.5rem] border border-tertiary/30 overflow-hidden shadow-lg">
-                <div className="p-8">
+              <article className="bg-surface-container rounded-[1.5rem] border border-violet-500/30 overflow-hidden shadow-lg">
+                <div className="p-6 sm:p-8">
                   {/* Header */}
                   <div className="text-center mb-8">
-                    <div className="w-20 h-20 rounded-full bg-tertiary/15 border-2 border-tertiary/30 flex items-center justify-center mx-auto mb-4">
-                      <span className="material-symbols-outlined text-tertiary text-[40px]" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/10 border-2 border-violet-500/30 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-500/20">
+                      <span className="text-[40px]">🎓</span>
                     </div>
                     <h2 className="text-[24px] font-bold text-on-surface mb-2">Mastery Challenge</h2>
                     <p className="text-[14px] text-on-surface-variant max-w-md mx-auto">
