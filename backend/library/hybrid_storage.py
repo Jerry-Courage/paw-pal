@@ -170,6 +170,7 @@ def _get_file_bytes_cloudinary(resource):
         raise Exception(f'Resource {resource.id} has no file name or data available')
 
     # 3. Brute-force signed URLs with all public_id variants × resource_type × type
+    #    Also try a direct unsigned URL (public resources) without media/ prefix
     try:
         import cloudinary
         import cloudinary.utils
@@ -181,7 +182,30 @@ def _get_file_bytes_cloudinary(resource):
             fmt = file_ext.group(1).lower() if file_ext and file_ext.group(1).lower() in KNOWN_EXTS else 'pdf'
 
             pub_id_variants = _build_pub_id_variants(raw_name)
-            logger.info(f'[Cloudinary] Trying {len(pub_id_variants)} public_id variants for {resource.id}: {pub_id_variants}')
+
+            # Also try direct unsigned URLs (no media/ prefix, raw resource_type)
+            # This handles the case where file.url returns wrong path
+            base_no_ext = _re.sub(r'\.[^.]+$', '', raw_name)
+            direct_variants = []
+            if base_no_ext.startswith('media/'):
+                direct_variants.append(base_no_ext[len('media/'):])
+            else:
+                direct_variants.append(base_no_ext)
+                direct_variants.append('media/' + base_no_ext)
+
+            # Try direct unsigned Cloudinary URLs first (fastest, no signing needed)
+            for pub_id in direct_variants:
+                for res_type in ['raw', 'image']:
+                    try:
+                        url = f'https://res.cloudinary.com/{cfg.cloud_name}/{res_type}/upload/{pub_id}.{fmt}'
+                        resp = _req.get(url, timeout=60)
+                        if resp.status_code == 200:
+                            logger.info(f'[Cloudinary] Downloaded via direct URL ({res_type}): {resource.id} ({len(resp.content)} bytes)')
+                            return resp.content
+                    except Exception:
+                        pass
+
+            logger.info(f'[Cloudinary] Trying {len(pub_id_variants)} signed variants for {resource.id}: {pub_id_variants}')
 
             for pub_id in pub_id_variants:
                 for res_type in ['raw', 'image', 'video']:
@@ -192,7 +216,7 @@ def _get_file_bytes_cloudinary(resource):
                             )
                             resp = _req.get(signed_url, timeout=60)
                             if resp.status_code == 200:
-                                logger.info(f'[Cloudinary] Downloaded via {pub_id} as {res_type}/{t}: {resource.id} ({len(resp.content)} bytes)')
+                                logger.info(f'[Cloudinary] Downloaded via signed {pub_id} as {res_type}/{t}: {resource.id} ({len(resp.content)} bytes)')
                                 return resp.content
                         except Exception:
                             pass
