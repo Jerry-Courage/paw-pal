@@ -472,42 +472,7 @@ class AIService:
                 logger.warning(f"[_call_vision fallback] Failed: {e}")
             return "Flow AI is temporarily overloaded. Please try again in a moment."
             
-        # ── STAGE 0: GOOGLE GEMINI — quality-first, rotate all keys ────────
-        for g_client in self._google_clients():
-            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(2):
-                    try:
-                        contents, sys_instr = self._to_gemini_format(messages)
-                        if sys_instr and contents and contents[0].get('role') == 'user':
-                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        response = await asyncio.wait_for(
-                            g_client.aio.models.generate_content(
-                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=12
-                        )
-                        if response.text:
-                            logger.info(f"[Google SDK Chat] ✓ {g_model}")
-                            return response.text
-                    except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Chat] {g_model} timed out ({12}s)")
-                        break
-                    except Exception as e:
-                        err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
-                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/2")
-                            await asyncio.sleep(1)
-                            continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
-                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/2")
-                            await asyncio.sleep(1)
-                            continue
-                        else:
-                            logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
-                            break
-
-        # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ─────
-
-        # ── STAGE 2: GROQ (all keys) — speed fallback ──────────────────────
+        # ── STAGE 0: GROQ (all keys) — fastest inference ────────────────────
         global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
 
@@ -602,6 +567,39 @@ class AIService:
         else:
             _GROQ_413_STREAK = 0  # 429 means keys work, reset streak
 
+        # ── STAGE 2: GOOGLE GEMINI — quality fallback ──────────────────────
+        for g_client in self._google_clients():
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
+                for attempt in range(2):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=12
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Chat] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Chat] {g_model} timed out ({12}s)")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
+                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
+                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
+                            break
+
         # ── STAGE 4: OPENROUTER — last resort ────────────────────────────────
         models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
         for i, model in enumerate(models_to_try[:max_fallbacks]):
@@ -628,45 +626,10 @@ class AIService:
 
     async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
         """
-        Study Kit Chat — optimised for QUALITY + RELIABILITY (generation tasks).
-        Chain: Google Gemini (quality) → Groq (speed fallback) → OpenRouter
+        Study Kit Chat — optimised for SPEED + QUALITY.
+        Chain: Groq (speed) → Gemini (quality fallback) → OpenRouter
         """
-        # ── STAGE 0: GOOGLE GEMINI — quality-first, rotate all keys ────────
-        for g_client in self._google_clients():
-            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(2):
-                    try:
-                        contents, sys_instr = self._to_gemini_format(messages)
-                        if sys_instr and contents and contents[0].get('role') == 'user':
-                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        response = await asyncio.wait_for(
-                            g_client.aio.models.generate_content(
-                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=30
-                        )
-                        if response.text:
-                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
-                            return response.text
-                    except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Kit] {g_model} timed out ({30}s)")
-                        break
-                    except Exception as e:
-                        err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
-                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/2")
-                            await asyncio.sleep(1)
-                            continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
-                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/2")
-                            await asyncio.sleep(1)
-                            continue
-                        else:
-                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
-                            break
-
-        # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ──────
-
-        # ── STAGE 2: GROQ — speed fallback ────────────────────────────────
+        # ── STAGE 0: GROQ — fastest inference ────────────────────────────
         global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
         _kit_groq_429 = False
@@ -737,6 +700,39 @@ class AIService:
                 logger.warning(f"[Groq Kit] {_GROQ_413_STREAK} consecutive full 413 failures — skipping Groq for rest of session")
         elif _kit_groq_429:
             _GROQ_413_STREAK = 0
+
+        # ── STAGE 2: GOOGLE GEMINI — quality fallback ────────────────────
+        for g_client in self._google_clients():
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
+                for attempt in range(2):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=30
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Kit] {g_model} timed out ({30}s)")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
+                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
+                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+                            break
 
         # ── STAGE 4: OPENROUTER (Final Ultimate Resiliency Fallback) ─────────
         if self.api_key:
