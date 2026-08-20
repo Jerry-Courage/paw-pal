@@ -278,8 +278,9 @@ class FlowAgent:
                     web_search_context = (
                         "\n\n[CRITICAL INSTRUCTION: Web search results were ALREADY fetched for this user query. "
                         "DO NOT use the web_search tool — the results are provided below. "
-                        "Present the results directly in your response as if you searched for them yourself. "
-                        "Never say 'let me search' — you already have the results.]\n\n"
+                        "Present them in an organized, fun way with emoji headers and structure. "
+                        "Never say 'let me search' — you already have the results. "
+                        "Make it engaging and scannable — use emoji section headers, bold key terms, and bullet points.]\n\n"
                         "WEB SEARCH RESULTS:\n" + "\n\n---\n\n".join(results)
                     )
                     logger.info(f"[Agent] Web search fetched {len(results)} results via duckduckgo-search")

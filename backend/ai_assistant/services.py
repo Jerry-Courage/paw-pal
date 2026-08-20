@@ -474,7 +474,7 @@ class AIService:
         # ── STAGE 0: GOOGLE GEMINI — quality-first, rotate all keys ────────
         for g_client in self._google_clients():
             for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(3):
+                for attempt in range(2):
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         if sys_instr and contents and contents[0].get('role') == 'user':
@@ -482,25 +482,23 @@ class AIService:
                         response = await asyncio.wait_for(
                             g_client.aio.models.generate_content(
                                 model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=25
+                            ), timeout=12
                         )
                         if response.text:
                             logger.info(f"[Google SDK Chat] ✓ {g_model}")
                             return response.text
                     except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Chat] {g_model} timed out")
+                        logger.warning(f"[Google SDK Chat] {g_model} timed out ({12}s)")
                         break
                     except Exception as e:
                         err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
+                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
                             continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
+                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
                             continue
                         else:
                             logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
@@ -635,7 +633,7 @@ class AIService:
         # ── STAGE 0: GOOGLE GEMINI — quality-first, rotate all keys ────────
         for g_client in self._google_clients():
             for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(3):
+                for attempt in range(2):
                     try:
                         contents, sys_instr = self._to_gemini_format(messages)
                         if sys_instr and contents and contents[0].get('role') == 'user':
@@ -643,25 +641,23 @@ class AIService:
                         response = await asyncio.wait_for(
                             g_client.aio.models.generate_content(
                                 model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=60
+                            ), timeout=30
                         )
                         if response.text:
                             logger.info(f"[Google SDK Kit] ✓ {g_model}")
                             return response.text
                     except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Kit] {g_model} timed out")
+                        logger.warning(f"[Google SDK Kit] {g_model} timed out ({30}s)")
                         break
                     except Exception as e:
                         err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 1:
+                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
                             continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 1:
+                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/2")
+                            await asyncio.sleep(1)
                             continue
                         else:
                             logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
