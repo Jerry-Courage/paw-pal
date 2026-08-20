@@ -531,7 +531,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
                 toast.success('Reading aloud with Microsoft voices...')
                 try {
                   const { ttsApi } = await import('@/lib/api')
-                  const res = await ttsApi.edgeSpeak(text, 'jenny')
+                  const res = await ttsApi.edgeSpeak(text, 'andrew')
                   const blob = new Blob([res.data], { type: 'audio/mpeg' })
                   const url = URL.createObjectURL(blob)
                   const audio = new Audio(url)
@@ -798,7 +798,7 @@ function AIChat() {
         // CHAT
         try {
           const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(query)
-          const wantsImage = /image|pic|picture|photo|illustrat|draw|labelled|labeled|sketch|show.*me|what.*look like|generate|create|visuali[sz]e|depict/i.test(query)
+          const wantsImage = /\b(generate|create|draw)\s+(an?\s+)?(image|picture|photo|illustration|sketch|painting)|\bimage\s+of\b|\bpicture\s+of\b|\bphoto\s+of\b|\bdraw\s+(me\s+)?\b|\billustrat(e|ion)\b|\blabelled\s+diagram\b|\blabeled\s+diagram\b|\bwhat\s+does\s+\w+\s+look\s+like\s*(as|in)\s*(a|an)\s+(image|photo|picture|drawing)/i.test(query)
           const wantsWebSearch = /search|google|look\s+up|what.*is|latest|recent|current|news|web/i.test(query)
           if (wantsDiagram) setPendingAction('diagram')
           else if (wantsImage) setPendingAction('image')

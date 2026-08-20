@@ -1429,41 +1429,46 @@ class EdgeTTSView(APIView):
         if not edge_voice.startswith('en-'):
             edge_voice = self.DEFAULT_VOICE
 
-        try:
-            import edge_tts
-            import asyncio
-            import tempfile
+        import subprocess, sys, tempfile, time
+        output_path = tempfile.mktemp(suffix='.mp3')
 
-            async def _generate():
-                communicate = edge_tts.Communicate(text, edge_voice)
-                tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
-                tmp.close()
-                await communicate.save(tmp.path)
-                return tmp.path
+        cmd = [
+            sys.executable, "-m", "edge_tts",
+            "--voice", edge_voice,
+            "--text", text,
+            "--write-media", output_path
+        ]
 
-            # Run edge-tts in a thread pool to avoid blocking
-            loop = asyncio.new_event_loop()
+        word_count = len(text.split())
+        min_size = max(1000, word_count * 50)
+
+        for attempt in range(3):
             try:
-                mp3_path = loop.run_until_complete(_generate())
-            finally:
-                loop.close()
-
-            # Read and return the MP3 file
-            with open(mp3_path, 'rb') as f:
-                audio_data = f.read()
-            
-            # Clean up
-            try:
-                os.remove(mp3_path)
+                result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=120)
+                if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > min_size:
+                    break
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                time.sleep(1)
+            except subprocess.TimeoutExpired:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                time.sleep(1)
             except:
-                pass
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                time.sleep(1)
+        else:
+            return Response({'error': 'TTS generation failed'}, status=500)
 
-            if not audio_data or len(audio_data) < 500:
-                return Response({'error': 'TTS generation failed'}, status=500)
+        # Read and return the MP3 file
+        try:
+            with open(output_path, 'rb') as f:
+                audio_data = f.read()
+            os.remove(output_path)
 
             from django.http import HttpResponse
             return HttpResponse(audio_data, content_type='audio/mpeg')
-
         except Exception as e:
             logger.error(f'[Edge TTS] Error: {e}')
             return Response({'error': str(e)}, status=500)

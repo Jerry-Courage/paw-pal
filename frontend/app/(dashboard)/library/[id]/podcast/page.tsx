@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
 
-const VOICES_A = ['Aoede', 'Puck', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe']
-const VOICES_B = ['Puck', 'Aoede', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe']
+const VOICES_A = ['Andrew', 'Ava', 'Emma', 'Christopher', 'Brian', 'Sara', 'Guy', 'Tony']
+const VOICES_B = ['Ava', 'Andrew', 'Emma', 'Christopher', 'Brian', 'Sara', 'Guy', 'Tony']
 
 export default function PodcastPage({ params }: { params: { id: string } }) {
   const resourceId = parseInt(params.id)
@@ -28,8 +28,8 @@ export default function PodcastPage({ params }: { params: { id: string } }) {
   })
 
   const [status, setStatus] = useState<'checking' | 'idle' | 'generating' | 'ready' | 'error'>('checking')
-  const [voiceA, setVoiceA] = useState('Aoede')
-  const [voiceB, setVoiceB] = useState('Puck')
+  const [voiceA, setVoiceA] = useState('Andrew')
+  const [voiceB, setVoiceB] = useState('Ava')
   const [visuals, setVisuals] = useState<any[]>([])
   const [interjectionUrls, setInterjectionUrls] = useState<Record<string, string>>({})
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null)

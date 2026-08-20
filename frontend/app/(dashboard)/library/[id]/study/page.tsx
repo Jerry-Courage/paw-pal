@@ -117,6 +117,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     return new Set()
   })
   const [isReading, setIsReading] = useState(false)
+  const [readVoice, setReadVoice] = useState('Andrew')
   const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
   const [timerSeconds, setTimerSeconds] = useState(25 * 60)
   const [timerRunning, setTimerRunning] = useState(true)
@@ -282,7 +283,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     setIsReading(true)
     try {
       const { ttsApi } = await import('@/lib/api')
-      const res = await ttsApi.edgeSpeak(text, 'jenny')
+      const res = await ttsApi.edgeSpeak(text, readVoice.toLowerCase())
       const blob = new Blob([res.data], { type: 'audio/mpeg' })
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
@@ -906,11 +907,25 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                         <span className="sm:hidden">Got it</span>
                       </button>
                     )}
-                    <button onClick={readAloud}
-                      className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
-                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
-                      {isReading ? 'Stop' : 'Listen'}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={readVoice}
+                        onChange={e => setReadVoice(e.target.value)}
+                        className="text-[11px] bg-transparent border border-outline-variant/30 rounded-full px-2 py-1 text-on-surface-variant cursor-pointer appearance-none"
+                      >
+                        <option value="Andrew">Andrew</option>
+                        <option value="Ava">Ava</option>
+                        <option value="Emma">Emma</option>
+                        <option value="Brian">Brian</option>
+                        <option value="Sara">Sara</option>
+                        <option value="Guy">Guy</option>
+                      </select>
+                      <button onClick={readAloud}
+                        className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
+                        {isReading ? 'Stop' : 'Listen'}
+                      </button>
+                    </div>
                     <button onClick={handleNext} disabled={loadingQuiz}
                       className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-primary-container text-on-primary-container font-bold text-[12px] sm:text-[14px] shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none hover:brightness-110 transition-all disabled:opacity-60">
                       {loadingQuiz ? <><span className="material-symbols-outlined text-[14px] sm:text-[16px] animate-spin">autorenew</span> <span className="hidden sm:inline">Generating…</span><span className="sm:hidden">Loading</span></> : <>Next <span className="hidden sm:inline">: Quick Test</span><span className="material-symbols-outlined text-[16px] sm:text-[18px]">arrow_forward</span></>}

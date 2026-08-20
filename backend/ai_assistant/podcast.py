@@ -10,23 +10,20 @@ from django.conf import settings
 from asgiref.sync import async_to_sync
 from .services import AIService, VoiceSanitizer
 
-# Default voices available for users to pick from (Edge-TTS Neural primary for stability, Gemini secondary)
+# Edge-TTS Neural voices — reliable, no quota issues
 SUPPORTED_VOICES = {
-    'Andrew (Neural Male - Ultra Stable)': 'en-US-AndrewNeural',
-    'Ava (Neural Female - Ultra Stable)': 'en-US-AvaNeural',
-    'Emma (Neural Female)': 'en-US-EmmaNeural',
-    'Christopher (Neural Male)': 'en-US-ChristopherNeural',
-    'Aoede (Gemini Female)': 'Aoede',
-    'Puck (Gemini Male)': 'Puck',
-    'Kore (Gemini Female)': 'Kore',
-    'Charon (Gemini Male)': 'Charon',
-    'Fenrir (Gemini Male)': 'Fenrir',
-    'Leda (Gemini Female)': 'Leda',
-    'Zephyr (Gemini Female)': 'Zephyr',
-    'Autonoe (Gemini Female)': 'Autonoe',
+    'Andrew (Male - Deep Rich)': 'en-US-AndrewNeural',
+    'Ava (Female - Warm Natural)': 'en-US-AvaNeural',
+    'Emma (Female - Clear Bright)': 'en-US-EmmaNeural',
+    'Christopher (Male - Authoritative)': 'en-US-ChristopherNeural',
+    'Brian (Male - Friendly)': 'en-US-BrianNeural',
+    'Sara (Female - Professional)': 'en-US-SaraNeural',
+    'Guy (Male - Conversational)': 'en-US-GuyNeural',
+    'Tony (Male - Energetic)': 'en-US-TonyNeural',
 }
 
-GEMINI_VOICES = ['Puck', 'Aoede', 'Kore', 'Charon', 'Fenrir', 'Leda', 'Zephyr', 'Autonoe']
+# All voices are Edge-TTS Neural — Gemini TTS removed for reliability
+GEMINI_VOICES = []
 
 def generate_gemini_tts_file(text, voice, output_path):
     import struct
