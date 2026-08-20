@@ -17,12 +17,12 @@ export default function LearnPage() {
 
   const { data: paths, isLoading } = useQuery({
     queryKey: ['learning-paths'],
-    queryFn: () => learningApi.getPaths().then(r => r.data),
+    queryFn: () => learningApi.getPaths().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []),
   })
 
   const { data: resources } = useQuery({
     queryKey: ['library'],
-    queryFn: () => libraryApi.getResources().then(r => r.data),
+    queryFn: () => libraryApi.getResources().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []),
   })
 
   const createMutation = useMutation({

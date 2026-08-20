@@ -28,7 +28,7 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
 
   const { data: resources } = useQuery({
     queryKey: ['library'],
-    queryFn: () => libraryApi.getResources().then(r => r.data),
+    queryFn: () => libraryApi.getResources().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []),
   })
 
   const { data: analytics } = useQuery({
