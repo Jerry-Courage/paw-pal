@@ -51,27 +51,81 @@ export default function UniDashboard() {
     <div className="space-y-8 pb-12">
 
       {/* ── Welcome Banner ── */}
-      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] p-6 sm:p-8 text-white shadow-2xl border border-orange-500/10">
-        <div className="absolute -right-10 -top-10 w-64 h-64 bg-orange-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-[2rem] bg-[#0c0c1d] p-6 sm:p-8 text-white shadow-2xl border border-white/[0.06]">
+        {/* Animated mesh background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {/* Glowing orbs */}
+          <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-orange-500/[0.07] rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '4s' }} />
+          <div className="absolute bottom-0 right-1/4 w-60 h-60 bg-amber-500/[0.05] rounded-full blur-[80px] animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
+          <div className="absolute top-0 right-1/3 w-40 h-40 bg-orange-400/[0.04] rounded-full blur-[60px] animate-pulse" style={{ animationDuration: '5s', animationDelay: '1s' }} />
+
+          {/* Floating data nodes */}
+          <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="15%" cy="30%" r="2" fill="#f97316" className="animate-pulse" style={{ animationDuration: '3s' }} />
+            <circle cx="85%" cy="20%" r="1.5" fill="#f97316" className="animate-pulse" style={{ animationDuration: '4s', animationDelay: '1s' }} />
+            <circle cx="70%" cy="70%" r="2" fill="#f97316" className="animate-pulse" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }} />
+            <circle cx="30%" cy="80%" r="1.5" fill="#f97316" className="animate-pulse" style={{ animationDuration: '4.5s', animationDelay: '1.5s' }} />
+            <circle cx="50%" cy="15%" r="1" fill="#fb923c" className="animate-pulse" style={{ animationDuration: '3s', animationDelay: '2s' }} />
+            <circle cx="90%" cy="55%" r="1.5" fill="#fb923c" className="animate-pulse" style={{ animationDuration: '5s', animationDelay: '0.8s' }} />
+            {/* Connection lines */}
+            <line x1="15%" y1="30%" x2="30%" y2="80%" stroke="#f97316" strokeWidth="0.5" opacity="0.3" />
+            <line x1="70%" y1="70%" x2="85%" y2="20%" stroke="#f97316" strokeWidth="0.5" opacity="0.2" />
+            <line x1="50%" y1="15%" x2="85%" y2="20%" stroke="#fb923c" strokeWidth="0.5" opacity="0.2" />
+          </svg>
+
+          {/* Grid pattern */}
+          <div className="absolute inset-0 opacity-[0.02]" style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+            backgroundSize: '60px 60px'
+          }} />
+        </div>
+
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/15 backdrop-blur-md text-[11px] font-black uppercase tracking-wider text-orange-300 border border-orange-500/20">
-              <span>🎓 University Hub</span>
+          <div className="space-y-3">
+            {/* AI badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 backdrop-blur-sm">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
+                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93" />
+                  <path d="M12 2a4 4 0 0 0-4 4c0 1.95 1.4 3.58 3.25 3.93" />
+                  <path d="M12 9.93V22" />
+                  <path d="M8 13h8" />
+                  <path d="M9 17h6" />
+                </svg>
+              </div>
+              <span className="text-[11px] font-black uppercase tracking-wider text-orange-300">AI-Powered Study Hub</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tight">Welcome back, {name}! 👋</h1>
-            <p className="text-white/70 text-sm max-w-xl font-medium">
-              {nudgeData?.nudge || 'Your AI tutor is ready. What are we studying today?'}
+
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+              Welcome back, <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-clip-text text-transparent">{name}</span>! <span className="inline-block animate-bounce" style={{ animationDuration: '2s' }}>👋</span>
+            </h1>
+            <p className="text-white/50 text-sm max-w-lg font-medium leading-relaxed">
+              {nudgeData?.nudge || 'Your AI tutor is warmed up and ready to help you crush your goals.'}
             </p>
           </div>
+
+          {/* Stats as glass panels */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border border-orange-500/15 text-center">
-              <p className="text-[10px] uppercase font-black text-orange-300 tracking-wider">Streak</p>
-              <p className="text-xl font-black flex items-center gap-1">🔥 {streak} <span className="text-sm font-bold">Days</span></p>
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="relative bg-white/[0.04] backdrop-blur-xl px-5 py-3.5 rounded-2xl border border-white/[0.06] text-center hover:border-orange-500/20 transition-colors">
+                <p className="text-[10px] uppercase font-black text-orange-400/80 tracking-widest mb-0.5">Streak</p>
+                <p className="text-2xl font-black flex items-center justify-center gap-1.5">
+                  <span className="text-lg">🔥</span>
+                  <span className="bg-gradient-to-b from-white to-white/70 bg-clip-text text-transparent">{streak}</span>
+                  <span className="text-[11px] font-bold text-white/40">days</span>
+                </p>
+              </div>
             </div>
-            <div className="bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border border-orange-500/15 text-center">
-              <p className="text-[10px] uppercase font-black text-orange-300 tracking-wider">Study XP</p>
-              <p className="text-xl font-black flex items-center gap-1">⚡ {xp.toLocaleString()}</p>
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="relative bg-white/[0.04] backdrop-blur-xl px-5 py-3.5 rounded-2xl border border-white/[0.06] text-center hover:border-orange-500/20 transition-colors">
+                <p className="text-[10px] uppercase font-black text-orange-400/80 tracking-widest mb-0.5">Study XP</p>
+                <p className="text-2xl font-black flex items-center justify-center gap-1.5">
+                  <span className="text-lg">⚡</span>
+                  <span className="bg-gradient-to-b from-white to-white/70 bg-clip-text text-transparent">{xp.toLocaleString()}</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
