@@ -276,8 +276,10 @@ class FlowAgent:
 
                 if results:
                     web_search_context = (
-                        "\n\n[IMPORTANT: The following web search results were ALREADY fetched for the user. "
-                        "Present them directly in your response. Do NOT say you will search — the results are below.]\n\n"
+                        "\n\n[CRITICAL INSTRUCTION: Web search results were ALREADY fetched for this user query. "
+                        "DO NOT use the web_search tool — the results are provided below. "
+                        "Present the results directly in your response as if you searched for them yourself. "
+                        "Never say 'let me search' — you already have the results.]\n\n"
                         "WEB SEARCH RESULTS:\n" + "\n\n---\n\n".join(results)
                     )
                     logger.info(f"[Agent] Web search fetched {len(results)} results via duckduckgo-search")
@@ -301,14 +303,25 @@ class FlowAgent:
         else:
             mode_indicator = "MODE: FREE — No document assigned. You are in free conversational mode. Chat about anything, be entertaining, engage casually."
 
+        # When web search results are already fetched, suppress the web_search tool
+        # so the AI presents results instead of calling the tool again
+        if web_search_context:
+            tools_prompt = TOOLS_SYSTEM_PROMPT.replace(
+                'web_search',
+                'web_search [PRE-FETCHED — results already in your system context, present them directly]'
+            )
+        else:
+            tools_prompt = TOOLS_SYSTEM_PROMPT
+
         messages = [
-            {'role': 'system', 'content': f"{base_prompt}\n\n{mode_indicator}\n\n{TOOLS_SYSTEM_PROMPT}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}\n{web_search_context}"},
+            {'role': 'system', 'content': f"{base_prompt}\n\n{mode_indicator}\n\n{tools_prompt}\n\nCURRENT TIME: {current_time_str}\n\n{self.context}\n{library_context}\n{web_search_context}"},
         ]
         if history and isinstance(history, list):
             messages.extend(self._truncate_history(history, max_messages=50, max_chars=12000))
         if current_page_context:
             messages.append({'role': 'system', 'content': f"Current Page Context: {current_page_context}"})
         messages.append({'role': 'user', 'content': user_query})
+        self._last_messages = messages  # Store for tool handlers to check context
         return messages
     
     async def _build_tutor_messages(self, user_query, current_page_context, history):
@@ -507,6 +520,16 @@ class FlowAgent:
                 if not query:
                     return "Error: No search query provided."
                 logger.info(f"[Agent] Web search: {query[:80]}")
+                
+                # Check if results were already pre-fetched in system context
+                pre_fetched = False
+                for msg in (self._last_messages or []):
+                    if msg.get('role') == 'system' and 'WEB SEARCH RESULTS:' in (msg.get('content', '') or ''):
+                        pre_fetched = True
+                        break
+                if pre_fetched:
+                    return "[Web search results are already provided in your context above. Present them to the user.]"
+                
                 try:
                     import requests as _req
                     resp = await asyncio.to_thread(
