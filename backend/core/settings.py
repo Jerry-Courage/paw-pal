@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django_q',
     'pgvector',
     'channels',
+    'learning',
 ]
 
 MIDDLEWARE = [

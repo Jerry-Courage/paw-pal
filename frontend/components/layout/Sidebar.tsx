@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/dashboard',   icon: 'home',            label: 'Home' },
   { href: '/library',     icon: 'menu_book',       label: 'My Library' },
   { href: '/planner',     icon: 'calendar_today',  label: 'Planner' },
+  { href: '/learn',       icon: 'school',          label: 'Learn' },
   { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },

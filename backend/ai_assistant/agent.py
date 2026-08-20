@@ -120,6 +120,10 @@ The available tools are:
    - Also use when you're not confident about a factual answer — search first, then answer.
    - Parameters: {"query": "the search query"}
    - NEVER say "I don't have access to the internet" or "I can't search the web". You CAN search. Use this tool.
+8. generate_learning_path:
+   - Use when the user asks to create a study plan, learning path, roadmap, or study schedule for their materials.
+   - Parameters: {"title": "path title", "resources": [list of resource IDs], "deadline": "Optional ISO 8601 date"}
+   - This generates a structured concept-by-concept progression from their uploaded materials.
 
 Example response: "Sure! I'll put that Biology session on your calendar for 3 PM tomorrow. ACTION: {"tool": "schedule_study_session", "parameters": {"title": "Biology Session", "start_time": "2026-04-10T15:00:00"}}"
 """
@@ -374,7 +378,7 @@ class FlowAgent:
             action_part = action_match.group(1).strip()
             result = self._self_healing_json_parse(action_part)
             # Validate: only return actions with known tool names
-            if result and result.get('tool') in ('generate_image', 'generate_diagram', 'web_search', 'schedule_study_session', 'create_assignment', 'add_deadline', 'create_workspace'):
+            if result and result.get('tool') in ('generate_image', 'generate_diagram', 'web_search', 'schedule_study_session', 'create_assignment', 'add_deadline', 'create_workspace', 'generate_learning_path'):
                 return result
         return None
 
@@ -559,6 +563,51 @@ class FlowAgent:
                 except Exception as se:
                     logger.warning(f"[Agent] Web search failed: {se}")
                     return f"Search temporarily unavailable for: {query}"
+
+            elif tool == 'generate_learning_path':
+                title = params.get('title', 'My Learning Path')
+                resource_ids = params.get('resources', [])
+                deadline = params.get('deadline')
+                if not resource_ids:
+                    return "Error: Provide resource IDs to create a learning path."
+                from learning.models import LearningPath, ConceptNode
+                from library.models import Resource
+                from django.utils.dateparse import parse_datetime
+                path = LearningPath.objects.create(
+                    user=self.user,
+                    title=title,
+                    deadline=parse_datetime(deadline) if deadline else None,
+                    status='active',
+                )
+                resource_objs = Resource.objects.filter(id__in=resource_ids, user=self.user)
+                all_concepts = []
+                for res in resource_objs:
+                    concepts = res.ai_concepts or []
+                    for i, c in enumerate(concepts):
+                        if isinstance(c, str):
+                            c = {'title': c}
+                        all_concepts.append({
+                            'title': c.get('title', c.get('name', f'Concept {i+1}'))[:300],
+                            'description': c.get('description', c.get('summary', ''))[:2000],
+                            'source_resource': res,
+                            'source_page': c.get('page'),
+                            'source_section': c.get('section', ''),
+                            'difficulty': c.get('difficulty', 'medium'),
+                        })
+                nodes = []
+                for i, c in enumerate(all_concepts):
+                    node = ConceptNode.objects.create(
+                        path=path, title=c['title'], description=c['description'],
+                        source_resource=c['source_resource'], source_page=c.get('source_page'),
+                        source_section=c.get('source_section', ''), order_index=i,
+                        status='current' if i == 0 else 'locked', difficulty=c.get('difficulty', 'medium'),
+                    )
+                    if nodes:
+                        node.prerequisites.add(nodes[-1])
+                    nodes.append(node)
+                path.total_concepts = len(nodes)
+                path.save(update_fields=['total_concepts', 'status', 'updated_at'])
+                return f"Created learning path '{title}' with {len(nodes)} concepts. First concept is ready to study!"
 
             return f"Unknown tool: {tool}"
         except Exception as e:

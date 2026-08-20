@@ -236,10 +236,20 @@ export default function QuizBattlePage() {
         setShowConfetti(true)
         snd.gameOver()
         setTimeout(() => setShowConfetti(false), 4000)
-        // Notify winner of XP reward
-        const winner = (msg.leaderboard || [])[0]
-        if (winner && winner.username === me) {
-          setTimeout(() => toast.success('Winner! +10 XP earned 🏆', { duration: 5000, icon: '⚡' }), 1500)
+        // Show XP awards
+        const xpAwards = msg.xp_awards || []
+        const myAward = xpAwards.find((a: any) => a.username === me)
+        if (myAward) {
+          setTimeout(() => {
+            if (myAward.bonus === 'perfect_score') {
+              toast.success(`Perfect Score! +${myAward.xp} XP 🎯`, { duration: 5000 })
+            } else if (myAward.rank <= 3) {
+              const medals = ['🏆', '🥈', '🥉']
+              toast.success(`${medals[myAward.rank - 1]} ${myAward.rank === 1 ? 'Winner' : `#${myAward.rank}`}! +${myAward.xp} XP earned`, { duration: 5000 })
+            } else {
+              toast.success(`+${myAward.xp} XP participation reward`, { duration: 3000 })
+            }
+          }, 1500)
         }
         break
     }
@@ -394,6 +404,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
   const [title, setTitle]             = useState('')
   const [count, setCount]             = useState(10)
   const [timePerQ, setTimePerQ]       = useState(20)
+  const [difficulty, setDifficulty]   = useState<'easy' | 'medium' | 'hard'>('medium')
   const [loading, setLoading]         = useState(false)
   const [fetching, setFetching]       = useState(true)
   const fileRef                       = useRef<HTMLInputElement>(null)
@@ -426,6 +437,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
         title: title.trim() || undefined,
         count,
         time_per_q: timePerQ,
+        difficulty,
       })
       onCreated(res.data.pin, true)
     } catch (e: any) {
@@ -490,6 +502,24 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Difficulty Selector */}
+        <div className="space-y-1.5">
+          <span className="text-[11px] text-white/40 font-bold uppercase tracking-wider ml-1">Difficulty</span>
+          <div className="grid grid-cols-3 gap-1.5 bg-white/5 p-1.5 rounded-xl border border-white/10">
+            {([
+              { key: 'easy', label: 'Easy', icon: '🟢', color: 'bg-emerald-500' },
+              { key: 'medium', label: 'Medium', icon: '🟡', color: 'bg-amber-500' },
+              { key: 'hard', label: 'Hard', icon: '🔴', color: 'bg-red-500' },
+            ] as const).map(d => (
+              <button key={d.key} onClick={() => setDifficulty(d.key)}
+                className={cn('py-2 rounded-lg text-[13px] font-bold transition-all flex items-center justify-center gap-1.5',
+                  difficulty === d.key ? `${d.color} text-white shadow-md` : 'text-white/60 hover:text-white')}>
+                <span className="text-[14px]">{d.icon}</span> {d.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -908,8 +938,10 @@ function LeaderboardScreen({ leaderboard, me }: { leaderboard: Player[]; me: str
 // ══════════════════════════════════════════════════════════════════════════════
 function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[]; me: string; onPlayAgain: () => void }) {
   const MEDALS   = ['🥇','🥈','🥉']
+  const XP_REWARDS: Record<number, string> = { 1: '+15 XP', 2: '+10 XP', 3: '+5 XP' }
   const top3     = leaderboard.slice(0, 3)
   const myRank   = leaderboard.findIndex(p => p.username === me) + 1
+  const myPlayer = leaderboard.find(p => p.username === me)
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -919,7 +951,7 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
         <h2 className="text-[36px] sm:text-[44px] font-black bg-gradient-to-r from-amber-300 via-amber-400 to-amber-200 bg-clip-text text-transparent">
           Battle Complete!
         </h2>
-        <p className="text-[14px] text-white/50 font-medium">Final Rankings &amp; Winner Podium</p>
+        <p className="text-[14px] text-white/50 font-medium">Final Rankings &amp; Rewards</p>
       </div>
 
       {/* Winner Podium (2nd - 1st - 3rd) */}
@@ -931,7 +963,8 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
               className="flex-1 flex flex-col items-center">
               <span className="text-[32px] mb-1">🥈</span>
               <span className="text-[13px] font-black text-white truncate max-w-[90px]">{top3[1].username}</span>
-              <span className="text-[12px] text-white/50 mb-2">{top3[1].score} pts</span>
+              <span className="text-[12px] text-white/50 mb-1">{top3[1].score.toLocaleString()} pts</span>
+              <span className="text-[10px] font-bold text-emerald-400 mb-2">+10 XP</span>
               <div className="w-full h-[120px] sm:h-[140px] bg-slate-400/20 border-t-4 border-slate-300 rounded-t-2xl flex items-center justify-center font-black text-[28px] text-slate-300 shadow-lg">
                 2
               </div>
@@ -944,7 +977,8 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
               className="flex-1 flex flex-col items-center">
               <span className="text-[44px] mb-1">🏆</span>
               <span className="text-[15px] font-black text-amber-300 truncate max-w-[100px]">{top3[0].username}</span>
-              <span className="text-[13px] text-amber-400/80 mb-2 font-bold">{top3[0].score} pts</span>
+              <span className="text-[13px] text-amber-400/80 mb-1 font-bold">{top3[0].score.toLocaleString()} pts</span>
+              <span className="text-[11px] font-bold text-emerald-400 mb-2">+15 XP</span>
               <div className="w-full h-[160px] sm:h-[200px] bg-amber-500/25 border-t-4 border-amber-400 rounded-t-2xl flex items-center justify-center font-black text-[36px] text-amber-300 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
                 1
               </div>
@@ -957,7 +991,8 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
               className="flex-1 flex flex-col items-center">
               <span className="text-[32px] mb-1">🥉</span>
               <span className="text-[13px] font-black text-white truncate max-w-[90px]">{top3[2].username}</span>
-              <span className="text-[12px] text-white/50 mb-2">{top3[2].score} pts</span>
+              <span className="text-[12px] text-white/50 mb-1">{top3[2].score.toLocaleString()} pts</span>
+              <span className="text-[10px] font-bold text-emerald-400 mb-2">+5 XP</span>
               <div className="w-full h-[90px] sm:h-[100px] bg-amber-700/20 border-t-4 border-amber-600 rounded-t-2xl flex items-center justify-center font-black text-[24px] text-amber-600 shadow-lg">
                 3
               </div>
@@ -969,8 +1004,40 @@ function GameOverScreen({ leaderboard, me, onPlayAgain }: { leaderboard: Player[
       {/* Your Rank Banner */}
       {myRank > 0 && (
         <div className="w-full px-6 py-3.5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
-          <span className="text-[13px] text-white/60 font-bold">Your Position</span>
-          <span className="text-[16px] font-black text-primary">{MEDALS[myRank-1] || `#${myRank}`} ({leaderboard[myRank-1]?.score.toLocaleString()} pts)</span>
+          <div>
+            <span className="text-[13px] text-white/60 font-bold">Your Position</span>
+            {myPlayer?.streak >= 3 && (
+              <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-bold">
+                🔥 {myPlayer.streak} streak
+              </span>
+            )}
+          </div>
+          <div className="text-right">
+            <span className="text-[16px] font-black text-primary">{MEDALS[myRank-1] || `#${myRank}`}</span>
+            <span className="text-[12px] text-white/40 ml-2">{myPlayer?.score.toLocaleString()} pts</span>
+            <span className="text-[11px] font-bold text-emerald-400 ml-2">
+              {myRank <= 3 ? XP_REWARDS[myRank] : '+1 XP'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Full Leaderboard (collapsed) */}
+      {leaderboard.length > 3 && (
+        <div className="w-full space-y-1.5">
+          <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-2">Full Rankings</p>
+          {leaderboard.slice(3).map((p, i) => (
+            <div key={p.username} className={`flex items-center justify-between px-4 py-2 rounded-xl text-[12px] ${p.username === me ? 'bg-primary/10 border border-primary/20' : 'bg-white/3'}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-white/30 font-bold w-5">#{i + 4}</span>
+                <span className={p.username === me ? 'text-primary font-bold' : 'text-white/70'}>{p.username}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/50">{p.score.toLocaleString()} pts</span>
+                <span className="text-emerald-400/60 text-[10px]">+1 XP</span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

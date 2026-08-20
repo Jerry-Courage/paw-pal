@@ -152,14 +152,33 @@ class QuizConsumer(AsyncWebsocketConsumer):
         await self._set_status('finished')
         leaderboard = await self._get_leaderboard()
 
-        # Award 10 XP to the winner (rank 1)
-        if leaderboard and leaderboard[0].get('rank') == 1:
-            winner_username = leaderboard[0]['username']
-            await self._award_quiz_xp(winner_username, 10)
+        # Award XP to top 3 + participation
+        xp_awards = []
+        XP_REWARDS = {1: 15, 2: 10, 3: 5}
+        for entry in leaderboard:
+            rank = entry['rank']
+            if rank in XP_REWARDS:
+                await self._award_quiz_xp(entry['username'], XP_REWARDS[rank])
+                xp_awards.append({'username': entry['username'], 'xp': XP_REWARDS[rank], 'rank': rank})
+            else:
+                # Participation XP for everyone else
+                await self._award_quiz_xp(entry['username'], 1)
+                xp_awards.append({'username': entry['username'], 'xp': 1, 'rank': rank})
+
+        # Check for perfect score bonus
+        perfect_users = await self._check_perfect_scores()
+        for u in perfect_users:
+            await self._award_quiz_xp(u, 5)
+            xp_awards.append({'username': u, 'xp': 5, 'rank': 0, 'bonus': 'perfect_score'})
+
+        # Update persistent battle streaks
+        if leaderboard:
+            await self._update_battle_streaks(leaderboard)
 
         await self.channel_layer.group_send(self.group, {
             'type':        'game_over',
             'leaderboard': leaderboard,
+            'xp_awards':   xp_awards,
         })
 
     async def _handle_answer(self, data):
@@ -309,6 +328,48 @@ class QuizConsumer(AsyncWebsocketConsumer):
         obs['quiz_xp'] = current + amount
         user.onboarding_status = obs
         user.save(update_fields=['onboarding_status'])
+
+    @database_sync_to_async
+    def _check_perfect_scores(self):
+        """Return usernames who answered every question correctly."""
+        from .models import QuizPlayer, QuizAnswer
+        players = QuizPlayer.objects.filter(room__pin=self.pin)
+        perfect = []
+        for p in players:
+            total = QuizAnswer.objects.filter(player=p).count()
+            correct = QuizAnswer.objects.filter(player=p, is_correct=True).count()
+            if total > 0 and correct == total:
+                perfect.append(p.user.username)
+        return perfect
+
+    @database_sync_to_async
+    def _update_battle_streaks(self, leaderboard):
+        """Update persistent battle win streaks."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if not leaderboard:
+            return
+        winner_name = leaderboard[0]['username']
+        try:
+            winner = User.objects.get(username=winner_name)
+        except User.DoesNotExist:
+            return
+        obs = winner.onboarding_status or {}
+        current_streak = int(obs.get('battle_streak', 0))
+        obs['battle_streak'] = current_streak + 1
+        obs['best_battle_streak'] = max(int(obs.get('best_battle_streak', 0)), obs['battle_streak'])
+        winner.onboarding_status = obs
+        winner.save(update_fields=['onboarding_status'])
+        # Reset streaks for non-winners
+        for entry in leaderboard[1:]:
+            try:
+                loser = User.objects.get(username=entry['username'])
+                lobs = loser.onboarding_status or {}
+                lobs['battle_streak'] = 0
+                loser.onboarding_status = lobs
+                loser.save(update_fields=['onboarding_status'])
+            except User.DoesNotExist:
+                pass
 
     def send_json(self, data):
         import asyncio

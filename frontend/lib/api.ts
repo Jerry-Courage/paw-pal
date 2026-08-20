@@ -365,6 +365,26 @@ export const plannerApi = {
   sendReminders: () => api.post('/planner/send-reminders/', {}),
 }
 
+// Learning Paths
+export const learningApi = {
+  getPaths: () => api.get('/learning/paths/'),
+  getPath: (id: string) => api.get(`/learning/paths/${id}/`),
+  createPath: (data: any) => api.post('/learning/paths/', data),
+  deletePath: (id: string) => api.delete(`/learning/paths/${id}/`),
+  generateConcepts: (id: string, resources: number[]) =>
+    api.post(`/learning/paths/${id}/generate/`, { resources }),
+  getRoadmap: (id: string) => api.get(`/learning/paths/${id}/roadmap/`),
+  getDueReviews: (id: string) => api.get(`/learning/paths/${id}/due-reviews/`),
+  getAnalytics: (id: string) => api.get(`/learning/paths/${id}/analytics/`),
+  // Concepts
+  getConcept: (id: string) => api.get(`/learning/concepts/${id}/`),
+  completeConcept: (id: string, score: number) =>
+    api.post(`/learning/concepts/${id}/complete/`, { score }),
+  reviewConcept: (id: string, score: number) =>
+    api.post(`/learning/concepts/${id}/review/`, { score }),
+  getSourceContext: (id: string) => api.get(`/learning/concepts/${id}/source-context/`),
+}
+
 // Assignments
 export const assignmentsApi = {
   getAll: () => api.get('/assignments/'),

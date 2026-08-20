@@ -240,15 +240,20 @@ class QuizGenerateView(APIView):
         count       = int(request.data.get('count', 10))
         time_per_q  = int(request.data.get('time_per_q', 20))
         title       = request.data.get('title', '').strip()
+        difficulty  = request.data.get('difficulty', 'medium')
 
         if not resource_id and not topic:
             return Response({'error': 'Please select a resource, upload a file, or enter a topic.'}, status=400)
+
+        # Map difficulty to level
+        level_map = {'easy': 'highschool', 'medium': 'undergrad', 'hard': 'graduate'}
+        level = level_map.get(difficulty, 'undergrad')
 
         ai = AIService()
         if topic:
             if not title:
                 title = f'{topic} — Quiz Battle'
-            raw_questions = ai.generate_quiz_from_topic(topic, fmt='mcq', level='undergrad', count=count)
+            raw_questions = ai.generate_quiz_from_topic(topic, fmt='mcq', level=level, count=count)
         else:
             resource = get_object_or_404(
                 Resource,
@@ -256,7 +261,7 @@ class QuizGenerateView(APIView):
             )
             if not title:
                 title = f'{resource.title} — Quiz Battle'
-            raw_questions = ai.generate_quiz(resource, fmt='mcq', level='undergrad', count=count)
+            raw_questions = ai.generate_quiz(resource, fmt='mcq', level=level, count=count)
 
         if not raw_questions:
             return Response({'error': 'AI could not generate questions. Try a different topic or resource.'}, status=500)
