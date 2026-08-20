@@ -1,9 +1,9 @@
-const CACHE_NAME = 'flowstate-v1';
+const CACHE_NAME = 'flowstate-v2';
 const STATIC_ASSETS = [
   '/',
   '/dashboard',
   '/images/logo-icon.png',
-  '/images/logo.png',
+  '/images/logo-pwa.png',
 ];
 
 // ─── INSTALL: Cache static assets ────────────────────────────────────────────

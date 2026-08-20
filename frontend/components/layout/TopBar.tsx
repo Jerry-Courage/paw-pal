@@ -32,8 +32,8 @@ export default function TopBar({ onMenuClick, onToggleSidebar, isSidebarOpen }: 
           <Menu className="w-5 h-5" />
         </button>
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-            <Brain className="w-3.5 h-3.5 text-orange-400" />
+          <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0">
+            <img src="/images/logo-icon.png" alt="FlowState" className="w-full h-full object-contain" />
           </div>
           <span className="text-sm font-black text-white uppercase tracking-tight">
             Flow<span className="text-orange-500">State</span>

@@ -69,13 +69,9 @@ export default function Sidebar() {
     >
       {/* ── Brand ───────────────────────────────────── */}
       <div className="flex items-center gap-3 px-[14px] pt-6 pb-4 shrink-0 overflow-hidden">
-        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-sm shrink-0 overflow-hidden">
-          {(session?.user as any)?.avatar ? (
-            <img src={(session?.user as any).avatar} alt={name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-[13px]">{getInitials(name)}</span>
-          )}
-        </div>
+        <Link href="/dashboard" className="shrink-0">
+          <img src="/images/logo-icon.png" alt="FlowState" className="w-10 h-10 rounded-[0.65rem] object-contain" />
+        </Link>
         <div className={cn('min-w-0 transition-all duration-200', expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 pointer-events-none')}>
           <Link href="/dashboard">
             <h1 className="text-[18px] font-bold text-primary leading-none whitespace-nowrap">FlowState</h1>
