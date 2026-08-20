@@ -97,7 +97,15 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
               </Link>
               <div>
                 <h1 className="font-black text-lg leading-tight">{path?.title}</h1>
-                <p className="text-[10px] text-on-surface-variant">{path?.subject}</p>
+                <div className="flex items-center gap-2 text-[10px] text-on-surface-variant">
+                  {path?.subject && <span>{path.subject}</span>}
+                  {path?.start_date && path?.deadline && (
+                    <span>{new Date(path.start_date).toLocaleDateString()} → {new Date(path.deadline).toLocaleDateString()}</span>
+                  )}
+                  {!path?.start_date && path?.deadline && (
+                    <span>Due: {new Date(path.deadline).toLocaleDateString()}</span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">

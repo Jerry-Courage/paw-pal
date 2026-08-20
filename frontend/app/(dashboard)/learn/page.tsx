@@ -12,6 +12,7 @@ export default function LearnPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
+  const [startDate, setStartDate] = useState('')
   const [deadline, setDeadline] = useState('')
   const [selectedResources, setSelectedResources] = useState<number[]>([])
 
@@ -28,25 +29,46 @@ export default function LearnPage() {
   const createMutation = useMutation({
     mutationFn: (data: any) => learningApi.createPath(data),
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['learning-paths'] })
+      // Auto-generate concepts if resources selected
+      if (selectedResources.length > 0) {
+        learningApi.generateConcepts(res.data.id, selectedResources).then(() => {
+          qc.invalidateQueries({ queryKey: ['learning-paths'] })
+          window.location.href = `/learn/${res.data.id}`
+        }).catch(() => {
+          qc.invalidateQueries({ queryKey: ['learning-paths'] })
+          window.location.href = `/learn/${res.data.id}`
+        })
+      } else {
+        qc.invalidateQueries({ queryKey: ['learning-paths'] })
+        window.location.href = `/learn/${res.data.id}`
+      }
       setShowCreate(false)
-      setTitle('')
-      setSubject('')
-      setDeadline('')
-      setSelectedResources([])
-      toast.success('Learning path created! Generate concepts to get started.')
-      window.location.href = `/learn/${res.data.id}`
+      resetForm()
     },
     onError: () => toast.error('Failed to create path'),
   })
 
+  const resetForm = () => {
+    setTitle('')
+    setSubject('')
+    setStartDate('')
+    setDeadline('')
+    setSelectedResources([])
+  }
+
   const handleCreate = () => {
     if (!title.trim()) return toast.error('Enter a title')
+    if (selectedResources.length === 0) return toast.error('Select at least one resource')
     createMutation.mutate({
       title: title.trim(),
       subject: subject.trim(),
+      start_date: startDate || null,
       deadline: deadline || null,
     })
+  }
+
+  const toggleResource = (id: number) => {
+    setSelectedResources(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id])
   }
 
   const STATUS_COLORS: Record<string, string> = {
@@ -76,33 +98,110 @@ export default function LearnPage() {
       {/* Create Modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={() => setShowCreate(false)}>
-          <div className="bg-surface rounded-t-3xl sm:rounded-2xl w-full max-w-lg p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-black mb-4">Create Learning Path</h2>
-            <div className="space-y-3">
-              <input
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder="Path title (e.g. Biology Exam Prep)"
-                className="w-full bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-                placeholder="Subject (optional)"
-                className="w-full bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="datetime-local"
-                value={deadline}
-                onChange={e => setDeadline(e.target.value)}
-                className="w-full bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 rounded-xl border border-outline-variant/30 text-sm font-bold">Cancel</button>
-              <button onClick={handleCreate} disabled={createMutation.isPending} className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm disabled:opacity-50">
-                {createMutation.isPending ? 'Creating…' : 'Create Path'}
-              </button>
+          <div className="bg-surface rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-xl font-black mb-1">Create Learning Path</h2>
+              <p className="text-xs text-on-surface-variant mb-4">Pick your materials and set your timeline</p>
+
+              <div className="space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Title *</label>
+                  <input
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="e.g. Biology Exam Prep"
+                    className="w-full mt-1 bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Subject */}
+                <div>
+                  <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Subject</label>
+                  <input
+                    value={subject}
+                    onChange={e => setSubject(e.target.value)}
+                    placeholder="e.g. Biology"
+                    className="w-full mt-1 bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Start Date</label>
+                    <input
+                      type="datetime-local"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="w-full mt-1 bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Deadline *</label>
+                    <input
+                      type="datetime-local"
+                      value={deadline}
+                      onChange={e => setDeadline(e.target.value)}
+                      className="w-full mt-1 bg-surface-variant/50 border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Resource Selection */}
+                <div>
+                  <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                    Study Materials * ({selectedResources.length} selected)
+                  </label>
+                  <div className="mt-2 max-h-48 overflow-y-auto space-y-1.5">
+                    {!resources || resources.length === 0 ? (
+                      <p className="text-xs text-on-surface-variant py-3 text-center">No resources in your library yet. Upload some first.</p>
+                    ) : (
+                      resources.map((res: any) => (
+                        <button
+                          key={res.id}
+                          onClick={() => toggleResource(res.id)}
+                          className={cn(
+                            'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all',
+                            selectedResources.includes(res.id)
+                              ? 'border-primary bg-primary/5'
+                              : 'border-outline-variant/20 hover:border-outline-variant/40'
+                          )}
+                        >
+                          <span className={cn(
+                            'material-symbols-outlined text-[18px]',
+                            selectedResources.includes(res.id) ? 'text-primary' : 'text-on-surface-variant/50'
+                          )}>
+                            {selectedResources.includes(res.id) ? 'check_circle' : 'radio_button_unchecked'}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{res.title}</p>
+                            <p className="text-[10px] text-on-surface-variant">
+                              {res.ai_concepts?.length || 0} concepts · {res.resource_type || 'note'}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => { setShowCreate(false); resetForm() }} className="flex-1 py-2.5 rounded-xl border border-outline-variant/30 text-sm font-bold">Cancel</button>
+                <button
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending || !title.trim() || selectedResources.length === 0}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {createMutation.isPending ? (
+                    <><span className="material-symbols-outlined text-[16px] animate-spin">autorenew</span> Creating…</>
+                  ) : (
+                    <><span className="material-symbols-outlined text-[16px]">school</span> Create Path</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -142,6 +241,15 @@ export default function LearnPage() {
                 </div>
                 <h3 className="font-black text-lg mb-1 group-hover:text-primary transition-colors">{path.title}</h3>
                 {path.subject && <p className="text-xs text-on-surface-variant mb-3">{path.subject}</p>}
+
+                {/* Dates */}
+                {(path.start_date || path.deadline) && (
+                  <div className="flex items-center gap-2 text-[10px] text-on-surface-variant mb-3">
+                    {path.start_date && <span>Start: {new Date(path.start_date).toLocaleDateString()}</span>}
+                    {path.start_date && path.deadline && <span>→</span>}
+                    {path.deadline && <span>Due: {new Date(path.deadline).toLocaleDateString()}</span>}
+                  </div>
+                )}
 
                 {/* Mastery Bar */}
                 <div className="mt-3">

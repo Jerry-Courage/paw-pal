@@ -55,7 +55,7 @@ class LearningPathSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LearningPath
-        fields = ['id', 'user', 'title', 'description', 'subject', 'status', 'deadline',
+        fields = ['id', 'user', 'title', 'description', 'subject', 'status', 'start_date', 'deadline',
                   'total_xp', 'concepts_completed', 'total_concepts', 'mastery_percent',
                   'daily_review_goal', 'concept_count', 'due_reviews', 'concepts',
                   'created_at', 'updated_at']
@@ -79,7 +79,7 @@ class LearningPathListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LearningPath
-        fields = ['id', 'title', 'description', 'subject', 'status', 'deadline',
+        fields = ['id', 'title', 'description', 'subject', 'status', 'start_date', 'deadline',
                   'total_xp', 'concepts_completed', 'total_concepts', 'mastery_percent',
                   'daily_review_goal', 'concept_count', 'due_reviews', 'created_at', 'updated_at']
 
