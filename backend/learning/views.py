@@ -53,18 +53,20 @@ class LearningPathViewSet(viewsets.ModelViewSet):
             if len(concepts) < 3 and notes:
                 concepts = []
                 for idx, section in enumerate(notes):
-                    # Extract richer info from section
+                    # Extract richer info from section — prefer plain_english and deep_dive (fun content)
                     title = section.get('title', f'Section {idx+1}')
-                    content = section.get('content', '') or section.get('plain_english', '') or section.get('deep_dive', '') or ''
-                    summary = section.get('quick_summary', '') or section.get('plain_english', '')[:300] if section.get('plain_english') else ''
+                    plain = section.get('plain_english', '')
+                    deep = section.get('deep_dive', '')
+                    content = section.get('content', '') or deep or plain
+                    summary = section.get('quick_summary', '') or plain[:300] if plain else content[:300]
                     key_defs = section.get('key_definitions', [])
                     if not key_defs and section.get('key_question'):
                         key_defs = [{'term': 'Key Concept', 'definition': section.get('key_question')}]
 
                     concepts.append({
                         'title': title,
-                        'description': content[:500],
-                        'summary': summary[:300] if summary else content[:300],
+                        'description': (plain + '\n\n' + deep)[:800] if plain else content[:500],
+                        'summary': summary[:400] if summary else '',
                         'difficulty': section.get('difficulty', 'medium'),
                         'definitions': key_defs if key_defs else [],
                     })
