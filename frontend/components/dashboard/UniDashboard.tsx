@@ -7,6 +7,8 @@ import { libraryApi, aiApi, authApi } from '@/lib/api'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { BookOpen, Upload, Brain, Trophy, ArrowRight, Flame, Zap, Target, Headphones } from 'lucide-react'
+import NotificationPrompt from '@/components/notifications/NotificationPrompt'
+import { useNotifications } from '@/hooks/useNotifications'
 
 const QUICK_ACTIONS = [
   { icon: Upload, label: 'Upload', desc: 'PDF, Video, Slides', href: '/library', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
@@ -25,6 +27,7 @@ function getMasteryInfo(mastery: number) {
 export default function UniDashboard() {
   const { data: session } = useSession()
   const name = session?.user?.name?.split(' ')[0] || 'there'
+  useNotifications() // Initialize smart notification scheduler
 
   const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: () => authApi.me().then(r => r.data) })
   const { data: nudgeData } = useQuery({ queryKey: ['nudge'], queryFn: () => aiApi.getNudge().then(r => r.data) })
@@ -262,6 +265,7 @@ export default function UniDashboard() {
           </div>
         </div>
       )}
+      <NotificationPrompt />
     </div>
   )
 }

@@ -1437,19 +1437,40 @@ class AIService:
         topics = ', '.join(recent_topics) if recent_topics else 'general studies'
         name = user.first_name or user.username or 'there'
         prompt = (
-            f"Write a short, warm, motivating study nudge (1-2 sentences max) for a student named {name} "
-            f"who has been studying: {topics}. Be specific to their subject if possible. "
-            "Sound like a supportive friend, not a robot. No emojis. No quotes around the response. "
-            "Output ONLY the nudge text, nothing else."
+            f"Generate a 1-2 sentence motivational nudge for a university student studying {topics}. "
+            f"Address them as '{name}' somewhere in the message. "
+            "Be specific to their subject. Sound like a supportive friend. "
+            "No emojis. No quotation marks around the response. No greetings like 'Hey' — just go straight into the nudge. "
+            "Output ONLY the nudge text."
         )
         messages = [{'role': 'user', 'content': prompt}]
 
-        # Use reliable instruction-following models — skip gpt-oss-20b which echoes prompts
         import httpx, asyncio as _asyncio
 
         async def _call():
+            # Try Gemini first (more reliable for instruction following)
+            for g_client in self._google_clients():
+                for g_model in ['gemini-3.5-flash', 'gemini-3.1-flash-lite']:
+                    try:
+                        contents, sys_instr = self._to_gemini_format(
+                            [{'role': 'system', 'content': 'You are a friendly study motivator. Output ONLY the nudge text, nothing else.'}, {'role': 'user', 'content': prompt}]
+                        )
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM: You are a friendly study motivator. Output ONLY the nudge text.\n\nUSER: {prompt}"
+                        response = await _asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': 150}
+                            ), timeout=10
+                        )
+                        if response.text and len(response.text.strip()) > 10:
+                            logger.info(f"[StudyNudge] ✓ {g_model}")
+                            return response.text.strip()
+                    except Exception as e:
+                        logger.warning(f"[StudyNudge] {g_model} failed: {e}")
+
+            # Fallback to Groq
             for key in self._groq_keys():
-                for model in ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.6-27b']:
+                for model in ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b']:
                     try:
                         async with httpx.AsyncClient() as client:
                             resp = await client.post(
@@ -1463,10 +1484,14 @@ class AIService:
                                 import re as _re
                                 result = _re.sub(r'<think>.*?</think>', '', result, flags=_re.DOTALL).strip()
                                 if result and len(result) > 10:
-                                    leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive', 'Output ONLY']
+                                    leak_signals = ['Write a short', 'study nudge', 'motivating study', 'Sound like a supportive', 'Output ONLY', 'Generate a']
                                     if any(sig.lower() in result.lower() for sig in leak_signals):
                                         logger.warning(f"[StudyNudge] {model} echoed prompt — skipping")
                                         continue
+                                    # Clean common echo patterns
+                                    for prefix in ['Hey ', 'Hi ', 'Hello ', f'{name}, ']:
+                                        if result.startswith(prefix):
+                                            result = result[len(prefix):].lstrip(', ')
                                     logger.info(f"[StudyNudge] ✓ {model}")
                                     return result
                     except Exception as e:
