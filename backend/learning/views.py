@@ -48,6 +48,18 @@ class LearningPathViewSet(viewsets.ModelViewSet):
         for res in resource_objs:
             concepts = res.ai_concepts or []
             notes = (res.ai_notes_json or {}).get('sections', [])
+
+            # If ai_concepts is empty, fall back to notes sections
+            if not concepts and notes:
+                concepts = []
+                for idx, section in enumerate(notes):
+                    concepts.append({
+                        'title': section.get('title', f'Section {idx+1}'),
+                        'description': section.get('content', '')[:500],
+                        'summary': section.get('content', '')[:300],
+                        'difficulty': 'medium',
+                    })
+
             for i, concept in enumerate(concepts):
                 if isinstance(concept, str):
                     concept = {'title': concept, 'description': ''}
@@ -63,7 +75,7 @@ class LearningPathViewSet(viewsets.ModelViewSet):
                 })
 
         if not all_concepts:
-            return Response({'error': 'No concepts found in resources. Generate study notes first.'},
+            return Response({'error': 'No concepts found. Open each resource and generate study notes first (click the Study Notes tab).'},
                             status=400)
 
         # Build dependency graph — linear with some branching
