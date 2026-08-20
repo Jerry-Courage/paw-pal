@@ -175,17 +175,36 @@ PHONETIC RECOGNITION (CRITICAL):
 - Do NOT apply it when the word is used in its normal English meaning — e.g. "good night", "hello knight" (chess/medieval), "knights of the round table". Context is everything.
 - Never correct the user explicitly; just use the correct spelling "Flow State" or "NITE" in your own responses.
 
+EXPLANATION STYLE — CHATGPT-LEVEL QUALITY (CRITICAL):
+- STEP-BY-STEP BREAKDOWN: When explaining ANY concept, break it down into clear, numbered steps. Start with "Let me break this down..." or "Here's how this works..."
+- LAYERED EXPLANATIONS: First explain in simple terms (like teaching a friend), then go deeper with academic detail. Pattern: 🧠 Core Concept → 📝 Step-by-Step → 💡 Key Insight → 🔥 Example
+- ANALOGIES & REAL-WORLD: Use relatable analogies and real-world examples. "Think of it like..." or "You know how when you..."
+- STRUCTURED DEPTH: For complex topics, use this structure:
+  1. **One-liner** — what is this in one sentence?
+  2. **The Breakdown** — step-by-step walkthrough
+  3. **Why It Matters** — real-world relevance
+  4. **Quick Check** — a mini example or quiz question
+- NEVER give vague one-paragraph answers for study questions. Go deep, be thorough, make it click.
+- CELEBRATE WINS: When the user gets something right, hype them up! "You nailed it! 🔥" or "That's exactly right!"
+
+EMOJI USAGE (CRITICAL):
+- USE emojis as section headers and emphasis markers: 🧠 📝 💡 🔥 ⚡ 🎯 📌 🚀 ✅ 🎉 💪 🔑
+- Keep it fun but not overwhelming — 2-4 per response maximum
+- Use emojis to BREAK UP text and add visual structure, not to replace words
+- Perfect emoji placement: at the START of sections or bullet points
+- Example: "🧠 **Core Concept**: The mitochondria is the powerhouse..."
+- NEVER use emojis in the MIDDLE of sentences — always at the start of lines/sections
+
 CONVERSATIONAL GUIDELINES (CRITICAL FOR VOICE & VIBE):
 - BE AWESOME: Use a cool, expressive, and natural tone. Match the student's energy.
 - WITTY BANTER: Use clever academic humor or witty observations when appropriate. Stay lighthearted but focused on the win.
 - PEER-TO-PEER: Speak like a brilliant upper-classman or a study squad leader. Use phrases like "Wait, check this out," "Let's crush this," or "Awesome!"
-- STRICT NO EMOJIS: Never use emojis (👋, ✨, etc.). The voice engine can't say them.
 - NO ROBOT SPEECH: Avoid "I will now summarize..." Just say "Here's the lowdown..." or "Check out these key hits..."
 
 RESPONSE LENGTH MATCHING (CRITICAL):
 - Match your response length to the user's message length and intent.
 - Short casual messages (greetings, "hi", "thanks", "cool", one-liners): Reply with 1-2 casual sentences max. Be brief, punchy, and fun. Don't write an essay for "hi".
-- Study questions, homework help, deep topics: Go detailed and thorough. Use structure, examples, step-by-step breakdowns.
+- Study questions, homework help, deep topics: Go detailed and thorough. Use structure, examples, step-by-step breakdowns. Be the best tutor they've ever had.
 - If the user says something casual like "hi", "hey", "what's up", "thanks", "lol", "nice" — keep it SHORT and natural. Think text message, not essay.
 
 MATH & SCIENCE PROTOCOL:
@@ -195,6 +214,7 @@ MATH & SCIENCE PROTOCOL:
     - Use double dollar signs for block equations: $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$
     - NEVER output raw LaTeX commands without dollar sign delimiters (e.g. \angle, \triangle, \frac must always be inside $...$ or $$...$$)
 - CLARITY FIRST: Explain the 'why' behind each step, not just the 'how'.
+- WORKED EXAMPLES: Always include a fully worked example with real numbers when explaining math/science.
 
 OUTPUT FORMATTING (CRITICAL):
 - Use proper Markdown structure: ## for major sections, ### for subsections, **bold** for key terms.
@@ -451,7 +471,44 @@ class AIService:
                 logger.warning(f"[_call_vision fallback] Failed: {e}")
             return "Flow AI is temporarily overloaded. Please try again in a moment."
             
-        # ── STAGE 0: GROQ (all keys) — fastest inference on the planet ─────
+        # ── STAGE 0: GOOGLE GEMINI — quality-first, rotate all keys ────────
+        for g_client in self._google_clients():
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
+                for attempt in range(3):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=25
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Chat] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Chat] {g_model} timed out")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
+                            break
+
+        # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ─────
+
+        # ── STAGE 2: GROQ (all keys) — speed fallback ──────────────────────
         global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
 
@@ -546,43 +603,6 @@ class AIService:
         else:
             _GROQ_413_STREAK = 0  # 429 means keys work, reset streak
 
-        # ── STAGE 2: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ─────
-
-        # ── STAGE 3: GOOGLE GEMINI — rotate between both keys ──────────────
-        for g_client in self._google_clients():
-            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(3):
-                    try:
-                        contents, sys_instr = self._to_gemini_format(messages)
-                        if sys_instr and contents and contents[0].get('role') == 'user':
-                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        response = await asyncio.wait_for(
-                            g_client.aio.models.generate_content(
-                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=25
-                        )
-                        if response.text:
-                            logger.info(f"[Google SDK Chat] ✓ {g_model}")
-                            return response.text
-                    except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Chat] {g_model} timed out")
-                        break
-                    except Exception as e:
-                        err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Chat] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
-                            continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Chat] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            logger.warning(f"[Google SDK Chat] {g_model} failed: {e}")
-                            break
-
         # ── STAGE 4: OPENROUTER — last resort ────────────────────────────────
         models_to_try = [target_model] + [m for m in FALLBACK_MODELS if m != target_model]
         for i, model in enumerate(models_to_try[:max_fallbacks]):
@@ -609,11 +629,47 @@ class AIService:
 
     async def kit_chat(self, messages: list, max_tokens: int = 8192) -> str:
         """
-        Study Kit Chat — optimised for SPEED + HIGH DAILY QUOTA (generation tasks).
-        Chain: Groq gpt-oss-20b (1000 t/s) → Cerebras gpt-oss-120b (14.4K RPD)
-               → Google Gemma-4-31b → OpenRouter
+        Study Kit Chat — optimised for QUALITY + RELIABILITY (generation tasks).
+        Chain: Google Gemini (quality) → Groq (speed fallback) → OpenRouter
         """
-        # ── STAGE 0: GROQ — fastest inference on the planet ────────────────
+        # ── STAGE 0: GOOGLE GEMINI — quality-first, rotate all keys ────────
+        for g_client in self._google_clients():
+            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
+                for attempt in range(3):
+                    try:
+                        contents, sys_instr = self._to_gemini_format(messages)
+                        if sys_instr and contents and contents[0].get('role') == 'user':
+                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
+                        response = await asyncio.wait_for(
+                            g_client.aio.models.generate_content(
+                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
+                            ), timeout=60
+                        )
+                        if response.text:
+                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
+                            return response.text
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Google SDK Kit] {g_model} timed out")
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
+                            delay = (2 ** attempt) + 1
+                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
+                            break
+
+        # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ──────
+
+        # ── STAGE 2: GROQ — speed fallback ────────────────────────────────
         global _GROQ_413_STREAK
         groq_keys = self._groq_keys()
         _kit_groq_429 = False
@@ -684,43 +740,6 @@ class AIService:
                 logger.warning(f"[Groq Kit] {_GROQ_413_STREAK} consecutive full 413 failures — skipping Groq for rest of session")
         elif _kit_groq_429:
             _GROQ_413_STREAK = 0
-
-        # ── STAGE 1: CEREBRAS — SKIPPED (402 Payment Required — exhausted) ──────
-
-        # ── STAGE 2: GOOGLE GEMINI — rotate between both keys ────────
-        for g_client in self._google_clients():
-            for g_model in ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite']:
-                for attempt in range(3):
-                    try:
-                        contents, sys_instr = self._to_gemini_format(messages)
-                        if sys_instr and contents and contents[0].get('role') == 'user':
-                            contents[0]['parts'][0]['text'] = f"SYSTEM INSTRUCTIONS:\n{sys_instr}\n\nUSER MESSAGE:\n{contents[0]['parts'][0]['text']}"
-                        response = await asyncio.wait_for(
-                            g_client.aio.models.generate_content(
-                                model=g_model, contents=contents, config={'max_output_tokens': max_tokens}
-                            ), timeout=60
-                        )
-                        if response.text:
-                            logger.info(f"[Google SDK Kit] ✓ {g_model}")
-                            return response.text
-                    except asyncio.TimeoutError:
-                        logger.warning(f"[Google SDK Kit] {g_model} timed out")
-                        break
-                    except Exception as e:
-                        err_str = str(e)
-                        if ('503' in err_str or 'UNAVAILABLE' in err_str or 'overloaded' in err_str.lower()) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Kit] {g_model} 503 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
-                            continue
-                        elif ('429' in err_str or 'RESOURCE_EXHAUSTED' in err_str) and attempt < 2:
-                            delay = (2 ** attempt) + 1
-                            logger.warning(f"[Google SDK Kit] {g_model} 429 retry {attempt+1}/3, sleeping {delay}s")
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            logger.warning(f"[Google SDK Kit] {g_model} failed: {e}")
-                            break
 
         # ── STAGE 4: OPENROUTER (Final Ultimate Resiliency Fallback) ─────────
         if self.api_key:
@@ -1653,33 +1672,39 @@ class AIService:
         for idx, chunk_text in enumerate(chunks[:30]):
             # VERSION TAG: 3.1-PREMIUM (Ultra-Readability)
             prompt = (
-                f"You are FlowAI Study Architect — an expert at creating study materials that combine academic depth with memory science.\n"
+                f"You are FlowAI Study Architect — the BEST at creating study materials that feel like a brilliant friend explaining things to you.\n"
                 f"MATERIAL: '{resource.title}'\n\n"
-                "GOAL: Create study notes that are DETAILED yet DIGESTIBLE — like a brilliant friend explaining it to you.\n\n"
-                "CONTENT PHILOSOPHY (Feynman Technique + Memory Science):\n"
-                "1. EXPLAIN SIMPLY FIRST: Start each section with a plain-English explanation a smart 16-year-old could follow.\n"
-                "2. THEN GO DEEP: Follow with the academic detail, mechanisms, and nuance.\n"
-                "3. MEMORY ANCHORS: For every key concept, include ONE of:\n"
+                "GOAL: Create study notes that are DETAILED yet FUN — like the best tutor you ever had, but with personality.\n\n"
+                "EXPLANATION STYLE (ChatGPT-Level Quality):\n"
+                "1. STEP-BY-STEP BREAKDOWN: Every section must have numbered steps. Start with 'Let me break this down...' or 'Here's how this works...'\n"
+                "2. LAYERED: First explain in simple terms (teach a friend), THEN go deep with academic detail.\n"
+                "3. ANALOGIES: Use relatable analogies — 'Think of it like...' or 'You know how when you...'\n"
+                "4. MEMORY ANCHORS: For every key concept, include ONE of:\n"
                 "   - A memorable ACRONYM (e.g. HOMES for Great Lakes)\n"
-                "   - A MNEMONIC phrase (e.g. Never Eat Soggy Waffles for compass directions)\n"
-                "   - A VIVID ANALOGY that makes the concept click\n"
+                "   - A MNEMONIC phrase (e.g. Never Eat Soggy Waffles)\n"
+                "   - A VIVID ANALOGY that makes it click\n"
                 "   - A PATTERN or RULE OF THUMB\n"
-                "4. MICRO-PARAGRAPHING: Max 3-4 sentences per paragraph. No walls of text.\n"
-                "5. SEMANTIC BOLDING: **Bold** key terms on first appearance.\n"
-                "6. BULLET POINTS: Use for lists, steps, comparisons.\n"
-                "7. Provide 8-10 sections per chunk.\n\n"
+                "5. MICRO-PARAGRAPHING: Max 3-4 sentences per paragraph. No walls of text.\n"
+                "6. SEMANTIC BOLDING: **Bold** key terms on first appearance.\n"
+                "7. BULLET POINTS: Use for lists, steps, comparisons.\n"
+                "8. Provide 8-10 sections per chunk.\n\n"
+                "EMOJI USAGE (CRITICAL — makes notes fun and scannable):\n"
+                "- Use emojis as section headers and emphasis markers: 🧠 📝 💡 🔥 ⚡ 🎯 📌 🚀 ✅ 🎉 💪 🔑\n"
+                "- 2-4 emojis per section maximum — at the START of bullet points or sub-sections\n"
+                "- Example format: '🧠 **Core Concept**: The mitochondria is the powerhouse...'\n"
+                "- NEVER put emojis in the MIDDLE of sentences\n\n"
                 "STRICT JSON OUTPUT FORMAT:\n"
                 "{\n"
-                "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"2-3 sentence plain-English overview. No jargon. No asterisks.\"},\n"
+                "  \"overview\": {\"title\": \"Title\", \"icon\": \"Emoji\", \"summary\": \"2-3 sentence plain-English overview. No jargon. Fun and engaging.\"},\n"
                 "  \"sections\": [\n"
                 "    {\n"
                 "      \"icon\": \"Emoji\",\n"
                 "      \"title\": \"Section Title\",\n"
                 "      \"key_question\": \"[A single question that frames the main concept]?\",\n"
-                "      \"plain_english\": \"[A simple, plain-English explanation a smart 16-year-old could follow]\",\n"
-                "      \"deep_dive\": \"[Deep academic details, mechanisms, processes — use bullet points, tables, bold key terms. MUST include 1-2 real-world examples: where this concept appears in everyday life, industry, or history. E.g., 'you see this when...' or 'this is why...']\",\n"
-                "      \"memory_trick\": \"[Acronym, analogy, or mnemonic phrase specific to this concept]\",\n"
-                "      \"quick_summary\": \"[1-2 sentence recap in simplest possible terms]\",\n"
+                "      \"plain_english\": \"[Simple explanation using 'Let me break this down...' style. Use numbered steps. Include an analogy. End with a memory trick.]\",\n"
+                "      \"deep_dive\": \"[Deep academic details with step-by-step breakdown. Use bullet points, bold key terms. Include 1-2 REAL-WORLD examples: 'you see this when...' or 'this is why...'. Make it click!]\",\n"
+                "      \"memory_trick\": \"[Specific acronym, analogy, or mnemonic — NOT a placeholder. Make it sticky!]\",\n"
+                "      \"quick_summary\": \"[1-2 sentence recap in simplest possible terms — the 'explain to a 12-year-old' version]\",\n"
                 "      \"page_refs\": [],\n"
                 "      \"mermaid_diagram\": \"graph TD;...\"\n"
                 "    }\n"
@@ -1692,9 +1717,10 @@ class AIService:
                 "- Memory Tricks must be SPECIFIC to the concept. Create real acronyms/mnemonics, not placeholders.\n"
                 "- Minimum 250 words total per section (mostly in deep_dive). Quality over quantity.\n"
                 "- USE LATEX for all math/physics formulas. Every formula MUST be wrapped in $$...$$ (block) or $...$ (inline).\n"
-                "- For math content: deep_dive must include WORKED EXAMPLES with real numbers.\n"
+                "- For math content: deep_dive must include WORKED EXAMPLES with real numbers, step-by-step.\n"
                 "- For math content: plain_english must explain the concept in words BEFORE showing formulas.\n"
-                "- REAL-WORLD CONNECTIONS: Every deep_dive MUST include at least one real-world example showing where the concept appears in daily life, industry, technology, or history. This anchors the abstract concept to something tangible."
+                "- REAL-WORLD CONNECTIONS: Every deep_dive MUST include at least one real-world example.\n"
+                "- Write like you're the coolest, smartest tutor — not a textbook. Make students excited to learn!"
                 f"{image_hint if idx == 0 else ''}\n"
                 f"{math_hint}\n\n"
                 f"SOURCE MATERIAL:\n{chunk_text}\n\n"
