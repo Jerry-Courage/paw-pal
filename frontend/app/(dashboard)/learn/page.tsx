@@ -6,6 +6,7 @@ import { learningApi, libraryApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import FlowMascot from '@/components/learning/FlowMascot'
 
 export default function LearnPage() {
   const qc = useQueryClient()
@@ -214,13 +215,17 @@ export default function LearnPage() {
         </div>
       ) : paths?.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <span className="material-symbols-outlined text-6xl text-on-surface-variant/30 mb-4">school</span>
-          <h2 className="text-xl font-bold mb-2">No learning paths yet</h2>
-          <p className="text-sm text-on-surface-variant max-w-sm mb-6">
-            Create a learning path to get a Duolingo-style roadmap through your study materials.
-            AI breaks down your notes into concepts and guides you step by step.
+          <FlowMascot mood="wave" size={140} />
+          <h2 className="text-xl font-black mt-6 mb-2">Hey there, learner!</h2>
+          <p className="text-sm text-on-surface-variant max-w-sm mb-6 leading-relaxed">
+            Create a learning path to get a personalized roadmap through your study materials.
+            AI breaks down your notes into bite-sized concepts and guides you step by step.
           </p>
-          <button onClick={() => setShowCreate(true)} className="px-6 py-3 rounded-full bg-primary text-on-primary font-bold text-sm">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-6 py-3 rounded-full bg-gradient-to-r from-primary to-amber-500 text-white font-bold text-sm shadow-lg shadow-primary/30 hover:scale-105 transition-transform"
+          >
+            <span className="material-symbols-outlined text-[16px] mr-1.5 align-middle">add</span>
             Create Your First Path
           </button>
         </div>

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { learningApi, libraryApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import ConceptPanel from '@/components/learning/ConceptPanel'
+import FlowMascot from '@/components/learning/FlowMascot'
 
 export default function RoadmapPage({ params }: { params: { id: string } }) {
   const pathId = params.id
@@ -14,6 +15,9 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
   const [selectedConcept, setSelectedConcept] = useState<string | null>(null)
   const [showGenerate, setShowGenerate] = useState(false)
   const [selectedRes, setSelectedRes] = useState<number[]>([])
+  const [justCompleted, setJustCompleted] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const currentRef = useRef<HTMLDivElement>(null)
 
   const { data: path, isLoading } = useQuery({
     queryKey: ['learning-path', pathId],
@@ -48,40 +52,71 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
     onError: () => toast.error('Failed to generate concepts'),
   })
 
-  // Layout: arrange nodes in a winding path like Duolingo
-  const layoutNodes = useMemo(() => {
-    if (!roadmap?.nodes) return []
-    const nodes = roadmap.nodes
-    const COLS = 3
-    return nodes.map((node: any, i: number) => {
-      const row = Math.floor(i / COLS)
-      const colInRow = i % COLS
-      const isEvenRow = row % 2 === 0
-      // Wind left-to-right on even rows, right-to-left on odd rows
-      const col = isEvenRow ? colInRow : (COLS - 1 - colInRow)
-      // Alternate vertical offset for visual variety
-      const yOffset = (col % 2 === 0) ? 0 : 40
-      return { ...node, row, col, x: col, y: row * 2 + (col % 2), yOffset }
-    })
+  // Scroll to current concept on load
+  useEffect(() => {
+    if (currentRef.current) {
+      setTimeout(() => {
+        currentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 300)
+    }
   }, [roadmap])
 
-  const maxRow = layoutNodes.length > 0 ? Math.max(...layoutNodes.map((n: any) => n.y)) : 0
+  const nodes = roadmap?.nodes || []
+  const currentNodeIdx = nodes.findIndex((n: any) => n.status === 'current')
+  const currentNode = currentNodeIdx >= 0 ? nodes[currentNodeIdx] : null
 
-  const STATUS_STYLE: Record<string, { ring: string; bg: string; icon: string; glow: string }> = {
-    locked:   { ring: 'border-slate-600', bg: 'bg-slate-800', icon: 'lock', glow: '' },
-    current:  { ring: 'border-primary', bg: 'bg-primary/20', icon: 'play_arrow', glow: 'shadow-lg shadow-primary/30 animate-pulse' },
-    completed:{ ring: 'border-emerald-500', bg: 'bg-emerald-500/20', icon: 'check_circle', glow: '' },
-  }
+  // Mascot mood based on state
+  const mascotMood = useMemo(() => {
+    if (justCompleted) return 'celebrating'
+    if (!currentNode) return 'idle'
+    return 'idle'
+  }, [justCompleted, currentNode])
+
+  // Build winding path positions
+  const pathLayout = useMemo(() => {
+    if (nodes.length === 0) return []
+
+    // Create a winding path: left-center-right-center-left pattern
+    const positions = [
+      { x: 50, side: 'center' },   // 0: center
+      { x: 25, side: 'left' },     // 1: left
+      { x: 75, side: 'right' },    // 2: right
+      { x: 50, side: 'center' },   // 3: center
+      { x: 25, side: 'left' },     // 4: left
+      { x: 75, side: 'right' },    // 5: right
+      { x: 50, side: 'center' },   // 6: center
+      { x: 25, side: 'left' },     // 7: left
+      { x: 75, side: 'right' },    // 8: right
+      { x: 50, side: 'center' },   // 9: center
+    ]
+
+    return nodes.map((node: any, i: number) => {
+      const pos = positions[i % positions.length]
+      const isEven = pos.side === 'left' || (pos.side === 'center' && i % 4 < 2)
+      return {
+        ...node,
+        x: pos.x,
+        y: i * 110 + 60,
+        side: pos.side,
+        isLeft: pos.side === 'left',
+      }
+    })
+  }, [nodes])
+
+  const totalHeight = pathLayout.length > 0 ? pathLayout[pathLayout.length - 1].y + 120 : 400
 
   const DIFFICULTY_COLORS: Record<string, string> = {
-    easy: 'text-emerald-400',
-    medium: 'text-amber-400',
-    hard: 'text-red-400',
+    easy: '#22c55e',
+    medium: '#f59e0b',
+    hard: '#ef4444',
   }
 
   if (isLoading) return (
     <div className="flex items-center justify-center min-h-screen">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center gap-4">
+        <FlowMascot mood="thinking" size={100} />
+        <p className="text-on-surface-variant text-sm">Loading your roadmap...</p>
+      </div>
     </div>
   )
 
@@ -111,10 +146,16 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
             <div className="flex items-center gap-2">
               {analytics && (
                 <div className="hidden sm:flex items-center gap-3 text-[10px] mr-3">
-                  <span className="text-on-surface-variant">{analytics.total_xp} XP</span>
-                  <span className="text-on-surface-variant">{analytics.average_mastery}% mastery</span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">
+                    <span className="material-symbols-outlined text-[12px]">bolt</span>
+                    {analytics.total_xp} XP
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold">
+                    <span className="material-symbols-outlined text-[12px]">local_fire_department</span>
+                    {analytics.average_mastery}%
+                  </span>
                   {analytics.reviews_due > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">
+                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold animate-pulse">
                       {analytics.reviews_due} due
                     </span>
                   )}
@@ -133,15 +174,17 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
           {/* Progress Bar */}
           {path && (
             <div className="mt-2">
-              <div className="h-1.5 bg-surface-variant rounded-full overflow-hidden">
+              <div className="h-2 bg-surface-variant rounded-full overflow-hidden relative">
                 <div
-                  className="h-full bg-gradient-to-r from-primary via-secondary to-primary rounded-full transition-all duration-700"
+                  className="h-full bg-gradient-to-r from-primary via-amber-400 to-primary rounded-full transition-all duration-700 relative"
                   style={{ width: `${path.mastery_percent}%` }}
-                />
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shine" />
+                </div>
               </div>
               <div className="flex justify-between text-[9px] text-on-surface-variant mt-1">
                 <span>{path.concepts_completed}/{path.total_concepts} concepts</span>
-                <span>{path.mastery_percent}%</span>
+                <span className="font-bold text-primary">{path.mastery_percent}%</span>
               </div>
             </div>
           )}
@@ -187,81 +230,195 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* Duolingo-Style Roadmap */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {layoutNodes.length === 0 ? (
+      {/* Duolingo-Style Winding Path */}
+      <div className="max-w-4xl mx-auto px-4 py-6 overflow-hidden" ref={scrollRef}>
+        {pathLayout.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <span className="material-symbols-outlined text-6xl text-on-surface-variant/30 mb-4">route</span>
-            <h2 className="text-xl font-bold mb-2">No concepts yet</h2>
+            <FlowMascot mood="thinking" size={140} />
+            <h2 className="text-xl font-black mt-6 mb-2">Your roadmap awaits!</h2>
             <p className="text-sm text-on-surface-variant max-w-sm mb-6">
-              Generate concepts from your study materials to build your learning roadmap.
+              Generate concepts from your study materials to build a personalized learning path.
             </p>
-            <button onClick={() => setShowGenerate(true)} className="px-6 py-3 rounded-full bg-primary text-on-primary font-bold text-sm">
+            <button
+              onClick={() => setShowGenerate(true)}
+              className="px-6 py-3 rounded-full bg-gradient-to-r from-primary to-amber-500 text-white font-bold text-sm shadow-lg shadow-primary/30 hover:scale-105 transition-transform"
+            >
+              <span className="material-symbols-outlined text-[16px] mr-1.5 align-middle">auto_awesome</span>
               Generate Concepts
             </button>
           </div>
         ) : (
-          <div className="relative flex flex-col items-center gap-2">
-            {/* Connection lines are done via CSS */}
-            {Array.from({ length: Math.ceil(layoutNodes.length / 3) }).map((_, rowIdx) => {
-              const rowNodes = layoutNodes.filter((n: any) => Math.floor(layoutNodes.indexOf(n) / 3) === rowIdx)
-              const isEvenRow = rowIdx % 2 === 0
+          <div className="relative" style={{ minHeight: totalHeight + 60 }}>
+            {/* Path line SVG */}
+            <svg
+              className="absolute top-0 left-0 w-full h-full pointer-events-none"
+              viewBox={`0 0 100 ${totalHeight}`}
+              preserveAspectRatio="none"
+              style={{ zIndex: 0 }}
+            >
+              <defs>
+                <linearGradient id="pathGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#FF8C42" stopOpacity="0.3" />
+                  <stop offset={`${(currentNodeIdx / Math.max(nodes.length - 1, 1)) * 100}%`} stopColor="#FF8C42" stopOpacity="0.6" />
+                  <stop offset={`${(currentNodeIdx / Math.max(nodes.length - 1, 1)) * 100 + 5}%`} stopColor="#4A3728" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#4A3728" stopOpacity="0.1" />
+                </linearGradient>
+              </defs>
+              <path
+                d={pathLayout.map((n: any, i: number) => {
+                  const prev = pathLayout[i - 1]
+                  if (!prev) return `M ${n.x} ${n.y}`
+                  const cpx1 = prev.x
+                  const cpy1 = prev.y + 40
+                  const cpx2 = n.x
+                  const cpy2 = n.y - 40
+                  return `C ${cpx1} ${cpy1} ${cpx2} ${cpy2} ${n.x} ${n.y}`
+                }).join(' ')}
+                fill="none"
+                stroke="url(#pathGradient)"
+                strokeWidth="0.8"
+                strokeDasharray="3 2"
+              />
+            </svg>
+
+            {/* Nodes */}
+            {pathLayout.map((node: any, i: number) => {
+              const isCurrent = node.status === 'current'
+              const isCompleted = node.status === 'completed'
+              const isLocked = node.status === 'locked'
+              const isLeft = node.isLeft
+
               return (
-                <div key={rowIdx} className={cn('flex items-center gap-6 sm:gap-10', isEvenRow ? 'flex-row' : 'flex-row-reverse')}>
-                  {rowNodes.map((node: any) => {
-                    const style = STATUS_STYLE[node.status] || STATUS_STYLE.locked
-                    return (
-                      <button
-                        key={node.id}
-                        onClick={() => node.status !== 'locked' && setSelectedConcept(node.id)}
-                        disabled={node.status === 'locked'}
-                        className={cn(
-                          'relative flex flex-col items-center gap-1 group',
-                          node.status === 'locked' && 'opacity-40 cursor-not-allowed'
-                        )}
+                <div
+                  key={node.id}
+                  ref={isCurrent ? currentRef : undefined}
+                  className="absolute"
+                  style={{
+                    left: `${node.x}%`,
+                    top: node.y,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: isCurrent ? 20 : 10,
+                  }}
+                >
+                  {/* Mascot on current node */}
+                  {isCurrent && (
+                    <div className="absolute -top-[100px] left-1/2 -translate-x-1/2 z-30">
+                      <FlowMascot mood={mascotMood} size={80} />
+                    </div>
+                  )}
+
+                  {/* Connection dot to path */}
+                  <div className={cn(
+                    'absolute left-1/2 -translate-x-1/2 w-1 h-6',
+                    isCompleted ? 'bg-emerald-500/40' : isCurrent ? 'bg-primary/40' : 'bg-slate-700/30',
+                    isLeft ? 'bottom-full' : 'top-full'
+                  )} />
+
+                  {/* Main node */}
+                  <button
+                    onClick={() => !isLocked && setSelectedConcept(node.id)}
+                    disabled={isLocked}
+                    className={cn(
+                      'relative flex flex-col items-center gap-1.5 group transition-all duration-300',
+                      isLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
+                      isCurrent && 'scale-110'
+                    )}
+                  >
+                    {/* Glow ring for current */}
+                    {isCurrent && (
+                      <div className="absolute -inset-3 rounded-full bg-primary/20 animate-pulse" />
+                    )}
+
+                    {/* Node circle */}
+                    <div className={cn(
+                      'relative w-[72px] h-[72px] sm:w-[84px] sm:h-[84px] rounded-full border-4 flex items-center justify-center transition-all duration-300',
+                      isCompleted && 'border-emerald-500 bg-emerald-500/15',
+                      isCurrent && 'border-primary bg-primary/15 shadow-xl shadow-primary/30',
+                      isLocked && 'border-slate-700 bg-slate-800/50',
+                      !isLocked && 'group-hover:scale-110 group-hover:shadow-lg'
+                    )}>
+                      {/* Difficulty ring */}
+                      <svg className="absolute inset-0 w-full h-full -rotate-90">
+                        <circle
+                          cx="50%" cy="50%" r="46%"
+                          fill="none"
+                          stroke={DIFFICULTY_COLORS[node.difficulty] || '#f59e0b'}
+                          strokeWidth="2"
+                          strokeDasharray={`${(node.mastery / 100) * 283} 283`}
+                          opacity="0.5"
+                        />
+                      </svg>
+
+                      {/* Icon */}
+                      <span className={cn(
+                        'material-symbols-outlined text-2xl sm:text-3xl',
+                        isCompleted && 'text-emerald-400',
+                        isCurrent && 'text-primary',
+                        isLocked && 'text-slate-600'
+                      )}>
+                        {isCompleted ? 'check_circle' : isCurrent ? 'play_arrow' : 'lock'}
+                      </span>
+
+                      {/* XP badge */}
+                      {node.xp_earned > 0 && (
+                        <div className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[8px] font-black shadow-lg">
+                          +{node.xp_earned}
+                        </div>
+                      )}
+
+                      {/* Review due badge */}
+                      {node.reviews_due > 0 && (
+                        <div className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center animate-bounce">
+                          <span className="text-[8px] font-bold text-white">{node.reviews_due}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Title */}
+                    <div className={cn(
+                      'text-center max-w-[100px] sm:max-w-[120px]',
+                      isLeft ? 'text-right' : 'text-left'
+                    )}>
+                      <p className={cn(
+                        'text-[10px] sm:text-xs font-bold leading-tight line-clamp-2',
+                        isCompleted && 'text-emerald-400',
+                        isCurrent && 'text-primary',
+                        isLocked && 'text-slate-600'
+                      )}>
+                        {node.title}
+                      </p>
+                      <div className="flex items-center gap-1 text-[8px] text-on-surface-variant mt-0.5"
+                        style={{ justifyContent: isLeft ? 'flex-end' : 'flex-start' }}
                       >
-                        {/* Node circle */}
-                        <div className={cn(
-                          'w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-3 flex items-center justify-center transition-all',
-                          style.ring, style.bg, style.glow,
-                          node.status !== 'locked' && 'hover:scale-110 cursor-pointer'
-                        )}>
-                          <span className={cn('material-symbols-outlined text-2xl sm:text-3xl', node.status === 'completed' ? 'text-emerald-400' : node.status === 'current' ? 'text-primary' : 'text-slate-500')}>
-                            {style.icon}
-                          </span>
-                        </div>
+                        <span style={{ color: DIFFICULTY_COLORS[node.difficulty] }}>{node.difficulty}</span>
+                        <span>·</span>
+                        <span>{node.estimated_minutes}m</span>
+                      </div>
+                    </div>
 
-                        {/* Mastery ring */}
-                        {node.status === 'completed' && (
-                          <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                            <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                          </div>
-                        )}
-
-                        {/* Label */}
-                        <p className="text-[10px] sm:text-xs font-bold text-center max-w-[80px] sm:max-w-[100px] leading-tight mt-1 line-clamp-2">
-                          {node.title}
-                        </p>
-
-                        {/* Meta */}
-                        <div className="flex items-center gap-1.5 text-[8px] text-on-surface-variant">
-                          <span className={DIFFICULTY_COLORS[node.difficulty] || 'text-amber-400'}>{node.difficulty}</span>
-                          <span>·</span>
-                          <span>{node.xp_earned}XP</span>
-                        </div>
-
-                        {/* Reviews due badge */}
-                        {node.reviews_due > 0 && (
-                          <div className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
-                            <span className="text-[8px] font-bold text-white">{node.reviews_due}</span>
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
+                    {/* Step number */}
+                    <div className={cn(
+                      'absolute w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black',
+                      isCompleted ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-primary text-white' : 'bg-slate-700 text-slate-400',
+                      isLeft ? '-right-2' : '-left-2',
+                      'top-0'
+                    )}>
+                      {i + 1}
+                    </div>
+                  </button>
                 </div>
               )
             })}
+
+            {/* Bottom mascot */}
+            {nodes.length > 0 && (
+              <div className="absolute left-1/2 -translate-x-1/2" style={{ top: totalHeight - 40 }}>
+                <FlowMascot
+                  mood={path?.mastery_percent >= 100 ? 'celebrating' : path?.mastery_percent >= 50 ? 'happy' : 'idle'}
+                  size={60}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -272,10 +429,12 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
           conceptId={selectedConcept}
           onClose={() => setSelectedConcept(null)}
           onComplete={() => {
+            setJustCompleted(true)
             qc.invalidateQueries({ queryKey: ['learning-path', pathId] })
             qc.invalidateQueries({ queryKey: ['roadmap', pathId] })
             qc.invalidateQueries({ queryKey: ['path-analytics', pathId] })
             setSelectedConcept(null)
+            setTimeout(() => setJustCompleted(false), 2000)
           }}
         />
       )}
