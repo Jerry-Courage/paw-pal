@@ -10,7 +10,7 @@ import { BookOpen, Upload, Brain, Trophy, ArrowRight, Flame, Zap, Target, Headph
 
 const QUICK_ACTIONS = [
   { icon: Upload, label: 'Upload', desc: 'PDF, Video, Slides', href: '/library', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  { icon: Brain, label: 'Ask AI', desc: 'Instant help', href: '/ai', color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
+  { icon: Brain, label: 'Ask AI', desc: 'Instant help', href: '/ai', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   { icon: BookOpen, label: 'Library', desc: 'Study materials', href: '/library', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
   { icon: Trophy, label: 'Rankings', desc: 'Compete', href: '/rankings', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
 ]
@@ -51,25 +51,26 @@ export default function UniDashboard() {
     <div className="space-y-8 pb-12">
 
       {/* ── Welcome Banner ── */}
-      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-6 sm:p-8 text-white shadow-2xl">
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] p-6 sm:p-8 text-white shadow-2xl border border-orange-500/10">
+        <div className="absolute -right-10 -top-10 w-64 h-64 bg-orange-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/20 backdrop-blur-md text-[11px] font-black uppercase tracking-wider text-blue-200">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/15 backdrop-blur-md text-[11px] font-black uppercase tracking-wider text-orange-300 border border-orange-500/20">
               <span>🎓 University Hub</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight">Welcome back, {name}! 👋</h1>
-            <p className="text-white/80 text-sm max-w-xl font-medium">
+            <p className="text-white/70 text-sm max-w-xl font-medium">
               {nudgeData?.nudge || 'Your AI tutor is ready. What are we studying today?'}
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-black/25 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-              <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Streak</p>
+            <div className="bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border border-orange-500/15 text-center">
+              <p className="text-[10px] uppercase font-black text-orange-300 tracking-wider">Streak</p>
               <p className="text-xl font-black flex items-center gap-1">🔥 {streak} <span className="text-sm font-bold">Days</span></p>
             </div>
-            <div className="bg-black/25 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-              <p className="text-[10px] uppercase font-black text-blue-200 tracking-wider">Study XP</p>
+            <div className="bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border border-orange-500/15 text-center">
+              <p className="text-[10px] uppercase font-black text-orange-300 tracking-wider">Study XP</p>
               <p className="text-xl font-black flex items-center gap-1">⚡ {xp.toLocaleString()}</p>
             </div>
           </div>
