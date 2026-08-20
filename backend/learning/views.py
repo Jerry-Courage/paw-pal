@@ -40,7 +40,7 @@ class LearningPathViewSet(viewsets.ModelViewSet):
                             status=400)
 
         from library.models import Resource
-        resource_objs = Resource.objects.filter(id__in=resources, user=request.user)
+        resource_objs = Resource.objects.filter(id__in=resources, owner=request.user)
         if not resource_objs.exists():
             return Response({'error': 'No valid resources found'}, status=400)
 
