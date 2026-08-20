@@ -130,18 +130,34 @@ def _get_file_bytes_cloudinary(resource):
     # Build all possible public_id variants to handle media/ prefix mismatches.
     # MediaCloudinaryStorage stores files under MEDIA_ROOT (e.g. "media/resources/...")
     # but resource.file.name may only hold "resources/..." (relative to MEDIA_ROOT).
+    # CRITICAL: Cloudinary public_ids may INCLUDE the file extension (e.g. "resources/6._Differentiation_xxx.pdf")
+    # so we must try both with and without the extension stripped.
     def _build_pub_id_variants(name):
-        """Return a list of public_id candidates, strip extension."""
-        base = _re.sub(r'\.[^.]+$', '', name) if name else ''
-        if not base:
+        """Return a list of public_id candidates, with and without extension."""
+        if not name:
             return []
-        variants = [base]
-        # Add media/ prefix variant if not already present
+        ext_match = _re.search(r'(\.[^.]+)$', name)
+        ext = ext_match.group(1) if ext_match else ''
+        base = name[:-len(ext)] if ext else name
+
+        variants = []
+        # With extension (the ACTUAL public_id on Cloudinary)
+        if ext:
+            variants.append(name)  # e.g. "resources/6._Differentiation_xxx.pdf"
+        # Without extension (stripped)
+        variants.append(base)  # e.g. "resources/6._Differentiation_xxx"
+
+        # media/ prefix variants
         if not base.startswith('media/'):
-            variants.append('media/' + base)
-        # Strip media/ prefix variant if present
+            if ext:
+                variants.append('media/' + name)  # e.g. "media/resources/6._Differentiation_xxx.pdf"
+            variants.append('media/' + base)  # e.g. "media/resources/6._Differentiation_xxx"
         if base.startswith('media/'):
-            variants.append(base[len('media/'):])
+            stripped = base[len('media/'):]
+            if ext:
+                variants.append(stripped + ext)
+            variants.append(stripped)
+
         return variants
 
     # 1. Try direct resource.file.url first (Django constructs this via storage.url())
@@ -183,36 +199,37 @@ def _get_file_bytes_cloudinary(resource):
 
             pub_id_variants = _build_pub_id_variants(raw_name)
 
-            # Also try direct unsigned URLs (no media/ prefix, raw resource_type)
-            # This handles the case where file.url returns wrong path
-            base_no_ext = _re.sub(r'\.[^.]+$', '', raw_name)
-            direct_variants = []
-            if base_no_ext.startswith('media/'):
-                direct_variants.append(base_no_ext[len('media/'):])
-            else:
-                direct_variants.append(base_no_ext)
-                direct_variants.append('media/' + base_no_ext)
-
-            # Try direct unsigned Cloudinary URLs first (fastest, no signing needed)
-            for pub_id in direct_variants:
+            # Try direct unsigned Cloudinary URLs (fastest, no signing needed)
+            # Try both with and without extension appended
+            for pub_id in pub_id_variants:
                 for res_type in ['raw', 'image']:
-                    try:
-                        url = f'https://res.cloudinary.com/{cfg.cloud_name}/{res_type}/upload/{pub_id}.{fmt}'
-                        resp = _req.get(url, timeout=60)
-                        if resp.status_code == 200:
-                            logger.info(f'[Cloudinary] Downloaded via direct URL ({res_type}): {resource.id} ({len(resp.content)} bytes)')
-                            return resp.content
-                    except Exception:
-                        pass
+                    # If pub_id already has extension, don't append fmt
+                    has_ext = '.' in pub_id.split('/')[-1]
+                    urls_to_try = []
+                    if has_ext:
+                        urls_to_try.append(f'https://res.cloudinary.com/{cfg.cloud_name}/{res_type}/upload/{pub_id}')
+                    else:
+                        urls_to_try.append(f'https://res.cloudinary.com/{cfg.cloud_name}/{res_type}/upload/{pub_id}.{fmt}')
+                    for url in urls_to_try:
+                        try:
+                            resp = _req.get(url, timeout=60)
+                            if resp.status_code == 200:
+                                logger.info(f'[Cloudinary] Downloaded via direct URL ({res_type}): {resource.id} ({len(resp.content)} bytes)')
+                                return resp.content
+                        except Exception:
+                            pass
 
             logger.info(f'[Cloudinary] Trying {len(pub_id_variants)} signed variants for {resource.id}: {pub_id_variants}')
 
             for pub_id in pub_id_variants:
+                # If pub_id already has extension, pass empty format to avoid double-extending
+                has_ext = '.' in pub_id.split('/')[-1]
+                sign_fmt = '' if has_ext else fmt
                 for res_type in ['raw', 'image', 'video']:
                     for t in ['upload', 'private', 'authenticated']:
                         try:
                             signed_url = cloudinary.utils.private_download_url(
-                                pub_id, fmt, resource_type=res_type, type=t,
+                                pub_id, sign_fmt, resource_type=res_type, type=t,
                             )
                             resp = _req.get(signed_url, timeout=60)
                             if resp.status_code == 200:
