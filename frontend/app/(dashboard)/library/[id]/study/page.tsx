@@ -27,6 +27,7 @@ type Phase = 'reading' | 'quiz' | 'written' | 'result' | 'mastery' | 'mastery_co
 type Section = {
   icon?: string; title: string; key_question?: string; plain_english?: string
   deep_dive?: string; memory_trick?: string; quick_summary?: string; content?: string
+  ascii_art?: string; mermaid_diagram?: string
 }
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
@@ -117,6 +118,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
     return new Set()
   })
   const [isReading, setIsReading] = useState(false)
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [readVoice, setReadVoice] = useState('Andrew')
   const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
   const [timerSeconds, setTimerSeconds] = useState(25 * 60)
@@ -275,29 +277,39 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
       window.speechSynthesis.cancel()
       setIsReading(false)
+      setIsGeneratingAudio(false)
       return
     }
     if (!current) return
     const text = getSectionContent(current).replace(/\*\*/g, '').replace(/#{1,6} /g, '').slice(0, 2000)
     if (!text.trim()) return
     setIsReading(true)
+
+    // Start browser TTS instantly (no delay)
+    try {
+      const utt = new SpeechSynthesisUtterance(text)
+      utt.rate = 0.95
+      utt.onend = () => { if (!audioRef.current) setIsReading(false) }
+      window.speechSynthesis.speak(utt)
+    } catch {}
+
+    // Generate Edge TTS in background (better quality)
+    setIsGeneratingAudio(true)
     try {
       const { ttsApi } = await import('@/lib/api')
       const res = await ttsApi.edgeSpeak(text, readVoice.toLowerCase())
+      // Cancel browser TTS and switch to Edge audio
+      window.speechSynthesis.cancel()
       const blob = new Blob([res.data], { type: 'audio/mpeg' })
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onended = () => { setIsReading(false); URL.revokeObjectURL(url); audioRef.current = null }
-      audio.onerror = () => { setIsReading(false); URL.revokeObjectURL(url); audioRef.current = null }
+      audio.onended = () => { setIsReading(false); setIsGeneratingAudio(false); URL.revokeObjectURL(url); audioRef.current = null }
+      audio.onerror = () => { setIsReading(false); setIsGeneratingAudio(false); URL.revokeObjectURL(url); audioRef.current = null }
       await audio.play()
     } catch (e) {
-      // Fallback to browser TTS if Edge TTS fails
-      try {
-        const utt = new SpeechSynthesisUtterance(text)
-        utt.rate = 0.95; utt.onend = () => setIsReading(false)
-        window.speechSynthesis.speak(utt)
-      } catch { setIsReading(false) }
+      // Edge TTS failed — browser TTS is already playing, keep it
+      setIsGeneratingAudio(false)
     }
   }
   useEffect(() => () => { window.speechSynthesis.cancel(); if (audioRef.current) audioRef.current.pause() }, [])
@@ -851,6 +863,17 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
+                {/* ASCII Art Diagram */}
+                {current.ascii_art && current.ascii_art.trim() && (
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-surface-variant/20 border border-outline-variant/15 rounded-[1rem]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="material-symbols-outlined text-secondary text-[16px]">draw</span>
+                      <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Visual Diagram</span>
+                    </div>
+                    <pre className="font-mono text-[11px] sm:text-[13px] text-on-surface leading-relaxed overflow-x-auto whitespace-pre">{current.ascii_art}</pre>
+                  </div>
+                )}
+
                 {/* Memory Trick */}
                 {current.memory_trick && (
                   <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-tertiary/10 border border-tertiary/20 rounded-[1rem]">
@@ -922,8 +945,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       </select>
                       <button onClick={readAloud}
                         className={cn('flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border text-[12px] sm:text-[13px] font-bold transition-all', isReading ? 'bg-primary/10 border-primary/30 text-primary' : 'border-outline-variant/40 text-on-surface-variant hover:border-outline-variant')}>
-                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>volume_up</span>
-                        {isReading ? 'Stop' : 'Listen'}
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]" style={{ fontVariationSettings: isReading ? "'FILL' 1" : "'FILL' 0" }}>
+                          {isGeneratingAudio && isReading ? 'hourglass_top' : 'volume_up'}
+                        </span>
+                        {isReading ? (isGeneratingAudio ? 'Loading HD…' : 'Stop') : 'Listen'}
                       </button>
                     </div>
                     <button onClick={handleNext} disabled={loadingQuiz}
