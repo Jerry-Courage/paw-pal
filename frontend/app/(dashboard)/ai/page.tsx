@@ -10,7 +10,7 @@ import {
   MessageSquare, Copy, Check, Download, Trash2,
   Image as ImageIcon, GitMerge, Maximize2,
   Video, Mic, MicOff, Volume2, VolumeX, Zap,
-  Lightbulb, Brain, Calculator, BookOpen, RefreshCw
+  Lightbulb, Brain, Calculator, BookOpen, RefreshCw, Globe
 } from 'lucide-react'
 import { timeAgo, cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -389,12 +389,14 @@ function RichContent({ content }: { content: string }) {
 }
 
 // â”€â”€â”€ THINKING INDICATOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | null }) {
+function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | 'web_search' | null }) {
   const states = action === 'diagram'
     ? { icon: GitMerge, color: 'text-violet-400', bg: 'bg-violet-500/5', border: 'border-violet-500/10', label: 'Drafting diagram...' }
     : action === 'image'
     ? { icon: ImageIcon, color: 'text-pink-400', bg: 'bg-pink-500/5', border: 'border-pink-500/10', label: 'Synthesizing image...' }
-    : { icon: Sparkles, color: 'text-primary', bg: 'bg-primary-container/5', border: 'border-orange-500/10', label: 'Processing...' }
+    : action === 'web_search'
+    ? { icon: Globe, color: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/10', label: 'Searching the web for you...' }
+    : { icon: Sparkles, color: 'text-primary', bg: 'bg-primary-container/5', border: 'border-orange-500/10', label: 'Thinking...' }
 
   const Icon = states.icon
 
@@ -559,7 +561,7 @@ function AIChat() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [sending, setSending] = useState(false)
-  const [pendingAction, setPendingAction] = useState<'diagram' | 'image' | null>(null)
+  const [pendingAction, setPendingAction] = useState<'diagram' | 'image' | 'web_search' | null>(null)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [contextType, setContextType] = useState<'global' | 'resource'>('global')
@@ -783,8 +785,10 @@ function AIChat() {
         try {
           const wantsDiagram = /diagram|chart|flowchart|mindmap|roadmap|visuali[sz]e|draw|graph/i.test(query)
           const wantsImage = /image|pic|picture|photo|illustrat|draw|labelled|labeled|sketch|show.*me|what.*look like|generate|create|visuali[sz]e|depict/i.test(query)
+          const wantsWebSearch = /search|google|look\s+up|what.*is|latest|recent|current|news|web/i.test(query)
           if (wantsDiagram) setPendingAction('diagram')
           else if (wantsImage) setPendingAction('image')
+          else if (wantsWebSearch) setPendingAction('web_search')
 
           setSending(true)
 
