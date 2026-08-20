@@ -478,11 +478,13 @@ class AIService:
                         payload_bytes = len(_json.dumps(groq_payload).encode())
 
                         # Model-aware payload limits (in bytes) — NEVER drop system prompt
-                        # gpt-oss-120b: 128K ctx ≈ 512KB, gpt-oss-20b: 8K ctx ≈ 32KB, qwen: 131K ctx ≈ 524KB
+                        # Groq API gateway enforces ~6KB payload limit regardless of model context window
                         if 'gpt-oss-20b' in groq_model:
-                            payload_limit = 28000   # ~7K tokens for 8K context model
+                            payload_limit = 5500    # 8K context, tight API limit
+                        elif 'gpt-oss-120b' in groq_model:
+                            payload_limit = 5500    # 128K ctx but Groq API gateway caps at ~6KB
                         else:
-                            payload_limit = 200000  # plenty of room for 128K+ models
+                            payload_limit = 8000    # qwen 131K ctx, slightly more room
 
                         if payload_bytes > payload_limit:
                             # Smart compression: ALWAYS keep system prompt + tools, trim old history
@@ -630,9 +632,11 @@ class AIService:
                         payload_bytes = len(_json.dumps(groq_payload).encode())
 
                         if 'gpt-oss-20b' in groq_model:
-                            payload_limit = 28000
+                            payload_limit = 5500
+                        elif 'gpt-oss-120b' in groq_model:
+                            payload_limit = 5500
                         else:
-                            payload_limit = 200000
+                            payload_limit = 8000
 
                         if payload_bytes > payload_limit:
                             system_msgs = [m for m in messages if m.get('role') == 'system']
