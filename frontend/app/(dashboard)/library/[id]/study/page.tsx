@@ -578,8 +578,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
   if (isLoading) return (
     <div className="fixed inset-0 bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-amber-500 flex items-center justify-center animate-pulse">
-          <span className="text-[32px]">📚</span>
+        <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center animate-pulse">
+          <span className="text-[28px]">📚</span>
         </div>
         <p className="text-on-surface-variant text-sm font-medium">Loading your study session...</p>
       </div>
@@ -588,14 +588,14 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
   if (!resource || total === 0) return (
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-amber-500/10 flex items-center justify-center">
+      <div className="w-20 h-20 rounded-full bg-primary/15 flex items-center justify-center">
         <span className="text-[48px]">📖</span>
       </div>
       <div>
         <p className="text-on-surface font-bold text-lg mb-2">No study notes available yet</p>
         <p className="text-on-surface-variant text-sm max-w-sm">Go back to the resource hub and generate your study kit first.</p>
       </div>
-      <Link href={`/library/${resourceId}`} className="flex items-center gap-2 bg-gradient-to-r from-primary to-amber-500 text-white font-bold px-6 py-3 rounded-full shadow-lg shadow-primary/30 hover:scale-105 transition-all">
+      <Link href={`/library/${resourceId}`} className="flex items-center gap-2 bg-primary-container text-on-primary-container font-bold px-6 py-3 rounded-full hover:brightness-110 transition-all">
         <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Resource
       </Link>
     </div>
@@ -720,8 +720,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 <button key={i} onClick={() => canClick && goToSection(i)} disabled={!canClick}
                   title={isLocked ? 'Complete this section first' : undefined}
                   className={cn('flex items-center gap-3 w-full px-3 py-3 rounded-[1rem] text-left text-[13px] font-semibold transition-all',
-                    isDone ? 'bg-gradient-to-r from-emerald-500/15 to-green-500/10 border border-emerald-500/20 text-emerald-300' :
-                    isActive ? 'bg-gradient-to-r from-primary/15 to-amber-500/10 border-2 border-primary text-on-surface shadow-lg shadow-primary/10' :
+                    isDone ? 'bg-primary-container text-on-primary-container' :
+                    isActive ? 'bg-surface-container-high border-2 border-primary text-on-surface' :
                     isLocked ? 'text-on-surface-variant/30 cursor-not-allowed' :
                     'text-on-surface-variant hover:bg-surface-container-high'
                   )}>
@@ -782,10 +782,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Maths Formula Box — shown when section contains formulas */}
                 {hasMath(current.deep_dive || '') || hasMath(current.plain_english || '') ? (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-violet-500/10 to-purple-500/5 border border-violet-500/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-[18px]">📐</span>
-                      <span className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Key Formulas</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Key Formulas</span>
                     </div>
                     <div className="space-y-3">
                       {extractFormulas(current.deep_dive || current.plain_english || '').map((formula, i) => (
@@ -801,15 +801,15 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Key Question */}
                 {current.key_question && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-sky-500/10 to-blue-500/5 border border-sky-500/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[18px]">🤔</span>
-                      <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Think About This</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Think About This</span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[16px] font-bold text-on-surface">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.key_question)}</ReactMarkdown>
                     </div>
-                    <p className="text-[11px] text-sky-400/60 mt-2 italic">Try answering before moving on!</p>
+                    <p className="text-[11px] text-on-surface-variant mt-2 italic">Try answering before moving on!</p>
                   </div>
                 )}
 
@@ -822,7 +822,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                         {hasMath(current.deep_dive || current.plain_english || '') ? 'No Jargon — Just English' : 'In Simple Words'}
                       </span>
                     </div>
-                    <div className="bg-gradient-to-br from-amber-500/5 to-orange-500/5 border border-amber-500/15 rounded-[1rem] p-4 sm:p-5">
+                    <div className="bg-surface-container-high border border-outline-variant/20 rounded-[1rem] p-4 sm:p-5">
                       <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed text-on-surface/90">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.plain_english)}</ReactMarkdown>
                       </div>
@@ -845,7 +845,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                       </span>
                     </button>
                     {expandedSections.has(sectionIndex) ? (
-                      <div className="bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/15 rounded-[1rem] p-4 sm:p-5 animate-in slide-in-from-top-2 duration-300">
+                      <div className="bg-surface-container-high border border-outline-variant/20 rounded-[1rem] p-4 sm:p-5 animate-in slide-in-from-top-2 duration-300">
                         <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] leading-relaxed">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm, remarkMath]}
@@ -884,10 +884,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Memory Trick */}
                 {current.memory_trick && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-pink-500/10 to-rose-500/5 border border-pink-500/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[18px]">🧠</span>
-                      <span className="text-[10px] font-black text-pink-400 uppercase tracking-widest">Memory Trick</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Memory Trick</span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] text-on-surface italic">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.memory_trick)}</ReactMarkdown>
@@ -897,10 +897,10 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* Quick Summary */}
                 {current.quick_summary && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-gradient-to-br from-emerald-500/10 to-green-500/5 border border-emerald-500/20 rounded-[1rem]">
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[18px]">✅</span>
-                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Key Takeaway</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Key Takeaway</span>
                     </div>
                     <div className="prose prose-invert max-w-none text-[14px] sm:text-[15px] text-on-surface-variant leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(current.quick_summary)}</ReactMarkdown>
@@ -987,7 +987,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
                 <div className="p-6 sm:p-8">
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-amber-500 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
                       <span className="text-[20px]">🧪</span>
                     </div>
                     <div>
@@ -1030,8 +1030,8 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   </div>
 
                   {submitted && (
-                    <div className={cn('flex items-center gap-4 p-5 rounded-[1rem] border mt-8', passed ? 'bg-gradient-to-r from-emerald-500/15 to-green-500/10 border-emerald-500/30' : 'bg-gradient-to-r from-amber-500/10 to-orange-500/5 border-amber-500/30')}>
-                      <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center', passed ? 'bg-emerald-500/20' : 'bg-amber-500/20')}>
+                    <div className={cn('flex items-center gap-4 p-5 rounded-[1rem] border mt-8', passed ? 'bg-primary/10 border-primary/20' : 'bg-surface-container-high border-outline-variant/20')}>
+                      <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center', passed ? 'bg-primary/15' : 'bg-surface-container')}>
                         <span className="text-[28px]">{passed ? '🎉' : '💪'}</span>
                       </div>
                       <div>
@@ -1068,9 +1068,9 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
             {/* XP Banner */}
             {completed.size > 0 && phase !== 'mastery' && phase !== 'mastery_complete' && (
-              <div className="bg-gradient-to-r from-primary/10 to-amber-500/5 border border-primary/20 rounded-[1.5rem] p-5 sm:p-6 flex items-center justify-between">
+              <div className="bg-surface-container-high border border-outline-variant/20 rounded-[1.5rem] p-5 sm:p-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+                  <div className="w-12 h-12 bg-primary/15 rounded-2xl flex items-center justify-center">
                     <span className="text-[24px]">🚀</span>
                   </div>
                   <div>
@@ -1089,7 +1089,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               <article className="bg-surface-container rounded-[1.5rem] border border-outline-variant/30 overflow-hidden shadow-lg">
                 <div className="p-6 sm:p-8">
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-secondary to-blue-500 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
                       <span className="text-[20px]">✍️</span>
                     </div>
                     <div>
@@ -1112,7 +1112,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   />
 
                   {writtenGrade && (
-                    <div className={cn('p-5 rounded-[1rem] border mt-4', writtenGrade === 'got_it' ? 'bg-gradient-to-r from-emerald-500/15 to-green-500/10 border-emerald-500/30' : 'bg-gradient-to-r from-sky-500/10 to-blue-500/5 border-sky-500/30')}>
+                    <div className={cn('p-5 rounded-[1rem] border mt-4', writtenGrade === 'got_it' ? 'bg-primary/10 border-primary/20' : 'bg-surface-container-high border-outline-variant/20')}>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-[20px]">{writtenGrade === 'got_it' ? '🌟' : '💡'}</span>
                         <p className="font-bold text-on-surface">{writtenGrade === 'got_it' ? 'Brilliant explanation!' : 'Good effort — keep learning!'}</p>
@@ -1149,11 +1149,11 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
             {/* MASTERY CHALLENGE phase */}
             {phase === 'mastery' && (
-              <article className="bg-surface-container rounded-[1.5rem] border border-violet-500/30 overflow-hidden shadow-lg">
+              <article className="bg-surface-container rounded-[1.5rem] border border-primary/20 overflow-hidden shadow-lg">
                 <div className="p-6 sm:p-8">
                   {/* Header */}
                   <div className="text-center mb-8">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/10 border-2 border-violet-500/30 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-500/20">
+                    <div className="w-20 h-20 rounded-full bg-primary/15 border-2 border-primary/30 flex items-center justify-center mx-auto mb-4">
                       <span className="text-[40px]">🎓</span>
                     </div>
                     <h2 className="text-[24px] font-bold text-on-surface mb-2">Mastery Challenge</h2>

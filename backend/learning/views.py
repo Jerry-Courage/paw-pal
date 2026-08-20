@@ -49,16 +49,42 @@ class LearningPathViewSet(viewsets.ModelViewSet):
             concepts = res.ai_concepts or []
             notes = (res.ai_notes_json or {}).get('sections', [])
 
-            # If ai_concepts is empty, fall back to notes sections
-            if not concepts and notes:
+            # If ai_concepts is empty or has < 3 items, fall back to notes sections
+            if len(concepts) < 3 and notes:
                 concepts = []
                 for idx, section in enumerate(notes):
+                    # Extract richer info from section
+                    title = section.get('title', f'Section {idx+1}')
+                    content = section.get('content', '') or section.get('plain_english', '') or section.get('deep_dive', '') or ''
+                    summary = section.get('quick_summary', '') or section.get('plain_english', '')[:300] if section.get('plain_english') else ''
+                    key_defs = section.get('key_definitions', [])
+                    if not key_defs and section.get('key_question'):
+                        key_defs = [{'term': 'Key Concept', 'definition': section.get('key_question')}]
+
                     concepts.append({
-                        'title': section.get('title', f'Section {idx+1}'),
-                        'description': section.get('content', '')[:500],
-                        'summary': section.get('content', '')[:300],
-                        'difficulty': 'medium',
+                        'title': title,
+                        'description': content[:500],
+                        'summary': summary[:300] if summary else content[:300],
+                        'difficulty': section.get('difficulty', 'medium'),
+                        'definitions': key_defs if key_defs else [],
                     })
+
+            # If still too few concepts, try to split large content sections
+            if len(concepts) < 3 and notes:
+                for idx, section in enumerate(notes):
+                    content = section.get('content', '') or section.get('deep_dive', '') or ''
+                    if len(content) > 800:
+                        # Split into sub-concepts based on paragraphs
+                        paragraphs = [p.strip() for p in content.split('\n\n') if len(p.strip()) > 100]
+                        for pi, para in enumerate(paragraphs[:3]):
+                            title = section.get('title', f'Section {idx+1}')
+                            concepts.append({
+                                'title': f'{title} — Part {pi+1}',
+                                'description': para[:500],
+                                'summary': para[:300],
+                                'difficulty': section.get('difficulty', 'medium'),
+                                'definitions': [],
+                            })
 
             for i, concept in enumerate(concepts):
                 if isinstance(concept, str):
@@ -70,7 +96,7 @@ class LearningPathViewSet(viewsets.ModelViewSet):
                     'source_page': concept.get('page'),
                     'source_section': concept.get('section', ''),
                     'difficulty': concept.get('difficulty', 'medium'),
-                    'key_definitions': concept.get('definitions', []),
+                    'key_definitions': concept.get('definitions', concept.get('key_definitions', [])),
                     'summary': concept.get('summary', ''),
                 })
 
