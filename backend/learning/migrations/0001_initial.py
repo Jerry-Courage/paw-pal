@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('library', '0001_initial'),
+        ('library', '0017_add_section_progress_tracking'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

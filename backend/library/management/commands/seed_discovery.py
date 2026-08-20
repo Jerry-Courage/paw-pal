@@ -463,7 +463,16 @@ class Command(BaseCommand):
         ]
 
         self.stdout.write(self.style.WARNING('Purging existing curated materials...'))
-        Resource.objects.filter(is_public=True).delete()
+        try:
+            Resource.objects.filter(is_public=True).delete()
+        except Exception as e:
+            if 'does not exist' in str(e) or 'UndefinedTable' in str(e):
+                self.stdout.write(self.style.WARNING(f'Skipping cascade delete (learning tables not yet created): {e}'))
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute("DELETE FROM library_resource WHERE is_public = true")
+            else:
+                raise
 
         for item in curated_data:
             resource, created = Resource.objects.update_or_create(
