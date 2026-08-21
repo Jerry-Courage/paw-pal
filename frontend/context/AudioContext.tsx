@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react'
 import { podcastApi } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface AudioState {
   isPlaying: boolean
@@ -82,6 +83,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // 2. Core chunk loader — reads from REFS, not state, so it's never stale
+  const chunkRetries = useRef<Record<number, number>>({})
+
   const handleNextChunk = useCallback(async (idx: number, autoPlay: boolean = true) => {
     const sid = sessionIdRef.current
     const script = scriptRef.current
@@ -89,6 +92,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     if (!sid || idx >= total || !audioRef.current) {
       console.warn(`handleNextChunk bail: sid=${sid}, idx=${idx}, total=${total}`)
+      return
+    }
+
+    const retries = chunkRetries.current[idx] || 0
+    if (retries >= 5) {
+      console.error(`Chunk ${idx} failed 5 times — stopping`)
+      toast.error('Audio chunk failed. Tap play to retry.', { duration: 8000 })
+      chunkRetries.current[idx] = 0
+      setState(prev => ({ ...prev, isPlaying: false, isChunkLoaded: false }))
       return
     }
 
@@ -100,6 +112,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         if (res.data instanceof Blob && res.data.size > 0) {
           url = URL.createObjectURL(res.data)
           preloadedBlobs.current[idx] = url
+          chunkRetries.current[idx] = 0
         }
       }
 
@@ -122,15 +135,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         setState(prev => ({ ...prev, currentIndex: idx, isChunkLoaded: true }))
       }
     } catch (e) {
-      console.error('Chunk load failed for index', idx, e)
-      // Retry loading the same chunk after 1.5s instead of skipping segments
+      chunkRetries.current[idx] = retries + 1
+      console.error(`Chunk ${idx} failed (attempt ${retries + 1}/5):`, e)
       setTimeout(() => {
-        if (sessionIdRef.current) {
-          handleNextChunk(idx, autoPlay)
-        }
-      }, 1500)
+        if (sessionIdRef.current) handleNextChunk(idx, autoPlay)
+      }, 2000)
     }
-  }, []) // No state deps — reads from refs
+  }, [])
 
   // 3. Public actions
   const startPodcast = (resourceId: number, title: string, sessionId: number, script: any[]) => {
