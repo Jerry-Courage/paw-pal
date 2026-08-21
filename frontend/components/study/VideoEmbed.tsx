@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 
 interface VideoEmbedProps {
   videoId: string
@@ -10,7 +10,6 @@ interface VideoEmbedProps {
 
 export default function VideoEmbed({ videoId, title, thumbnail }: VideoEmbedProps) {
   const [loaded, setLoaded] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const thumbUrl = thumbnail || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
 
@@ -22,12 +21,12 @@ export default function VideoEmbed({ videoId, title, thumbnail }: VideoEmbedProp
 
   if (loaded) {
     return (
-      <div ref={containerRef} className="relative rounded-[1rem] overflow-hidden border border-outline-variant/20 bg-black aspect-video">
+      <div className="relative rounded-[1rem] overflow-hidden border border-outline-variant/20 bg-black aspect-video">
         <iframe
-          src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&autoplay=1&playsinline=1&enablejsapi=1&iv_load_policy=3&fs=0`}
+          src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&autoplay=1&playsinline=1&iv_load_policy=3&fs=0&disablekb=1`}
           title={title}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
+          allowFullScreen={false}
           className="w-full h-full"
           style={{ pointerEvents: 'auto' }}
         />
@@ -36,7 +35,7 @@ export default function VideoEmbed({ videoId, title, thumbnail }: VideoEmbedProp
   }
 
   return (
-    <div ref={containerRef} className="relative rounded-[1rem] overflow-hidden border border-outline-variant/20 bg-black">
+    <div className="relative rounded-[1rem] overflow-hidden border border-outline-variant/20 bg-black">
       <div className="aspect-video relative">
         <img
           src={thumbUrl}
@@ -47,8 +46,8 @@ export default function VideoEmbed({ videoId, title, thumbnail }: VideoEmbedProp
         />
         <button
           onMouseDown={handlePlay}
-          onTouchStart={handlePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/30 active:bg-black/50 z-10"
+          onTouchEnd={handlePlay}
+          className="absolute inset-0 flex items-center justify-center bg-black/30 active:bg-black/50 z-10 cursor-pointer"
           style={{ WebkitTapHighlightColor: 'transparent' }}
           aria-label={`Play ${title}`}
         >
