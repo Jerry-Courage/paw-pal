@@ -150,14 +150,14 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
 
         # Voice map per technique
         voice_map = {
-            'feynman':       'Puck',    # playful, giggly student
+            'feynman':       'Leda',    # calm & focused (matches personalised tutor)
             'active_recall': 'Kore',    # upbeat coach
             'socratic':      'Charon',  # thoughtful, measured
             'free_chat':     'Fenrir',  # confident, energetic
             'podcast_qa':    'Aoede',   # warm podcast host
             'vr_tutor':      'Aoede',   # holographic VR tutor voice
         }
-        voice_name = self.voice_override or voice_map.get(self.technique, 'Aoede')
+        voice_name = self.voice_override or voice_map.get(self.technique, 'Leda')
 
         try:
             self.gemini_ws = await asyncio.wait_for(
@@ -167,7 +167,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     ping_timeout=10,
                     max_size=10 * 1024 * 1024,  # 10MB for large audio payloads
                 ),
-                timeout=10,
+                timeout=15,  # match personalised tutor
             )
 
             # ── Setup config ──────────────────────────────────────────────────
@@ -183,8 +183,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                                 }
                             },
                         },
-                        'temperature': 0.8,
-                        'maxOutputTokens': 800,
+                        'temperature': 0.4,  # match personalised tutor
+                        'maxOutputTokens': 8192,  # match personalised tutor
                     },
                     'systemInstruction': {
                         'parts': [{'text': system_prompt}]
@@ -205,9 +205,9 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
 
             # Wait briefly for setupComplete; if it takes too long, fall back to fast text replies.
             setup_ready = False
-            for _ in range(5):
+            for _ in range(2):  # match personalised tutor (2 retries)
                 try:
-                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=15)
+                    setup_resp = await asyncio.wait_for(self.gemini_ws.recv(), timeout=3)  # match personalised tutor
                     setup_data = json.loads(setup_resp)
                     if 'setupComplete' in setup_data:
                         setup_ready = True

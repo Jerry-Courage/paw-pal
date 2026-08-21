@@ -138,7 +138,7 @@ export default function ExamPrepPage({ params }: { params: { id: string } }) {
   useStudyTimer(true)
   const [phase, setPhase] = useState<Phase>('setup')
   const [technique, setTechnique] = useState<Technique>('feynman')
-  const [voice, setVoice] = useState<string>('') // empty = auto-select by technique
+  const [voice, setVoice] = useState<string>('Leda') // default to Leda (calm & focused)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
