@@ -18,6 +18,7 @@ import SessionStats from '@/components/study/SessionStats'
 import AmbientPlayer from '@/components/study/AmbientPlayer'
 import MysteryBox from '@/components/study/MysteryBox'
 import StudyAIAssistant from '@/components/study/StudyAIAssistant'
+import FormulaBreakdown from '@/components/study/FormulaBreakdown'
 import dynamic from 'next/dynamic'
 const MermaidDiagram = dynamic(() => import('@/components/ai/MermaidDiagram'), { ssr: false })
 
@@ -55,33 +56,61 @@ function hasMath(text: string): boolean {
   return /\\[a-zA-Z]+|\\\(|\\\)|\$\$|\$[^$]+\$|V_[A-Z]|i_[A-Z]|=[ ]*[A-Z]/.test(text)
 }
 
-/** Extract formulas from deep_dive for a dedicated formula box */
-function extractFormulas(text: string): string[] {
+/** Extract formulas with variable definitions and explanations */
+function extractFormulas(text: string): { latex: string; label?: string; variables?: { name: string; meaning: string }[]; explanation?: string }[] {
   if (!text) return []
-  const formulas: string[] = []
+  const formulas: { latex: string; label?: string; variables?: { name: string; meaning: string }[]; explanation?: string }[] = []
 
-  // Match $$...$$ blocks (LaTeX display math)
+  // Extract $$...$$ blocks
   const blockMatches = text.match(/\$\$[\s\S]*?\$\$/g) || []
-  formulas.push(...blockMatches)
+  for (const block of blockMatches) {
+    const formula: { latex: string; variables?: { name: string; meaning: string }[]; explanation?: string } = { latex: block }
 
-  // Match inline $...$ with math content
-  const inlineMatches = text.match(/\$[^$\n]+\$/g) || []
-  formulas.push(...inlineMatches.filter(f => !formulas.includes(f)))
+    // Look for "Where X is..." patterns after the formula
+    const formulaIdx = text.indexOf(block)
+    const afterFormula = text.slice(formulaIdx + block.length, formulaIdx + block.length + 500)
+    const whereMatch = afterFormula.match(/(?:Where|Here)[\s\S]*?(?=\n\n|\n(?:📐|✅|⚠️|💡|Key|$))/i)
+    if (whereMatch) {
+      const whereText = whereMatch[0]
+      const varMatches = whereText.matchAll(/\$([^$]+)\$\s*(?:=|is|means?)\s*(?:the\s+)?(.+?)(?:,|\.|$)/gi)
+      const vars: { name: string; meaning: string }[] = []
+      for (const m of varMatches) {
+        vars.push({ name: `$${m[1]}$`, meaning: m[2].trim() })
+      }
+      if (vars.length > 0) formula.variables = vars
+    }
 
-  // Match lines that look like formulas (contain = with variable names)
-  // e.g. "V_DS = V_GS - V_t" or "i_D = ..."
-  const lines = text.split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    // Skip if already captured in a $ block
-    if (formulas.some(f => trimmed.includes(f.replace(/[$]/g, '')))) continue
-    // Match formula-like patterns: variable_subscript = expression
-    if (/^[A-Z]_[A-Z].*=|^[a-z]_[A-Z].*=|V_[A-Z].*=|i_[A-Z].*=|I_[A-Z].*=/.test(trimmed) && trimmed.length < 120) {
-      formulas.push(`$${trimmed}$`)
+    // Look for explanation line after variables
+    const explMatch = afterFormula.match(/(?:This|It)\s+(?:means|tells|gives|calculates|represents)[^.]+\./i)
+    if (explMatch) formula.explanation = explMatch[0]
+
+    formulas.push(formula)
+  }
+
+  // Also extract inline formulas that are standalone equations
+  if (formulas.length < 5) {
+    const inlineMatches = text.match(/\$[^$\n]+\$/g) || []
+    for (const m of inlineMatches) {
+      if (!formulas.some(f => f.latex === m) && /[=]/.test(m) && m.length < 100) {
+        formulas.push({ latex: m })
+      }
     }
   }
 
-  return formulas.slice(0, 5) // cap at 5 formulas
+  // Extract plain-text formula lines: V_DS = V_GS - V_t
+  if (formulas.length < 5) {
+    const lines = text.split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (/^[A-Z]_[A-Z].*=|^[a-z]_[A-Z].*=/.test(trimmed) && trimmed.length < 100) {
+        if (!formulas.some(f => f.latex.includes(trimmed.replace(/[$]/g, '')))) {
+          formulas.push({ latex: `$${trimmed}$` })
+        }
+      }
+    }
+  }
+
+  return formulas.slice(0, 5)
 }
 
 const XP_PER_SECTION = 50
@@ -847,26 +876,18 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
-                {/* Maths Formula Box — shown when section contains formulas */}
+                {/* Formula Breakdown */}
                 {(() => {
                   const formulaText = current.deep_dive || current.plain_english || ''
-                  const hasFormulaContent = hasMath(formulaText) || extractFormulas(formulaText).length > 0
                   const formulas = extractFormulas(formulaText)
+                  const hasFormulaContent = hasMath(formulaText) || formulas.length > 0
                   return hasFormulaContent && formulas.length > 0 ? (
-                    <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
+                    <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-[18px]">📐</span>
                         <span className="text-[10px] font-black text-primary uppercase tracking-widest">Key Formulas</span>
                       </div>
-                      <div className="space-y-3">
-                        {formulas.map((formula, i) => (
-                          <div key={i} className="bg-[#0d0d1a] rounded-xl px-4 py-3 border border-violet-500/10 overflow-x-auto">
-                            <div className="prose prose-invert max-w-none text-[15px] sm:text-[17px] text-center">
-                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(formula)}</ReactMarkdown>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <FormulaBreakdown formulas={formulas} />
                     </div>
                   ) : null
                 })()}
