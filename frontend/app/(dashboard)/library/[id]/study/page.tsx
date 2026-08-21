@@ -19,6 +19,7 @@ import AmbientPlayer from '@/components/study/AmbientPlayer'
 import MysteryBox from '@/components/study/MysteryBox'
 import StudyAIAssistant from '@/components/study/StudyAIAssistant'
 import FormulaBreakdown from '@/components/study/FormulaBreakdown'
+import VideoEmbed from '@/components/study/VideoEmbed'
 import dynamic from 'next/dynamic'
 const MermaidDiagram = dynamic(() => import('@/components/ai/MermaidDiagram'), { ssr: false })
 
@@ -837,38 +838,7 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                         <span className="text-[10px] text-on-surface-variant/50 ml-auto">{current.video.duration}</span>
                       )}
                     </div>
-                    <div className="relative rounded-[1rem] overflow-hidden border border-outline-variant/20 bg-black">
-                      {/* Thumbnail with play button for mobile */}
-                      <a
-                        href={`https://www.youtube.com/watch?v=${current.video.video_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block sm:hidden"
-                      >
-                        <div className="aspect-video relative">
-                          <img
-                            src={current.video.thumbnail}
-                            alt={current.video.title}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                            <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
-                              <span className="text-white text-2xl ml-1">▶</span>
-                            </div>
-                          </div>
-                        </div>
-                      </a>
-                      {/* Desktop iframe */}
-                      <div className="hidden sm:block aspect-video">
-                        <iframe
-                          src={`https://www.youtube.com/embed/${current.video.video_id}?rel=0&modestbranding=1`}
-                          title={current.video.title}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          className="w-full h-full"
-                        />
-                      </div>
-                    </div>
+                    <VideoEmbed videoId={current.video.video_id} title={current.video.title} thumbnail={current.video.thumbnail} />
                     <p className="text-[11px] text-on-surface-variant mt-2 truncate">
                       {current.video.title}
                       {current.video.channel && <span className="text-on-surface-variant/50"> — {current.video.channel}</span>}
