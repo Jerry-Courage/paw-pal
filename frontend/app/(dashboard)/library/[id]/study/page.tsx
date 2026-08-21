@@ -51,19 +51,36 @@ function prepareForMarkdown(text: string): string {
 /** Detect if content contains math/LaTeX expressions */
 function hasMath(text: string): boolean {
   if (!text) return false
-  return /\\[a-zA-Z]+|\\\(|\\\|\$\$|\$[^$]/.test(text)
+  // Match LaTeX commands, $$ blocks, inline $ with math content, or common formula patterns
+  return /\\[a-zA-Z]+|\\\(|\\\)|\$\$|\$[^$]+\$|V_[A-Z]|i_[A-Z]|=[ ]*[A-Z]/.test(text)
 }
 
 /** Extract formulas from deep_dive for a dedicated formula box */
 function extractFormulas(text: string): string[] {
   if (!text) return []
   const formulas: string[] = []
-  // Match $$...$$ blocks
+
+  // Match $$...$$ blocks (LaTeX display math)
   const blockMatches = text.match(/\$\$[\s\S]*?\$\$/g) || []
   formulas.push(...blockMatches)
-  // Match inline $...$ that look like standalone equations (contain = or \frac or \sum)
-  const inlineMatches = text.match(/\$[^$\n]*(?:=|\\frac|\\sum|\\int|\\prod|\\lim)[^$\n]*\$/g) || []
+
+  // Match inline $...$ with math content
+  const inlineMatches = text.match(/\$[^$\n]+\$/g) || []
   formulas.push(...inlineMatches.filter(f => !formulas.includes(f)))
+
+  // Match lines that look like formulas (contain = with variable names)
+  // e.g. "V_DS = V_GS - V_t" or "i_D = ..."
+  const lines = text.split('\n')
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // Skip if already captured in a $ block
+    if (formulas.some(f => trimmed.includes(f.replace(/[$]/g, '')))) continue
+    // Match formula-like patterns: variable_subscript = expression
+    if (/^[A-Z]_[A-Z].*=|^[a-z]_[A-Z].*=|V_[A-Z].*=|i_[A-Z].*=|I_[A-Z].*=/.test(trimmed) && trimmed.length < 120) {
+      formulas.push(`$${trimmed}$`)
+    }
+  }
+
   return formulas.slice(0, 5) // cap at 5 formulas
 }
 
@@ -810,23 +827,28 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                 )}
 
                 {/* Maths Formula Box — shown when section contains formulas */}
-                {hasMath(current.deep_dive || '') || hasMath(current.plain_english || '') ? (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-[18px]">📐</span>
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Key Formulas</span>
-                    </div>
-                    <div className="space-y-3">
-                      {extractFormulas(current.deep_dive || current.plain_english || '').map((formula, i) => (
-                        <div key={i} className="bg-[#0d0d1a] rounded-xl px-4 py-3 border border-violet-500/10 overflow-x-auto">
-                          <div className="prose prose-invert max-w-none text-[15px] sm:text-[17px] text-center">
-                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(formula)}</ReactMarkdown>
+                {(() => {
+                  const formulaText = current.deep_dive || current.plain_english || ''
+                  const hasFormulaContent = hasMath(formulaText) || extractFormulas(formulaText).length > 0
+                  const formulas = extractFormulas(formulaText)
+                  return hasFormulaContent && formulas.length > 0 ? (
+                    <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-4 sm:p-5 bg-surface-container-high border border-outline-variant/20 rounded-[1rem]">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-[18px]">📐</span>
+                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Key Formulas</span>
+                      </div>
+                      <div className="space-y-3">
+                        {formulas.map((formula, i) => (
+                          <div key={i} className="bg-[#0d0d1a] rounded-xl px-4 py-3 border border-violet-500/10 overflow-x-auto">
+                            <div className="prose prose-invert max-w-none text-[15px] sm:text-[17px] text-center">
+                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{prepareForMarkdown(formula)}</ReactMarkdown>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null
+                })()}
 
                 {/* Key Question */}
                 {current.key_question && (
