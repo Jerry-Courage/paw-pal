@@ -873,12 +873,24 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
 
                 {/* ASCII Art Diagram */}
                 {current.ascii_art && current.ascii_art.trim() && (
-                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7 p-3 sm:p-4 bg-surface-variant/20 border border-outline-variant/15 rounded-[1rem]">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-secondary text-[16px]">draw</span>
-                      <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Visual Diagram</span>
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-7">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[18px]">📊</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Visual Diagram</span>
                     </div>
-                    <pre className="font-mono text-[11px] sm:text-[13px] text-on-surface leading-relaxed overflow-x-auto whitespace-pre">{current.ascii_art}</pre>
+                    <div className="bg-[#0a0a0f] border border-outline-variant/20 rounded-[1rem] overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2 border-b border-outline-variant/15 bg-surface-container-high/50">
+                        <span className="text-[10px] text-on-surface-variant/50 font-medium">diagram</span>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(current.ascii_art || ''); toast.success('Copied!') }}
+                          className="text-[10px] text-on-surface-variant/50 hover:text-primary transition-colors flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                          Copy
+                        </button>
+                      </div>
+                      <pre className="font-mono text-[12px] sm:text-[13px] text-emerald-400/80 leading-relaxed overflow-x-auto p-5 whitespace-pre">{current.ascii_art}</pre>
+                    </div>
                   </div>
                 )}
 
