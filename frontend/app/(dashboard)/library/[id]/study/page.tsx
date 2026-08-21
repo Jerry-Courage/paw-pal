@@ -28,6 +28,7 @@ type Section = {
   icon?: string; title: string; key_question?: string; plain_english?: string
   deep_dive?: string; memory_trick?: string; quick_summary?: string; content?: string
   ascii_art?: string; mermaid_diagram?: string
+  video?: { url: string; video_id: string; title: string; channel: string; duration: string; thumbnail: string }
 }
 type TranscriptEntry = { role: 'user' | 'ai'; text: string; ts: number }
 
@@ -779,6 +780,34 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
                     <span className="text-[10px] text-on-surface-variant font-medium">{sectionIndex + 1}/{total}</span>
                   </div>
                 </div>
+
+                {/* YouTube Video */}
+                {current.video && (
+                  <div className="mx-3 sm:mx-8 mt-5 sm:mt-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[18px]">🎬</span>
+                      <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Watch This</span>
+                      {current.video.duration && (
+                        <span className="text-[10px] text-on-surface-variant/50 ml-auto">{current.video.duration}</span>
+                      )}
+                    </div>
+                    <div className="relative rounded-[1rem] overflow-hidden border border-outline-variant/20 bg-black">
+                      <div className="aspect-video">
+                        <iframe
+                          src={`https://www.youtube.com/embed/${current.video.video_id}?rel=0&modestbranding=1`}
+                          title={current.video.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="w-full h-full"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant mt-2 truncate">
+                      {current.video.title}
+                      {current.video.channel && <span className="text-on-surface-variant/50"> — {current.video.channel}</span>}
+                    </p>
+                  </div>
+                )}
 
                 {/* Maths Formula Box — shown when section contains formulas */}
                 {hasMath(current.deep_dive || '') || hasMath(current.plain_english || '') ? (

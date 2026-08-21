@@ -2199,8 +2199,49 @@ class AIService:
             "exam_tips": all_tips
         }
         
-        # Capture the image map from current extraction context (passed in or stored)
-        return self._attach_images_to_sections(kit, getattr(self, '_current_image_map', {}))
+        # Attach images and search YouTube videos for each section
+        kit = self._attach_images_to_sections(kit, getattr(self, '_current_image_map', {}))
+        kit = self._attach_youtube_videos(kit, resource)
+        
+        return kit
+
+    def _attach_youtube_videos(self, kit: dict, resource) -> dict:
+        """Search YouTube for each section and attach the best matching video."""
+        sections = kit.get('sections', [])
+        if not sections:
+            return kit
+
+        try:
+            from ai_assistant.youtube_search import search_section_video
+        except ImportError:
+            logger.warning("[StudyKit] YouTube search module not available")
+            return kit
+
+        resource_title = resource.title or ''
+        subject = getattr(resource, 'subject', '') or ''
+        
+        # Only search for first 10 sections to avoid rate limiting
+        for sec in sections[:10]:
+            title = sec.get('title', '')
+            if not title:
+                continue
+            
+            try:
+                video = search_section_video(title, resource_title, subject)
+                if video:
+                    sec['video'] = {
+                        'url': video['url'],
+                        'video_id': video['video_id'],
+                        'title': video['title'],
+                        'channel': video['channel'],
+                        'duration': video.get('duration_str', ''),
+                        'thumbnail': video['thumbnail'],
+                    }
+                    logger.info(f"[StudyKit] Found video for '{title}': {video['title']}")
+            except Exception as e:
+                logger.warning(f"[StudyKit] Video search failed for '{title}': {e}")
+
+        return kit
 
 
     def _generate_basic_kit(self, resource) -> dict:
