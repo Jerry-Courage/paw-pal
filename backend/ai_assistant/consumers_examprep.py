@@ -89,6 +89,10 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         logger.info(f'[ExamPrep] Browser disconnected: code={close_code}')
 
     async def receive(self, text_data=None, bytes_data=None):
+        # Handle binary frames (optimized audio path)
+        if bytes_data:
+            await self._handle_binary_audio(bytes_data)
+            return
         if not text_data:
             return
         try:
@@ -109,8 +113,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         elif msg_type == 'audio':
             if self.gemini_ws and self.session_active:
                 audio_b64 = msg.get('data', '')
-                if audio_b64:
-                    await self._send_audio_to_gemini(audio_b64)
+                if audio_b64 and hasattr(self, 'audio_queue'):
+                    await self.audio_queue.put(audio_b64)
 
         elif msg_type == 'text_message':
             # User typed a message instead of speaking.
@@ -128,14 +132,35 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 await self._reply_with_text_fallback(text)
             else:
                 try:
-                    realtime_msg = {'realtimeInput': {'text': text}}
-                    await self.gemini_ws.send(json.dumps(realtime_msg))
+                    msg_obj = {
+                        'clientContent': {
+                            'turns': [{'role': 'user', 'parts': [{'text': text}]}],
+                            'turnComplete': True
+                        }
+                    }
+                    await self.gemini_ws.send(json.dumps(msg_obj))
                 except Exception as e:
                     logger.warning(f'[ExamPrep] Failed to send text to Gemini: {e}')
                     await self._reply_with_text_fallback(text)
 
         elif msg_type == 'end_session':
             await self._end_session()
+
+    async def _handle_binary_audio(self, data: bytes):
+        """Handle binary WebSocket frames from the browser.
+        Format: [0x01, 0x00, 0x00, 0x00] + raw PCM16 bytes.
+        """
+        if len(data) < 4 or data[0] != 0x01:
+            return
+        if not self.gemini_ws or not self.session_active:
+            return
+        pcm_bytes = data[4:]
+        if not pcm_bytes:
+            return
+        import base64 as b64
+        audio_b64 = b64.b64encode(pcm_bytes).decode('ascii')
+        if hasattr(self, 'audio_queue'):
+            await self.audio_queue.put(audio_b64)
 
     # ── Gemini session management ─────────────────────────────────────────────
 
@@ -194,6 +219,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                             'disabled': False,
                         }
                     },
+                    'tools': [{'google_search': {}}],
                 }
             }
             await self.gemini_ws.send(json.dumps(config))
@@ -282,6 +308,8 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
     async def _send_audio_to_gemini(self, audio_b64: str):
         """Forward PCM16 audio (16kHz, mono, base64) to Gemini realtimeInput."""
         try:
+            if not self.gemini_ws:
+                return
             msg = {
                 'realtimeInput': {
                     'mediaChunks': [
@@ -297,19 +325,15 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
             logger.warning(f'[ExamPrep] Failed to send audio: {e}')
 
     async def _drain_audio_queue(self):
-        """
-        Dedicated coroutine that drains the audio queue and forwards chunks to Gemini.
-        Running this separately from receive() means audio sends never block message handling,
-        giving much lower perceived latency.
-        """
+        """Dedicated coroutine that drains the audio queue and forwards chunks to Gemini."""
         try:
             while self.session_active:
                 try:
-                    audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=1.0)
+                    audio_b64 = await asyncio.wait_for(self.audio_queue.get(), timeout=0.1)
                     await self._send_audio_to_gemini(audio_b64)
                     self.audio_queue.task_done()
                 except asyncio.TimeoutError:
-                    continue  # no audio — keep looping
+                    continue
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -349,19 +373,20 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
         except websockets.exceptions.ConnectionClosed as e:
             logger.info(f'[ExamPrep] Gemini connection closed: {e.code}')
             if self.session_active:
+                self.session_active = False
                 await self._send({'type': 'error', 'message': 'AI connection dropped. Please end the session.'})
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f'[ExamPrep] Receive error: {e}')
             if self.session_active:
+                self.session_active = False
                 await self._send({'type': 'error', 'message': 'Connection to AI lost'})
 
     async def _handle_gemini_message(self, data: dict):
         server_content = data.get('serverContent', {}) or {}
         interrupted = data.get('interrupted') or server_content.get('interrupted', False)
         if interrupted:
-            logger.info('[ExamPrep] Gemini detected interruption, notifying browser')
             await self._send({'type': 'interrupted'})
 
         if not server_content:
@@ -375,15 +400,17 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                 await self._send({'type': 'audio', 'data': inline['data']})
                 self.ai_audio_b64_chunks.append(inline['data'])
             if part.get('text'):
-                txt = part['text']
+                txt = part['text'].strip()
+                if not txt:
+                    continue
                 # Check for mastery magic token
                 if '[MASTERY_ACHIEVED]' in txt:
                     txt = txt.replace('[MASTERY_ACHIEVED]', '').strip()
-                    self.transcript_log.append(('ai', txt))
-                    await self._send({'type': 'transcript_ai', 'text': txt})
-                    # End session with high score & badge trigger
+                    if txt:
+                        self.transcript_log.append(('ai', txt))
+                        await self._send({'type': 'transcript_ai', 'text': txt})
                     report = {
-                        'summary': 'Mastery achieved! You successfully taught the concept using the Feynman technique and answered all clarifying questions.',
+                        'summary': 'Mastery achieved! You successfully taught the concept using the Feynman technique.',
                         'strengths': ['Clear explanations', 'Effective analogies', 'Deep conceptual understanding'],
                         'gaps': [],
                         'score': 95,
@@ -393,6 +420,7 @@ class ExamPrepConsumer(AsyncWebsocketConsumer):
                     return
                 else:
                     self.transcript_log.append(('ai', txt))
+                    await self._send({'type': 'transcript_ai', 'text': txt})
 
         # ── User speech transcript ────────────────────────────────────────────
         input_transcript = server_content.get('inputTranscription', {})
