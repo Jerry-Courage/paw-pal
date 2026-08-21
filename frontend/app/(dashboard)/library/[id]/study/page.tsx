@@ -554,8 +554,9 @@ export default function StudyModePage({ params }: { params: { id: string } }) {
               playbackQueue.push(audioBuf)
               playNext()
             } else if (msg.type === 'session_report') {
-              setMasteryScore(msg.score || 75)
-              setMasteryFeedback(msg.summary || 'Great session! You demonstrated solid understanding.')
+              const report = msg.report || {}
+              setMasteryScore(report.score || 75)
+              setMasteryFeedback(report.summary || 'Great session! You demonstrated solid understanding.')
               setMasteryActive(false)
               setPhase('mastery_complete')
               const masteryXP = totalXP + XP_MASTERY
