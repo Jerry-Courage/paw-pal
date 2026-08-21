@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { normalizeForRendering } from '@/lib/mathFormatting'
 
 interface Message {
   role: 'user' | 'ai'
@@ -208,7 +209,7 @@ export default function StudyAIAssistant({ resourceId, sectionContent, sectionTi
                 {msg.role === 'ai' ? (
                   <div className="prose prose-invert prose-sm max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {msg.text}
+                      {normalizeForRendering(msg.text)}
                     </ReactMarkdown>
                   </div>
                 ) : (
