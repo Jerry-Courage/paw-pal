@@ -190,6 +190,17 @@ class WorkspaceMessageView(APIView):
                     )
             except: pass
 
+        # C. Notify ALL other workspace members (not just @mentions/replies)
+        other_members = ws.members.exclude(id=request.user.id)
+        preview = content[:100] + ('...' if len(content) > 100 else '') if content else 'Sent a voice note or attachment'
+        for member in other_members:
+            create_notification(
+                member, 'group',
+                f"New message in {ws.name}",
+                f"{request.user.username}: {preview}",
+                f"/workspace/{ws.id}"
+            )
+
         # 6. Broadcast user message (with transcript if available)
         self._broadcast(ws.id, msg)
 
