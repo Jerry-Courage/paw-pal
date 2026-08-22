@@ -3,11 +3,11 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer, QuizAnswer
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer, QuizAnswer, BattleHistory
 from .serializers import (
     StudyGroupSerializer, GroupSessionSerializer,
     GroupTaskSerializer, GroupMessageSerializer, GroupDocumentSerializer,
-    QuizRoomSerializer, QuizQuestionSerializer,
+    QuizRoomSerializer, QuizQuestionSerializer, BattleHistorySerializer,
 )
 from ai_assistant.services import AIService
 
@@ -289,6 +289,49 @@ class QuizGenerateView(APIView):
                 text=q.get('question', ''),
                 opt_a=opt_a, opt_b=opt_b, opt_c=opt_c, opt_d=opt_d,
                 correct=correct_letter,
+                explanation=q.get('explanation', ''),
             )
 
         return Response(QuizRoomSerializer(room).data, status=201)
+
+
+class QuizRoomCreateView(APIView):
+    """POST /api/groups/quiz/  — create a quiz room with questions (manual)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        title       = request.data.get('title', 'Quiz Battle').strip()
+        time_per_q  = int(request.data.get('time_per_q', 20))
+        questions   = request.data.get('questions', [])
+
+        if not questions:
+            return Response({'error': 'At least one question is required.'}, status=400)
+
+        room = QuizRoom.objects.create(
+            title=title,
+            host=request.user,
+            time_per_q=time_per_q,
+        )
+        for i, q in enumerate(questions):
+            QuizQuestion.objects.create(
+                room        = room,
+                order       = i,
+                text        = q.get('text', ''),
+                opt_a       = q.get('opt_a', ''),
+                opt_b       = q.get('opt_b', ''),
+                opt_c       = q.get('opt_c', ''),
+                opt_d       = q.get('opt_d', ''),
+                correct     = q.get('correct', 'A'),
+                explanation = q.get('explanation', ''),
+            )
+        QuizPlayer.objects.create(room=room, user=request.user)
+        return Response(QuizRoomSerializer(room).data, status=201)
+
+
+class BattleHistoryView(APIView):
+    """GET /api/groups/battle-history/ — get user's battle history."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        history = BattleHistory.objects.filter(player=request.user).select_related('room')[:20]
+        return Response(BattleHistorySerializer(history, many=True).data)

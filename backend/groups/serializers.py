@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer
+from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer, BattleHistory
 from users.serializers import UserSerializer
 
 
@@ -93,23 +93,24 @@ class GroupDocumentSerializer(serializers.ModelSerializer):
 class QuizQuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = QuizQuestion
-        fields = ('id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d', 'correct')
+        fields = ('id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d', 'correct', 'explanation')
 
 
 class QuizQuestionPublicSerializer(serializers.ModelSerializer):
-    """Like QuizQuestionSerializer but omits the correct answer — sent to players during game."""
     class Meta:
         model  = QuizQuestion
         fields = ('id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d')
 
 
 class QuizPlayerSerializer(serializers.ModelSerializer):
-    username   = serializers.CharField(source='user.username', read_only=True)
-    avatar_url = serializers.SerializerMethodField()
+    username      = serializers.CharField(source='user.username', read_only=True)
+    avatar_url    = serializers.SerializerMethodField()
+    ready         = serializers.BooleanField(read_only=True)
+    correct_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model  = QuizPlayer
-        fields = ('id', 'username', 'avatar_url', 'score', 'streak')
+        fields = ('id', 'username', 'avatar_url', 'score', 'streak', 'ready', 'correct_count')
 
     def get_avatar_url(self, obj):
         try:
@@ -129,3 +130,12 @@ class QuizRoomSerializer(serializers.ModelSerializer):
 
     def get_q_count(self, obj):
         return obj.questions.count()
+
+
+class BattleHistorySerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='player.username', read_only=True)
+
+    class Meta:
+        model  = BattleHistory
+        fields = ('id', 'username', 'score', 'rank', 'correct_count', 'total_questions',
+                  'best_streak', 'avg_time', 'xp_earned', 'created_at')

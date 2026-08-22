@@ -7,24 +7,31 @@ from django.utils import timezone
 
 class QuizConsumer(AsyncWebsocketConsumer):
     """
-    Real-time quiz battle consumer.
+    Real-time quiz battle consumer — redesigned v2.
 
-    URL: ws/quiz/<pin>/
+    Client → Server message types:
+      start_game      — host only: kicks off countdown then questions
+      submit_answer   — player submits answer choice for current question
+      kick_player     — host only: remove a player from lobby
+      set_ready       — player toggles ready state in lobby
+      send_reaction   — emoji reaction during question/round_result
+      request_rematch — any player: request rematch (resets room to lobby)
+      chat_message    — in-game chat message
 
-    Message types (client → server):
-      start_game     — host only: kicks off countdown then questions
-      submit_answer  — player submits answer choice for current question
-      kick_player    — host only: remove a player from lobby
-
-    Message types (server → client):
+    Server → Client message types:
       player_joined     — new player entered lobby
       player_left       — player disconnected
+      player_ready      — ready state changed
       game_countdown    — 3-2-1 before first question
-      show_question     — broadcast question (no correct answer)
+      show_question     — broadcast question with explanation
       timer_tick        — remaining seconds for current question
-      round_result      — correct answer + per-player points earned this round
+      answer_reaction   — someone sent an emoji reaction
+      round_result      — correct answer + per-player points + explanation
       leaderboard       — full sorted scores
-      game_over         — final rankings + confetti trigger
+      game_over         — final rankings + XP + battle history
+      chat_message      — in-game chat
+      rematch_request   — someone requested rematch
+      rematch_start     — rematch begins (room reset to lobby)
       error             — something went wrong
     """
 
@@ -37,18 +44,15 @@ class QuizConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Must be a player in this room
         room = await self._get_room()
         if not room:
             await self.close()
             return
 
         self.room_id = room.id
-
         await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
 
-        # Tell everyone a new player joined
         player = await self._get_or_create_player(room)
         players = await self._get_players()
         await self.channel_layer.group_send(self.group, {
@@ -77,6 +81,14 @@ class QuizConsumer(AsyncWebsocketConsumer):
             await self._handle_answer(data)
         elif t == 'kick_player':
             await self._handle_kick(data)
+        elif t == 'set_ready':
+            await self._handle_ready()
+        elif t == 'send_reaction':
+            await self._handle_reaction(data)
+        elif t == 'request_rematch':
+            await self._handle_rematch()
+        elif t == 'chat_message':
+            await self._handle_chat(data)
 
     # ── Game logic ────────────────────────────────────────────────────────────
 
@@ -90,7 +102,6 @@ class QuizConsumer(AsyncWebsocketConsumer):
 
         await self._set_status('countdown')
 
-        # 3-2-1 countdown
         for i in (3, 2, 1):
             await self.channel_layer.group_send(self.group, {'type': 'game_countdown', 'count': i})
             await asyncio.sleep(1)
@@ -104,25 +115,21 @@ class QuizConsumer(AsyncWebsocketConsumer):
         for idx, q in enumerate(questions):
             await self._set_q_idx(idx)
             await self._set_status('question')
-
-            # Re-fetch room so time_per_q is always fresh
             room = await self._get_room()
 
-            # Send question (no correct answer)
             await self.channel_layer.group_send(self.group, {
-                'type':       'show_question',
-                'idx':        idx,
-                'total':      total,
-                'id':         q['id'],
-                'text':       q['text'],
-                'opt_a':      q['opt_a'],
-                'opt_b':      q['opt_b'],
-                'opt_c':      q['opt_c'],
-                'opt_d':      q['opt_d'],
-                'time_limit': room.time_per_q,
+                'type':        'show_question',
+                'idx':         idx,
+                'total':       total,
+                'id':          q['id'],
+                'text':        q['text'],
+                'opt_a':       q['opt_a'],
+                'opt_b':       q['opt_b'],
+                'opt_c':       q['opt_c'],
+                'opt_d':       q['opt_d'],
+                'time_limit':  room.time_per_q,
             })
 
-            # Countdown timer ticks
             for remaining in range(room.time_per_q, 0, -1):
                 await asyncio.sleep(1)
                 await self.channel_layer.group_send(self.group, {
@@ -130,10 +137,7 @@ class QuizConsumer(AsyncWebsocketConsumer):
                     'remaining': remaining - 1,
                 })
 
-            # Grace period — let last-second answers arrive before computing results
             await asyncio.sleep(1)
-
-            # Show results for this round
             await self._set_status('results')
             results     = await self._calc_round_results(q['id'], q['correct'])
             leaderboard = await self._get_leaderboard()
@@ -141,18 +145,16 @@ class QuizConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_send(self.group, {
                 'type':        'round_result',
                 'correct':     q['correct'],
+                'explanation': q.get('explanation', ''),
                 'results':     results,
                 'leaderboard': leaderboard,
             })
 
-            # Pause on round result screen before next question
             await asyncio.sleep(5)
 
-        # Game over
         await self._set_status('finished')
         leaderboard = await self._get_leaderboard()
 
-        # Award XP to top 3 + participation
         xp_awards = []
         XP_REWARDS = {1: 15, 2: 10, 3: 5}
         for entry in leaderboard:
@@ -161,19 +163,17 @@ class QuizConsumer(AsyncWebsocketConsumer):
                 await self._award_quiz_xp(entry['username'], XP_REWARDS[rank])
                 xp_awards.append({'username': entry['username'], 'xp': XP_REWARDS[rank], 'rank': rank})
             else:
-                # Participation XP for everyone else
                 await self._award_quiz_xp(entry['username'], 1)
                 xp_awards.append({'username': entry['username'], 'xp': 1, 'rank': rank})
 
-        # Check for perfect score bonus
         perfect_users = await self._check_perfect_scores()
         for u in perfect_users:
             await self._award_quiz_xp(u, 5)
             xp_awards.append({'username': u, 'xp': 5, 'rank': 0, 'bonus': 'perfect_score'})
 
-        # Update persistent battle streaks
         if leaderboard:
             await self._update_battle_streaks(leaderboard)
+            await self._save_battle_history(leaderboard, total, xp_awards)
 
         await self.channel_layer.group_send(self.group, {
             'type':        'game_over',
@@ -182,7 +182,7 @@ class QuizConsumer(AsyncWebsocketConsumer):
         })
 
     async def _handle_answer(self, data):
-        choice    = data.get('choice', '').upper()
+        choice     = data.get('choice', '').upper()
         time_taken = float(data.get('time_taken', 0))
 
         if choice not in ('A', 'B', 'C', 'D'):
@@ -198,6 +198,70 @@ class QuizConsumer(AsyncWebsocketConsumer):
 
         q = questions[room.current_q_idx]
         await self._save_answer(q['id'], q['correct'], choice, time_taken, room.time_per_q)
+
+        answered_count = await self._get_answered_count(q['id'])
+        player_count   = await self._get_player_count()
+        await self.channel_layer.group_send(self.group, {
+            'type':          'answer_reaction',
+            'reaction_type': 'answer_submit',
+            'username':      self.user.username,
+            'answered':      answered_count,
+            'total':         player_count,
+        })
+
+    async def _handle_ready(self):
+        room = await self._get_room()
+        if not room or room.status != 'lobby':
+            return
+        await self._toggle_ready()
+        players = await self._get_players()
+        await self.channel_layer.group_send(self.group, {
+            'type':    'player_ready',
+            'players': players,
+            'username': self.user.username,
+        })
+
+    async def _handle_reaction(self, data):
+        emoji = data.get('emoji', '')
+        if not emoji or len(emoji) > 8:
+            return
+        await self.channel_layer.group_send(self.group, {
+            'type':     'answer_reaction',
+            'reaction_type': 'emoji',
+            'username': self.user.username,
+            'emoji':    emoji,
+        })
+
+    async def _handle_chat(self, data):
+        msg = data.get('message', '').strip()
+        if not msg or len(msg) > 200:
+            return
+        await self.channel_layer.group_send(self.group, {
+            'type':     'chat_message',
+            'username': self.user.username,
+            'message':  msg,
+        })
+
+    async def _handle_rematch(self):
+        room = await self._get_room()
+        if not room:
+            return
+
+        await self._toggle_rematch_ready()
+
+        all_ready = await self._check_all_rematch()
+        if all_ready:
+            await self._reset_room_for_rematch()
+            players = await self._get_players()
+            await self.channel_layer.group_send(self.group, {
+                'type':    'rematch_start',
+                'players': players,
+            })
+        else:
+            await self.channel_layer.group_send(self.group, {
+                'type':     'rematch_request',
+                'username': self.user.username,
+            })
 
     async def _handle_kick(self, data):
         room = await self._get_room()
@@ -228,13 +292,20 @@ class QuizConsumer(AsyncWebsocketConsumer):
     def _get_players(self):
         from .models import QuizPlayer
         players = QuizPlayer.objects.filter(room__pin=self.pin).select_related('user')
-        return [{'username': p.user.username, 'score': p.score, 'streak': p.streak} for p in players]
+        return [{
+            'username': p.user.username,
+            'score':    p.score,
+            'streak':   p.streak,
+            'ready':    p.ready,
+            'correct_count': p.correct_count,
+            'best_streak': max(p.streak, 0),
+        } for p in players]
 
     @database_sync_to_async
     def _get_questions(self):
         from .models import QuizQuestion
         return list(QuizQuestion.objects.filter(room__pin=self.pin).values(
-            'id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d', 'correct'
+            'id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d', 'correct', 'explanation'
         ))
 
     @database_sync_to_async
@@ -257,34 +328,42 @@ class QuizConsumer(AsyncWebsocketConsumer):
         except Exception:
             return
 
-        # Skip if already answered
         if QuizAnswer.objects.filter(player=player, question=question).exists():
             return
 
         is_correct = (choice == correct)
 
         if is_correct:
-            # Speed bonus: 1000 pts max, scales down to 500 based on time taken
             speed_ratio = max(0.0, 1.0 - (time_taken / max(time_limit, 1)))
             points = int(500 + 500 * speed_ratio)
-            # Streak bonus (+20% if 3+ in a row) — read streak FIRST then update
             current_streak = player.streak
-            if current_streak >= 2:          # 3rd correct in a row
+            if current_streak >= 2:
                 points = int(points * 1.2)
-            # Use F() to avoid race condition when multiple players answer simultaneously
             QuizPlayer.objects.filter(pk=player.pk).update(
                 score=F('score') + points,
                 streak=F('streak') + 1,
+                correct_count=F('correct_count') + 1,
+                total_time=F('total_time') + time_taken,
             )
         else:
             points = 0
-            QuizPlayer.objects.filter(pk=player.pk).update(streak=0)
+            QuizPlayer.objects.filter(pk=player.pk).update(streak=0, total_time=F('total_time') + time_taken)
 
         QuizAnswer.objects.create(
             player=player, question=question,
             choice=choice, is_correct=is_correct,
             time_taken=time_taken, points=points,
         )
+
+    @database_sync_to_async
+    def _get_answered_count(self, q_id):
+        from .models import QuizAnswer
+        return QuizAnswer.objects.filter(question_id=q_id).count()
+
+    @database_sync_to_async
+    def _get_player_count(self):
+        from .models import QuizPlayer
+        return QuizPlayer.objects.filter(room__pin=self.pin).count()
 
     @database_sync_to_async
     def _calc_round_results(self, q_id, correct):
@@ -296,7 +375,7 @@ class QuizConsumer(AsyncWebsocketConsumer):
                 'choice':     a.choice,
                 'is_correct': a.is_correct,
                 'points':     a.points,
-                'time_taken': a.time_taken,
+                'time_taken': round(a.time_taken, 2),
             }
             for a in answers
         ]
@@ -306,7 +385,15 @@ class QuizConsumer(AsyncWebsocketConsumer):
         from .models import QuizPlayer
         players = QuizPlayer.objects.filter(room__pin=self.pin).select_related('user').order_by('-score')
         return [
-            {'rank': i + 1, 'username': p.user.username, 'score': p.score, 'streak': p.streak}
+            {
+                'rank':          i + 1,
+                'username':      p.user.username,
+                'score':         p.score,
+                'streak':        p.streak,
+                'correct_count': p.correct_count,
+                'total_time':    round(p.total_time, 1),
+                'avg_time':      round(p.total_time / max(p.correct_count, 1), 1),
+            }
             for i, p in enumerate(players)
         ]
 
@@ -314,6 +401,39 @@ class QuizConsumer(AsyncWebsocketConsumer):
     def _remove_player(self, username):
         from .models import QuizPlayer
         QuizPlayer.objects.filter(room__pin=self.pin, user__username=username).delete()
+
+    @database_sync_to_async
+    def _toggle_ready(self):
+        from .models import QuizPlayer
+        try:
+            player = QuizPlayer.objects.get(room__pin=self.pin, user=self.user)
+            player.ready = not player.ready
+            player.save(update_fields=['ready'])
+        except QuizPlayer.DoesNotExist:
+            pass
+
+    @database_sync_to_async
+    def _toggle_rematch_ready(self):
+        from .models import QuizPlayer
+        try:
+            player = QuizPlayer.objects.get(room__pin=self.pin, user=self.user)
+            player.ready = not player.ready
+            player.save(update_fields=['ready'])
+        except QuizPlayer.DoesNotExist:
+            pass
+
+    @database_sync_to_async
+    def _check_all_rematch(self):
+        from .models import QuizPlayer
+        players = list(QuizPlayer.objects.filter(room__pin=self.pin))
+        return len(players) > 1 and all(p.ready for p in players)
+
+    @database_sync_to_async
+    def _reset_room_for_rematch(self):
+        from .models import QuizRoom, QuizPlayer, QuizAnswer
+        QuizAnswer.objects.filter(player__room__pin=self.pin).delete()
+        QuizPlayer.objects.filter(room__pin=self.pin).update(score=0, streak=0, ready=False, correct_count=0, total_time=0)
+        QuizRoom.objects.filter(pin=self.pin).update(status='lobby', current_q_idx=0)
 
     @database_sync_to_async
     def _award_quiz_xp(self, username, amount):
@@ -331,7 +451,6 @@ class QuizConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _check_perfect_scores(self):
-        """Return usernames who answered every question correctly."""
         from .models import QuizPlayer, QuizAnswer
         players = QuizPlayer.objects.filter(room__pin=self.pin)
         perfect = []
@@ -344,7 +463,6 @@ class QuizConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _update_battle_streaks(self, leaderboard):
-        """Update persistent battle win streaks."""
         from django.contrib.auth import get_user_model
         User = get_user_model()
         if not leaderboard:
@@ -360,7 +478,6 @@ class QuizConsumer(AsyncWebsocketConsumer):
         obs['best_battle_streak'] = max(int(obs.get('best_battle_streak', 0)), obs['battle_streak'])
         winner.onboarding_status = obs
         winner.save(update_fields=['onboarding_status'])
-        # Reset streaks for non-winners
         for entry in leaderboard[1:]:
             try:
                 loser = User.objects.get(username=entry['username'])
@@ -371,16 +488,47 @@ class QuizConsumer(AsyncWebsocketConsumer):
             except User.DoesNotExist:
                 pass
 
+    @database_sync_to_async
+    def _save_battle_history(self, leaderboard, total_questions, xp_awards):
+        from .models import BattleHistory
+        from .models import QuizRoom
+        try:
+            room = QuizRoom.objects.get(pin=self.pin)
+        except QuizRoom.DoesNotExist:
+            return
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        xp_map = {a['username']: a for a in xp_awards}
+        for entry in leaderboard:
+            try:
+                user = User.objects.get(username=entry['username'])
+            except User.DoesNotExist:
+                continue
+            award = xp_map.get(entry['username'], {})
+            BattleHistory.objects.create(
+                room=room,
+                player=user,
+                score=entry['score'],
+                rank=entry['rank'],
+                correct_count=entry['correct_count'],
+                total_questions=total_questions,
+                best_streak=entry.get('best_streak', 0),
+                avg_time=entry.get('avg_time', 0),
+                xp_earned=award.get('xp', 1),
+            )
+
     def send_json(self, data):
-        import asyncio
         return self.send(text_data=json.dumps(data))
 
-    # ── Channel layer event handlers (server → this client) ──────────────────
+    # ── Channel layer event handlers ──────────────────────────────────────────
 
     async def player_joined(self, event):
         await self.send(text_data=json.dumps(event))
 
     async def player_left(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def player_ready(self, event):
         await self.send(text_data=json.dumps(event))
 
     async def game_countdown(self, event):
@@ -392,6 +540,9 @@ class QuizConsumer(AsyncWebsocketConsumer):
     async def timer_tick(self, event):
         await self.send(text_data=json.dumps(event))
 
+    async def answer_reaction(self, event):
+        await self.send(text_data=json.dumps(event))
+
     async def round_result(self, event):
         await self.send(text_data=json.dumps(event))
 
@@ -399,4 +550,13 @@ class QuizConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event))
 
     async def game_over(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def rematch_request(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def rematch_start(self, event):
         await self.send(text_data=json.dumps(event))

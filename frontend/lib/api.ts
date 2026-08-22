@@ -333,6 +333,7 @@ export const groupsApi = {
   joinQuiz:      (pin: string) => api.post('/groups/quiz/join/', { pin }),
   getQuizRoom:   (pin: string) => api.get(`/groups/quiz/${pin}/`),
   getQuizQuestions: (pin: string) => api.get(`/groups/quiz/${pin}/questions/`),
+  getBattleHistory: () => api.get('/groups/battle-history/'),
 }
 
 // Planner

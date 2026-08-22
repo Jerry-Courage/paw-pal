@@ -4,7 +4,7 @@ from .views import (
     GroupSessionListCreateView, GroupTaskView, GroupTaskDetailView,
     GroupMessageView, GroupDocumentView, GroupDocumentDetailView,
     QuizRoomCreateView, QuizRoomJoinView, QuizRoomDetailView, QuizQuestionsView,
-    QuizGenerateView,
+    QuizGenerateView, BattleHistoryView,
 )
 
 urlpatterns = [
@@ -23,4 +23,6 @@ urlpatterns = [
     path('quiz/join/', QuizRoomJoinView.as_view()),
     path('quiz/<str:pin>/', QuizRoomDetailView.as_view()),
     path('quiz/<str:pin>/questions/', QuizQuestionsView.as_view()),
+    # Battle history
+    path('battle-history/', BattleHistoryView.as_view()),
 ]

@@ -124,14 +124,15 @@ class QuizRoom(models.Model):
 
 
 class QuizQuestion(models.Model):
-    room    = models.ForeignKey(QuizRoom, on_delete=models.CASCADE, related_name='questions')
-    order   = models.IntegerField(default=0)
-    text    = models.TextField()
-    opt_a   = models.CharField(max_length=400)
-    opt_b   = models.CharField(max_length=400)
-    opt_c   = models.CharField(max_length=400)
-    opt_d   = models.CharField(max_length=400)
-    correct = models.CharField(max_length=1, choices=[('A','A'),('B','B'),('C','C'),('D','D')])
+    room        = models.ForeignKey(QuizRoom, on_delete=models.CASCADE, related_name='questions')
+    order       = models.IntegerField(default=0)
+    text        = models.TextField()
+    opt_a       = models.CharField(max_length=400)
+    opt_b       = models.CharField(max_length=400)
+    opt_c       = models.CharField(max_length=400)
+    opt_d       = models.CharField(max_length=400)
+    correct     = models.CharField(max_length=1, choices=[('A','A'),('B','B'),('C','C'),('D','D')])
+    explanation = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['order']
@@ -141,10 +142,13 @@ class QuizQuestion(models.Model):
 
 
 class QuizPlayer(models.Model):
-    room   = models.ForeignKey(QuizRoom, on_delete=models.CASCADE, related_name='players')
-    user   = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='quiz_sessions')
-    score  = models.IntegerField(default=0)
-    streak = models.IntegerField(default=0)   # consecutive correct answers
+    room        = models.ForeignKey(QuizRoom, on_delete=models.CASCADE, related_name='players')
+    user        = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='quiz_sessions')
+    score       = models.IntegerField(default=0)
+    streak      = models.IntegerField(default=0)
+    ready       = models.BooleanField(default=False)
+    correct_count = models.IntegerField(default=0)
+    total_time  = models.FloatField(default=0)
 
     class Meta:
         unique_together = ('room', 'user')
@@ -154,13 +158,31 @@ class QuizPlayer(models.Model):
 
 
 class QuizAnswer(models.Model):
-    """One answer per player per question."""
     player      = models.ForeignKey(QuizPlayer, on_delete=models.CASCADE, related_name='answers')
     question    = models.ForeignKey(QuizQuestion, on_delete=models.CASCADE, related_name='answers')
     choice      = models.CharField(max_length=1)
     is_correct  = models.BooleanField(default=False)
-    time_taken  = models.FloatField(default=0)   # seconds
+    time_taken  = models.FloatField(default=0)
     points      = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ('player', 'question')
+
+
+class BattleHistory(models.Model):
+    room        = models.ForeignKey(QuizRoom, on_delete=models.SET_NULL, null=True, related_name='history_entries')
+    player      = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='battle_history')
+    score       = models.IntegerField(default=0)
+    rank        = models.IntegerField(default=0)
+    correct_count = models.IntegerField(default=0)
+    total_questions = models.IntegerField(default=0)
+    best_streak = models.IntegerField(default=0)
+    avg_time    = models.FloatField(default=0)
+    xp_earned   = models.IntegerField(default=0)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.player.username} — Rank #{self.rank} ({self.score} pts)'
