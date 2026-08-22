@@ -47,6 +47,14 @@ for col, typedef in [
         print(f'Adding missing column groups_quizplayer.{col}')
         cursor.execute(f'ALTER TABLE groups_quizplayer ADD COLUMN {col} {typedef}')
 
+for col, typedef in [
+    ('explanation', \"TEXT DEFAULT '' NOT NULL\"),
+]:
+    cursor.execute(\"SELECT 1 FROM information_schema.columns WHERE table_name='groups_quizquestion' AND column_name=%s\", [col])
+    if not cursor.fetchone():
+        print(f'Adding missing column groups_quizquestion.{col}')
+        cursor.execute(f'ALTER TABLE groups_quizquestion ADD COLUMN {col} {typedef}')
+
 # Check and create groups_battlehistory table
 cursor.execute(\"SELECT 1 FROM information_schema.tables WHERE table_name='groups_battlehistory' LIMIT 1\")
 if not cursor.fetchone():

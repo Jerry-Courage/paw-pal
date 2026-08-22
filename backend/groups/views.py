@@ -28,6 +28,13 @@ def _ensure_quiz_columns():
         if not cursor.fetchone():
             cursor.execute(f'ALTER TABLE groups_quizplayer ADD COLUMN {col} {typedef}')
             print(f'[Quiz Fix] Added missing column groups_quizplayer.{col}')
+    for col, typedef in [
+        ('explanation', 'TEXT DEFAULT \'\' NOT NULL'),
+    ]:
+        cursor.execute("SELECT 1 FROM information_schema.columns WHERE table_name='groups_quizquestion' AND column_name=%s", [col])
+        if not cursor.fetchone():
+            cursor.execute(f'ALTER TABLE groups_quizquestion ADD COLUMN {col} {typedef}')
+            print(f'[Quiz Fix] Added missing column groups_quizquestion.{col}')
     cursor.execute("SELECT 1 FROM information_schema.tables WHERE table_name='groups_battlehistory' LIMIT 1")
     if not cursor.fetchone():
         cursor.execute('''CREATE TABLE IF NOT EXISTS groups_battlehistory (
