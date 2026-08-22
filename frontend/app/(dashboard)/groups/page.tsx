@@ -132,15 +132,23 @@ function ChatPanel({ messages, onSend, onClose }: { messages: { username: string
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: 300 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 300 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="fixed right-0 top-0 bottom-0 w-80 bg-[#0d091b]/95 backdrop-blur-xl border-l border-white/10 z-40 flex flex-col"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 z-40"
+      onClick={onClose}
     >
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="absolute right-0 top-0 bottom-0 w-[85vw] max-w-80 bg-[#0d091b]/95 backdrop-blur-xl border-l border-white/10 flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <h3 className="font-bold text-sm">Chat</h3>
-        <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+        <button onClick={onClose} className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center">
           <span className="material-symbols-outlined text-sm">close</span>
         </button>
       </div>
@@ -162,10 +170,11 @@ function ChatPanel({ messages, onSend, onClose }: { messages: { username: string
           placeholder="Type a message..."
           className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
         />
-        <button type="submit" className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center shrink-0">
+        <button type="submit" className="w-11 h-11 rounded-xl bg-purple-600 flex items-center justify-center shrink-0">
           <span className="material-symbols-outlined text-sm">send</span>
         </button>
       </form>
+      </motion.div>
     </motion.div>
   )
 }
@@ -268,7 +277,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
       className="flex-1 flex flex-col h-[100dvh] overflow-y-auto px-4 py-6"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+        <button onClick={onBack} className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center">
           <span className="material-symbols-outlined text-white">arrow_back</span>
         </button>
         <h2 className="text-xl font-bold">Create Battle Room</h2>
@@ -408,16 +417,16 @@ function LobbyScreen({ pin, players, isHost, onStart, onLeave, onToggleReady, me
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
 
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onLeave} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+        <button onClick={onLeave} className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center">
           <span className="material-symbols-outlined text-white">arrow_back</span>
         </button>
         <h2 className="text-xl font-bold">Lobby</h2>
         {isConnecting && <span className="text-xs text-amber-400 animate-pulse">Connecting...</span>}
         <div className="flex-1" />
-        <button onClick={onToggleMute} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+        <button onClick={onToggleMute} className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center">
           <span className="material-symbols-outlined text-sm text-white">{muted ? 'volume_off' : 'volume_up'}</span>
         </button>
-        <button onClick={onToggleChat} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+        <button onClick={onToggleChat} className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center">
           <span className="material-symbols-outlined text-sm text-white">chat_bubble</span>
         </button>
       </div>
@@ -591,13 +600,13 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/40">{answeredCount.answered}/{answeredCount.total} answered</span>
-            <button onClick={onToggleMute} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+            <button onClick={onToggleMute} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-sm text-white">{muted ? 'volume_off' : 'volume_up'}</span>
             </button>
-            <button onClick={onToggleChat} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+            <button onClick={onToggleChat} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-sm text-white">chat_bubble</span>
             </button>
-            <div className="relative w-10 h-10">
+            <div className="relative w-10 h-10 shrink-0">
               <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                 <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
                 <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="3"
@@ -657,10 +666,10 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
       </div>
 
       <div className="px-4 pb-4">
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
           {QUICK_EMOJIS.map(emoji => (
             <motion.button key={emoji} whileTap={{ scale: 0.8 }} onClick={() => onReact(emoji)}
-              className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-lg hover:bg-white/10 active:scale-90 transition-all">
+              className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-lg hover:bg-white/10 active:scale-90 transition-all">
               {emoji}
             </motion.button>
           ))}
