@@ -11,6 +11,41 @@ from .serializers import (
 )
 from ai_assistant.services import AIService
 
+_quiz_columns_fixed = False
+
+def _ensure_quiz_columns():
+    global _quiz_columns_fixed
+    if _quiz_columns_fixed:
+        return
+    from django.db import connection
+    cursor = connection.cursor()
+    for col, typedef in [
+        ('ready', 'BOOLEAN DEFAULT FALSE NOT NULL'),
+        ('correct_count', 'INTEGER DEFAULT 0 NOT NULL'),
+        ('total_time', 'DOUBLE PRECISION DEFAULT 0 NOT NULL'),
+    ]:
+        cursor.execute("SELECT 1 FROM information_schema.columns WHERE table_name='groups_quizplayer' AND column_name=%s", [col])
+        if not cursor.fetchone():
+            cursor.execute(f'ALTER TABLE groups_quizplayer ADD COLUMN {col} {typedef}')
+            print(f'[Quiz Fix] Added missing column groups_quizplayer.{col}')
+    cursor.execute("SELECT 1 FROM information_schema.tables WHERE table_name='groups_battlehistory' LIMIT 1")
+    if not cursor.fetchone():
+        cursor.execute('''CREATE TABLE IF NOT EXISTS groups_battlehistory (
+            id BIGSERIAL PRIMARY KEY,
+            score INTEGER DEFAULT 0 NOT NULL,
+            "rank" INTEGER DEFAULT 0 NOT NULL,
+            correct_count INTEGER DEFAULT 0 NOT NULL,
+            total_questions INTEGER DEFAULT 0 NOT NULL,
+            best_streak INTEGER DEFAULT 0 NOT NULL,
+            avg_time DOUBLE PRECISION DEFAULT 0 NOT NULL,
+            xp_earned INTEGER DEFAULT 0 NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+            room_id INTEGER REFERENCES groups_quizroom(id) ON DELETE SET NULL,
+            player_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE
+        )''')
+        print('[Quiz Fix] Created missing groups_battlehistory table')
+    _quiz_columns_fixed = True
+
 
 class GroupListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -231,6 +266,7 @@ class QuizGenerateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        _ensure_quiz_columns()
         from library.models import Resource
         from ai_assistant.services import AIService
         from django.db.models import Q
