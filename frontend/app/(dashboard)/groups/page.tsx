@@ -159,24 +159,45 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
   const [questionCount, setQuestionCount] = useState(10)
   const [timer, setTimer] = useState(15)
   const [difficulty, setDifficulty] = useState('medium')
-  const [resource, setResource] = useState('')
+  const [selectedRes, setSelectedRes] = useState<any>(null)
+  const [resources, setResources] = useState<any[]>([])
+  const [fetching, setFetching] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    const { libraryApi } = require('@/lib/api')
+    libraryApi.getResources().then((r: any) => {
+      const items = Array.isArray(r.data) ? r.data : r.data?.results || []
+      setResources(items)
+    }).catch(() => {}).finally(() => setFetching(false))
+  }, [])
 
   const handleCreate = async () => {
-    if (!topic.trim()) return toast.error('Enter a topic for the quiz.')
+    if (!topic.trim() && !selectedRes && !uploadFile) return toast.error('Enter a topic, pick a resource, or upload a file.')
     setGenerating(true)
     try {
+      let resourceId = selectedRes?.id
+      if (uploadFile && !selectedRes) {
+        const { libraryApi } = require('@/lib/api')
+        const fd = new FormData()
+        fd.append('file', uploadFile)
+        fd.append('title', uploadFile.name.replace(/\.[^.]+$/, ''))
+        const upRes = await libraryApi.uploadResource(fd)
+        resourceId = upRes.data.id
+      }
       const res = await groupsApi.generateQuiz({
-        topic: topic.trim(),
-        title: title.trim() || topic.trim(),
-        question_count: questionCount,
-        timer_seconds: timer,
+        topic: topic.trim() || undefined,
+        resource_id: resourceId,
+        title: title.trim() || topic.trim() || selectedRes?.title || undefined,
+        count: questionCount,
+        time_per_q: timer,
         difficulty,
-        resource_id: resource || undefined,
       })
       const data = res.data
       toast.success('Quiz room created!')
-      onCreated(data.pin || data.room_pin || data.id, true)
+      onCreated(data.pin, true)
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Failed to create quiz room.')
     } finally {
@@ -208,7 +229,49 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
             className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-purple-500/50" />
         </div>
 
-        <p className="text-xs text-white/40 italic">AI extracts questions with explanations</p>
+        <p className="text-xs text-white/40 italic">AI extracts questions with explanations from your notes</p>
+
+        {/* Resource Selection */}
+        <div>
+          <label className="text-xs text-white/50 font-medium mb-2 block">Or Select Study Material</label>
+          {fetching ? (
+            <div className="flex items-center justify-center py-6 gap-2 text-white/40 text-xs">
+              <span className="material-symbols-outlined animate-spin text-[16px]">autorenew</span>
+              Loading library...
+            </div>
+          ) : resources.length === 0 ? (
+            <p className="text-xs text-white/30 text-center py-4">No resources found. Upload a file below.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-1">
+              {resources.map((r: any) => (
+                <button key={r.id} onClick={() => { setSelectedRes(r); setUploadFile(null); setTopic('') }}
+                  className={cn('flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all text-sm',
+                    selectedRes?.id === r.id ? 'bg-purple-600/20 border-purple-500/50' : 'bg-white/5 border-white/10 hover:bg-white/10')}>
+                  <span className="material-symbols-outlined text-[18px] text-purple-400">
+                    {r.resource_type === 'pdf' ? 'picture_as_pdf' : r.resource_type === 'video' ? 'smart_display' : 'description'}
+                  </span>
+                  <span className="flex-1 truncate font-medium text-white/80">{r.title}</span>
+                  {selectedRes?.id === r.id && <span className="material-symbols-outlined text-purple-400 text-[16px]">check_circle</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 my-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[10px] text-white/30 font-bold uppercase tracking-widest">or upload</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          <input ref={fileRef} type="file" accept=".pdf,image/*,.txt,.docx" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setSelectedRes(null); setTopic('') }; e.target.value = '' }} />
+          <button onClick={() => fileRef.current?.click()}
+            className={cn('w-full py-3 border-2 border-dashed rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2',
+              uploadFile ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400' : 'border-white/20 text-white/40 hover:border-white/40')}>
+            <span className="material-symbols-outlined text-[16px]">upload_file</span>
+            <span className="truncate">{uploadFile ? uploadFile.name : 'Upload PDF, Image, or Doc'}</span>
+          </button>
+        </div>
 
         <div>
           <label className="text-xs text-white/50 font-medium mb-2 block">Questions</label>
