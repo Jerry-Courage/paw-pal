@@ -181,8 +181,11 @@ function ChatPanel({ messages, onSend, onClose }: { messages: { username: string
 
 function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () => void; onJoin: () => void; joinPin: string; setJoinPin: (v: string) => void }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center min-h-[100dvh] px-6 py-10 overflow-y-auto"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative flex flex-col items-center justify-center min-h-[100dvh] px-6 py-10 overflow-y-auto"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
+      <button onClick={() => window.history.back()} className="absolute top-4 left-4 w-11 h-11 rounded-full bg-white/10 flex items-center justify-center z-10">
+        <span className="material-symbols-outlined text-white">arrow_back</span>
+      </button>
       <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
         className="text-[72px] mb-4">
         ⚔️
