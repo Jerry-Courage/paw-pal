@@ -71,7 +71,7 @@ function Confetti() {
     <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
       {pieces.map(p => (
         <motion.div key={p.id} className="absolute rounded-sm"
-          style={{ left: ${p.x}%, top: -20, width: p.size, height: p.size * 0.6, backgroundColor: p.color }}
+          style={{ left: `${p.x}%`, top: -20, width: p.size, height: p.size * 0.6, backgroundColor: p.color }}
           initial={{ y: -20, rotate: 0, opacity: 1 }}
           animate={{ y: typeof window !== 'undefined' ? window.innerHeight + 40 : 800, rotate: 720, opacity: 0 }}
           transition={{ duration: 2.5 + Math.random(), delay: p.delay, ease: 'easeIn' }}
@@ -94,7 +94,7 @@ function FloatingScore({ points, show }: { points: number; show: boolean }) {
 function FloatingEmoji({ emoji, startX }: { emoji: string; startX: number }) {
   return (
     <motion.div initial={{ opacity: 1, y: 0, scale: 0.5 }} animate={{ opacity: 0, y: -120, scale: 1.5 }} transition={{ duration: 2, ease: 'easeOut' }}
-      className="fixed z-50 pointer-events-none text-[32px]" style={{ left: ${startX}%, bottom: '20%' }}>
+      className="fixed z-50 pointer-events-none text-[32px]" style={{ left: `${startX}%`, bottom: '20%' }}>
       {emoji}
     </motion.div>
   )
