@@ -130,6 +130,8 @@ def process_resource_task(res_id):
                 logger.warning(f'[Task Queue] macOS metadata file detected for {res.id}: {raw_name}')
                 if res.resource_type == 'pdf' or (res.title or '').lower().endswith('.pdf'):
                     ext = '.pdf'
+                elif (res.title or '').lower().endswith(('.docx', '.doc')):
+                    ext = '.docx'
                 elif res.resource_type == 'slides' or (res.title or '').lower().endswith(('.pptx', '.ppt')):
                     ext = '.pptx'
                 elif res.resource_type == 'video':
@@ -143,6 +145,8 @@ def process_resource_task(res_id):
             if not ext:
                 if res.resource_type == 'pdf' or (res.title or '').lower().endswith('.pdf'):
                     ext = '.pdf'
+                elif (res.title or '').lower().endswith(('.docx', '.doc')):
+                    ext = '.docx'
                 elif res.resource_type == 'slides' or (res.title or '').lower().endswith(('.pptx', '.ppt')):
                     ext = '.pptx'
                 elif res.resource_type == 'video':

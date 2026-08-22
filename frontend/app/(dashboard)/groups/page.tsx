@@ -330,7 +330,7 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          <input ref={fileRef} type="file" accept=".pdf,image/*,.txt,.docx" className="hidden"
+          <input ref={fileRef} type="file" accept=".pdf,image/*,.txt,.doc,.docx" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setSelectedRes(null); setTopic('') }; e.target.value = '' }} />
           <button onClick={() => fileRef.current?.click()}
             className={cn('w-full py-3 border-2 border-dashed rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2',
