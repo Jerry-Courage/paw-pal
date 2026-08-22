@@ -137,10 +137,15 @@ export default function ConceptPanel({ conceptId, onClose, onComplete }: Concept
           {tab === 'learn' && (
             <div className="space-y-4">
               {/* Summary */}
-              {concept.summary && (
+              {concept.summary ? (
                 <div className="bg-surface-variant/30 rounded-xl p-4">
                   <h3 className="text-xs font-bold text-on-surface-variant uppercase mb-2">Summary</h3>
-                  <p className="text-sm leading-relaxed">{concept.summary}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{concept.summary}</p>
+                </div>
+              ) : (
+                <div className="bg-surface-variant/30 rounded-xl p-4">
+                  <h3 className="text-xs font-bold text-on-surface-variant uppercase mb-2">Summary</h3>
+                  <p className="text-sm leading-relaxed text-on-surface-variant/60 italic">No summary generated yet. Use the Generate button to create study notes for this concept's source material.</p>
                 </div>
               )}
 
@@ -148,7 +153,7 @@ export default function ConceptPanel({ conceptId, onClose, onComplete }: Concept
               {concept.description && (
                 <div>
                   <h3 className="text-xs font-bold text-on-surface-variant uppercase mb-2">Why This Matters</h3>
-                  <p className="text-sm leading-relaxed text-on-surface-variant">{concept.description}</p>
+                  <p className="text-sm leading-relaxed text-on-surface-variant whitespace-pre-wrap">{concept.description}</p>
                 </div>
               )}
 

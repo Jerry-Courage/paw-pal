@@ -1051,8 +1051,8 @@ function AIChat() {
         {/* Slim toolbar */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-outline-variant/15 bg-background/90 backdrop-blur-md shrink-0 z-20">
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-lg text-on-surface-variant/50 hover:bg-surface-container-high hover:text-on-surface transition-all active:scale-95 cursor-pointer">
-            <Menu className="w-4 h-4" />
+            className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all active:scale-95 cursor-pointer">
+            <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
             {activeSession && (

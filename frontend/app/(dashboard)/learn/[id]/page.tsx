@@ -96,7 +96,7 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
       return {
         ...node,
         x: pos.x,
-        y: i * 110 + 60,
+        y: i * 110 + 140,
         side: pos.side,
         isLeft: pos.side === 'left',
       }
@@ -211,7 +211,7 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
                   />
                   <div>
                     <p className="text-sm font-bold">{res.title}</p>
-                    <p className="text-[10px] text-on-surface-variant">{res.ai_concepts?.length || 0} concepts</p>
+                    <p className="text-[10px] text-on-surface-variant">{(res.ai_concepts || []).filter((c: any) => c.title || c.name).length || (res.ai_notes_json?.sections?.length || 0)} concepts</p>
                   </div>
                 </label>
               ))}
@@ -231,7 +231,7 @@ export default function RoadmapPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Duolingo-Style Winding Path */}
-      <div className="max-w-4xl mx-auto px-4 py-6 overflow-hidden" ref={scrollRef}>
+      <div className="max-w-4xl mx-auto px-4 py-6 pt-8 overflow-hidden" ref={scrollRef}>
         {pathLayout.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <FlowMascot mood="thinking" size={140} />

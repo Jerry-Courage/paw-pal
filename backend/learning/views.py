@@ -46,11 +46,16 @@ class LearningPathViewSet(viewsets.ModelViewSet):
 
         all_concepts = []
         for res in resource_objs:
-            concepts = res.ai_concepts or []
+            # Filter out metadata objects (extracted_text, practice_questions, transcript)
+            # Only keep actual concept objects that have a 'title' or 'name' key
+            raw_concepts = res.ai_concepts or []
+            real_concepts = [c for c in raw_concepts if isinstance(c, dict) and (c.get('title') or c.get('name'))]
             notes = (res.ai_notes_json or {}).get('sections', [])
 
-            # If ai_concepts is empty or has < 3 items, fall back to notes sections
-            if len(concepts) < 3 and notes:
+            # Use real concepts if we have enough, otherwise fall back to notes sections
+            if len(real_concepts) >= 3:
+                concepts = real_concepts
+            elif notes:
                 concepts = []
                 for idx, section in enumerate(notes):
                     # Extract richer info from section — prefer plain_english and deep_dive (fun content)
@@ -70,6 +75,8 @@ class LearningPathViewSet(viewsets.ModelViewSet):
                         'difficulty': section.get('difficulty', 'medium'),
                         'definitions': key_defs if key_defs else [],
                     })
+            else:
+                concepts = []
 
             # If still too few concepts, try to split large content sections
             if len(concepts) < 3 and notes:
