@@ -63,7 +63,7 @@ if not cursor.fetchone():
             xp_earned INTEGER DEFAULT 0 NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
             room_id INTEGER REFERENCES groups_quizroom(id) ON DELETE SET NULL,
-            player_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE
+            player_id INTEGER REFERENCES users_user(id) ON DELETE CASCADE
         )
     ''')
 
