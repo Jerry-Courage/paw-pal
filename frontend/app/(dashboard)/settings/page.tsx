@@ -133,9 +133,13 @@ export default function SettingsPage() {
 
   const deleteAccountMutation = useMutation({
     mutationFn: (password: string) => authApi.deleteAccount(password),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Account deleted. Goodbye!')
-      signOut({ callbackUrl: '/login' })
+      try {
+        await signOut({ callbackUrl: '/login' })
+      } catch {
+        window.location.href = '/login'
+      }
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.error || 'Failed to delete account.')

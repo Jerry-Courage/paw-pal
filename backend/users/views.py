@@ -411,10 +411,15 @@ class DeleteAccountView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            user_id = user.id
+            user_email = user.email
             user.delete()
+            logger.info(f'Deleted account for user {user_id} ({user_email})')
         except Exception as e:
             logger.error(f'Delete account failed for {user.id}: {e}')
-            return Response({'error': 'Failed to delete account. Please try again.'},
+            import traceback
+            traceback.print_exc()
+            return Response({'error': f'Failed to delete account: {str(e)}'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'detail': 'Account deleted.'})
