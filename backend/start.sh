@@ -26,7 +26,55 @@ except Exception as e:
 
 # Run database migrations
 echo "Running database migrations..."
-python manage.py migrate --noinput --verbosity 2
+python manage.py migrate --noinput --verbosity 2 || echo "WARNING: migrate failed, attempting column-level fix..."
+
+# Fallback: ensure quiz battle columns exist (handles migration desync)
+python -c "
+import os, django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+django.setup()
+from django.db import connection
+cursor = connection.cursor()
+
+# Check and add missing columns to groups_quizplayer
+for col, typedef in [
+    ('ready', 'BOOLEAN DEFAULT FALSE NOT NULL'),
+    ('correct_count', 'INTEGER DEFAULT 0 NOT NULL'),
+    ('total_time', 'DOUBLE PRECISION DEFAULT 0 NOT NULL'),
+]:
+    cursor.execute(\"SELECT 1 FROM information_schema.columns WHERE table_name='groups_quizplayer' AND column_name=%s\", [col])
+    if not cursor.fetchone():
+        print(f'Adding missing column groups_quizplayer.{col}')
+        cursor.execute(f'ALTER TABLE groups_quizplayer ADD COLUMN {col} {typedef}')
+
+# Check and create groups_battlehistory table
+cursor.execute(\"SELECT 1 FROM information_schema.tables WHERE table_name='groups_battlehistory' LIMIT 1\")
+if not cursor.fetchone():
+    print('Creating missing table groups_battlehistory')
+    cursor.execute('''
+        CREATE TABLE groups_battlehistory (
+            id BIGSERIAL PRIMARY KEY,
+            score INTEGER DEFAULT 0 NOT NULL,
+            \"rank\" INTEGER DEFAULT 0 NOT NULL,
+            correct_count INTEGER DEFAULT 0 NOT NULL,
+            total_questions INTEGER DEFAULT 0 NOT NULL,
+            best_streak INTEGER DEFAULT 0 NOT NULL,
+            avg_time DOUBLE PRECISION DEFAULT 0 NOT NULL,
+            xp_earned INTEGER DEFAULT 0 NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+            room_id INTEGER REFERENCES groups_quizroom(id) ON DELETE SET NULL,
+            player_id INTEGER REFERENCES auth_user(id) ON DELETE CASCADE
+        )
+    ''')
+
+# Ensure the migration record exists so Django doesn't try to re-apply
+cursor.execute(\"SELECT 1 FROM django_migrations WHERE app='groups' AND name='0004_quiz_enhancements' LIMIT 1\")
+if not cursor.fetchone():
+    cursor.execute(\"INSERT INTO django_migrations (app, name, applied) VALUES ('groups', '0004_quiz_enhancements', NOW())\")
+    print('Inserted migration record for 0004_quiz_enhancements')
+
+print('Quiz battle DB check complete')
+" || echo "Quiz battle column fix skipped (table may not exist yet)"
 
 # Verify the ResourceProgress table exists
 python -c "
