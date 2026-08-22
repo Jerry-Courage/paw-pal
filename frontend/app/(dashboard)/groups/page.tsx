@@ -114,7 +114,7 @@ function StreakFire({ streak }: { streak: number }) {
 
 function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () => void; onJoin: () => void; joinPin: string; setJoinPin: (v: string) => void }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col items-center justify-center px-4 py-8 h-[100dvh] overflow-y-auto"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center min-h-[100dvh] px-6 py-10 overflow-y-auto"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 24px)' }}>
       <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
         className="text-[72px] mb-4">
@@ -125,10 +125,10 @@ function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () =>
         Quiz Battle
       </motion.h1>
       <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
-        className="text-white/50 mb-10 text-center">Challenge friends in real-time quiz duels</motion.p>
+        className="text-white/50 mb-10 text-center px-4">Challenge friends in real-time quiz duels</motion.p>
 
       <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}
-        className="w-full max-w-sm mb-4">
+        className="w-full max-w-sm mb-4 px-2">
         <button onClick={onCreate}
           className="w-full py-5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg shadow-lg shadow-purple-500/25 active:scale-[0.98] transition-transform">
           <span className="material-symbols-outlined align-middle mr-2">add_circle</span>
@@ -137,11 +137,11 @@ function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () =>
       </motion.div>
 
       <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}
-        className="w-full max-w-sm bg-white/5 rounded-2xl p-5 border border-white/10">
+        className="w-full max-w-sm bg-white/5 rounded-2xl p-6 px-8 border border-white/10">
         <p className="text-white/60 text-sm font-medium mb-3 text-center">Join with PIN</p>
         <div className="flex gap-2">
           <input value={joinPin} onChange={e => setJoinPin(e.target.value.toUpperCase())}
-            placeholder="XXXXXX" maxLength={6}
+            placeholder="Enter PIN" maxLength={6}
             className="flex-1 bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-[0.3em] text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-purple-500/50 uppercase" />
           <button onClick={onJoin}
             className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-5 py-3 font-semibold text-white active:scale-[0.97] transition-all">
