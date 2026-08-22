@@ -137,14 +137,14 @@ function HomeScreen({ onCreate, onJoin, joinPin, setJoinPin }: { onCreate: () =>
       </motion.div>
 
       <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}
-        className="w-full max-w-sm bg-white/5 rounded-2xl p-6 px-8 border border-white/10">
+        className="w-full max-w-sm bg-white/5 rounded-2xl p-5 border border-white/10 overflow-hidden">
         <p className="text-white/60 text-sm font-medium mb-3 text-center">Join with PIN</p>
         <div className="flex gap-2">
           <input value={joinPin} onChange={e => setJoinPin(e.target.value.toUpperCase())}
             placeholder="Enter PIN" maxLength={6}
             className="flex-1 bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-[0.3em] text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-purple-500/50 uppercase" />
           <button onClick={onJoin}
-            className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-5 py-3 font-semibold text-white active:scale-[0.97] transition-all">
+            className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-4 py-3 font-semibold text-white active:scale-[0.97] transition-all shrink-0">
             Join
           </button>
         </div>
