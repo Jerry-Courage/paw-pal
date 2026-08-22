@@ -1,7 +1,7 @@
 'use client'
 import dynamic from 'next/dynamic'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -41,10 +41,15 @@ import {
   Copy as CopyIcon,
   Pin as PinIcon,
   Paperclip,
-  Video
+  Video,
+  SmilePlus,
+  Hash,
+  MessageCircle,
+  Wifi
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
+import StageNavigator from '@/components/workspace/StageNavigator'
 import { workspaceApi, libraryApi, assignmentsApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useSession } from 'next-auth/react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -54,6 +59,8 @@ import remarkGfm from 'remark-gfm'
 const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
 const PDFViewer = dynamic(() => import('@/components/library/PDFViewer'), { ssr: false })
 const ConfirmationModal = dynamic(() => import('@/components/ui/ConfirmationModal'), { ssr: false })
+
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '💡', '👀', '💪']
 
 export default function WorkspaceCollaborationStudio() {
   const { id } = useParams()
@@ -101,6 +108,15 @@ export default function WorkspaceCollaborationStudio() {
   const chunksRef = useRef<Blob[]>([])
   const qc = useQueryClient()
 
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const [reactions, setReactions] = useState<Record<string, Record<string, string[]>>>({})
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isMobileResourceOpen, setIsMobileResourceOpen] = useState(false)
+  const [currentStage, setCurrentStage] = useState<'ingest' | 'synthesize' | 'master'>('ingest')
+  const reactionPickerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     fetchWorkspace()
     fetchLibrary()
@@ -113,6 +129,16 @@ export default function WorkspaceCollaborationStudio() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (reactionPickerRef.current && !reactionPickerRef.current.contains(e.target as Node)) {
+        setReactionPickerMessageId(null)
+      }
+    }
+    if (reactionPickerMessageId) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [reactionPickerMessageId])
 
   const fetchWorkspace = async () => {
     try {
@@ -212,6 +238,8 @@ export default function WorkspaceCollaborationStudio() {
           } else if (data.type === 'broadcast_chat_message_delete') {
             const msgId = data.message_id
             setMessages(prev => prev.filter(m => String(m.id) !== String(msgId)))
+          } else if (data.type === 'presence_update') {
+            setOnlineUsers(new Set(data.online_users || []))
           }
         }
 
@@ -414,6 +442,7 @@ export default function WorkspaceCollaborationStudio() {
     if (workspace?.invite_code) {
       navigator.clipboard.writeText(workspace.invite_code)
       setCopied(true)
+      toast.success('Invite code copied!')
       setTimeout(() => setCopied(false), 2000)
     }
   }
@@ -464,6 +493,27 @@ export default function WorkspaceCollaborationStudio() {
     })
   }
 
+  const handleReact = useCallback((messageId: string, emoji: string) => {
+    const userId = session?.user?.id || 'me'
+    setReactions(prev => {
+      const msgReactions = { ...(prev[messageId] || {}) }
+      const users = [...(msgReactions[emoji] || [])]
+      const idx = users.indexOf(userId)
+      if (idx !== -1) {
+        users.splice(idx, 1)
+        if (users.length === 0) delete msgReactions[emoji]
+        else msgReactions[emoji] = users
+      } else {
+        msgReactions[emoji] = [...users, userId]
+      }
+      return { ...prev, [messageId]: msgReactions }
+    })
+  }, [session?.user?.id])
+
+  const filteredMessages = searchQuery.trim()
+    ? messages.filter(m => m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
+    : messages
+
   if (isLoading) return (
     <div className="fixed inset-0 bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
@@ -482,7 +532,7 @@ export default function WorkspaceCollaborationStudio() {
       {/* ═══════════════ HEADER ═══════════════ */}
       <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-outline-variant/20 bg-background z-20 flex-shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors flex-shrink-0">
+          <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
             <ChevronLeft className="w-4 h-4 text-on-surface-variant" />
           </button>
           <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -494,13 +544,21 @@ export default function WorkspaceCollaborationStudio() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Center: Stage Navigator */}
+        <div className="hidden lg:flex flex-1 justify-center px-4">
+          <StageNavigator currentStage={currentStage} onStageChange={setCurrentStage} />
+        </div>
+
+        <div className="flex items-center gap-1.5">
           {/* Member avatars */}
           <div className="hidden md:flex items-center -space-x-1.5 mr-2">
             {workspace?.members?.slice(0, 4).map((m: any, i: number) => (
               <div key={i} className="relative w-6 h-6 rounded-full border-2 border-background bg-slate-700 flex items-center justify-center text-[9px] font-bold uppercase text-on-surface">
                 {m.user?.username?.[0] || '?'}
-                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-background" />
+                <span className={cn(
+                  "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
+                  onlineUsers.has(String(m.user?.id)) ? "bg-emerald-500" : "bg-gray-500"
+                )} />
               </div>
             ))}
             {(workspace?.members?.length || 0) > 4 && (
@@ -510,10 +568,21 @@ export default function WorkspaceCollaborationStudio() {
             )}
           </div>
 
+          {/* Search toggle */}
+          <button 
+            onClick={() => { setIsSearchOpen(!isSearchOpen); if (isSearchOpen) setSearchQuery('') }}
+            className={cn(
+              "p-2 rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center",
+              isSearchOpen ? "bg-primary-container text-on-surface" : "bg-surface-container/40 hover:bg-surface-container/60 text-on-surface-variant"
+            )}
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
+
           {/* Invite code */}
           <button 
             onClick={copyInviteCode}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all min-h-[44px]"
           >
             <span className="text-[10px] font-bold text-on-surface-variant font-mono tracking-tight">{workspace?.invite_code}</span>
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60" />}
@@ -522,7 +591,7 @@ export default function WorkspaceCollaborationStudio() {
           {/* Knowledge bank button */}
           <button 
             onClick={() => setIsKnowledgeDrawerOpen(true)}
-            className="p-2 bg-primary-container rounded-lg hover:bg-primary-container/80 transition-all shadow-lg shadow-primary/20 active:scale-90"
+            className="p-2 bg-primary-container rounded-lg hover:bg-primary-container/80 transition-all shadow-lg shadow-primary/20 active:scale-90 min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <BookOpen className="w-3.5 h-3.5 text-on-surface" />
           </button>
@@ -531,7 +600,7 @@ export default function WorkspaceCollaborationStudio() {
           <div className="relative">
             <button 
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="p-2 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all"
+              className="p-2 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <Settings className="w-3.5 h-3.5 text-on-surface-variant" />
             </button>
@@ -562,6 +631,12 @@ export default function WorkspaceCollaborationStudio() {
                         {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60 group-hover:text-on-surface/80 transition-colors" />}
                       </button>
                     </div>
+                    <button 
+                      onClick={() => { setIsSearchOpen(!isSearchOpen); setIsSettingsOpen(false) }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all text-xs font-medium sm:hidden"
+                    >
+                      <Search className="w-3.5 h-3.5" /> Search messages
+                    </button>
                     {workspace?.is_owner ? (
                       <button 
                         onClick={handleDeleteWorkspace}
@@ -589,10 +664,45 @@ export default function WorkspaceCollaborationStudio() {
         </div>
       </header>
 
+      {/* ═══════════════ SEARCH BAR ═══════════════ */}
+      <AnimatePresence>
+        {isSearchOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-outline-variant/20 bg-surface-container-low overflow-hidden flex-shrink-0"
+          >
+            <div className="px-4 sm:px-8 py-2.5 flex items-center gap-3">
+              <Search className="w-4 h-4 text-on-surface-variant/60 flex-shrink-0" />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') { setIsSearchOpen(false); setSearchQuery('') } }}
+                placeholder="Search messages..."
+                className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none"
+              />
+              {searchQuery.trim() && (
+                <span className="text-[10px] text-on-surface-variant/60 font-medium whitespace-nowrap">
+                  {filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              <button
+                onClick={() => { setIsSearchOpen(false); setSearchQuery('') }}
+                className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2"
+              >
+                <X className="w-4 h-4 text-on-surface-variant/60" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ═══════════════ 3-COLUMN BODY ═══════════════ */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── LEFT PANEL: Resources (w-64) ── */}
+        {/* ── LEFT PANEL: Resources (w-56) ── */}
         <aside className="hidden md:flex w-56 flex-shrink-0 flex-col bg-surface-container border-r border-outline-variant/20 overflow-hidden">
           {/* Panel header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -602,7 +712,7 @@ export default function WorkspaceCollaborationStudio() {
               className="w-7 h-7 flex items-center justify-center rounded-full bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
               title="Add resource"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
+              <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -610,25 +720,23 @@ export default function WorkspaceCollaborationStudio() {
           <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2 custom-scrollbar">
             {(workspace?.resources || []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
-                <span className="material-symbols-outlined text-on-surface-variant/30" style={{ fontSize: 32 }}>folder_open</span>
+                <BookOpen className="w-8 h-8 text-on-surface-variant/30" />
                 <p className="text-[11px] text-on-surface-variant/50 leading-relaxed">No resources yet. Add from your library.</p>
               </div>
             ) : (workspace?.resources || []).map((res: any) => (
               <button
                 key={res.id}
                 onClick={() => { setViewingResource(res); setHubTab('insights'); setIsKnowledgeDrawerOpen(true) }}
-                className="w-full flex items-center gap-3 p-3 bg-surface-container-low border border-outline-variant/30 rounded-[1rem] hover:bg-surface-container-high transition-colors text-left group"
+                className="w-full flex items-center gap-3 p-3 bg-surface-container-low border border-outline-variant/30 rounded-[1rem] hover:bg-surface-container-high transition-colors text-left group min-h-[44px]"
               >
                 <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-primary-container" style={{ fontSize: 16 }}>
-                    {res.resource_type === 'pdf' ? 'picture_as_pdf' : res.resource_type === 'video' ? 'smart_display' : 'description'}
-                  </span>
+                  <BookOpen className="w-3.5 h-3.5 text-primary-container" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium text-on-surface truncate leading-tight">{res.title}</p>
                   <p className="text-[10px] text-on-surface-variant/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
                 </div>
-                <span className="material-symbols-outlined text-on-surface-variant/30 group-hover:text-on-surface-variant transition-colors" style={{ fontSize: 14 }}>chevron_right</span>
+                <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/30 group-hover:text-on-surface-variant transition-colors flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -637,9 +745,9 @@ export default function WorkspaceCollaborationStudio() {
           <div className="p-3 border-t border-outline-variant/20">
             <button
               onClick={() => { setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[1rem] bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-[11px] font-semibold text-on-surface-variant"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[1rem] bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-[11px] font-semibold text-on-surface-variant min-h-[44px]"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add_circle</span>
+              <Plus className="w-3.5 h-3.5" />
               Add from Library
             </button>
           </div>
@@ -657,21 +765,50 @@ export default function WorkspaceCollaborationStudio() {
             </div>
 
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-surface-container-high border border-outline-variant/25 flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-on-surface-variant/40" />
+              <div className="flex flex-col items-center justify-center py-20 gap-6">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/15 to-primary-container/10 border border-primary/20 flex items-center justify-center">
+                    <Sparkles className="w-8 h-8 text-primary-container" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <Wifi className="w-2.5 h-2.5 text-white" />
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium text-on-surface-variant">Start the conversation</p>
-                  <p className="text-xs text-on-surface-variant/40 mt-1">Send a message or mention @Flow for AI assistance</p>
+                <div className="text-center max-w-xs">
+                  <p className="text-sm font-semibold text-on-surface mb-1">Start collaborating</p>
+                  <p className="text-xs text-on-surface-variant/50 leading-relaxed">Send a message to kick things off, or mention @Flow for AI-powered help.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-2">
+                  <button
+                    onClick={() => { setInputText(''); document.querySelector<HTMLInputElement>('input[placeholder*="Message"]')?.focus() }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-primary-container text-on-surface rounded-xl text-xs font-semibold hover:bg-primary transition-all active:scale-95 min-h-[44px]"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    Send a message
+                  </button>
+                  <button
+                    onClick={() => { setInputText('@Flow '); document.querySelector<HTMLInputElement>('input[placeholder*="Message"]')?.focus() }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-tertiary-container/15 border border-tertiary-container/25 text-on-surface rounded-xl text-xs font-semibold hover:bg-tertiary-container/25 transition-all active:scale-95 min-h-[44px]"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                    Mention @Flow
+                  </button>
+                  <button
+                    onClick={() => setIsKnowledgeDrawerOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-high border border-outline-variant/30 text-on-surface-variant rounded-xl text-xs font-semibold hover:bg-surface-container-highest transition-all active:scale-95 min-h-[44px]"
+                  >
+                    <ShareIcon className="w-3.5 h-3.5" />
+                    Share a resource
+                  </button>
                 </div>
               </div>
             ) : (
               <>
-                {messages.map((ms, i) => {
+                {(searchQuery.trim() ? filteredMessages : messages).map((ms, i) => {
+                  const allMsgs = searchQuery.trim() ? filteredMessages : messages
                   const isMe = String(ms.author?.id) === String(session?.user?.id)
-                  const showAvatar = i === 0 || messages[i-1]?.author?.id !== ms.author?.id || messages[i-1]?.is_ai !== ms.is_ai
-                  const prevDate = i > 0 ? new Date(messages[i-1].created_at).toDateString() : null
+                  const showAvatar = i === 0 || allMsgs[i-1]?.author?.id !== ms.author?.id || allMsgs[i-1]?.is_ai !== ms.is_ai
+                  const prevDate = i > 0 ? new Date(allMsgs[i-1].created_at).toDateString() : null
                   const currDate = new Date(ms.created_at).toDateString()
                   const showDateSep = prevDate !== currDate
                   const today = new Date().toDateString()
@@ -700,11 +837,19 @@ export default function WorkspaceCollaborationStudio() {
                           setViewingResource(res)
                           setIsKnowledgeDrawerOpen(true)
                         }}
+                        reactions={reactions[String(ms.id)] || {}}
+                        onReact={handleReact}
                       />
                     </React.Fragment>
                   )
                 })}
               </>
+            )}
+            {searchQuery.trim() && filteredMessages.length === 0 && messages.length > 0 && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Search className="w-8 h-8 text-on-surface-variant/30" />
+                <p className="text-sm text-on-surface-variant/60">No messages match "{searchQuery}"</p>
+              </div>
             )}
             <div className="h-2" />
           </div>
@@ -727,7 +872,7 @@ export default function WorkspaceCollaborationStudio() {
                         <p className="text-xs text-on-surface-variant truncate italic">"{replyingTo.content}"</p>
                       </div>
                     </div>
-                    <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-surface-container-high rounded-md transition-colors flex-shrink-0">
+                    <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-surface-container-high rounded-md transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
                       <X className="w-3.5 h-3.5 text-on-surface-variant/60 hover:text-on-surface transition-colors" />
                     </button>
                   </motion.div>
@@ -754,7 +899,7 @@ export default function WorkspaceCollaborationStudio() {
               </AnimatePresence>
             </div>
 
-            <div className="bg-surface-container-low border-t border-outline-variant/20 px-4 sm:px-8 py-3">
+            <div className="bg-surface-container-low border-t border-outline-variant/20 px-4 sm:px-8 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
               {attachmentFile && (
                 <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
                   <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
@@ -775,7 +920,7 @@ export default function WorkspaceCollaborationStudio() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
+                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
@@ -792,7 +937,7 @@ export default function WorkspaceCollaborationStudio() {
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
                   className={cn(
-                    "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
+                    "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
                     isRecording ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" : "bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
                   )}
                 >
@@ -808,7 +953,7 @@ export default function WorkspaceCollaborationStudio() {
                   />
                   <button 
                     type="submit"
-                    className="mr-1.5 w-8 h-8 bg-tertiary rounded-full flex items-center justify-center hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 text-on-tertiary-container"
+                    className="mr-1.5 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 text-on-tertiary-container"
                     disabled={isRecording || !inputText.trim()}
                   >
                     <Send className="w-3.5 h-3.5" />
@@ -822,9 +967,197 @@ export default function WorkspaceCollaborationStudio() {
           </div>
         </main>
 
-        {/* ── RIGHT PANEL: Sidekick AI (w-80) ── */}
+        {/* ── RIGHT PANEL: Members & Stats (w-64) ── */}
+        <aside className="hidden md:flex w-64 flex-shrink-0 flex-col bg-surface-container border-l border-outline-variant/20 overflow-hidden">
+          {/* Stats section */}
+          <div className="px-4 pt-5 pb-3 border-b border-outline-variant/20">
+            <p className="text-[10px] font-bold tracking-widest uppercase text-primary mb-3">Workspace</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-1 p-2 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                <div className="flex items-center gap-1">
+                  <Users className="w-3 h-3 text-on-surface-variant/60" />
+                  <span className="text-sm font-bold text-on-surface">{workspace?.members?.length || 0}</span>
+                </div>
+                <span className="text-[9px] text-on-surface-variant/50">Members</span>
+                {onlineUsers.size > 0 && (
+                  <span className="text-[8px] text-emerald-400 font-medium">{onlineUsers.size} online</span>
+                )}
+              </div>
+              <div className="flex flex-col items-center gap-1 p-2 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                <div className="flex items-center gap-1">
+                  <MessageCircle className="w-3 h-3 text-on-surface-variant/60" />
+                  <span className="text-sm font-bold text-on-surface">{messages.length}</span>
+                </div>
+                <span className="text-[9px] text-on-surface-variant/50">Messages</span>
+              </div>
+              <div className="flex flex-col items-center gap-1 p-2 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                <div className="flex items-center gap-1">
+                  <BookOpen className="w-3 h-3 text-on-surface-variant/60" />
+                  <span className="text-sm font-bold text-on-surface">{workspace?.resources?.length || 0}</span>
+                </div>
+                <span className="text-[9px] text-on-surface-variant/50">Resources</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Members header */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <span className="text-xs font-bold tracking-widest uppercase text-primary">Members</span>
+            <button
+              onClick={copyInviteCode}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary-container rounded-lg transition-all text-[10px] font-semibold min-h-[44px]"
+            >
+              {copied ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+              {copied ? 'Copied' : 'Invite'}
+            </button>
+          </div>
+
+          {/* Member list */}
+          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1 custom-scrollbar">
+            {(workspace?.members || []).map((member: any) => {
+              const memberUser = member.user
+              const isOnline = onlineUsers.has(String(memberUser?.id))
+              const isMe = String(memberUser?.id) === String(session?.user?.id)
+              return (
+                <div
+                  key={member.id || memberUser?.id}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-high transition-colors"
+                >
+                  <div className="relative flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold uppercase text-on-surface">
+                      {memberUser?.username?.[0] || '?'}
+                    </div>
+                    <span className={cn(
+                      "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-container",
+                      isOnline ? "bg-emerald-500" : "bg-gray-600"
+                    )} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-medium text-on-surface truncate">
+                        {memberUser?.username || 'Member'}
+                      </p>
+                      {isMe && <span className="text-[8px] text-on-surface-variant/40">(you)</span>}
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant/50 capitalize truncate">
+                      {member.role || 'Member'}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Bottom: invite shortcut */}
+          <div className="p-3 border-t border-outline-variant/20">
+            <button
+              onClick={copyInviteCode}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-[11px] font-semibold text-on-surface-variant min-h-[44px]"
+            >
+              <Copy className="w-3 h-3" />
+              Copy Invite Code
+            </button>
+          </div>
+        </aside>
 
       </div>{/* end 3-col body */}
+
+      {/* ═══════════════ MOBILE BOTTOM BAR (Resources) ═══════════════ */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 pb-[env(safe-area-inset-bottom)]">
+        <div className="bg-surface-container-low border-t border-outline-variant/20 px-4 py-2 flex items-center justify-center">
+          <button
+            onClick={() => setIsMobileResourceOpen(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-primary-container text-on-surface rounded-xl text-xs font-semibold hover:bg-primary transition-all active:scale-95 shadow-lg shadow-primary/20 min-h-[44px]"
+          >
+            <BookOpen className="w-4 h-4" />
+            Resources
+            {workspace?.resources?.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-black/20 rounded-full text-[9px] font-bold">
+                {workspace.resources.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ═══════════════ MOBILE RESOURCE BOTTOM SHEET ═══════════════ */}
+      <AnimatePresence>
+        {isMobileResourceOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileResourceOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] md:hidden"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-background border-t border-outline-variant/25 z-[90] md:hidden rounded-t-2xl max-h-[75vh] flex flex-col"
+              style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/25">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-3.5 h-3.5 text-primary-container" />
+                  </div>
+                  <h2 className="text-sm font-semibold text-on-surface">Resources</h2>
+                </div>
+                <button
+                  onClick={() => setIsMobileResourceOpen(false)}
+                  className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-surface-container-high transition-colors"
+                >
+                  <X className="w-4 h-4 text-on-surface-variant" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                {(workspace?.resources || []).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <BookOpen className="w-10 h-10 text-on-surface-variant/30" />
+                    <p className="text-xs text-on-surface-variant/50 text-center">No resources yet. Add from your library.</p>
+                    <button
+                      onClick={() => { setIsMobileResourceOpen(false); setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-primary-container text-on-surface rounded-xl text-xs font-semibold min-h-[44px]"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add from Library
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {workspace.resources.map((res: any) => (
+                      <button
+                        key={res.id}
+                        onClick={() => { setIsMobileResourceOpen(false); setViewingResource(res); setHubTab('insights'); setIsKnowledgeDrawerOpen(true) }}
+                        className="w-full flex items-center gap-3 p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl text-left min-h-[44px]"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <BookOpen className="w-3.5 h-3.5 text-primary-container" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-on-surface truncate">{res.title}</p>
+                          <p className="text-[10px] text-on-surface-variant/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/40 flex-shrink-0" />
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => { setIsMobileResourceOpen(false); setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-container-high border border-outline-variant/30 text-xs font-semibold text-on-surface-variant min-h-[44px]"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add from Library
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ═══════════════ KNOWLEDGE DRAWER ═══════════════ */}
       <AnimatePresence>
@@ -865,7 +1198,7 @@ export default function WorkspaceCollaborationStudio() {
                         setIsKnowledgeDrawerOpen(false)
                       }
                     }} 
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest rounded-xl transition-all text-on-surface/80 hover:text-on-surface"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest rounded-xl transition-all text-on-surface/80 hover:text-on-surface min-h-[44px]"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span className="text-xs font-semibold">Back</span>
@@ -878,11 +1211,11 @@ export default function WorkspaceCollaborationStudio() {
                 <div className="px-5 py-3 flex items-center gap-1.5 border-b border-outline-variant/25">
                   <button 
                     onClick={() => setHubTab('insights')}
-                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all", hubTab === 'insights' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
+                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all min-h-[44px]", hubTab === 'insights' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
                   >AI Insights</button>
                   <button 
                     onClick={() => setHubTab('source')}
-                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all", hubTab === 'source' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
+                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all min-h-[44px]", hubTab === 'source' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
                   >Source PDF</button>
                 </div>
               )}
@@ -893,11 +1226,11 @@ export default function WorkspaceCollaborationStudio() {
                     <motion.div key="list" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col p-5 space-y-4 overflow-hidden">
                       <div className="flex items-center justify-between">
                         <div className="flex gap-1 p-1 bg-surface-container-high rounded-lg border border-outline-variant/25">
-                          <button onClick={() => setHubView('shared')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all", hubView === 'shared' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Shared</button>
-                          <button onClick={() => setHubView('library')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all", hubView === 'library' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Library</button>
+                          <button onClick={() => setHubView('shared')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all min-h-[44px]", hubView === 'shared' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Shared</button>
+                          <button onClick={() => setHubView('library')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all min-h-[44px]", hubView === 'library' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Library</button>
                         </div>
                         {hubView === 'shared' && (
-                          <button onClick={() => setHubView('library')} className="p-1.5 bg-primary/10 text-primary-container rounded-lg hover:bg-primary-container hover:text-on-surface transition-all" title="Add from Library">
+                          <button onClick={() => setHubView('library')} className="p-1.5 bg-primary/10 text-primary-container rounded-lg hover:bg-primary-container hover:text-on-surface transition-all min-w-[44px] min-h-[44px] flex items-center justify-center" title="Add from Library">
                             <Plus className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -909,11 +1242,11 @@ export default function WorkspaceCollaborationStudio() {
                               <div className="text-center py-12">
                                 <BookOpen className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
                                 <p className="text-xs text-on-surface-variant/60 font-medium">No shared resources yet</p>
-                                <button onClick={() => setHubView('library')} className="mt-3 text-xs text-primary-container font-medium hover:text-primary transition-colors">+ Add from library</button>
+                                <button onClick={() => setHubView('library')} className="mt-3 text-xs text-primary-container font-medium hover:text-primary transition-colors min-h-[44px] inline-flex items-center">+ Add from library</button>
                               </div>
                             ) : (workspace.resources.map((res: any) => (
                               <div key={res.id} className="group relative">
-                                <button onClick={() => { setViewingResource(res); setHubTab('insights') }} className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl transition-all text-left flex items-start gap-3 hover:border-primary/20 active:scale-[0.98]">
+                                <button onClick={() => { setViewingResource(res); setHubTab('insights') }} className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl transition-all text-left flex items-start gap-3 hover:border-primary/20 active:scale-[0.98] min-h-[44px]">
                                   <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-primary-container" /></div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-on-surface truncate">{res.title}</p>
@@ -933,14 +1266,14 @@ export default function WorkspaceCollaborationStudio() {
                               </div>
                             ) : libraryResources.filter(res => !workspace?.resources?.some((r: any) => r.id === res.id)).map((res) => (
                               <div key={res.id} className="group relative">
-                                <div className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl flex items-start gap-3">
+                                <div className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl flex items-start gap-3 min-h-[44px]">
                                   <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-on-surface-variant/60" /></div>
                                   <div className="flex-1 min-w-0 pr-8">
                                     <p className="text-sm font-medium text-on-surface-variant truncate">{res.title}</p>
                                     <p className="text-[10px] text-on-surface-variant/40 mt-0.5">In your library</p>
                                   </div>
                                 </div>
-                                <button onClick={() => handleShareResource(res.id)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary-container rounded-lg group-hover:bg-primary-container group-hover:text-on-surface transition-all" title="Add to Workspace">
+                                <button onClick={() => handleShareResource(res.id)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary-container rounded-lg group-hover:bg-primary-container group-hover:text-on-surface transition-all min-w-[44px] min-h-[44px] flex items-center justify-center" title="Add to Workspace">
                                   <Plus className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -999,17 +1332,17 @@ export default function WorkspaceCollaborationStudio() {
                       </div>
                       <div className="p-5 border-t border-outline-variant/25 space-y-2.5">
                         <div className="grid grid-cols-2 gap-2">
-                          <button onClick={() => { const link = document.createElement('a'); link.href = viewingResource.file_url; link.download = viewingResource.title; link.click() }} className="py-2.5 bg-surface-container-high border border-outline-variant/40 text-on-surface/80 rounded-xl text-xs font-medium hover:border-outline-variant/70 transition-all flex items-center justify-center gap-2">
+                          <button onClick={() => { const link = document.createElement('a'); link.href = viewingResource.file_url; link.download = viewingResource.title; link.click() }} className="py-2.5 bg-surface-container-high border border-outline-variant/40 text-on-surface/80 rounded-xl text-xs font-medium hover:border-outline-variant/70 transition-all flex items-center justify-center gap-2 min-h-[44px]">
                             <Download className="w-3.5 h-3.5 text-on-surface-variant/60" /> Download
                           </button>
                           {viewingResource.owner?.id !== session?.user?.id && (
-                            <button onClick={handleCloneResource} disabled={isCloning} className={cn("py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2", isCloning ? "bg-slate-800 text-on-surface-variant/60 cursor-not-allowed" : "bg-primary-container text-on-surface hover:bg-primary shadow-lg shadow-primary/20 active:scale-95")}>
+                            <button onClick={handleCloneResource} disabled={isCloning} className={cn("py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 min-h-[44px]", isCloning ? "bg-slate-800 text-on-surface-variant/60 cursor-not-allowed" : "bg-primary-container text-on-surface hover:bg-primary shadow-lg shadow-primary/20 active:scale-95")}>
                               {isCloning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
                               {isCloning ? 'Saving...' : 'Save to Library'}
                             </button>
                           )}
                         </div>
-                        <button onClick={() => handleShareResource(viewingResource.id)} className="w-full py-3 bg-surface-container-high border border-primary/20 text-primary-container rounded-xl text-xs font-medium hover:bg-primary/10 transition-all flex items-center justify-center gap-2">
+                        <button onClick={() => handleShareResource(viewingResource.id)} className="w-full py-3 bg-surface-container-high border border-primary/20 text-primary-container rounded-xl text-xs font-medium hover:bg-primary/10 transition-all flex items-center justify-center gap-2 min-h-[44px]">
                           <Pin className="w-3.5 h-3.5" /> Share to chat
                         </button>
                       </div>
@@ -1043,6 +1376,16 @@ export default function WorkspaceCollaborationStudio() {
         }
       `}</style>
     </div>
+  )
+}
+
+function ShareIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <polyline points="16 6 12 2 8 6" />
+      <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
   )
 }
 
@@ -1133,14 +1476,18 @@ function MessageBubble({
   showAvatar = true, 
   onReply, 
   onViewResource,
-  workspaceId
+  workspaceId,
+  reactions = {},
+  onReact
 }: { 
   message: any, 
   isMe: boolean, 
   showAvatar?: boolean, 
   onReply: () => void, 
   onViewResource: (res: any) => void,
-  workspaceId: number
+  workspaceId: number,
+  reactions?: Record<string, string[]>,
+  onReact?: (messageId: string, emoji: string) => void
 }) {
   const isAI = message.is_ai
   const [isEditing, setIsEditing] = useState(false)
@@ -1148,8 +1495,10 @@ function MessageBubble({
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+  const reactionPickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1160,6 +1509,16 @@ function MessageBubble({
     if (isMenuOpen) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isMenuOpen])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (reactionPickerRef.current && !reactionPickerRef.current.contains(e.target as Node)) {
+        setShowReactionPicker(false)
+      }
+    }
+    if (showReactionPicker) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showReactionPicker])
 
   const handleLongPress = () => {
     setIsMenuOpen(true)
@@ -1192,6 +1551,9 @@ function MessageBubble({
     toast.success('Copied to clipboard')
     setIsMenuOpen(false)
   }
+
+  const messageId = String(message.id)
+  const hasReactions = Object.keys(reactions).length > 0
 
   return (
     <motion.div 
@@ -1263,6 +1625,44 @@ function MessageBubble({
             </button>
           )}
 
+          {/* Reaction picker trigger (desktop) */}
+          {!isAI && !isEditing && (
+            <button
+              onClick={() => setShowReactionPicker(!showReactionPicker)}
+              className={cn(
+                "absolute -bottom-2 opacity-0 group-hover:opacity-100 p-1 rounded-full bg-surface-container-high border border-outline-variant/25 text-on-surface-variant hover:text-primary-container transition-all z-20 min-w-[44px] min-h-[44px] flex items-center justify-center",
+                isMe ? "left-2" : "right-2"
+              )}
+            >
+              <SmilePlus className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <AnimatePresence>
+            {showReactionPicker && (
+              <motion.div
+                ref={reactionPickerRef}
+                initial={{ opacity: 0, scale: 0.9, y: 4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 4 }}
+                className={cn(
+                  "absolute bottom-full mb-3 flex items-center gap-1 p-2 bg-surface-container-high border border-outline-variant/40 rounded-2xl shadow-2xl z-[100]",
+                  isMe ? "right-0" : "left-0"
+                )}
+              >
+                {REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => { onReact?.(messageId, emoji); setShowReactionPicker(false) }}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-surface-container-highest transition-all text-lg active:scale-125"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <AnimatePresence>
             {isMenuOpen && (
               <motion.div 
@@ -1275,19 +1675,22 @@ function MessageBubble({
                   isMe ? "right-0" : "left-0"
                 )}
               >
-                <button onClick={copyToClipboard} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all">
+                <button onClick={() => { setShowReactionPicker(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
+                  <SmilePlus className="w-3 h-3" /> React
+                </button>
+                <button onClick={copyToClipboard} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
                   <CopyIcon className="w-3 h-3" /> Copy text
                 </button>
                 {isMe && !message.audio_file && (
-                  <button onClick={() => { setIsEditing(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all">
+                  <button onClick={() => { setIsEditing(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
                 )}
-                <button onClick={onReply} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all">
+                <button onClick={onReply} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
                   <Reply className="w-3 h-3" /> Reply
                 </button>
                 {(isMe || message.is_owner) && (
-                  <button onClick={() => { handleDelete(); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
+                  <button onClick={() => { handleDelete(); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-red-400 hover:bg-red-500/10 rounded-lg transition-all min-h-[44px]">
                     <Trash2 className="w-3 h-3" /> Delete
                   </button>
                 )}
@@ -1308,8 +1711,8 @@ function MessageBubble({
                 className="w-full bg-black/40 border border-primary/30 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none min-h-[60px]"
               />
               <div className="flex justify-end gap-1.5">
-                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-on-surface-variant/60 hover:text-on-surface/80">Cancel</button>
-                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-primary-container text-on-surface rounded-lg hover:bg-primary">Save</button>
+                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-on-surface-variant/60 hover:text-on-surface/80 min-h-[44px]">Cancel</button>
+                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-primary-container text-on-surface rounded-lg hover:bg-primary min-h-[44px]">Save</button>
               </div>
             </div>
           ) : (message.audio_file || message.audio_data) ? (
@@ -1358,11 +1761,32 @@ function MessageBubble({
               )}
             </>
           )}
+
+          {/* Existing reactions row */}
+          {hasReactions && (
+            <div className={cn("flex flex-wrap gap-1 mt-2", isAI ? "" : "")}>
+              {Object.entries(reactions).map(([emoji, users]) => (
+                <button
+                  key={emoji}
+                  onClick={() => onReact?.(messageId, emoji)}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-all min-h-[28px]",
+                    users.length > 0
+                      ? "bg-primary/10 border-primary/20 hover:bg-primary/20"
+                      : "bg-surface-container-high border-outline-variant/20 hover:bg-surface-container-highest"
+                  )}
+                >
+                  <span>{emoji}</span>
+                  <span className="text-[9px] font-medium text-on-surface-variant/70">{users.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
           
           {message.pinned_resource_data && (
             <div 
               onClick={() => onViewResource(message.pinned_resource_data)}
-              className="mt-3 p-3 bg-black/30 border border-outline-variant/25 rounded-xl flex items-center gap-3 hover:border-primary/20 transition-all cursor-pointer group/res"
+              className="mt-3 p-3 bg-black/30 border border-outline-variant/25 rounded-xl flex items-center gap-3 hover:border-primary/20 transition-all cursor-pointer group/res min-h-[44px]"
             >
               <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
                 <BookOpen className="w-3.5 h-3.5 text-primary-container" />
@@ -1401,7 +1825,7 @@ function MessageBubble({
                       toast.error('Failed to export PDF.', { id: 'export-toast' })
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all"
+                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all min-h-[44px]"
                 >
                   <Download className="w-3 h-3" /> PDF
                 </button>
@@ -1418,7 +1842,7 @@ function MessageBubble({
                       toast.error('Failed to export Word.', { id: 'export-toast' })
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all"
+                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all min-h-[44px]"
                 >
                   <CloudDownload className="w-3 h-3" /> Word
                 </button>
@@ -1448,7 +1872,7 @@ function MessageBubble({
             className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-4"
             onClick={() => setLightboxUrl(null)}
           >
-            <button className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all z-10" onClick={() => setLightboxUrl(null)}>
+            <button className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all z-10 min-w-[44px] min-h-[44px] flex items-center justify-center" onClick={() => setLightboxUrl(null)}>
               <X className="w-5 h-5 text-white" />
             </button>
             <motion.img
