@@ -27,7 +27,9 @@ function OptionShape({ index, className = "w-6 h-6 fill-current shrink-0" }: { i
   }
 }
 
-function useSound() {
+function useSound(muted: boolean) {
+  const mutedRef = useRef(muted)
+  mutedRef.current = muted
   const ctx = useRef<AudioContext | null>(null)
   const ensure = () => {
     if (!ctx.current) {
@@ -38,6 +40,7 @@ function useSound() {
     return ctx.current
   }
   const play = useCallback((freq: number, type: OscillatorType, dur: number, vol = 0.18) => {
+    if (mutedRef.current) return
     try {
       const c = ensure(); if (!c) return
       const osc = c.createOscillator(); const gain = c.createGain()
@@ -108,6 +111,61 @@ function StreakFire({ streak }: { streak: number }) {
         🔥
       </motion.span>
       <span className="text-sm font-bold text-orange-400">{streak}x</span>
+    </motion.div>
+  )
+}
+
+function ChatPanel({ messages, onSend, onClose }: { messages: { username: string; message: string }[]; onSend: (msg: string) => void; onClose: () => void }) {
+  const [input, setInput] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim()) return
+    onSend(input.trim())
+    setInput('')
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 300 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 300 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      className="fixed right-0 top-0 bottom-0 w-80 bg-[#0d091b]/95 backdrop-blur-xl border-l border-white/10 z-40 flex flex-col"
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+        <h3 className="font-bold text-sm">Chat</h3>
+        <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+          <span className="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {messages.length === 0 && (
+          <p className="text-white/30 text-xs text-center mt-10">No messages yet</p>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} className="bg-white/5 rounded-xl px-3 py-2">
+            <p className="text-xs font-bold text-purple-400">{m.username}</p>
+            <p className="text-sm text-white/80">{m.message}</p>
+          </div>
+        ))}
+      </div>
+      <form onSubmit={handleSubmit} className="flex gap-2 px-4 py-3 border-t border-white/10">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="Type a message..."
+          className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+        />
+        <button type="submit" className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-sm">send</span>
+        </button>
+      </form>
     </motion.div>
   )
 }
@@ -327,8 +385,8 @@ function CreateScreen({ onBack, onCreated }: { onBack: () => void; onCreated: (p
   )
 }
 
-function LobbyScreen({ pin, players, isHost, onStart, onLeave, onToggleReady, me, isStarting, isConnecting }: {
-  pin: string; players: Player[]; isHost: boolean; onStart: () => void; onLeave: () => void; onToggleReady: () => void; me: string; isStarting: boolean; isConnecting: boolean
+function LobbyScreen({ pin, players, isHost, onStart, onLeave, onToggleReady, me, isStarting, isConnecting, isRematch, onToggleMute, muted, onToggleChat }: {
+  pin: string; players: Player[]; isHost: boolean; onStart: () => void; onLeave: () => void; onToggleReady: () => void; me: string; isStarting: boolean; isConnecting: boolean; isRematch: boolean; onToggleMute: () => void; muted: boolean; onToggleChat: () => void
 }) {
   const [copied, setCopied] = useState(false)
   const mePlayer = players.find(p => p.username === me)
@@ -355,7 +413,24 @@ function LobbyScreen({ pin, players, isHost, onStart, onLeave, onToggleReady, me
         </button>
         <h2 className="text-xl font-bold">Lobby</h2>
         {isConnecting && <span className="text-xs text-amber-400 animate-pulse">Connecting...</span>}
+        <div className="flex-1" />
+        <button onClick={onToggleMute} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+          <span className="material-symbols-outlined text-sm text-white">{muted ? 'volume_off' : 'volume_up'}</span>
+        </button>
+        <button onClick={onToggleChat} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+          <span className="material-symbols-outlined text-sm text-white">chat_bubble</span>
+        </button>
       </div>
+
+      {isRematch && (
+        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+          className="bg-purple-500/15 border border-purple-500/30 rounded-xl p-3 mb-4 text-center">
+          <p className="text-sm font-bold text-purple-400">
+            <span className="material-symbols-outlined text-sm align-middle mr-1">replay</span>
+            Rematch in progress! Get ready to play again.
+          </p>
+        </motion.div>
+      )}
 
       <div className="flex-1 flex flex-col items-center">
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
@@ -464,12 +539,35 @@ function CountdownScreen({ count }: { count: number }) {
   )
 }
 
-function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, onReact, answeredCount, players, me }: {
+function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, onReact, answeredCount, players, me, onToggleMute, muted, onToggleChat }: {
   question: Question; timeLeft: number; setTimeLeft: (v: number) => void; answered: string | null;
   onAnswer: (choice: string) => void; onReact: (emoji: string) => void;
-  answeredCount: { answered: number; total: number }; players: Player[]; me: string
+  answeredCount: { answered: number; total: number }; players: Player[]; me: string;
+  onToggleMute: () => void; muted: boolean; onToggleChat: () => void
 }) {
-  const maxStreak = useMemo(() => Math.max(0, ...players.map(p => p.streak || 0)), [players])
+  const myStreak = useMemo(() => players.find(p => p.username === me)?.streak || 0, [players, me])
+  const [showExplanation, setShowExplanation] = useState(false)
+
+  useEffect(() => {
+    if (answered && question.explanation) {
+      const timer = setTimeout(() => setShowExplanation(true), 1500)
+      return () => clearTimeout(timer)
+    }
+    setShowExplanation(false)
+  }, [answered, question.explanation])
+
+  useEffect(() => {
+    if (answered) return
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key.toUpperCase()
+      if (['A', 'B', 'C', 'D'].includes(key)) {
+        e.preventDefault()
+        onAnswer(key)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [answered, onAnswer])
   const timerPct = (timeLeft / question.time_limit) * 100
   const timerColor = timerPct > 50 ? 'text-emerald-400' : timerPct > 25 ? 'text-amber-400' : 'text-red-400'
   const barColor = timerPct > 50 ? 'bg-emerald-500' : timerPct > 25 ? 'bg-amber-500' : 'bg-red-500'
@@ -489,10 +587,16 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-white/60">Q{question.idx}/{question.total}</span>
-            <StreakFire streak={maxStreak} />
+            <StreakFire streak={myStreak} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/40">{answeredCount.answered}/{answeredCount.total} answered</span>
+            <button onClick={onToggleMute} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm text-white">{muted ? 'volume_off' : 'volume_up'}</span>
+            </button>
+            <button onClick={onToggleChat} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm text-white">chat_bubble</span>
+            </button>
             <div className="relative w-10 h-10">
               <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                 <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
@@ -537,6 +641,19 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
             )
           })}
         </div>
+
+        <AnimatePresence>
+          {showExplanation && question.explanation && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+              className="mt-4 bg-purple-500/15 border border-purple-500/25 rounded-xl p-4 w-full max-w-lg">
+              <p className="text-xs text-purple-400 font-medium mb-1">
+                <span className="material-symbols-outlined text-sm align-middle mr-1">lightbulb</span>
+                Explanation
+              </p>
+              <p className="text-sm text-white/70 leading-relaxed">{question.explanation}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="px-4 pb-4">
@@ -557,6 +674,11 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
   const myResult = result.results.find(r => r.username === me)
   const isCorrect = answered === result.correct
   const myRank = result.leaderboard.findIndex(p => p.username === me) + 1
+
+  const fastestCorrect = useMemo(() => {
+    const correctResults = result.results.filter(r => r.is_correct && r.time_taken > 0)
+    return correctResults.length > 0 ? correctResults.reduce((a, b) => a.time_taken < b.time_taken ? a : b) : null
+  }, [result.results])
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -616,7 +738,12 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
                 r.username === me ? 'border-purple-500/40' : 'border-white/10')}>
               <span className="text-lg">{r.is_correct ? '✅' : '❌'}</span>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{r.username}{r.username === me ? ' (You)' : ''}</p>
+                <p className="font-semibold text-sm truncate">
+                  {r.username}{r.username === me ? ' (You)' : ''}
+                  {r.username === fastestCorrect?.username && (
+                    <span className="text-yellow-400 text-xs font-bold ml-1">⚡ Fastest!</span>
+                  )}
+                </p>
                 <p className="text-xs text-white/40">{r.time_taken.toFixed(1)}s</p>
               </div>
               <span className={cn("font-bold text-sm", r.points > 0 ? 'text-emerald-400' : 'text-white/30')}>
@@ -806,7 +933,8 @@ function GameOverScreen({ leaderboard, me, onPlayAgain, onGoHome, totalQuestions
 
 export default function QuizBattlePage() {
   const { data: session } = useSession()
-  const snd = useSound()
+  const [muted, setMuted] = useState(false)
+  const snd = useSound(muted)
   const me = session?.user?.username || session?.user?.name || 'You'
 
   const [screen, setScreen]               = useState<Screen>('home')
@@ -829,6 +957,8 @@ export default function QuizBattlePage() {
   const [answeredCount, setAnsweredCount] = useState({ answered: 0, total: 0 })
   const [chatMessages, setChatMessages]   = useState<{username: string; message: string}[]>([])
   const [totalQuestions, setTotalQuestions] = useState(0)
+  const [showChat, setShowChat]           = useState(false)
+  const [isRematch, setIsRematch]         = useState(false)
 
   const wsRef        = useRef<WebSocket | null>(null)
   const qStartRef    = useRef<number>(0)
@@ -946,6 +1076,7 @@ export default function QuizBattlePage() {
         break
       case 'rematch_start':
         toast.success('Rematch starting!', { icon: '⚡' })
+        setIsRematch(true)
         setScreen('lobby')
         setQuestion(null)
         setRoundResult(null)
@@ -1003,13 +1134,21 @@ export default function QuizBattlePage() {
     wsRef.current?.send(JSON.stringify({ type: 'chat_message', message: message.trim() }))
   }
 
-  const goHome = () => { disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false); setChatMessages([]) }
+  const goHome = () => { disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false); setChatMessages([]); setIsRematch(false); setShowChat(false) }
+
+  const vibrate = (ms: number | number[]) => {
+    try { (navigator as any)?.vibrate?.(ms) } catch {}
+  }
+
+  const handleToggleMute = useCallback(() => setMuted(prev => !prev), [])
+  const handleToggleChat = useCallback(() => setShowChat(prev => !prev), [])
 
   useEffect(() => {
     if (screen !== 'round_result' || !roundResult || !answered) return
     const isCorrect = answered === roundResult.correct
     if (isCorrect) {
       snd.correct()
+      vibrate(50)
       const myResult = roundResult.results.find(r => r.username === me)
       if (myResult && myResult.points > 0) {
         setFloatingScore({ points: myResult.points, show: true })
@@ -1018,6 +1157,7 @@ export default function QuizBattlePage() {
       }
     } else {
       snd.wrong()
+      vibrate([30, 50, 30])
     }
   }, [screen, roundResult, answered, me, snd])
 
@@ -1035,12 +1175,15 @@ export default function QuizBattlePage() {
         <AnimatePresence mode="wait">
           {screen === 'home'        && <HomeScreen     key="home"     onCreate={() => setScreen('create')} onJoin={handleJoinRoom} joinPin={joinPinInput} setJoinPin={setJoinPinInput} />}
           {screen === 'create'      && <CreateScreen   key="create"   onBack={() => setScreen('home')} onCreated={async (roomPin, host) => { setPin(roomPin); setIsHost(host); await connect(roomPin); setScreen('lobby') }} />}
-          {screen === 'lobby'       && <LobbyScreen    key="lobby"    pin={pin} players={players} isHost={isHost} onStart={handleStartGame} onLeave={goHome} onToggleReady={handleToggleReady} me={me} isStarting={isStarting} isConnecting={isConnecting} />}
+          {screen === 'lobby'       && <LobbyScreen    key="lobby"    pin={pin} players={players} isHost={isHost} onStart={handleStartGame} onLeave={goHome} onToggleReady={handleToggleReady} me={me} isStarting={isStarting} isConnecting={isConnecting} isRematch={isRematch} onToggleMute={handleToggleMute} muted={muted} onToggleChat={handleToggleChat} />}
           {screen === 'countdown'   && <CountdownScreen key="countdown" count={countNum} />}
-          {screen === 'question'    && question && <QuestionScreen key={`q-${question.idx}`} question={question} timeLeft={timeLeft} setTimeLeft={setTimeLeft} answered={answered} onAnswer={handleAnswer} onReact={handleSendReaction} answeredCount={answeredCount} players={players} me={me} />}
+          {screen === 'question'    && question && <QuestionScreen key={`q-${question.idx}`} question={question} timeLeft={timeLeft} setTimeLeft={setTimeLeft} answered={answered} onAnswer={handleAnswer} onReact={handleSendReaction} answeredCount={answeredCount} players={players} me={me} onToggleMute={handleToggleMute} muted={muted} onToggleChat={handleToggleChat} />}
           {screen === 'round_result' && roundResult && <RoundResultScreen key="result" result={roundResult} answered={answered} me={me} isHost={isHost} />}
           {screen === 'leaderboard' && <LeaderboardScreen key="lb" leaderboard={leaderboard} me={me} />}
           {screen === 'game_over'   && <GameOverScreen  key="gameover" leaderboard={leaderboard} me={me} onPlayAgain={handleRematch} onGoHome={goHome} totalQuestions={totalQuestions} />}
+        </AnimatePresence>
+        <AnimatePresence>
+          {showChat && <ChatPanel messages={chatMessages} onSend={handleSendChat} onClose={() => setShowChat(false)} />}
         </AnimatePresence>
       </div>
     </div>
