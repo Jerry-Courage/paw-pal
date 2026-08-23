@@ -522,10 +522,10 @@ export default function WorkspaceCollaborationStudio() {
   )
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#0b0b1e] text-white overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-[#0b0b1e] text-white overflow-hidden" style={{ maxWidth: '100vw', maxHeight: '100dvh' }}>
 
       {/* ═══════════════ HEADER ═══════════════ */}
-      <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-white/[0.06] bg-[#0b0b1e] z-20 flex-shrink-0">
+      <header className="h-12 sm:h-14 flex items-center justify-between px-3 sm:px-5 border-b border-white/[0.06] bg-[#0b0b1e] z-20 flex-shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
           <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-white/[0.04] rounded-lg transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
             <ChevronLeft className="w-4 h-4 text-[#94a3b8]" />
@@ -755,12 +755,12 @@ export default function WorkspaceCollaborationStudio() {
         </aside>
 
         {/* ── CENTER PANEL: Collaborative Chat ── */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-6 space-y-1 scroll-smooth custom-scrollbar">
-            <div className="mb-6">
-              <h2 className="text-[28px] font-bold text-white leading-tight">{workspace?.name || 'Collab Space'}</h2>
-              {workspace?.subject && <p className="text-sm text-[#94a3b8] mt-1">{workspace.subject}</p>}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-6 py-4 space-y-1 scroll-smooth custom-scrollbar">
+            <div className="mb-4 sm:mb-6 min-w-0">
+              <h2 className="text-xl sm:text-[28px] font-bold text-white leading-tight truncate">{workspace?.name || 'Collab Space'}</h2>
+              {workspace?.subject && <p className="text-xs sm:text-sm text-[#94a3b8] mt-1 truncate">{workspace.subject}</p>}
             </div>
 
             {messages.length === 0 ? (
@@ -855,7 +855,7 @@ export default function WorkspaceCollaborationStudio() {
 
           {/* ── Input Area ── */}
           <div className="relative">
-            <div className="absolute bottom-[calc(100%+4px)] left-0 right-0 px-4 sm:px-8 space-y-1.5 pointer-events-none">
+            <div className="absolute bottom-full left-0 right-0 px-3 sm:px-6 space-y-1.5 pointer-events-none z-10">
               <AnimatePresence mode="wait">
                 {replyingTo && (
                   <motion.div
@@ -898,7 +898,7 @@ export default function WorkspaceCollaborationStudio() {
               </AnimatePresence>
             </div>
 
-            <div className="bg-[#12122a] border-t border-white/[0.06] px-4 sm:px-8 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+            <div className="bg-[#12122a] border-t border-white/[0.06] px-3 sm:px-6 py-2.5 pb-[max(10px,env(safe-area-inset-bottom))]">
               {attachmentFile && (
                 <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
                   <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
@@ -915,11 +915,11 @@ export default function WorkspaceCollaborationStudio() {
                   </div>
                 </div>
               )}
-              <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2.5">
+              <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 sm:gap-2.5">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-white/[0.04] text-[#94a3b8]/60 hover:text-white hover:bg-white/[0.08]"
+                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-white/[0.04] text-[#94a3b8]/60 hover:text-white hover:bg-white/[0.08]"
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
@@ -936,7 +936,7 @@ export default function WorkspaceCollaborationStudio() {
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
                   className={cn(
-                    "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
+                    "w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
                     isRecording ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" : "bg-white/[0.04] text-[#94a3b8]/60 hover:text-white hover:bg-white/[0.08]"
                   )}
                 >
@@ -966,7 +966,7 @@ export default function WorkspaceCollaborationStudio() {
                   </button>
                 </div>
               </form>
-              <p className="text-center text-[10px] text-[#94a3b8]/40 mt-2 max-w-4xl mx-auto">
+              <p className="text-center text-[10px] text-[#94a3b8]/40 mt-1.5 max-w-4xl mx-auto hidden sm:block">
                 {isRecording ? "Tap mic to stop & send" : "Press Enter to send • Shift + Enter for new line"}
               </p>
             </div>
@@ -1639,7 +1639,7 @@ function MessageBubble({
         <div className="w-7 flex-shrink-0" />
       )}
 
-      <div className={cn("flex flex-col max-w-[85%] sm:max-w-[70%]", isMe ? 'items-end' : 'items-start')}>
+      <div className={cn("flex flex-col max-w-[85%] sm:max-w-[70%] min-w-0", isMe ? 'items-end' : 'items-start')}>
         {showAvatar && (
           <div className={cn("flex items-center gap-1.5 mb-1 px-1", isMe ? 'flex-row-reverse' : '')}>
             <span className="text-[11px] font-medium text-[#94a3b8]">
@@ -1660,14 +1660,14 @@ function MessageBubble({
         )}
 
         <div className={cn(
-          "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg transition-all duration-200",
+          "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg transition-all duration-200 break-words overflow-hidden",
           isAI
             ? 'bg-[#1a1a2e] border-l-2 border-purple-500/40 text-white rounded-2xl rounded-bl-md'
             : isMe
               ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] text-white rounded-2xl rounded-br-md'
               : 'bg-[#1a1a2e] border border-white/[0.08] text-white rounded-2xl rounded-bl-md',
           isDeleting && "opacity-40 grayscale pointer-events-none"
-        )}>
+        )} style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
           {!isAI && !isEditing && (
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
