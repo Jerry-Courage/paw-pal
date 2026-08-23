@@ -6,6 +6,7 @@ import { groupsApi, getAuthToken, API_BASE } from '@/lib/api'
 import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import katex from 'katex'
 
 type Screen = 'home' | 'create' | 'lobby' | 'countdown' | 'question' | 'round_result' | 'leaderboard' | 'game_over'
 
@@ -64,72 +65,89 @@ function useSound(muted: boolean) {
   }
 }
 
-const VICTORY_SONG_PATH = '/audio/victory.mp3'
-const VICTORY_CLIPS = [
-  { start: 0,    dur: 5 },   // Intro horns
-  { start: 17,   dur: 5 },   // Verse 1 opening
-  { start: 32,   dur: 5 },   // Pre-chorus build
-  { start: 48,   dur: 5 },   // Chorus drop
-  { start: 63,   dur: 5 },   // Chorus peak
-  { start: 78,   dur: 5 },   // Post-chorus
-  { start: 95,   dur: 5 },   // Verse 2
-  { start: 112,  dur: 5 },   // Verse 2 build
-  { start: 128,  dur: 5 },   // Pre-chorus 2
-  { start: 145,  dur: 5 },   // Chorus 2
-  { start: 160,  dur: 5 },   // Bridge
-  { start: 178,  dur: 5 },   // Bridge build
-  { start: 195,  dur: 5 },   // Final chorus
-  { start: 210,  dur: 5 },   // Final chorus peak
-  { start: 225,  dur: 5 },   // Outro
-  { start: 240,  dur: 5 },   // Outro tail
+function LatexText({ text, className }: { text: string; className?: string }) {
+  const html = useMemo(() => {
+    try {
+      return text.replace(/\$([^$]+)\$/g, (_, tex) => {
+        try { return katex.renderToString(tex, { throwOnError: false }) }
+        catch { return `$${tex}$` }
+      })
+    } catch { return text }
+  }, [text])
+  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+const VICTORY_MELODY = [
+  { freq: 523, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
+  { freq: 659, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
+  { freq: 784, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
+  { freq: 1046, type: 'square' as OscillatorType, dur: 0.15, vol: 0.15 },
+  { freq: 0, type: 'square' as OscillatorType, dur: 0.06, vol: 0 },
+  { freq: 880, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
+  { freq: 1046, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
+  { freq: 1175, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
+  { freq: 1318, type: 'square' as OscillatorType, dur: 0.15, vol: 0.15 },
+  { freq: 0, type: 'square' as OscillatorType, dur: 0.06, vol: 0 },
+  { freq: 1046, type: 'sine' as OscillatorType, dur: 0.12, vol: 0.18 },
+  { freq: 1318, type: 'sine' as OscillatorType, dur: 0.12, vol: 0.18 },
+  { freq: 1568, type: 'sine' as OscillatorType, dur: 0.12, vol: 0.18 },
+  { freq: 2093, type: 'sine' as OscillatorType, dur: 0.3, vol: 0.2 },
+  { freq: 0, type: 'sine' as OscillatorType, dur: 0.15, vol: 0 },
+  { freq: 1568, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
+  { freq: 1318, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
+  { freq: 1046, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
+  { freq: 1318, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
+  { freq: 1568, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
+  { freq: 2093, type: 'square' as OscillatorType, dur: 0.2, vol: 0.15 },
+  { freq: 0, type: 'square' as OscillatorType, dur: 0.1, vol: 0 },
+  { freq: 1046, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
+  { freq: 1318, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
+  { freq: 1568, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
+  { freq: 2093, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
+  { freq: 2637, type: 'sine' as OscillatorType, dur: 0.4, vol: 0.22 },
 ]
 
 function useVictorySong(muted: boolean) {
+  const mutedRef = useRef(muted)
+  mutedRef.current = muted
   const ctxRef = useRef<AudioContext | null>(null)
-  const bufferRef = useRef<AudioBuffer | null>(null)
   const clipIndex = useRef(0)
-  const activeSource = useRef<AudioBufferSourceNode | null>(null)
 
-  useEffect(() => {
-    const AC = window.AudioContext || (window as any).webkitAudioContext
-    const ctx = new AC()
-    ctxRef.current = ctx
-
-    fetch(VICTORY_SONG_PATH)
-      .then(r => r.arrayBuffer())
-      .then(data => ctx.decodeAudioData(data))
-      .then(buf => { bufferRef.current = buf })
-      .catch(err => console.error('[VictorySong] Failed to load:', err))
-
-    return () => {
-      try { activeSource.current?.stop() } catch {}
-      ctx.close()
+  const getCtx = () => {
+    if (!ctxRef.current) {
+      const AC = window.AudioContext || (window as any).webkitAudioContext
+      ctxRef.current = new AC()
     }
-  }, [])
+    if (ctxRef.current!.state === 'suspended') ctxRef.current!.resume()
+    return ctxRef.current!
+  }
 
   const play = useCallback(() => {
-    const ctx = ctxRef.current
-    const buffer = bufferRef.current
-    if (!ctx || !buffer || muted) return
-
-    try { activeSource.current?.stop() } catch {}
-
-    if (ctx.state === 'suspended') ctx.resume()
-
-    const clip = VICTORY_CLIPS[clipIndex.current % VICTORY_CLIPS.length]
-    clipIndex.current++
-
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.connect(ctx.destination)
-    source.start(0, clip.start, clip.dur)
-    activeSource.current = source
-  }, [muted])
-
-  const stop = useCallback(() => {
-    try { activeSource.current?.stop() } catch {}
-    activeSource.current = null
+    if (mutedRef.current) return
+    try {
+      const ctx = getCtx()
+      let t = ctx.currentTime
+      const melody = VICTORY_MELODY
+      for (let rep = 0; rep < 2; rep++) {
+        for (const note of melody) {
+          if (note.freq === 0) { t += note.dur; continue }
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.connect(gain)
+          gain.connect(ctx.destination)
+          osc.type = note.type
+          osc.frequency.setValueAtTime(note.freq, t)
+          gain.gain.setValueAtTime(note.vol, t)
+          gain.gain.exponentialRampToValueAtTime(0.001, t + note.dur)
+          osc.start(t)
+          osc.stop(t + note.dur)
+          t += note.dur
+        }
+      }
+    } catch {}
   }, [])
+
+  const stop = useCallback(() => {}, [])
 
   return { play, stop }
 }
@@ -706,7 +724,7 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-4">
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
           className="bg-white/[0.05] border border-white/10 rounded-2xl p-6 mb-6 w-full max-w-lg">
-          <p className="text-lg font-semibold text-center leading-relaxed">{question.text}</p>
+          <p className="text-lg font-semibold text-center leading-relaxed"><LatexText text={question.text} /></p>
         </motion.div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
@@ -723,7 +741,7 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
                   answered && "opacity-50"
                 )}>
                 <OptionShape index={i} className="w-5 h-5 fill-current shrink-0 opacity-70" />
-                <span className="flex-1 text-sm">{opt.text}</span>
+                <span className="flex-1 text-sm"><LatexText text={opt.text} /></span>
                 <span className="text-xs opacity-60 font-bold">{opt.key}</span>
               </motion.button>
             )
@@ -738,7 +756,7 @@ function QuestionScreen({ question, timeLeft, setTimeLeft, answered, onAnswer, o
                 <span className="material-symbols-outlined text-sm align-middle mr-1">lightbulb</span>
                 Explanation
               </p>
-              <p className="text-sm text-white/70 leading-relaxed">{question.explanation}</p>
+              <p className="text-sm text-white/70 leading-relaxed"><LatexText text={question.explanation} /></p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -812,7 +830,7 @@ function RoundResultScreen({ result, answered, me, isHost }: { result: RoundResu
             <span className="material-symbols-outlined text-sm align-middle mr-1">lightbulb</span>
             Explanation
           </p>
-          <p className="text-sm text-white/70 leading-relaxed">{result.explanation}</p>
+          <p className="text-sm text-white/70 leading-relaxed"><LatexText text={result.explanation} /></p>
         </motion.div>
       )}
 
