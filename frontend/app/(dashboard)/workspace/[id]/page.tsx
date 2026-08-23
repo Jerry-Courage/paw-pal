@@ -48,6 +48,7 @@ import { workspaceApi, libraryApi, assignmentsApi, getAuthToken, API_BASE } from
 import { useSession } from 'next-auth/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { normalizeForRendering } from '@/lib/mathFormatting'
 import remarkGfm from 'remark-gfm'
 
 const RichNotesViewer = dynamic(() => import('@/components/library/RichNotesViewer'), { ssr: false })
@@ -755,7 +756,7 @@ export default function WorkspaceCollaborationStudio() {
         </aside>
 
         {/* ── CENTER PANEL: Collaborative Chat ── */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative pb-[70px] md:pb-0">
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-6 py-4 space-y-1 scroll-smooth custom-scrollbar">
             <div className="mb-4 sm:mb-6 min-w-0">
@@ -1809,7 +1810,7 @@ function MessageBubble({
                       p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-white/80 leading-relaxed">{children}</p>,
                     }}
                   >
-                    {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
+                    {isAI ? normalizeForRendering(message.content.split(/\bACTION\b/i)[0].trim()) : normalizeForRendering(message.content)}
                   </ReactMarkdown>
                 </div>
               )}
