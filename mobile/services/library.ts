@@ -19,7 +19,8 @@ export const libraryService = {
     onProgress?: (progress: number) => void
   ): Promise<ResourceUploadResponse> {
     const { data } = await api.post<ResourceUploadResponse>('/library/resources/', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: (fData) => fData,
+      timeout: 60000,
       onUploadProgress: (e) => {
         if (e.total && onProgress) {
           onProgress(Math.round((e.loaded * 100) / e.total));
