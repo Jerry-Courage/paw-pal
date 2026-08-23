@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { libraryService } from '@/services/library';
-import { Resource } from '@/types';
 
 export function useResources(type?: string) {
   return useQuery({
