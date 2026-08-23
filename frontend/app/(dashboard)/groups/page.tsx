@@ -85,31 +85,50 @@ const VICTORY_CLIPS = [
 ]
 
 function useVictorySong(muted: boolean) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
+  const bufferRef = useRef<AudioBuffer | null>(null)
   const clipIndex = useRef(0)
+  const activeSource = useRef<AudioBufferSourceNode | null>(null)
 
   useEffect(() => {
-    const el = new Audio()
-    el.src = VICTORY_SONG_PATH
-    el.preload = 'auto'
-    el.volume = 0.7
-    audioRef.current = el
-    return () => { el.pause(); el.src = '' }
+    const AC = window.AudioContext || (window as any).webkitAudioContext
+    const ctx = new AC()
+    ctxRef.current = ctx
+
+    fetch(VICTORY_SONG_PATH)
+      .then(r => r.arrayBuffer())
+      .then(data => ctx.decodeAudioData(data))
+      .then(buf => { bufferRef.current = buf })
+      .catch(err => console.error('[VictorySong] Failed to load:', err))
+
+    return () => {
+      try { activeSource.current?.stop() } catch {}
+      ctx.close()
+    }
   }, [])
 
   const play = useCallback(() => {
-    const el = audioRef.current
-    if (!el || muted) return
+    const ctx = ctxRef.current
+    const buffer = bufferRef.current
+    if (!ctx || !buffer || muted) return
+
+    try { activeSource.current?.stop() } catch {}
+
+    if (ctx.state === 'suspended') ctx.resume()
+
     const clip = VICTORY_CLIPS[clipIndex.current % VICTORY_CLIPS.length]
     clipIndex.current++
-    el.currentTime = clip.start
-    el.play().catch(() => {})
-    setTimeout(() => { try { el.pause() } catch {} }, clip.dur * 1000)
+
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+    source.start(0, clip.start, clip.dur)
+    activeSource.current = source
   }, [muted])
 
   const stop = useCallback(() => {
-    const el = audioRef.current
-    if (el) { try { el.pause(); el.currentTime = 0 } catch {} }
+    try { activeSource.current?.stop() } catch {}
+    activeSource.current = null
   }, [])
 
   return { play, stop }
