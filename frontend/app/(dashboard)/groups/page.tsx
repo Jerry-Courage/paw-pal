@@ -64,6 +64,57 @@ function useSound(muted: boolean) {
   }
 }
 
+const VICTORY_SONG_PATH = '/audio/victory.mp3'
+const VICTORY_CLIPS = [
+  { start: 0,    dur: 5 },   // Intro horns
+  { start: 17,   dur: 5 },   // Verse 1 opening
+  { start: 32,   dur: 5 },   // Pre-chorus build
+  { start: 48,   dur: 5 },   // Chorus drop
+  { start: 63,   dur: 5 },   // Chorus peak
+  { start: 78,   dur: 5 },   // Post-chorus
+  { start: 95,   dur: 5 },   // Verse 2
+  { start: 112,  dur: 5 },   // Verse 2 build
+  { start: 128,  dur: 5 },   // Pre-chorus 2
+  { start: 145,  dur: 5 },   // Chorus 2
+  { start: 160,  dur: 5 },   // Bridge
+  { start: 178,  dur: 5 },   // Bridge build
+  { start: 195,  dur: 5 },   // Final chorus
+  { start: 210,  dur: 5 },   // Final chorus peak
+  { start: 225,  dur: 5 },   // Outro
+  { start: 240,  dur: 5 },   // Outro tail
+]
+
+function useVictorySong(muted: boolean) {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const clipIndex = useRef(0)
+
+  useEffect(() => {
+    const el = new Audio()
+    el.src = VICTORY_SONG_PATH
+    el.preload = 'auto'
+    el.volume = 0.7
+    audioRef.current = el
+    return () => { el.pause(); el.src = '' }
+  }, [])
+
+  const play = useCallback(() => {
+    const el = audioRef.current
+    if (!el || muted) return
+    const clip = VICTORY_CLIPS[clipIndex.current % VICTORY_CLIPS.length]
+    clipIndex.current++
+    el.currentTime = clip.start
+    el.play().catch(() => {})
+    setTimeout(() => { try { el.pause() } catch {} }, clip.dur * 1000)
+  }, [muted])
+
+  const stop = useCallback(() => {
+    const el = audioRef.current
+    if (el) { try { el.pause(); el.currentTime = 0 } catch {} }
+  }, [])
+
+  return { play, stop }
+}
+
 function Confetti() {
   const pieces = Array.from({ length: 80 }, (_, i) => ({
     id: i, x: Math.random() * 100, delay: Math.random() * 2,
@@ -946,6 +997,7 @@ export default function QuizBattlePage() {
   const { data: session } = useSession()
   const [muted, setMuted] = useState(false)
   const snd = useSound(muted)
+  const victorySong = useVictorySong(muted)
   const me = session?.user?.username || session?.user?.name || 'You'
 
   const [screen, setScreen]               = useState<Screen>('home')
@@ -1027,6 +1079,7 @@ export default function QuizBattlePage() {
         snd.countdown()
         break
       case 'show_question':
+        victorySong.stop()
         setIsStarting(false)
         setQuestion({ id: msg.id, text: msg.text, opt_a: msg.opt_a, opt_b: msg.opt_b, opt_c: msg.opt_c, opt_d: msg.opt_d, time_limit: msg.time_limit, idx: msg.idx, total: msg.total, explanation: msg.explanation })
         setTimeLeft(msg.time_limit)
@@ -1106,7 +1159,7 @@ export default function QuizBattlePage() {
         setLeaderboard([])
         break
     }
-  }, [me, snd])
+  }, [me, snd, victorySong])
 
   useEffect(() => { msgHandlerRef.current = handleServerMsg }, [handleServerMsg])
   useEffect(() => {
@@ -1158,7 +1211,7 @@ export default function QuizBattlePage() {
     wsRef.current?.send(JSON.stringify({ type: 'chat_message', message: message.trim() }))
   }
 
-  const goHome = () => { localStorage.removeItem('quiz_battle_session'); disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false); setChatMessages([]); setIsRematch(false); setShowChat(false) }
+  const goHome = () => { localStorage.removeItem('quiz_battle_session'); victorySong.stop(); disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false); setChatMessages([]); setIsRematch(false); setShowChat(false) }
 
   const vibrate = (ms: number | number[]) => {
     try { (navigator as any)?.vibrate?.(ms) } catch {}
@@ -1171,7 +1224,7 @@ export default function QuizBattlePage() {
     if (screen !== 'round_result' || !roundResult || !answered) return
     const isCorrect = answered === roundResult.correct
     if (isCorrect) {
-      snd.correct()
+      victorySong.play()
       vibrate(50)
       const myResult = roundResult.results.find(r => r.username === me)
       if (myResult && myResult.points > 0) {
