@@ -67,11 +67,21 @@ function useSound(muted: boolean) {
 
 function LatexText({ text, className }: { text: string; className?: string }) {
   const html = useMemo(() => {
+    if (!text) return ''
     try {
-      return text.replace(/\$([^$]+)\$/g, (_, tex) => {
-        try { return katex.renderToString(tex, { throwOnError: false }) }
-        catch { return `$${tex}$` }
-      })
+      return text
+        .replace(/\\\((.+?)\\\)/g, (_, tex) => {
+          try { return katex.renderToString(tex, { throwOnError: false, displayMode: false }) }
+          catch { return tex }
+        })
+        .replace(/\\\[(.+?)\\\]/g, (_, tex) => {
+          try { return katex.renderToString(tex, { throwOnError: false, displayMode: true }) }
+          catch { return tex }
+        })
+        .replace(/\$([^$\n]+?)\$/g, (_, tex) => {
+          try { return katex.renderToString(tex, { throwOnError: false, displayMode: false }) }
+          catch { return tex }
+        })
     } catch { return text }
   }, [text])
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -109,8 +119,8 @@ function useVictorySong(muted: boolean) {
     const el = new Audio()
     el.preload = 'auto'
     el.volume = 0.75
-    el.addEventListener('canplaythrough', () => { ready.current = true }, { once: true })
-    el.addEventListener('error', (e) => { console.warn('[VictorySong] error', e) })
+    el.addEventListener('loadeddata', () => { ready.current = true }, { once: true })
+    el.addEventListener('error', (e) => { console.warn('[VictorySong] load error', e) })
     el.src = VICTORY_SONG_PATH
     el.load()
     audioRef.current = el
@@ -134,22 +144,25 @@ function useVictorySong(muted: boolean) {
       try {
         el.pause()
         el.currentTime = clip.start
-        el.play().catch(() => {})
-        stopTimer.current = setTimeout(() => { try { el.pause() } catch {} }, clip.dur * 1000)
+        el.onseeked = () => {
+          el.onseeked = null
+          el.play().catch(() => {})
+          stopTimer.current = setTimeout(() => { try { el.pause() } catch {} }, clip.dur * 1000)
+        }
       } catch (e) { console.warn('[VictorySong] play failed', e) }
     }
 
     if (ready.current) {
       doPlay()
     } else {
-      el.addEventListener('canplaythrough', doPlay, { once: true })
+      el.addEventListener('loadeddata', doPlay, { once: true })
     }
   }, [])
 
   const stop = useCallback(() => {
     if (stopTimer.current) { clearTimeout(stopTimer.current); stopTimer.current = null }
     const el = audioRef.current
-    if (el) { try { el.pause(); el.currentTime = 0 } catch {} }
+    if (el) { el.onseeked = null; try { el.pause(); el.currentTime = 0 } catch {} }
   }, [])
 
   return { play, stop }
