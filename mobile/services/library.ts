@@ -3,9 +3,10 @@ import { Resource, ResourceDetail, ResourceProgress, ResourceUploadResponse } fr
 
 export const libraryService = {
   async getResources(type?: string): Promise<Resource[]> {
-    const params = type ? { type } : {};
-    const { data } = await api.get<Resource[]>('/library/resources/', { params });
-    return data;
+    const params: Record<string, string> = {};
+    if (type) params.type = type;
+    const { data } = await api.get<Resource[] | { results: Resource[] }>('/library/resources/', { params });
+    return Array.isArray(data) ? data : data.results || [];
   },
 
   async getResource(id: number): Promise<ResourceDetail> {

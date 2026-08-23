@@ -47,7 +47,7 @@ export default function HomeScreen() {
   const { analytics, nudge } = useDashboard();
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const resources = resourcesQuery.data || [];
+  const resources = Array.isArray(resourcesQuery.data) ? resourcesQuery.data : [];
   const recentResources = resources.slice(0, 4);
   const processingCount = resources.filter((r) => r.status === 'processing').length;
 

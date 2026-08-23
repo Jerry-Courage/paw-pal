@@ -65,7 +65,7 @@ export default function LibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showUploadSheet, setShowUploadSheet] = useState(false);
 
-  const resources = resourcesQuery.data || [];
+  const resources = Array.isArray(resourcesQuery.data) ? resourcesQuery.data : [];
 
   const filteredResources = useMemo(() => {
     let filtered = resources;
