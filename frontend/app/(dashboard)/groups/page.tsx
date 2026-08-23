@@ -87,83 +87,49 @@ function LatexText({ text, className }: { text: string; className?: string }) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-const VICTORY_SONG_PATH = '/audio/victory.mp3'
-const VICTORY_CLIPS = [
-  { start: 0,    dur: 5 },   // Intro horns
-  { start: 17,   dur: 5 },   // Verse 1 opening
-  { start: 32,   dur: 5 },   // Pre-chorus build
-  { start: 48,   dur: 5 },   // Chorus drop
-  { start: 63,   dur: 5 },   // Chorus peak
-  { start: 78,   dur: 5 },   // Post-chorus
-  { start: 95,   dur: 5 },   // Verse 2
-  { start: 112,  dur: 5 },   // Verse 2 build
-  { start: 128,  dur: 5 },   // Pre-chorus 2
-  { start: 145,  dur: 5 },   // Chorus 2
-  { start: 160,  dur: 5 },   // Bridge
-  { start: 178,  dur: 5 },   // Bridge build
-  { start: 195,  dur: 5 },   // Final chorus
-  { start: 210,  dur: 5 },   // Final chorus peak
-  { start: 225,  dur: 5 },   // Outro
-  { start: 240,  dur: 5 },   // Outro tail
-]
-
 function useVictorySong(muted: boolean) {
   const mutedRef = useRef(muted)
   mutedRef.current = muted
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const ready = useRef(false)
-  const clipIndex = useRef(0)
-  const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
 
-  useEffect(() => {
-    const el = new Audio()
-    el.preload = 'auto'
-    el.volume = 0.75
-    el.addEventListener('loadeddata', () => { ready.current = true }, { once: true })
-    el.addEventListener('error', (e) => { console.warn('[VictorySong] load error', e) })
-    el.src = VICTORY_SONG_PATH
-    el.load()
-    audioRef.current = el
-    return () => {
-      if (stopTimer.current) clearTimeout(stopTimer.current)
-      el.pause()
-      el.src = ''
+  const getCtx = () => {
+    if (!ctxRef.current) {
+      const AC = window.AudioContext || (window as any).webkitAudioContext
+      ctxRef.current = new AC()
     }
-  }, [])
+    if (ctxRef.current!.state === 'suspended') ctxRef.current!.resume()
+    return ctxRef.current!
+  }
 
   const play = useCallback(() => {
     if (mutedRef.current) return
-    const el = audioRef.current
-    if (!el) return
-
-    if (stopTimer.current) { clearTimeout(stopTimer.current); stopTimer.current = null }
-
-    const doPlay = () => {
-      const clip = VICTORY_CLIPS[clipIndex.current % VICTORY_CLIPS.length]
-      clipIndex.current++
-      try {
-        el.pause()
-        el.currentTime = clip.start
-        el.onseeked = () => {
-          el.onseeked = null
-          el.play().catch(() => {})
-          stopTimer.current = setTimeout(() => { try { el.pause() } catch {} }, clip.dur * 1000)
-        }
-      } catch (e) { console.warn('[VictorySong] play failed', e) }
-    }
-
-    if (ready.current) {
-      doPlay()
-    } else {
-      el.addEventListener('loadeddata', doPlay, { once: true })
-    }
+    try {
+      const ctx = getCtx()
+      const n = (freq: number, type: OscillatorType, start: number, dur: number, vol: number) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = type
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start)
+        gain.gain.setValueAtTime(vol, ctx.currentTime + start)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur)
+        osc.start(ctx.currentTime + start)
+        osc.stop(ctx.currentTime + start + dur)
+      }
+      // Upbeat victory fanfare
+      n(523, 'sine', 0,    0.12, 0.2)
+      n(659, 'sine', 0.1,  0.12, 0.2)
+      n(784, 'sine', 0.2,  0.12, 0.2)
+      n(1046,'sine', 0.3,  0.25, 0.25)
+      n(0,   'sine', 0.5,  0.08, 0)
+      n(880, 'sine', 0.55, 0.12, 0.18)
+      n(1046,'sine', 0.65, 0.12, 0.18)
+      n(1318,'sine', 0.75, 0.3,  0.22)
+    } catch {}
   }, [])
 
-  const stop = useCallback(() => {
-    if (stopTimer.current) { clearTimeout(stopTimer.current); stopTimer.current = null }
-    const el = audioRef.current
-    if (el) { el.onseeked = null; try { el.pause(); el.currentTime = 0 } catch {} }
-  }, [])
+  const stop = useCallback(() => {}, [])
 
   return { play, stop }
 }
