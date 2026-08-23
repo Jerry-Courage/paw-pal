@@ -77,77 +77,80 @@ function LatexText({ text, className }: { text: string; className?: string }) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-const VICTORY_MELODY = [
-  { freq: 523, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
-  { freq: 659, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
-  { freq: 784, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
-  { freq: 1046, type: 'square' as OscillatorType, dur: 0.15, vol: 0.15 },
-  { freq: 0, type: 'square' as OscillatorType, dur: 0.06, vol: 0 },
-  { freq: 880, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
-  { freq: 1046, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
-  { freq: 1175, type: 'square' as OscillatorType, dur: 0.08, vol: 0.12 },
-  { freq: 1318, type: 'square' as OscillatorType, dur: 0.15, vol: 0.15 },
-  { freq: 0, type: 'square' as OscillatorType, dur: 0.06, vol: 0 },
-  { freq: 1046, type: 'sine' as OscillatorType, dur: 0.12, vol: 0.18 },
-  { freq: 1318, type: 'sine' as OscillatorType, dur: 0.12, vol: 0.18 },
-  { freq: 1568, type: 'sine' as OscillatorType, dur: 0.12, vol: 0.18 },
-  { freq: 2093, type: 'sine' as OscillatorType, dur: 0.3, vol: 0.2 },
-  { freq: 0, type: 'sine' as OscillatorType, dur: 0.15, vol: 0 },
-  { freq: 1568, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
-  { freq: 1318, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
-  { freq: 1046, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
-  { freq: 1318, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
-  { freq: 1568, type: 'square' as OscillatorType, dur: 0.08, vol: 0.1 },
-  { freq: 2093, type: 'square' as OscillatorType, dur: 0.2, vol: 0.15 },
-  { freq: 0, type: 'square' as OscillatorType, dur: 0.1, vol: 0 },
-  { freq: 1046, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
-  { freq: 1318, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
-  { freq: 1568, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
-  { freq: 2093, type: 'sine' as OscillatorType, dur: 0.1, vol: 0.15 },
-  { freq: 2637, type: 'sine' as OscillatorType, dur: 0.4, vol: 0.22 },
+const VICTORY_SONG_PATH = '/audio/victory.mp3'
+const VICTORY_CLIPS = [
+  { start: 0,    dur: 5 },   // Intro horns
+  { start: 17,   dur: 5 },   // Verse 1 opening
+  { start: 32,   dur: 5 },   // Pre-chorus build
+  { start: 48,   dur: 5 },   // Chorus drop
+  { start: 63,   dur: 5 },   // Chorus peak
+  { start: 78,   dur: 5 },   // Post-chorus
+  { start: 95,   dur: 5 },   // Verse 2
+  { start: 112,  dur: 5 },   // Verse 2 build
+  { start: 128,  dur: 5 },   // Pre-chorus 2
+  { start: 145,  dur: 5 },   // Chorus 2
+  { start: 160,  dur: 5 },   // Bridge
+  { start: 178,  dur: 5 },   // Bridge build
+  { start: 195,  dur: 5 },   // Final chorus
+  { start: 210,  dur: 5 },   // Final chorus peak
+  { start: 225,  dur: 5 },   // Outro
+  { start: 240,  dur: 5 },   // Outro tail
 ]
 
 function useVictorySong(muted: boolean) {
   const mutedRef = useRef(muted)
   mutedRef.current = muted
-  const ctxRef = useRef<AudioContext | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const ready = useRef(false)
   const clipIndex = useRef(0)
+  const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const getCtx = () => {
-    if (!ctxRef.current) {
-      const AC = window.AudioContext || (window as any).webkitAudioContext
-      ctxRef.current = new AC()
+  useEffect(() => {
+    const el = new Audio()
+    el.preload = 'auto'
+    el.volume = 0.75
+    el.addEventListener('canplaythrough', () => { ready.current = true }, { once: true })
+    el.addEventListener('error', (e) => { console.warn('[VictorySong] error', e) })
+    el.src = VICTORY_SONG_PATH
+    el.load()
+    audioRef.current = el
+    return () => {
+      if (stopTimer.current) clearTimeout(stopTimer.current)
+      el.pause()
+      el.src = ''
     }
-    if (ctxRef.current!.state === 'suspended') ctxRef.current!.resume()
-    return ctxRef.current!
-  }
+  }, [])
 
   const play = useCallback(() => {
     if (mutedRef.current) return
-    try {
-      const ctx = getCtx()
-      let t = ctx.currentTime
-      const melody = VICTORY_MELODY
-      for (let rep = 0; rep < 2; rep++) {
-        for (const note of melody) {
-          if (note.freq === 0) { t += note.dur; continue }
-          const osc = ctx.createOscillator()
-          const gain = ctx.createGain()
-          osc.connect(gain)
-          gain.connect(ctx.destination)
-          osc.type = note.type
-          osc.frequency.setValueAtTime(note.freq, t)
-          gain.gain.setValueAtTime(note.vol, t)
-          gain.gain.exponentialRampToValueAtTime(0.001, t + note.dur)
-          osc.start(t)
-          osc.stop(t + note.dur)
-          t += note.dur
-        }
-      }
-    } catch {}
+    const el = audioRef.current
+    if (!el) return
+
+    if (stopTimer.current) { clearTimeout(stopTimer.current); stopTimer.current = null }
+
+    const doPlay = () => {
+      const clip = VICTORY_CLIPS[clipIndex.current % VICTORY_CLIPS.length]
+      clipIndex.current++
+      try {
+        el.pause()
+        el.currentTime = clip.start
+        el.play().catch(() => {})
+        stopTimer.current = setTimeout(() => { try { el.pause() } catch {} }, clip.dur * 1000)
+      } catch (e) { console.warn('[VictorySong] play failed', e) }
+    }
+
+    if (ready.current) {
+      doPlay()
+    } else {
+      el.addEventListener('canplaythrough', doPlay, { once: true })
+    }
   }, [])
 
-  const stop = useCallback(() => {}, [])
+  const stop = useCallback(() => {
+    if (stopTimer.current) { clearTimeout(stopTimer.current); stopTimer.current = null }
+    const el = audioRef.current
+    if (el) { try { el.pause(); el.currentTime = 0 } catch {} }
+  }, [])
 
   return { play, stop }
 }
