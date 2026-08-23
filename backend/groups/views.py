@@ -3,6 +3,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from .models import StudyGroup, GroupMembership, GroupSession, GroupTask, GroupMessage, GroupDocument, QuizRoom, QuizQuestion, QuizPlayer, QuizAnswer, BattleHistory
 from .serializers import (
     StudyGroupSerializer, GroupSessionSerializer,
@@ -369,6 +370,47 @@ class QuizRoomCreateView(APIView):
             )
         QuizPlayer.objects.create(room=room, user=request.user)
         return Response(QuizRoomSerializer(room).data, status=201)
+
+
+class QuizRoomSnapshotView(APIView):
+    """GET /api/groups/quiz/<pin>/snapshot/ — full room state for reconnection."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pin):
+        room = get_object_or_404(QuizRoom, pin=pin)
+        player = QuizPlayer.objects.filter(room=room, user=request.user).first()
+        if not player:
+            return Response({'error': 'Not a member of this room'}, status=403)
+
+        questions = list(room.questions.all().values('id', 'order', 'text', 'opt_a', 'opt_b', 'opt_c', 'opt_d', 'correct', 'explanation'))
+        players = list(room.players.all().values('user__username', 'score', 'streak', 'ready', 'correct_count', 'total_time'))
+
+        my_answers = {}
+        for a in player.answers.select_related('question').all():
+            my_answers[a.question.order] = {
+                'choice': a.choice,
+                'is_correct': a.is_correct,
+                'time_taken': a.time_taken,
+                'points': a.points,
+            }
+
+        return Response({
+            'pin': room.pin,
+            'title': room.title,
+            'status': room.status,
+            'current_q_idx': room.current_q_idx,
+            'time_per_q': room.time_per_q,
+            'host': room.host.username,
+            'total_questions': len(questions),
+            'questions': questions,
+            'players': [{
+                'username': p['user__username'],
+                'score': p['score'],
+                'streak': p['streak'],
+                'ready': p['ready'],
+            } for p in players],
+            'my_answers': my_answers,
+        })
 
 
 class BattleHistoryView(APIView):

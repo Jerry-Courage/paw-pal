@@ -934,16 +934,9 @@ function GameOverScreen({ leaderboard, me, onPlayAgain, onGoHome, totalQuestions
       </div>
 
       <div className="flex gap-3 max-w-sm mx-auto w-full">
-        <motion.button whileTap={{ scale: 0.97 }} onClick={onPlayAgain}
-          className="flex-1 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold shadow-lg shadow-purple-500/25 active:scale-[0.98] transition-transform">
-          <span className="material-symbols-outlined align-middle mr-2">replay</span>
-          Rematch
-        </motion.button>
-        <motion.button whileTap={{ scale: 0.97 }} onClick={onGoHome}
-          className="flex-1 py-4 rounded-xl bg-white/10 border border-white/15 text-white font-bold active:scale-[0.98] transition-transform">
-          <span className="material-symbols-outlined align-middle mr-2">home</span>
-          Home
-        </motion.button>
+        <div className="w-full py-4 rounded-xl bg-white/5 border border-white/15 text-center text-white/50 text-sm font-medium">
+          Returning to lobby in a few seconds...
+        </div>
       </div>
     </motion.div>
   )
@@ -977,6 +970,7 @@ export default function QuizBattlePage() {
   const [totalQuestions, setTotalQuestions] = useState(0)
   const [showChat, setShowChat]           = useState(false)
   const [isRematch, setIsRematch]         = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
 
   const wsRef        = useRef<WebSocket | null>(null)
   const qStartRef    = useRef<number>(0)
@@ -1005,7 +999,7 @@ export default function QuizBattlePage() {
     const url   = `${proto}//${host}/ws/quiz/${roomPin}/${token ? `?token=${token}` : ''}`
     const ws = new WebSocket(url)
     wsRef.current = ws
-    ws.onopen  = () => setIsConnecting(false)
+    ws.onopen  = () => { setIsConnecting(false); localStorage.setItem('quiz_battle_session', JSON.stringify({ pin: roomPin, isHost })) }
     ws.onerror = () => { setIsConnecting(false); toast.error('Connection failed.') }
     ws.onclose = () => {}
     ws.onmessage = (ev) => { msgHandlerRef.current(JSON.parse(ev.data)) }
@@ -1085,6 +1079,17 @@ export default function QuizBattlePage() {
             }
           }, 1500)
         }
+        // Auto-return to lobby after 6 seconds
+        setTimeout(() => {
+          setScreen('lobby')
+          setIsRematch(false)
+          setQuestion(null)
+          setRoundResult(null)
+          setAnswered(null)
+          // Reset players ready state for new match
+          setPlayers(prev => prev.map(p => ({ ...p, ready: false, score: 0, streak: 0 })))
+          toast.info('Back to lobby — start a new battle!', { icon: '🏠' })
+        }, 6000)
         break
       case 'chat_message':
         setChatMessages(prev => [...prev.slice(-30), { username: msg.username, message: msg.message }])
@@ -1115,6 +1120,7 @@ export default function QuizBattlePage() {
     try {
       await groupsApi.joinQuiz(p)
       setPin(p); setIsHost(false)
+      localStorage.setItem('quiz_battle_session', JSON.stringify({ pin: p, isHost: false }))
       await connect(p); setScreen('lobby')
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Could not join room.')
@@ -1152,7 +1158,7 @@ export default function QuizBattlePage() {
     wsRef.current?.send(JSON.stringify({ type: 'chat_message', message: message.trim() }))
   }
 
-  const goHome = () => { disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false); setChatMessages([]); setIsRematch(false); setShowChat(false) }
+  const goHome = () => { localStorage.removeItem('quiz_battle_session'); disconnect(); setScreen('home'); setPin(''); setPlayers([]); setQuestion(null); setRoundResult(null); setLeaderboard([]); setIsHost(false); setIsStarting(false); setChatMessages([]); setIsRematch(false); setShowChat(false) }
 
   const vibrate = (ms: number | number[]) => {
     try { (navigator as any)?.vibrate?.(ms) } catch {}
@@ -1179,6 +1185,74 @@ export default function QuizBattlePage() {
     }
   }, [screen, roundResult, answered, me, snd])
 
+  // Auto-rejoin on page load if we have a saved session
+  useEffect(() => {
+    const saved = localStorage.getItem('quiz_battle_session')
+    if (!saved) return
+    try {
+      const { pin: savedPin, isHost: savedHost } = JSON.parse(saved)
+      if (!savedPin) return
+
+      const rejoin = async () => {
+        try {
+          const { getAuthToken } = await import('@/lib/api')
+          const token = await getAuthToken()
+          if (!token) { localStorage.removeItem('quiz_battle_session'); return }
+
+          const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+          const res = await fetch(`${apiBase}/groups/quiz/${savedPin}/snapshot/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (!res.ok) { localStorage.removeItem('quiz_battle_session'); return }
+          const snap = await res.json()
+
+          if (snap.status === 'finished') {
+            localStorage.removeItem('quiz_battle_session')
+            return
+          }
+
+          // Restore state from snapshot
+          setPin(snap.pin)
+          setIsHost(savedHost)
+          setPlayers(snap.players || [])
+          setTotalQuestions(snap.total_questions)
+
+          if (snap.status === 'lobby') {
+            await connect(snap.pin)
+            setScreen('lobby')
+          } else if (snap.status === 'question') {
+            // Resume mid-game
+            const q = snap.questions[snap.current_q_idx]
+            if (q) {
+              setQuestion({
+                id: q.id, text: q.text, opt_a: q.opt_a, opt_b: q.opt_b,
+                opt_c: q.opt_c, opt_d: q.opt_d, time_limit: snap.time_per_q,
+                idx: q.order, total: snap.total_questions, explanation: q.explanation
+              })
+              // Check if we already answered this question
+              const myAns = snap.my_answers[q.order]
+              if (myAns) {
+                setAnswered(myAns.choice)
+                setAnswerTime(myAns.time_taken)
+              }
+            }
+            await connect(snap.pin)
+            setScreen('question')
+          } else if (snap.status === 'countdown' || snap.status === 'results') {
+            await connect(snap.pin)
+            setScreen('lobby')
+          }
+
+          toast.success('Reconnected to battle!', { icon: '🔄' })
+        } catch (e) {
+          console.error('Rejoin failed:', e)
+          localStorage.removeItem('quiz_battle_session')
+        }
+      }
+      rejoin()
+    } catch { localStorage.removeItem('quiz_battle_session') }
+  }, []) // Only runs once on mount
+
   return (
     <div className="min-h-screen bg-[#0d091b] text-white relative overflow-x-hidden selection:bg-primary selection:text-white">
       {showConfetti && <Confetti />}
@@ -1192,7 +1266,7 @@ export default function QuizBattlePage() {
       <div className="relative z-10 h-[100dvh] flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
           {screen === 'home'        && <HomeScreen     key="home"     onCreate={() => setScreen('create')} onJoin={handleJoinRoom} joinPin={joinPinInput} setJoinPin={setJoinPinInput} />}
-          {screen === 'create'      && <CreateScreen   key="create"   onBack={() => setScreen('home')} onCreated={async (roomPin, host) => { setPin(roomPin); setIsHost(host); await connect(roomPin); setScreen('lobby') }} />}
+          {screen === 'create'      && <CreateScreen   key="create"   onBack={() => setScreen('home')} onCreated={async (roomPin, host) => { setPin(roomPin); setIsHost(host); localStorage.setItem('quiz_battle_session', JSON.stringify({ pin: roomPin, isHost: host })); await connect(roomPin); setScreen('lobby') }} />}
           {screen === 'lobby'       && <LobbyScreen    key="lobby"    pin={pin} players={players} isHost={isHost} onStart={handleStartGame} onLeave={goHome} onToggleReady={handleToggleReady} me={me} isStarting={isStarting} isConnecting={isConnecting} isRematch={isRematch} onToggleMute={handleToggleMute} muted={muted} onToggleChat={handleToggleChat} />}
           {screen === 'countdown'   && <CountdownScreen key="countdown" count={countNum} />}
           {screen === 'question'    && question && <QuestionScreen key={`q-${question.idx}`} question={question} timeLeft={timeLeft} setTimeLeft={setTimeLeft} answered={answered} onAnswer={handleAnswer} onReact={handleSendReaction} answeredCount={answeredCount} players={players} me={me} onToggleMute={handleToggleMute} muted={muted} onToggleChat={handleToggleChat} />}
