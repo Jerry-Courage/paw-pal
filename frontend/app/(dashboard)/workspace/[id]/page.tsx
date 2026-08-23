@@ -4,33 +4,29 @@ import dynamic from 'next/dynamic'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Send, 
-  Users, 
-  BookOpen, 
-  Sparkles, 
-  Copy, 
-  Check, 
+import {
+  Send,
+  Users,
+  BookOpen,
+  Sparkles,
+  Copy,
+  Check,
   ChevronLeft,
   X,
   Search,
   Pin,
   Clock,
-  Menu,
   Mic,
   Square,
   Play,
   Pause,
-  Volume2,
   Reply,
   Download,
   CloudDownload,
   ChevronRight,
   ExternalLink,
-  RotateCcw,
   Loader2,
   LayoutGrid,
-  Network,
   Plus,
   FileText,
   Trash2,
@@ -39,13 +35,11 @@ import {
   MoreVertical,
   Pencil,
   Copy as CopyIcon,
-  Pin as PinIcon,
   Paperclip,
-  Video,
   SmilePlus,
-  Hash,
   MessageCircle,
-  Wifi
+  FolderOpen,
+  Grid3X3
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -114,6 +108,7 @@ export default function WorkspaceCollaborationStudio() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isMobileResourceOpen, setIsMobileResourceOpen] = useState(false)
+  const [isMobileMembersOpen, setIsMobileMembersOpen] = useState(false)
   const [currentStage, setCurrentStage] = useState<'ingest' | 'synthesize' | 'master'>('ingest')
   const reactionPickerRef = useRef<HTMLDivElement>(null)
 
@@ -163,12 +158,12 @@ export default function WorkspaceCollaborationStudio() {
   }
 
   const connectingPromiseRef = useRef<Promise<void> | null>(null)
-  
+
   const connectWebSocket = async () => {
     if (connectingPromiseRef.current) {
       return await connectingPromiseRef.current
     }
-    if (socketRef.current?.readyState === WebSocket.CONNECTING || 
+    if (socketRef.current?.readyState === WebSocket.CONNECTING ||
         socketRef.current?.readyState === WebSocket.OPEN) {
       return
     }
@@ -183,11 +178,11 @@ export default function WorkspaceCollaborationStudio() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const backendHost = (API_BASE || '').replace(/^https?:\/\//, '').replace(/\/api$/, '')
       const host = backendHost || (window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host)
-      
+
       try {
         const token = await getAuthToken()
         const wsUrl = `${protocol}//${host}/ws/workspace/${id}/${token ? `?token=${token}` : ''}`
-        
+
         console.log("[WS] Initiating connection...")
         const socket = new WebSocket(wsUrl)
         socketRef.current = socket
@@ -202,18 +197,18 @@ export default function WorkspaceCollaborationStudio() {
             const msg = data
             setMessages(prev => {
               if (prev.find(m => String(m.id) === String(msg.id))) return prev
-              
+
               const optimisticIndex = prev.findIndex(m => {
                 if (!m.is_optimistic) return false
                 if (m.content?.trim() === msg.content?.trim()) return true
                 if (m.audio_file && msg.audio_file) {
                   const mTime = new Date(m.created_at).getTime()
                   const msgTime = new Date(msg.created_at).getTime()
-                  return Math.abs(msgTime - mTime) < 15000 
+                  return Math.abs(msgTime - mTime) < 15000
                 }
                 return false
               })
-              
+
               if (optimisticIndex !== -1) {
                 const next = [...prev]
                 const optimistic = prev[optimisticIndex]
@@ -323,7 +318,7 @@ export default function WorkspaceCollaborationStudio() {
       attachment_type: attachmentFile ? (attachmentFile.type.startsWith('video/') ? 'video' : 'image') : null
     }
     setMessages(prev => [...prev, tempMsg])
-    
+
     const fileToSend = attachmentFile
     setAttachmentFile(null)
 
@@ -341,7 +336,7 @@ export default function WorkspaceCollaborationStudio() {
           data.append('attachment_type', fileToSend.type.startsWith('video/') ? 'video' : 'image')
         }
       }
-      
+
       const response = await workspaceApi.sendMessage(Number(id), data, replyingTo?.id)
       setReplyingTo(null)
     } catch (err) {
@@ -515,130 +510,131 @@ export default function WorkspaceCollaborationStudio() {
     : messages
 
   if (isLoading) return (
-    <div className="fixed inset-0 bg-background flex items-center justify-center">
+    <div className="fixed inset-0 bg-[#0b0b1e] flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-10 h-10">
-          <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
+          <div className="absolute inset-0 rounded-full border-2 border-[#f97316]/20" />
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#f97316] animate-spin" />
         </div>
-        <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-on-surface-variant/60">Loading workspace...</p>
+        <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[#94a3b8]/60">Loading workspace...</p>
       </div>
     </div>
   )
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background text-on-surface overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-[#0b0b1e] text-white overflow-hidden">
 
       {/* ═══════════════ HEADER ═══════════════ */}
-      <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-outline-variant/20 bg-background z-20 flex-shrink-0">
+      <header className="h-14 flex items-center justify-between px-4 sm:px-5 border-b border-white/[0.06] bg-[#0b0b1e] z-20 flex-shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
-            <ChevronLeft className="w-4 h-4 text-on-surface-variant" />
+          <button onClick={() => router.push('/workspace')} className="p-1.5 hover:bg-white/[0.04] rounded-lg transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
+            <ChevronLeft className="w-4 h-4 text-[#94a3b8]" />
           </button>
-          <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-            <LayoutGrid className="w-3.5 h-3.5 text-primary-container" />
+          <div className="w-7 h-7 bg-[#f97316]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Grid3X3 className="w-3.5 h-3.5 text-[#f97316]" />
           </div>
           <div className="overflow-hidden">
-            <h1 className="text-sm font-semibold text-on-surface truncate leading-tight">{workspace?.name || 'Collab Space'}</h1>
-            <span className="text-[10px] text-on-surface-variant/60 hidden sm:block truncate">{workspace?.subject || 'Collaboration'}</span>
+            <h1 className="text-sm font-semibold text-white truncate leading-tight">{workspace?.name || 'Collab Space'}</h1>
+            <span className="text-[10px] text-[#94a3b8] hidden sm:block truncate">{workspace?.subject || 'Collaboration'}</span>
           </div>
         </div>
 
-        {/* Center: Stage Navigator */}
         <div className="hidden lg:flex flex-1 justify-center px-4">
           <StageNavigator currentStage={currentStage} onStageChange={setCurrentStage} />
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Member avatars */}
           <div className="hidden md:flex items-center -space-x-1.5 mr-2">
             {workspace?.members?.slice(0, 4).map((m: any, i: number) => (
-              <div key={i} className="relative w-6 h-6 rounded-full border-2 border-background bg-slate-700 flex items-center justify-center text-[9px] font-bold uppercase text-on-surface">
+              <div key={i} className="relative w-6 h-6 rounded-full border-2 border-[#0b0b1e] bg-[#1a1a2e] flex items-center justify-center text-[9px] font-bold uppercase text-white">
                 {m.user?.username?.[0] || '?'}
                 <span className={cn(
-                  "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
+                  "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#0b0b1e]",
                   onlineUsers.has(String(m.user?.id)) ? "bg-emerald-500" : "bg-gray-500"
                 )} />
               </div>
             ))}
             {(workspace?.members?.length || 0) > 4 && (
-              <div className="w-6 h-6 rounded-full border-2 border-background bg-surface-container flex items-center justify-center text-[9px] font-bold text-on-surface-variant">
+              <div className="w-6 h-6 rounded-full border-2 border-[#0b0b1e] bg-[#12122a] flex items-center justify-center text-[9px] font-bold text-[#94a3b8]">
                 +{workspace.members.length - 4}
               </div>
             )}
           </div>
 
-          {/* Search toggle */}
-          <button 
+          <button
+            onClick={() => setIsMobileMembersOpen(true)}
+            className="md:hidden p-2 rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] text-[#94a3b8]"
+          >
+            <Users className="w-3.5 h-3.5" />
+          </button>
+
+          <button
             onClick={() => { setIsSearchOpen(!isSearchOpen); if (isSearchOpen) setSearchQuery('') }}
             className={cn(
               "p-2 rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center",
-              isSearchOpen ? "bg-primary-container text-on-surface" : "bg-surface-container/40 hover:bg-surface-container/60 text-on-surface-variant"
+              isSearchOpen ? "bg-[#f97316]/15 text-[#f97316]" : "bg-white/[0.04] hover:bg-white/[0.08] text-[#94a3b8]"
             )}
           >
             <Search className="w-3.5 h-3.5" />
           </button>
 
-          {/* Invite code */}
-          <button 
+          <button
             onClick={copyInviteCode}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all min-h-[44px]"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl transition-all min-h-[44px]"
           >
-            <span className="text-[10px] font-bold text-on-surface-variant font-mono tracking-tight">{workspace?.invite_code}</span>
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60" />}
+            <span className="text-[10px] font-bold text-[#94a3b8] font-mono tracking-tight">{workspace?.invite_code}</span>
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-[#94a3b8]/60" />}
           </button>
 
-          {/* Knowledge bank button */}
-          <button 
-            onClick={() => setIsKnowledgeDrawerOpen(true)}
-            className="p-2 bg-primary-container rounded-lg hover:bg-primary-container/80 transition-all shadow-lg shadow-primary/20 active:scale-90 min-w-[44px] min-h-[44px] flex items-center justify-center"
+          <button
+            onClick={() => { setIsMobileResourceOpen(true) }}
+            className="md:hidden w-8 h-8 bg-[#f97316] rounded-full flex items-center justify-center hover:opacity-90 transition-all active:scale-90 shadow-lg shadow-[#f97316]/20"
           >
-            <BookOpen className="w-3.5 h-3.5 text-on-surface" />
+            <Plus className="w-4 h-4 text-white" />
           </button>
 
-          {/* Settings dropdown */}
           <div className="relative">
-            <button 
+            <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="p-2 bg-surface-container/40 hover:bg-surface-container/60 rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="p-2 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
-              <Settings className="w-3.5 h-3.5 text-on-surface-variant" />
+              <Settings className="w-3.5 h-3.5 text-[#94a3b8]" />
             </button>
-            
+
             <AnimatePresence>
               {isSettingsOpen && (
                 <>
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     onClick={() => setIsSettingsOpen(false)}
                     className="fixed inset-0 z-30"
                   />
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, scale: 0.95, y: 8 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                    className="absolute right-0 mt-2 w-48 bg-surface-container-high border border-outline-variant/40 rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
+                    className="absolute right-0 mt-2 w-48 bg-[#12122a] border border-white/[0.06] rounded-xl shadow-2xl z-40 p-1.5 overflow-hidden"
                   >
-                    <div className="px-3 py-2.5 border-b border-outline-variant/25 mb-1.5 bg-surface-container/40">
-                      <p className="text-[9px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-2">Workspace Code</p>
-                      <button 
+                    <div className="px-3 py-2.5 border-b border-white/[0.06] mb-1.5 bg-white/[0.04]">
+                      <p className="text-[9px] font-bold text-[#94a3b8]/60 uppercase tracking-wider mb-2">Workspace Code</p>
+                      <button
                         onClick={(e) => { e.stopPropagation(); copyInviteCode(); }}
-                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-outline-variant/40 rounded-lg hover:border-primary/30 transition-all group active:scale-[0.98]"
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-black/40 border border-white/[0.08] rounded-lg hover:border-[#f97316]/30 transition-all group active:scale-[0.98]"
                       >
-                        <span className="text-xs font-mono text-primary-container font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
-                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-on-surface-variant/60 group-hover:text-on-surface/80 transition-colors" />}
+                        <span className="text-xs font-mono text-[#f97316] font-bold tracking-wider">{workspace?.invite_code || '------'}</span>
+                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-[#94a3b8]/60 group-hover:text-white/80 transition-colors" />}
                       </button>
                     </div>
-                    <button 
+                    <button
                       onClick={() => { setIsSearchOpen(!isSearchOpen); setIsSettingsOpen(false) }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all text-xs font-medium sm:hidden"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#94a3b8] hover:bg-white/[0.04] rounded-lg transition-all text-xs font-medium sm:hidden"
                     >
                       <Search className="w-3.5 h-3.5" /> Search messages
                     </button>
                     {workspace?.is_owner ? (
-                      <button 
+                      <button
                         onClick={handleDeleteWorkspace}
                         disabled={isDeleting}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-medium disabled:opacity-50"
@@ -647,10 +643,10 @@ export default function WorkspaceCollaborationStudio() {
                         Delete workspace
                       </button>
                     ) : (
-                      <button 
+                      <button
                         onClick={handleLeaveWorkspace}
                         disabled={isLeaving}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all text-xs font-medium disabled:opacity-50"
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#94a3b8] hover:bg-white/[0.04] rounded-lg transition-all text-xs font-medium disabled:opacity-50"
                       >
                         {isLeaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
                         Leave space
@@ -671,28 +667,28 @@ export default function WorkspaceCollaborationStudio() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="border-b border-outline-variant/20 bg-surface-container-low overflow-hidden flex-shrink-0"
+            className="border-b border-white/[0.06] bg-[#12122a] overflow-hidden flex-shrink-0"
           >
             <div className="px-4 sm:px-8 py-2.5 flex items-center gap-3">
-              <Search className="w-4 h-4 text-on-surface-variant/60 flex-shrink-0" />
+              <Search className="w-4 h-4 text-[#94a3b8]/60 flex-shrink-0" />
               <input
                 autoFocus
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Escape') { setIsSearchOpen(false); setSearchQuery('') } }}
                 placeholder="Search messages..."
-                className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none"
+                className="flex-1 bg-transparent text-sm text-white placeholder:text-[#94a3b8]/40 focus:outline-none"
               />
               {searchQuery.trim() && (
-                <span className="text-[10px] text-on-surface-variant/60 font-medium whitespace-nowrap">
+                <span className="text-[10px] text-[#94a3b8]/60 font-medium whitespace-nowrap">
                   {filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''}
                 </span>
               )}
               <button
                 onClick={() => { setIsSearchOpen(false); setSearchQuery('') }}
-                className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2"
+                className="p-1.5 hover:bg-white/[0.04] rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2"
               >
-                <X className="w-4 h-4 text-on-surface-variant/60" />
+                <X className="w-4 h-4 text-[#94a3b8]/60" />
               </button>
             </div>
           </motion.div>
@@ -702,50 +698,55 @@ export default function WorkspaceCollaborationStudio() {
       {/* ═══════════════ 3-COLUMN BODY ═══════════════ */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── LEFT PANEL: Resources (w-56) ── */}
-        <aside className="hidden md:flex w-56 flex-shrink-0 flex-col bg-surface-container border-r border-outline-variant/20 overflow-hidden">
-          {/* Panel header */}
+        {/* ── LEFT PANEL: Resources (w-60) ── */}
+        <aside className="hidden md:flex w-60 flex-shrink-0 flex-col bg-[#0f0f24] border-r border-white/[0.06] overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
-            <span className="text-xs font-bold tracking-widest uppercase text-primary">Resources</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase text-[#f97316]">Resources</span>
             <button
               onClick={() => setIsKnowledgeDrawerOpen(true)}
-              className="w-7 h-7 flex items-center justify-center rounded-full bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] transition-colors"
               title="Add resource"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 text-[#f97316]" />
             </button>
           </div>
 
-          {/* Resource cards */}
           <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2 custom-scrollbar">
             {(workspace?.resources || []).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
-                <BookOpen className="w-8 h-8 text-on-surface-variant/30" />
-                <p className="text-[11px] text-on-surface-variant/50 leading-relaxed">No resources yet. Add from your library.</p>
+              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center px-4">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500/30 to-orange-500/20 blur-xl" />
+                <p className="text-white font-semibold text-sm">No resources yet</p>
+                <p className="text-[11px] text-[#94a3b8] leading-relaxed">Add from your library to get started.</p>
+                <button
+                  onClick={() => setIsKnowledgeDrawerOpen(true)}
+                  className="mt-2 flex items-center gap-2 px-4 py-2.5 border border-dashed border-white/[0.12] hover:border-[#f97316]/40 rounded-xl text-[11px] font-semibold text-[#94a3b8] hover:text-white transition-all min-h-[44px]"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add from Library
+                </button>
               </div>
             ) : (workspace?.resources || []).map((res: any) => (
               <button
                 key={res.id}
                 onClick={() => { setViewingResource(res); setHubTab('insights'); setIsKnowledgeDrawerOpen(true) }}
-                className="w-full flex items-center gap-3 p-3 bg-surface-container-low border border-outline-variant/30 rounded-[1rem] hover:bg-surface-container-high transition-colors text-left group min-h-[44px]"
+                className="w-full flex items-center gap-3 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl hover:bg-white/[0.04] transition-colors text-left group min-h-[44px]"
               >
-                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <BookOpen className="w-3.5 h-3.5 text-primary-container" />
+                <div className="w-8 h-8 rounded-lg bg-[#f97316]/10 flex items-center justify-center flex-shrink-0">
+                  <BookOpen className="w-3.5 h-3.5 text-[#f97316]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-on-surface truncate leading-tight">{res.title}</p>
-                  <p className="text-[10px] text-on-surface-variant/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
+                  <p className="text-[12px] font-medium text-white truncate leading-tight">{res.title}</p>
+                  <p className="text-[10px] text-[#94a3b8]/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/30 group-hover:text-on-surface-variant transition-colors flex-shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8]/30 group-hover:text-[#94a3b8] transition-colors flex-shrink-0" />
               </button>
             ))}
           </div>
 
-          {/* Add from Library button */}
-          <div className="p-3 border-t border-outline-variant/20">
+          <div className="p-3 border-t border-white/[0.06]">
             <button
               onClick={() => { setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[1rem] bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-[11px] font-semibold text-on-surface-variant min-h-[44px]"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/[0.04] border border-dashed border-white/[0.12] hover:bg-white/[0.08] transition-colors text-[11px] font-semibold text-[#94a3b8] min-h-[44px]"
             >
               <Plus className="w-3.5 h-3.5" />
               Add from Library
@@ -756,48 +757,46 @@ export default function WorkspaceCollaborationStudio() {
         {/* ── CENTER PANEL: Collaborative Chat ── */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-          {/* Message stream */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-6 space-y-1 scroll-smooth custom-scrollbar">
-            {/* Doc title */}
             <div className="mb-6">
-              <h2 className="text-[28px] font-bold text-on-surface leading-tight">{workspace?.name || 'Collab Space'}</h2>
-              {workspace?.subject && <p className="text-sm text-on-surface-variant/60 mt-1">{workspace.subject}</p>}
+              <h2 className="text-[28px] font-bold text-white leading-tight">{workspace?.name || 'Collab Space'}</h2>
+              {workspace?.subject && <p className="text-sm text-[#94a3b8] mt-1">{workspace.subject}</p>}
             </div>
 
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-6">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/15 to-primary-container/10 border border-primary/20 flex items-center justify-center">
-                    <Sparkles className="w-8 h-8 text-primary-container" />
+                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#f97316]/15 to-purple-500/10 border border-[#f97316]/20 flex items-center justify-center">
+                    <Sparkles className="w-8 h-8 text-[#f97316]" />
                   </div>
                   <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                    <Wifi className="w-2.5 h-2.5 text-white" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-white" />
                   </div>
                 </div>
                 <div className="text-center max-w-xs">
-                  <p className="text-sm font-semibold text-on-surface mb-1">Start collaborating</p>
-                  <p className="text-xs text-on-surface-variant/50 leading-relaxed">Send a message to kick things off, or mention @Flow for AI-powered help.</p>
+                  <p className="text-sm font-semibold text-white mb-1">Welcome to {workspace?.name}!</p>
+                  <p className="text-xs text-[#94a3b8] leading-relaxed">Start a conversation or mention @Flow AI for help.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                   <button
                     onClick={() => { setInputText(''); document.querySelector<HTMLInputElement>('input[placeholder*="Message"]')?.focus() }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-primary-container text-on-surface rounded-xl text-xs font-semibold hover:bg-primary transition-all active:scale-95 min-h-[44px]"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#f97316] text-white rounded-xl text-xs font-semibold hover:opacity-90 transition-all active:scale-95 min-h-[44px]"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
                     Send a message
                   </button>
                   <button
                     onClick={() => { setInputText('@Flow '); document.querySelector<HTMLInputElement>('input[placeholder*="Message"]')?.focus() }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-tertiary-container/15 border border-tertiary-container/25 text-on-surface rounded-xl text-xs font-semibold hover:bg-tertiary-container/25 transition-all active:scale-95 min-h-[44px]"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#1a1a2e] border border-purple-500/20 text-white rounded-xl text-xs font-semibold hover:bg-[#1a1a2e]/80 transition-all active:scale-95 min-h-[44px]"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                    Mention @Flow
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    Mention @Flow AI
                   </button>
                   <button
                     onClick={() => setIsKnowledgeDrawerOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-high border border-outline-variant/30 text-on-surface-variant rounded-xl text-xs font-semibold hover:bg-surface-container-highest transition-all active:scale-95 min-h-[44px]"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#12122a] border border-white/[0.06] text-[#94a3b8] rounded-xl text-xs font-semibold hover:bg-white/[0.04] transition-all active:scale-95 min-h-[44px]"
                   >
-                    <ShareIcon className="w-3.5 h-3.5" />
+                    <BookOpen className="w-3.5 h-3.5" />
                     Share a resource
                   </button>
                 </div>
@@ -818,14 +817,14 @@ export default function WorkspaceCollaborationStudio() {
                     <React.Fragment key={ms.id || i}>
                       {showDateSep && (
                         <div className="flex items-center gap-3 py-3">
-                          <div className="flex-1 h-px bg-outline-variant/25" />
-                          <span className="text-[10px] text-on-surface-variant/40 font-medium px-2">{dateLabel}</span>
-                          <div className="flex-1 h-px bg-outline-variant/25" />
+                          <div className="flex-1 h-px bg-white/[0.06]" />
+                          <span className="text-[10px] text-[#94a3b8]/40 font-medium px-2">{dateLabel}</span>
+                          <div className="flex-1 h-px bg-white/[0.06]" />
                         </div>
                       )}
-                      <MessageBubble 
-                        message={ms} 
-                        isMe={isMe} 
+                      <MessageBubble
+                        message={ms}
+                        isMe={isMe}
                         showAvatar={showAvatar}
                         workspaceId={Number(id)}
                         onReply={() => setReplyingTo({
@@ -847,8 +846,8 @@ export default function WorkspaceCollaborationStudio() {
             )}
             {searchQuery.trim() && filteredMessages.length === 0 && messages.length > 0 && (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Search className="w-8 h-8 text-on-surface-variant/30" />
-                <p className="text-sm text-on-surface-variant/60">No messages match "{searchQuery}"</p>
+                <Search className="w-8 h-8 text-[#94a3b8]/30" />
+                <p className="text-sm text-[#94a3b8]/60">No messages match "{searchQuery}"</p>
               </div>
             )}
             <div className="h-2" />
@@ -859,39 +858,39 @@ export default function WorkspaceCollaborationStudio() {
             <div className="absolute bottom-[calc(100%+4px)] left-0 right-0 px-4 sm:px-8 space-y-1.5 pointer-events-none">
               <AnimatePresence mode="wait">
                 {replyingTo && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 8 }}
-                    className="pointer-events-auto bg-surface-container-high border-l-2 border-l-primary border border-outline-variant/40 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xl"
+                    className="pointer-events-auto bg-[#12122a] border-l-2 border-l-[#f97316] border border-white/[0.06] rounded-xl p-3 flex items-center justify-between gap-3 shadow-xl"
                   >
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <Reply className="w-3.5 h-3.5 text-primary-container flex-shrink-0" />
+                      <Reply className="w-3.5 h-3.5 text-[#f97316] flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-[10px] font-semibold text-primary-container mb-0.5">Replying to {replyingTo.author_name}</p>
-                        <p className="text-xs text-on-surface-variant truncate italic">"{replyingTo.content}"</p>
+                        <p className="text-[10px] font-semibold text-[#f97316] mb-0.5">Replying to {replyingTo.author_name}</p>
+                        <p className="text-xs text-[#94a3b8] truncate italic">"{replyingTo.content}"</p>
                       </div>
                     </div>
-                    <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-surface-container-high rounded-md transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
-                      <X className="w-3.5 h-3.5 text-on-surface-variant/60 hover:text-on-surface transition-colors" />
+                    <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-white/[0.04] rounded-md transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                      <X className="w-3.5 h-3.5 text-[#94a3b8]/60 hover:text-white transition-colors" />
                     </button>
                   </motion.div>
                 )}
               </AnimatePresence>
               <AnimatePresence>
                 {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).length > 0 && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high border border-outline-variant/25 rounded-full w-fit shadow-lg"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-[#12122a] border border-white/[0.06] rounded-full w-fit shadow-lg"
                   >
                     <div className="flex gap-0.5">
-                      <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce" />
-                      <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.15s]" />
-                      <span className="w-1 h-1 bg-primary-container rounded-full animate-bounce [animation-delay:0.3s]" />
+                      <span className="w-1 h-1 bg-[#f97316] rounded-full animate-bounce" />
+                      <span className="w-1 h-1 bg-[#f97316] rounded-full animate-bounce [animation-delay:0.15s]" />
+                      <span className="w-1 h-1 bg-[#f97316] rounded-full animate-bounce [animation-delay:0.3s]" />
                     </div>
-                    <span className="text-[10px] text-on-surface-variant/60">
+                    <span className="text-[10px] text-[#94a3b8]/60">
                       {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).map(([user]) => user).join(", ")} {Object.entries(typingUsers).filter(([_, isTyping]) => isTyping).length > 1 ? 'are' : 'is'} typing
                     </span>
                   </motion.div>
@@ -899,16 +898,16 @@ export default function WorkspaceCollaborationStudio() {
               </AnimatePresence>
             </div>
 
-            <div className="bg-surface-container-low border-t border-outline-variant/20 px-4 sm:px-8 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+            <div className="bg-[#12122a] border-t border-white/[0.06] px-4 sm:px-8 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
               {attachmentFile && (
                 <div className="max-w-4xl mx-auto mb-3 flex items-center gap-2">
                   <div className="relative inline-block animate-in fade-in slide-in-from-bottom-2">
                     {attachmentFile.type.startsWith('video/') ? (
-                      <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center border border-outline-variant/50 shadow-lg">
-                        <Video className="w-6 h-6 text-on-surface-variant" />
+                      <div className="w-16 h-16 rounded-xl bg-[#1a1a2e] flex items-center justify-center border border-white/[0.08] shadow-lg">
+                        <FileText className="w-6 h-6 text-[#94a3b8]" />
                       </div>
                     ) : (
-                      <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-outline-variant/50 shadow-lg" />
+                      <img src={URL.createObjectURL(attachmentFile)} className="w-16 h-16 rounded-xl object-cover border border-white/[0.08] shadow-lg" />
                     )}
                     <button onClick={() => setAttachmentFile(null)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 shadow-md text-white transition-all">
                       <X className="w-3 h-3" />
@@ -920,7 +919,7 @@ export default function WorkspaceCollaborationStudio() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
+                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-white/[0.04] text-[#94a3b8]/60 hover:text-white hover:bg-white/[0.08]"
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
@@ -933,86 +932,81 @@ export default function WorkspaceCollaborationStudio() {
                     }
                   }}
                 />
-                <button 
+                <button
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
                   className={cn(
                     "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0",
-                    isRecording ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" : "bg-surface-container/40 text-on-surface-variant/60 hover:text-primary-container hover:bg-surface-container/60"
+                    isRecording ? "bg-red-500 shadow-lg shadow-red-500/30 animate-pulse" : "bg-white/[0.04] text-[#94a3b8]/60 hover:text-white hover:bg-white/[0.08]"
                   )}
                 >
                   {isRecording ? <Square className="w-3.5 h-3.5 fill-white text-white" /> : <Mic className="w-4 h-4" />}
                 </button>
-                <div className="flex-1 relative flex items-center bg-surface-container-highest border-2 border-transparent focus-within:border-tertiary-container rounded-full transition-all">
-                  <input 
+                <button
+                  type="button"
+                  onClick={() => { setIsKnowledgeDrawerOpen(true) }}
+                  className="hidden sm:flex w-11 h-11 rounded-xl items-center justify-center transition-all duration-200 flex-shrink-0 bg-white/[0.04] text-[#94a3b8]/60 hover:text-purple-400 hover:bg-white/[0.08]"
+                >
+                  <SmilePlus className="w-4 h-4" />
+                </button>
+                <div className="flex-1 relative flex items-center bg-white/[0.06] rounded-full transition-all">
+                  <input
                     value={inputText}
                     onChange={(e) => { setInputText(e.target.value); handleUserTyping() }}
-                    placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message or ask @Flow..."}
+                    placeholder={isRecording ? `Recording... ${recordingDuration}s` : replyingTo ? `Reply to ${replyingTo.author_name}...` : "Message @Flow AI or your team..."}
                     disabled={isRecording}
-                    className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-on-surface-variant/40 disabled:opacity-50 min-w-0"
+                    className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none placeholder:text-[#94a3b8]/40 text-white disabled:opacity-50 min-w-0"
                   />
-                  <button 
+                  <button
                     type="submit"
-                    className="mr-1.5 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 text-on-tertiary-container"
+                    className="mr-1.5 w-9 h-9 bg-purple-600 rounded-full flex items-center justify-center hover:opacity-90 transition-all active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 text-white"
                     disabled={isRecording || !inputText.trim()}
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </form>
-              <p className="text-center text-[10px] text-on-surface-variant/40 mt-2 max-w-4xl mx-auto">
-                {isRecording ? "Tap mic to stop & send" : "Mention @Flow for AI · Swipe message to reply"}
+              <p className="text-center text-[10px] text-[#94a3b8]/40 mt-2 max-w-4xl mx-auto">
+                {isRecording ? "Tap mic to stop & send" : "Press Enter to send • Shift + Enter for new line"}
               </p>
             </div>
           </div>
         </main>
 
         {/* ── RIGHT PANEL: Members & Stats (w-64) ── */}
-        <aside className="hidden md:flex w-64 flex-shrink-0 flex-col bg-surface-container border-l border-outline-variant/20 overflow-hidden">
-          {/* Stats section */}
-          <div className="px-4 pt-5 pb-3 border-b border-outline-variant/20">
-            <p className="text-[10px] font-bold tracking-widest uppercase text-primary mb-3">Workspace</p>
+        <aside className="hidden md:flex w-64 flex-shrink-0 flex-col bg-[#0f0f24] border-l border-white/[0.06] overflow-hidden">
+          <div className="px-4 pt-5 pb-3 border-b border-white/[0.06]">
+            <p className="text-[10px] font-bold tracking-wider uppercase text-[#f97316] mb-3">Workspace ⚡</p>
             <div className="grid grid-cols-3 gap-2">
-              <div className="flex flex-col items-center gap-1 p-2 bg-surface-container-low rounded-xl border border-outline-variant/15">
-                <div className="flex items-center gap-1">
-                  <Users className="w-3 h-3 text-on-surface-variant/60" />
-                  <span className="text-sm font-bold text-on-surface">{workspace?.members?.length || 0}</span>
-                </div>
-                <span className="text-[9px] text-on-surface-variant/50">Members</span>
-                {onlineUsers.size > 0 && (
-                  <span className="text-[8px] text-emerald-400 font-medium">{onlineUsers.size} online</span>
-                )}
+              <div className="flex flex-col items-center gap-1 p-3 bg-white/[0.04] rounded-xl text-center">
+                <Users className="w-3.5 h-3.5 text-[#94a3b8]/60" />
+                <span className="text-sm font-bold text-white">{workspace?.members?.length || 0}</span>
+                <span className="text-[10px] text-[#94a3b8]">Members</span>
               </div>
-              <div className="flex flex-col items-center gap-1 p-2 bg-surface-container-low rounded-xl border border-outline-variant/15">
-                <div className="flex items-center gap-1">
-                  <MessageCircle className="w-3 h-3 text-on-surface-variant/60" />
-                  <span className="text-sm font-bold text-on-surface">{messages.length}</span>
-                </div>
-                <span className="text-[9px] text-on-surface-variant/50">Messages</span>
+              <div className="flex flex-col items-center gap-1 p-3 bg-white/[0.04] rounded-xl text-center">
+                <MessageCircle className="w-3.5 h-3.5 text-[#94a3b8]/60" />
+                <span className="text-sm font-bold text-white">{messages.length}</span>
+                <span className="text-[10px] text-[#94a3b8]">Messages</span>
               </div>
-              <div className="flex flex-col items-center gap-1 p-2 bg-surface-container-low rounded-xl border border-outline-variant/15">
-                <div className="flex items-center gap-1">
-                  <BookOpen className="w-3 h-3 text-on-surface-variant/60" />
-                  <span className="text-sm font-bold text-on-surface">{workspace?.resources?.length || 0}</span>
-                </div>
-                <span className="text-[9px] text-on-surface-variant/50">Resources</span>
+              <div className="flex flex-col items-center gap-1 p-3 bg-white/[0.04] rounded-xl text-center">
+                <FolderOpen className="w-3.5 h-3.5 text-[#94a3b8]/60" />
+                <span className="text-sm font-bold text-white">{workspace?.resources?.length || 0}</span>
+                <span className="text-[10px] text-[#94a3b8]">Resources</span>
               </div>
             </div>
           </div>
 
-          {/* Members header */}
           <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <span className="text-xs font-bold tracking-widest uppercase text-primary">Members</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase text-white">Members</span>
             <button
               onClick={copyInviteCode}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary-container rounded-lg transition-all text-[10px] font-semibold min-h-[44px]"
+              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/[0.04] text-[#f97316] rounded-lg transition-all text-[10px] font-semibold min-h-[44px]"
             >
               {copied ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
               {copied ? 'Copied' : 'Invite'}
             </button>
           </div>
 
-          {/* Member list */}
           <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1 custom-scrollbar">
             {(workspace?.members || []).map((member: any) => {
               const memberUser = member.user
@@ -1021,25 +1015,25 @@ export default function WorkspaceCollaborationStudio() {
               return (
                 <div
                   key={member.id || memberUser?.id}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-container-high transition-colors"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors"
                 >
                   <div className="relative flex-shrink-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold uppercase text-on-surface">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#f97316] to-[#ea580c] flex items-center justify-center text-[11px] font-bold uppercase text-white">
                       {memberUser?.username?.[0] || '?'}
                     </div>
                     <span className={cn(
-                      "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-container",
+                      "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0f0f24]",
                       isOnline ? "bg-emerald-500" : "bg-gray-600"
                     )} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-medium text-on-surface truncate">
+                      <p className="text-xs font-medium text-white truncate">
                         {memberUser?.username || 'Member'}
                       </p>
-                      {isMe && <span className="text-[8px] text-on-surface-variant/40">(you)</span>}
+                      {isMe && <span className="text-[8px] text-[#94a3b8]/40">(you)</span>}
                     </div>
-                    <p className="text-[10px] text-on-surface-variant/50 capitalize truncate">
+                    <p className="text-[10px] text-[#94a3b8] capitalize truncate">
                       {member.role || 'Member'}
                     </p>
                   </div>
@@ -1048,26 +1042,26 @@ export default function WorkspaceCollaborationStudio() {
             })}
           </div>
 
-          {/* Bottom: invite shortcut */}
-          <div className="p-3 border-t border-outline-variant/20">
-            <button
-              onClick={copyInviteCode}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-[11px] font-semibold text-on-surface-variant min-h-[44px]"
-            >
-              <Copy className="w-3 h-3" />
-              Copy Invite Code
-            </button>
+          <div className="p-3 border-t border-white/[0.06]">
+            <p className="text-[10px] font-bold tracking-wider uppercase text-white mb-2">Invite Code</p>
+            <div className="flex items-center gap-2 p-3 bg-white/[0.04] border border-white/[0.08] rounded-lg">
+              <span className="text-xs font-mono text-white font-bold tracking-wider flex-1">{workspace?.invite_code || '------'}</span>
+              <button onClick={copyInviteCode} className="p-1.5 hover:bg-white/[0.08] rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#94a3b8]" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-[#94a3b8]/50 mt-2">Share this code with others to invite them to this workspace.</p>
           </div>
         </aside>
 
-      </div>{/* end 3-col body */}
+      </div>
 
       {/* ═══════════════ MOBILE BOTTOM BAR (Resources) ═══════════════ */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 pb-[env(safe-area-inset-bottom)]">
-        <div className="bg-surface-container-low border-t border-outline-variant/20 px-4 py-2 flex items-center justify-center">
+        <div className="bg-[#12122a] border-t border-white/[0.06] px-4 py-2 flex items-center justify-center">
           <button
             onClick={() => setIsMobileResourceOpen(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-primary-container text-on-surface rounded-xl text-xs font-semibold hover:bg-primary transition-all active:scale-95 shadow-lg shadow-primary/20 min-h-[44px]"
+            className="flex items-center gap-2 px-5 py-3 bg-[#f97316] text-white rounded-xl text-xs font-semibold hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-[#f97316]/20 min-h-[44px]"
           >
             <BookOpen className="w-4 h-4" />
             Resources
@@ -1079,6 +1073,81 @@ export default function WorkspaceCollaborationStudio() {
           </button>
         </div>
       </div>
+
+      {/* ═══════════════ MOBILE MEMBERS SHEET ═══════════════ */}
+      <AnimatePresence>
+        {isMobileMembersOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMembersOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] md:hidden"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-[#0b0b1e] border-t border-white/[0.06] z-[90] md:hidden rounded-t-2xl max-h-[75vh] flex flex-col"
+              style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <Users className="w-4 h-4 text-[#f97316]" />
+                  <h2 className="text-sm font-semibold text-white">Members</h2>
+                </div>
+                <button
+                  onClick={() => setIsMobileMembersOpen(false)}
+                  className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-white/[0.04] transition-colors"
+                >
+                  <X className="w-4 h-4 text-[#94a3b8]" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                {(workspace?.members || []).map((member: any) => {
+                  const memberUser = member.user
+                  const isOnline = onlineUsers.has(String(memberUser?.id))
+                  return (
+                    <div
+                      key={member.id || memberUser?.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors"
+                    >
+                      <div className="relative flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#f97316] to-[#ea580c] flex items-center justify-center text-[11px] font-bold uppercase text-white">
+                          {memberUser?.username?.[0] || '?'}
+                        </div>
+                        <span className={cn(
+                          "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0b0b1e]",
+                          isOnline ? "bg-emerald-500" : "bg-gray-600"
+                        )} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-white truncate">
+                          {memberUser?.username || 'Member'}
+                        </p>
+                        <p className="text-[10px] text-[#94a3b8] capitalize truncate">
+                          {member.role || 'Member'}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="p-4 border-t border-white/[0.06]">
+                <button
+                  onClick={copyInviteCode}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-xs font-semibold text-[#94a3b8] min-h-[44px]"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied!' : 'Copy Invite Code'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ═══════════════ MOBILE RESOURCE BOTTOM SHEET ═══════════════ */}
       <AnimatePresence>
@@ -1096,31 +1165,30 @@ export default function WorkspaceCollaborationStudio() {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-background border-t border-outline-variant/25 z-[90] md:hidden rounded-t-2xl max-h-[75vh] flex flex-col"
+              className="fixed bottom-0 left-0 right-0 bg-[#0b0b1e] border-t border-white/[0.06] z-[90] md:hidden rounded-t-2xl max-h-[75vh] flex flex-col"
               style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/25">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-3.5 h-3.5 text-primary-container" />
-                  </div>
-                  <h2 className="text-sm font-semibold text-on-surface">Resources</h2>
+                  <BookOpen className="w-4 h-4 text-[#f97316]" />
+                  <h2 className="text-sm font-semibold text-white">Resources</h2>
                 </div>
                 <button
                   onClick={() => setIsMobileResourceOpen(false)}
-                  className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-surface-container-high transition-colors"
+                  className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-white/[0.04] transition-colors"
                 >
-                  <X className="w-4 h-4 text-on-surface-variant" />
+                  <X className="w-4 h-4 text-[#94a3b8]" />
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                 {(workspace?.resources || []).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <BookOpen className="w-10 h-10 text-on-surface-variant/30" />
-                    <p className="text-xs text-on-surface-variant/50 text-center">No resources yet. Add from your library.</p>
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500/30 to-orange-500/20 blur-xl" />
+                    <p className="text-white font-semibold">No resources yet</p>
+                    <p className="text-xs text-[#94a3b8] text-center">Add from your library to get started.</p>
                     <button
                       onClick={() => { setIsMobileResourceOpen(false); setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-primary-container text-on-surface rounded-xl text-xs font-semibold min-h-[44px]"
+                      className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-white/[0.12] text-[#94a3b8] rounded-xl text-xs font-semibold min-h-[44px]"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add from Library
@@ -1132,21 +1200,21 @@ export default function WorkspaceCollaborationStudio() {
                       <button
                         key={res.id}
                         onClick={() => { setIsMobileResourceOpen(false); setViewingResource(res); setHubTab('insights'); setIsKnowledgeDrawerOpen(true) }}
-                        className="w-full flex items-center gap-3 p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl text-left min-h-[44px]"
+                        className="w-full flex items-center gap-3 p-3.5 bg-white/[0.04] border border-white/[0.08] rounded-xl text-left min-h-[44px]"
                       >
-                        <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="w-3.5 h-3.5 text-primary-container" />
+                        <div className="w-8 h-8 rounded-lg bg-[#f97316]/10 flex items-center justify-center flex-shrink-0">
+                          <BookOpen className="w-3.5 h-3.5 text-[#f97316]" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-on-surface truncate">{res.title}</p>
-                          <p className="text-[10px] text-on-surface-variant/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
+                          <p className="text-sm font-medium text-white truncate">{res.title}</p>
+                          <p className="text-[10px] text-[#94a3b8]/50 capitalize mt-0.5">{res.resource_type || 'Note'}</p>
                         </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/40 flex-shrink-0" />
+                        <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8]/40 flex-shrink-0" />
                       </button>
                     ))}
                     <button
                       onClick={() => { setIsMobileResourceOpen(false); setHubView('library'); setIsKnowledgeDrawerOpen(true) }}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-container-high border border-outline-variant/30 text-xs font-semibold text-on-surface-variant min-h-[44px]"
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/[0.04] border border-dashed border-white/[0.12] text-xs font-semibold text-[#94a3b8] min-h-[44px]"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add from Library
@@ -1163,42 +1231,41 @@ export default function WorkspaceCollaborationStudio() {
       <AnimatePresence>
         {isKnowledgeDrawerOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsKnowledgeDrawerOpen(false)}
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-background border-l border-outline-variant/25 z-[70] flex flex-col"
+              className="fixed right-0 top-0 bottom-0 w-full sm:max-w-sm bg-[#0b0b1e] border-l border-white/[0.06] z-[70] flex flex-col"
             >
-              {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/25"
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]"
                 style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-3.5 h-3.5 text-primary-container" />
+                  <div className="w-7 h-7 bg-[#f97316]/10 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-3.5 h-3.5 text-[#f97316]" />
                   </div>
-                  <h2 className="text-sm font-semibold text-on-surface">
+                  <h2 className="text-sm font-semibold text-white">
                     {viewingResource ? viewingResource.title : 'Knowledge Bank'}
                   </h2>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button 
-                    onClick={() => { 
+                  <button
+                    onClick={() => {
                       if (viewingResource) {
                         setViewingResource(null)
                       } else {
                         setIsKnowledgeDrawerOpen(false)
                       }
-                    }} 
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest rounded-xl transition-all text-on-surface/80 hover:text-on-surface min-h-[44px]"
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl transition-all text-white/80 hover:text-white min-h-[44px]"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span className="text-xs font-semibold">Back</span>
@@ -1206,16 +1273,15 @@ export default function WorkspaceCollaborationStudio() {
                 </div>
               </div>
 
-              {/* Hub Tab Switcher */}
               {viewingResource && (
-                <div className="px-5 py-3 flex items-center gap-1.5 border-b border-outline-variant/25">
-                  <button 
+                <div className="px-5 py-3 flex items-center gap-1.5 border-b border-white/[0.06]">
+                  <button
                     onClick={() => setHubTab('insights')}
-                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all min-h-[44px]", hubTab === 'insights' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
+                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all min-h-[44px]", hubTab === 'insights' ? "bg-[#f97316]/15 text-[#f97316]" : "text-[#94a3b8]/60 hover:text-white/80 hover:bg-white/[0.04]")}
                   >AI Insights</button>
-                  <button 
+                  <button
                     onClick={() => setHubTab('source')}
-                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all min-h-[44px]", hubTab === 'source' ? "bg-primary-container text-on-surface shadow-lg shadow-primary/20" : "text-on-surface-variant/60 hover:text-on-surface/80 hover:bg-surface-container-high")}
+                    className={cn("flex-1 py-2 text-xs font-medium rounded-lg transition-all min-h-[44px]", hubTab === 'source' ? "bg-[#f97316]/15 text-[#f97316]" : "text-[#94a3b8]/60 hover:text-white/80 hover:bg-white/[0.04]")}
                   >Source PDF</button>
                 </div>
               )}
@@ -1225,12 +1291,12 @@ export default function WorkspaceCollaborationStudio() {
                   {!viewingResource ? (
                     <motion.div key="list" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col p-5 space-y-4 overflow-hidden">
                       <div className="flex items-center justify-between">
-                        <div className="flex gap-1 p-1 bg-surface-container-high rounded-lg border border-outline-variant/25">
-                          <button onClick={() => setHubView('shared')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all min-h-[44px]", hubView === 'shared' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Shared</button>
-                          <button onClick={() => setHubView('library')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all min-h-[44px]", hubView === 'library' ? "bg-background text-on-surface shadow-sm" : "text-on-surface-variant/60 hover:text-on-surface/80")}>Library</button>
+                        <div className="flex gap-1 p-1 bg-white/[0.04] rounded-lg border border-white/[0.06]">
+                          <button onClick={() => setHubView('shared')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all min-h-[44px]", hubView === 'shared' ? "bg-[#12122a] text-white shadow-sm" : "text-[#94a3b8]/60 hover:text-white/80")}>Shared</button>
+                          <button onClick={() => setHubView('library')} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all min-h-[44px]", hubView === 'library' ? "bg-[#12122a] text-white shadow-sm" : "text-[#94a3b8]/60 hover:text-white/80")}>Library</button>
                         </div>
                         {hubView === 'shared' && (
-                          <button onClick={() => setHubView('library')} className="p-1.5 bg-primary/10 text-primary-container rounded-lg hover:bg-primary-container hover:text-on-surface transition-all min-w-[44px] min-h-[44px] flex items-center justify-center" title="Add from Library">
+                          <button onClick={() => setHubView('library')} className="p-1.5 bg-[#f97316]/10 text-[#f97316] rounded-lg hover:bg-[#f97316]/20 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center" title="Add from Library">
                             <Plus className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -1240,19 +1306,19 @@ export default function WorkspaceCollaborationStudio() {
                           <>
                             {(workspace?.resources || []).length === 0 ? (
                               <div className="text-center py-12">
-                                <BookOpen className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
-                                <p className="text-xs text-on-surface-variant/60 font-medium">No shared resources yet</p>
-                                <button onClick={() => setHubView('library')} className="mt-3 text-xs text-primary-container font-medium hover:text-primary transition-colors min-h-[44px] inline-flex items-center">+ Add from library</button>
+                                <BookOpen className="w-8 h-8 text-[#94a3b8]/30 mx-auto mb-3" />
+                                <p className="text-xs text-[#94a3b8]/60 font-medium">No shared resources yet</p>
+                                <button onClick={() => setHubView('library')} className="mt-3 text-xs text-[#f97316] font-medium hover:opacity-80 transition-colors min-h-[44px] inline-flex items-center">+ Add from library</button>
                               </div>
                             ) : (workspace.resources.map((res: any) => (
                               <div key={res.id} className="group relative">
-                                <button onClick={() => { setViewingResource(res); setHubTab('insights') }} className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl transition-all text-left flex items-start gap-3 hover:border-primary/20 active:scale-[0.98] min-h-[44px]">
-                                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-primary-container" /></div>
+                                <button onClick={() => { setViewingResource(res); setHubTab('insights') }} className="w-full p-3.5 bg-white/[0.04] border border-white/[0.08] rounded-xl transition-all text-left flex items-start gap-3 hover:border-[#f97316]/20 active:scale-[0.98] min-h-[44px]">
+                                  <div className="w-8 h-8 bg-[#f97316]/10 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-[#f97316]" /></div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-on-surface truncate">{res.title}</p>
-                                    <p className="text-[10px] text-on-surface-variant/60 mt-0.5 capitalize">{res.resource_type || 'Note'}</p>
+                                    <p className="text-sm font-medium text-white truncate">{res.title}</p>
+                                    <p className="text-[10px] text-[#94a3b8]/60 mt-0.5 capitalize">{res.resource_type || 'Note'}</p>
                                   </div>
-                                  <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/40 group-hover:text-on-surface-variant flex-shrink-0 mt-0.5" />
+                                  <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8]/40 group-hover:text-[#94a3b8] flex-shrink-0 mt-0.5" />
                                 </button>
                               </div>
                             )))}
@@ -1261,19 +1327,19 @@ export default function WorkspaceCollaborationStudio() {
                           <>
                             {libraryResources.filter(res => !workspace?.resources?.some((r: any) => r.id === res.id)).length === 0 ? (
                               <div className="text-center py-12">
-                                <Check className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
-                                <p className="text-xs text-on-surface-variant/60 font-medium px-6 leading-relaxed">All your library resources are already linked</p>
+                                <Check className="w-8 h-8 text-[#94a3b8]/30 mx-auto mb-3" />
+                                <p className="text-xs text-[#94a3b8]/60 font-medium px-6 leading-relaxed">All your library resources are already linked</p>
                               </div>
                             ) : libraryResources.filter(res => !workspace?.resources?.some((r: any) => r.id === res.id)).map((res) => (
                               <div key={res.id} className="group relative">
-                                <div className="w-full p-3.5 bg-surface-container-high border border-outline-variant/25 rounded-xl flex items-start gap-3 min-h-[44px]">
-                                  <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-on-surface-variant/60" /></div>
+                                <div className="w-full p-3.5 bg-white/[0.04] border border-white/[0.08] rounded-xl flex items-start gap-3 min-h-[44px]">
+                                  <div className="w-8 h-8 bg-[#1a1a2e] rounded-lg flex items-center justify-center flex-shrink-0"><BookOpen className="w-3.5 h-3.5 text-[#94a3b8]/60" /></div>
                                   <div className="flex-1 min-w-0 pr-8">
-                                    <p className="text-sm font-medium text-on-surface-variant truncate">{res.title}</p>
-                                    <p className="text-[10px] text-on-surface-variant/40 mt-0.5">In your library</p>
+                                    <p className="text-sm font-medium text-[#94a3b8] truncate">{res.title}</p>
+                                    <p className="text-[10px] text-[#94a3b8]/40 mt-0.5">In your library</p>
                                   </div>
                                 </div>
-                                <button onClick={() => handleShareResource(res.id)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary-container rounded-lg group-hover:bg-primary-container group-hover:text-on-surface transition-all min-w-[44px] min-h-[44px] flex items-center justify-center" title="Add to Workspace">
+                                <button onClick={() => handleShareResource(res.id)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-[#f97316]/10 text-[#f97316] rounded-lg group-hover:bg-[#f97316]/20 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center" title="Add to Workspace">
                                   <Plus className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -1288,24 +1354,24 @@ export default function WorkspaceCollaborationStudio() {
                         {hubTab === 'insights' ? (
                           <div>
                             <div className="mb-6">
-                              <h3 className="text-base font-semibold text-on-surface leading-tight mb-2">{viewingResource.title}</h3>
+                              <h3 className="text-base font-semibold text-white leading-tight mb-2">{viewingResource.title}</h3>
                               <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-primary/10 text-primary-container text-[10px] font-medium rounded-md border border-primary/20 capitalize">{viewingResource.resource_type || 'Note'}</span>
+                                <span className="px-2 py-0.5 bg-[#f97316]/10 text-[#f97316] text-[10px] font-medium rounded-md border border-[#f97316]/20 capitalize">{viewingResource.resource_type || 'Note'}</span>
                               </div>
                             </div>
                             {viewingResource.ai_summary && (
-                              <div className="mb-6 p-4 bg-surface-container-high border border-violet-500/15 rounded-xl">
+                              <div className="mb-6 p-4 bg-[#12122a] border border-purple-500/15 rounded-xl">
                                 <div className="flex items-center gap-2 mb-3">
-                                  <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                                  <span className="text-xs font-medium text-on-surface-variant">AI Summary</span>
+                                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                  <span className="text-xs font-medium text-[#94a3b8]">AI Summary</span>
                                 </div>
-                                <div className="prose prose-invert prose-sm leading-relaxed text-on-surface/80 text-sm">
+                                <div className="prose prose-invert prose-sm leading-relaxed text-white/80 text-sm">
                                   <ReactMarkdown>{viewingResource.ai_summary}</ReactMarkdown>
                                 </div>
                               </div>
                             )}
                             {viewingResource.ai_notes_json && (
-                              <RichNotesViewer 
+                              <RichNotesViewer
                                 resourceId={viewingResource.id}
                                 notes={typeof viewingResource.ai_notes_json === 'string' ? JSON.parse(viewingResource.ai_notes_json) : viewingResource.ai_notes_json}
                                 isEditing={false}
@@ -1315,34 +1381,34 @@ export default function WorkspaceCollaborationStudio() {
                             )}
                           </div>
                         ) : (
-                          <div className="h-[600px] w-full rounded-xl overflow-hidden border border-outline-variant/25 bg-surface-container-high">
+                          <div className="h-[600px] w-full rounded-xl overflow-hidden border border-white/[0.08] bg-[#12122a]">
                             {viewingResource.file_url ? (
                               <PDFViewer fileUrl={viewingResource.file_url} title={viewingResource.title} />
                             ) : (
                               <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                                <div className="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center mb-3">
-                                  <ExternalLink className="w-5 h-5 text-on-surface-variant/40" />
+                                <div className="w-12 h-12 bg-[#12122a] rounded-xl flex items-center justify-center mb-3">
+                                  <ExternalLink className="w-5 h-5 text-[#94a3b8]/40" />
                                 </div>
-                                <h4 className="text-sm font-medium text-on-surface mb-1">Source unavailable</h4>
-                                <p className="text-xs text-on-surface-variant/60 max-w-[180px]">No PDF linked to this resource.</p>
+                                <h4 className="text-sm font-medium text-white mb-1">Source unavailable</h4>
+                                <p className="text-xs text-[#94a3b8]/60 max-w-[180px]">No PDF linked to this resource.</p>
                               </div>
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="p-5 border-t border-outline-variant/25 space-y-2.5">
+                      <div className="p-5 border-t border-white/[0.06] space-y-2.5">
                         <div className="grid grid-cols-2 gap-2">
-                          <button onClick={() => { const link = document.createElement('a'); link.href = viewingResource.file_url; link.download = viewingResource.title; link.click() }} className="py-2.5 bg-surface-container-high border border-outline-variant/40 text-on-surface/80 rounded-xl text-xs font-medium hover:border-outline-variant/70 transition-all flex items-center justify-center gap-2 min-h-[44px]">
-                            <Download className="w-3.5 h-3.5 text-on-surface-variant/60" /> Download
+                          <button onClick={() => { const link = document.createElement('a'); link.href = viewingResource.file_url; link.download = viewingResource.title; link.click() }} className="py-2.5 bg-white/[0.04] border border-white/[0.08] text-white/80 rounded-xl text-xs font-medium hover:border-white/[0.12] transition-all flex items-center justify-center gap-2 min-h-[44px]">
+                            <Download className="w-3.5 h-3.5 text-[#94a3b8]/60" /> Download
                           </button>
                           {viewingResource.owner?.id !== session?.user?.id && (
-                            <button onClick={handleCloneResource} disabled={isCloning} className={cn("py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 min-h-[44px]", isCloning ? "bg-slate-800 text-on-surface-variant/60 cursor-not-allowed" : "bg-primary-container text-on-surface hover:bg-primary shadow-lg shadow-primary/20 active:scale-95")}>
+                            <button onClick={handleCloneResource} disabled={isCloning} className={cn("py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 min-h-[44px]", isCloning ? "bg-[#1a1a2e] text-[#94a3b8]/60 cursor-not-allowed" : "bg-[#f97316] text-white hover:opacity-90 active:scale-95")}>
                               {isCloning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
                               {isCloning ? 'Saving...' : 'Save to Library'}
                             </button>
                           )}
                         </div>
-                        <button onClick={() => handleShareResource(viewingResource.id)} className="w-full py-3 bg-surface-container-high border border-primary/20 text-primary-container rounded-xl text-xs font-medium hover:bg-primary/10 transition-all flex items-center justify-center gap-2 min-h-[44px]">
+                        <button onClick={() => handleShareResource(viewingResource.id)} className="w-full py-3 bg-white/[0.04] border border-[#f97316]/20 text-[#f97316] rounded-xl text-xs font-medium hover:bg-[#f97316]/10 transition-all flex items-center justify-center gap-2 min-h-[44px]">
                           <Pin className="w-3.5 h-3.5" /> Share to chat
                         </button>
                       </div>
@@ -1355,7 +1421,7 @@ export default function WorkspaceCollaborationStudio() {
         )}
       </AnimatePresence>
 
-      <ConfirmationModal 
+      <ConfirmationModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
@@ -1376,16 +1442,6 @@ export default function WorkspaceCollaborationStudio() {
         }
       `}</style>
     </div>
-  )
-}
-
-function ShareIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-      <polyline points="16 6 12 2 8 6" />
-      <line x1="12" y1="2" x2="12" y2="15" />
-    </svg>
   )
 }
 
@@ -1423,7 +1479,7 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
     <div className={cn(
       "mt-2 flex items-center gap-2.5 p-2.5 rounded-2xl min-w-[180px] sm:min-w-[220px]",
       error ? "bg-red-500/10 border border-red-500/20" :
-      isMe ? "bg-black/20" : "bg-background border border-outline-variant/25"
+      isMe ? "bg-black/20" : "bg-[#12122a] border border-white/[0.08]"
     )}>
       <audio
         ref={audioRef}
@@ -1444,46 +1500,46 @@ function AudioPlayer({ url, isMe }: { url: string, isMe: boolean }) {
         className={cn(
           "w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0",
           error ? "bg-red-500/20 text-red-400 cursor-not-allowed" :
-          isMe ? "bg-white/20 text-on-surface hover:bg-white/30" : "bg-primary-container text-on-surface hover:bg-primary shadow-sm shadow-primary/30"
+          isMe ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#f97316] text-white hover:opacity-90 shadow-sm shadow-[#f97316]/30"
         )}
       >
         {error ? <span className="text-[8px] font-bold">ERR</span> :
          isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
       </button>
       <div className="flex-1 min-w-0">
-        <div className="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden cursor-pointer"
+        <div className="h-1 w-full bg-white/[0.06] rounded-full overflow-hidden cursor-pointer"
           onClick={e => {
             if (!audioRef.current || error) return
             const rect = e.currentTarget.getBoundingClientRect()
             const pct = (e.clientX - rect.left) / rect.width
             audioRef.current.currentTime = pct * audioRef.current.duration
           }}>
-          <div className={cn("h-full rounded-full transition-all", isMe ? "bg-white/70" : "bg-primary-container")}
+          <div className={cn("h-full rounded-full transition-all", isMe ? "bg-white/70" : "bg-[#f97316]")}
             style={{ width: `${progress}%` }} />
         </div>
         <div className="mt-1 flex justify-between items-center">
-          <span className="text-[9px] text-on-surface-variant/60">{error ? 'Failed to load' : 'Voice note'}</span>
-          {duration > 0 && <span className="text-[9px] text-on-surface-variant/40 font-mono">{formatTime(duration)}</span>}
+          <span className="text-[9px] text-[#94a3b8]/60">{error ? 'Failed to load' : 'Voice note'}</span>
+          {duration > 0 && <span className="text-[9px] text-[#94a3b8]/40 font-mono">{formatTime(duration)}</span>}
         </div>
       </div>
     </div>
   )
 }
 
-function MessageBubble({ 
-  message, 
-  isMe, 
-  showAvatar = true, 
-  onReply, 
+function MessageBubble({
+  message,
+  isMe,
+  showAvatar = true,
+  onReply,
   onViewResource,
   workspaceId,
   reactions = {},
   onReact
-}: { 
-  message: any, 
-  isMe: boolean, 
-  showAvatar?: boolean, 
-  onReply: () => void, 
+}: {
+  message: any,
+  isMe: boolean,
+  showAvatar?: boolean,
+  onReply: () => void,
   onViewResource: (res: any) => void,
   workspaceId: number,
   reactions?: Record<string, string[]>,
@@ -1556,7 +1612,7 @@ function MessageBubble({
   const hasReactions = Object.keys(reactions).length > 0
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       drag="x"
@@ -1572,13 +1628,12 @@ function MessageBubble({
         !showAvatar ? 'mt-0.5' : 'mt-3'
       )}
     >
-      {/* Avatar */}
       {showAvatar ? (
         <div className={cn(
           "w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-semibold uppercase mb-0.5",
-          isAI ? 'bg-gradient-to-br from-violet-600 to-indigo-600' : isMe ? 'bg-primary-container' : 'bg-slate-700'
+          isAI ? 'bg-gradient-to-br from-purple-600 to-indigo-600' : isMe ? 'bg-gradient-to-br from-[#f97316] to-[#ea580c]' : 'bg-[#1a1a2e] border border-white/[0.08]'
         )}>
-          {isAI ? <Sparkles className="w-3.5 h-3.5 text-on-surface" /> : (message.author?.username?.[0] || 'U')}
+          {isAI ? <Sparkles className="w-3.5 h-3.5 text-white" /> : (message.author?.username?.[0] || 'U')}
         </div>
       ) : (
         <div className="w-7 flex-shrink-0" />
@@ -1587,10 +1642,10 @@ function MessageBubble({
       <div className={cn("flex flex-col max-w-[85%] sm:max-w-[70%]", isMe ? 'items-end' : 'items-start')}>
         {showAvatar && (
           <div className={cn("flex items-center gap-1.5 mb-1 px-1", isMe ? 'flex-row-reverse' : '')}>
-            <span className="text-[11px] font-medium text-on-surface-variant">
+            <span className="text-[11px] font-medium text-[#94a3b8]">
               {isAI ? 'Flow AI' : message.author?.username || 'Member'}
             </span>
-            <span className="text-[10px] text-on-surface-variant/40">
+            <span className="text-[10px] text-[#94a3b8]/40">
               {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               {message.is_edited && <span className="ml-1 text-[9px] opacity-50">(edited)</span>}
             </span>
@@ -1598,26 +1653,26 @@ function MessageBubble({
         )}
 
         {message.parent_data && (
-          <div className={cn("mb-1.5 px-3 py-2 rounded-xl bg-surface-container-high border-l-2 border-primary/50 max-w-xs", isMe ? "mr-2" : "ml-2")}>
-            <p className="text-[10px] font-medium text-primary-container mb-0.5">{message.parent_data.author_name}</p>
-            <p className="text-[11px] text-on-surface-variant/60 italic truncate">"{message.parent_data.content}"</p>
+          <div className={cn("mb-1.5 px-3 py-2 rounded-xl bg-[#12122a] border-l-2 border-[#f97316]/50 max-w-xs", isMe ? "mr-2" : "ml-2")}>
+            <p className="text-[10px] font-medium text-[#f97316] mb-0.5">{message.parent_data.author_name}</p>
+            <p className="text-[11px] text-[#94a3b8]/60 italic truncate">"{message.parent_data.content}"</p>
           </div>
         )}
 
         <div className={cn(
           "relative px-4 py-2.5 text-sm leading-relaxed shadow-lg transition-all duration-200",
-          isAI 
-            ? 'bg-tertiary-container/10 border border-tertiary-container/20 text-on-surface rounded-2xl rounded-tl-sm' 
-            : isMe 
-              ? 'bg-primary-container text-on-primary-container rounded-2xl rounded-tr-sm' 
-              : 'bg-surface-container-high text-on-surface rounded-2xl rounded-tl-sm',
+          isAI
+            ? 'bg-[#1a1a2e] border-l-2 border-purple-500/40 text-white rounded-2xl rounded-bl-md'
+            : isMe
+              ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] text-white rounded-2xl rounded-br-md'
+              : 'bg-[#1a1a2e] border border-white/[0.08] text-white rounded-2xl rounded-bl-md',
           isDeleting && "opacity-40 grayscale pointer-events-none"
         )}>
           {!isAI && !isEditing && (
-            <button 
+            <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className={cn(
-                "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-surface-container-high border border-outline-variant/25 text-on-surface-variant hover:text-on-surface transition-all opacity-0 group-hover:opacity-100 hidden sm:block shadow-xl z-20",
+                "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-[#12122a] border border-white/[0.08] text-[#94a3b8] hover:text-white transition-all opacity-0 group-hover:opacity-100 hidden sm:block shadow-xl z-20",
                 isMe ? "-left-10" : "-right-10"
               )}
             >
@@ -1625,12 +1680,11 @@ function MessageBubble({
             </button>
           )}
 
-          {/* Reaction picker trigger (desktop) */}
           {!isAI && !isEditing && (
             <button
               onClick={() => setShowReactionPicker(!showReactionPicker)}
               className={cn(
-                "absolute -bottom-2 opacity-0 group-hover:opacity-100 p-1 rounded-full bg-surface-container-high border border-outline-variant/25 text-on-surface-variant hover:text-primary-container transition-all z-20 min-w-[44px] min-h-[44px] flex items-center justify-center",
+                "absolute -bottom-2 opacity-0 group-hover:opacity-100 p-1 rounded-full bg-[#12122a] border border-white/[0.08] text-[#94a3b8] hover:text-[#f97316] transition-all z-20 min-w-[44px] min-h-[44px] flex items-center justify-center",
                 isMe ? "left-2" : "right-2"
               )}
             >
@@ -1646,7 +1700,7 @@ function MessageBubble({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 4 }}
                 className={cn(
-                  "absolute bottom-full mb-3 flex items-center gap-1 p-2 bg-surface-container-high border border-outline-variant/40 rounded-2xl shadow-2xl z-[100]",
+                  "absolute bottom-full mb-3 flex items-center gap-1 p-2 bg-[#12122a] border border-white/[0.08] rounded-2xl shadow-2xl z-[100]",
                   isMe ? "right-0" : "left-0"
                 )}
               >
@@ -1654,7 +1708,7 @@ function MessageBubble({
                   <button
                     key={emoji}
                     onClick={() => { onReact?.(messageId, emoji); setShowReactionPicker(false) }}
-                    className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-surface-container-highest transition-all text-lg active:scale-125"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.04] transition-all text-lg active:scale-125"
                   >
                     {emoji}
                   </button>
@@ -1665,28 +1719,28 @@ function MessageBubble({
 
           <AnimatePresence>
             {isMenuOpen && (
-              <motion.div 
+              <motion.div
                 ref={menuRef}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 className={cn(
-                  "absolute bottom-full mb-2 w-36 bg-surface-container-high border border-outline-variant/40 rounded-xl shadow-2xl z-[100] p-1 overflow-hidden",
+                  "absolute bottom-full mb-2 w-36 bg-[#12122a] border border-white/[0.08] rounded-xl shadow-2xl z-[100] p-1 overflow-hidden",
                   isMe ? "right-0" : "left-0"
                 )}
               >
-                <button onClick={() => { setShowReactionPicker(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
+                <button onClick={() => { setShowReactionPicker(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-white/80 hover:bg-white/[0.04] rounded-lg transition-all min-h-[44px]">
                   <SmilePlus className="w-3 h-3" /> React
                 </button>
-                <button onClick={copyToClipboard} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
+                <button onClick={copyToClipboard} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-white/80 hover:bg-white/[0.04] rounded-lg transition-all min-h-[44px]">
                   <CopyIcon className="w-3 h-3" /> Copy text
                 </button>
                 {isMe && !message.audio_file && (
-                  <button onClick={() => { setIsEditing(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
+                  <button onClick={() => { setIsEditing(true); setIsMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-white/80 hover:bg-white/[0.04] rounded-lg transition-all min-h-[44px]">
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
                 )}
-                <button onClick={onReply} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-on-surface/80 hover:bg-surface-container-high rounded-lg transition-all min-h-[44px]">
+                <button onClick={onReply} className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-white/80 hover:bg-white/[0.04] rounded-lg transition-all min-h-[44px]">
                   <Reply className="w-3 h-3" /> Reply
                 </button>
                 {(isMe || message.is_owner) && (
@@ -1700,7 +1754,7 @@ function MessageBubble({
 
           {isEditing ? (
             <div className="flex flex-col gap-2 min-w-[150px] sm:min-w-[200px] py-1">
-              <textarea 
+              <textarea
                 autoFocus
                 value={editText}
                 onChange={e => setEditText(e.target.value)}
@@ -1708,11 +1762,11 @@ function MessageBubble({
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit() }
                   if (e.key === 'Escape') setIsEditing(false)
                 }}
-                className="w-full bg-black/40 border border-primary/30 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none min-h-[60px]"
+                className="w-full bg-black/40 border border-[#f97316]/30 rounded-xl px-3 py-2 text-sm text-white focus:outline-none min-h-[60px]"
               />
               <div className="flex justify-end gap-1.5">
-                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-on-surface-variant/60 hover:text-on-surface/80 min-h-[44px]">Cancel</button>
-                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-primary-container text-on-surface rounded-lg hover:bg-primary min-h-[44px]">Save</button>
+                <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-[10px] text-[#94a3b8]/60 hover:text-white/80 min-h-[44px]">Cancel</button>
+                <button onClick={handleEdit} className="px-3 py-1 text-[10px] bg-[#f97316] text-white rounded-lg hover:opacity-90 min-h-[44px]">Save</button>
               </div>
             </div>
           ) : (message.audio_file || message.audio_data) ? (
@@ -1720,7 +1774,7 @@ function MessageBubble({
           ) : (
             <>
               {message.attachment && (
-                <div className="mb-2 max-w-sm overflow-hidden rounded-xl border border-outline-variant/50">
+                <div className="mb-2 max-w-sm overflow-hidden rounded-xl border border-white/[0.08]">
                   {message.attachment_type === 'video' ? (
                     <video src={message.attachment} controls className="w-full h-auto max-h-[300px] object-contain bg-black/40" />
                   ) : (
@@ -1735,24 +1789,24 @@ function MessageBubble({
               )}
               {message.content && (
                 <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5">
-                  <ReactMarkdown 
+                  <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      h1: ({children}) => <h1 className="text-base font-bold text-on-surface mt-4 mb-2">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-sm font-bold text-on-surface mt-4 mb-2">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-[13px] font-bold text-on-surface mt-3 mb-1">{children}</h3>,
+                      h1: ({children}) => <h1 className="text-base font-bold text-white mt-4 mb-2">{children}</h1>,
+                      h2: ({children}) => <h2 className="text-sm font-bold text-white mt-4 mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="text-[13px] font-bold text-white mt-3 mb-1">{children}</h3>,
                       ul: ({children}) => <ul className="list-disc pl-4 space-y-1 mb-3">{children}</ul>,
                       ol: ({children}) => <ol className="list-decimal pl-4 space-y-1 mb-3">{children}</ol>,
-                      li: ({children}) => <li className="text-[13px] text-on-surface/80 leading-normal">{children}</li>,
+                      li: ({children}) => <li className="text-[13px] text-white/80 leading-normal">{children}</li>,
                       table: ({children}) => (
-                        <div className="my-4 overflow-x-auto rounded-xl border border-outline-variant/25 bg-black/20">
+                        <div className="my-4 overflow-x-auto rounded-xl border border-white/[0.08] bg-black/20">
                           <table className="w-full text-left border-collapse text-[12px]">{children}</table>
                         </div>
                       ),
-                      thead: ({children}) => <thead className="bg-surface-container-high text-on-surface-variant font-semibold">{children}</thead>,
-                      th: ({children}) => <th className="px-3 py-2 border-b border-outline-variant/25">{children}</th>,
-                      td: ({children}) => <td className="px-3 py-2 border-b border-outline-variant/25 text-on-surface/80">{children}</td>,
-                      p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-on-surface/80 leading-relaxed">{children}</p>,
+                      thead: ({children}) => <thead className="bg-[#12122a] text-[#94a3b8] font-semibold">{children}</thead>,
+                      th: ({children}) => <th className="px-3 py-2 border-b border-white/[0.08]">{children}</th>,
+                      td: ({children}) => <td className="px-3 py-2 border-b border-white/[0.08] text-white/80">{children}</td>,
+                      p: ({children}) => <p className="mb-3 last:mb-0 text-[13px] text-white/80 leading-relaxed">{children}</p>,
                     }}
                   >
                     {isAI ? message.content.split(/\bACTION\b/i)[0].trim() : message.content}
@@ -1762,7 +1816,6 @@ function MessageBubble({
             </>
           )}
 
-          {/* Existing reactions row */}
           {hasReactions && (
             <div className={cn("flex flex-wrap gap-1 mt-2", isAI ? "" : "")}>
               {Object.entries(reactions).map(([emoji, users]) => (
@@ -1772,46 +1825,46 @@ function MessageBubble({
                   className={cn(
                     "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-all min-h-[28px]",
                     users.length > 0
-                      ? "bg-primary/10 border-primary/20 hover:bg-primary/20"
-                      : "bg-surface-container-high border-outline-variant/20 hover:bg-surface-container-highest"
+                      ? "bg-[#f97316]/10 border-[#f97316]/20 hover:bg-[#f97316]/20"
+                      : "bg-[#12122a] border-white/[0.08] hover:bg-white/[0.04]"
                   )}
                 >
                   <span>{emoji}</span>
-                  <span className="text-[9px] font-medium text-on-surface-variant/70">{users.length}</span>
+                  <span className="text-[9px] font-medium text-[#94a3b8]/70">{users.length}</span>
                 </button>
               ))}
             </div>
           )}
-          
+
           {message.pinned_resource_data && (
-            <div 
+            <div
               onClick={() => onViewResource(message.pinned_resource_data)}
-              className="mt-3 p-3 bg-black/30 border border-outline-variant/25 rounded-xl flex items-center gap-3 hover:border-primary/20 transition-all cursor-pointer group/res min-h-[44px]"
+              className="mt-3 p-3 bg-black/30 border border-white/[0.08] rounded-xl flex items-center gap-3 hover:border-[#f97316]/20 transition-all cursor-pointer group/res min-h-[44px]"
             >
-              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                <BookOpen className="w-3.5 h-3.5 text-primary-container" />
+              <div className="w-8 h-8 bg-[#f97316]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-3.5 h-3.5 text-[#f97316]" />
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-xs font-medium text-on-surface truncate">{message.pinned_resource_data.title}</p>
-                <p className="text-[10px] text-on-surface-variant/60 mt-0.5 capitalize">{message.pinned_resource_data.resource_type || 'Resource'}</p>
+                <p className="text-xs font-medium text-white truncate">{message.pinned_resource_data.title}</p>
+                <p className="text-[10px] text-[#94a3b8]/60 mt-0.5 capitalize">{message.pinned_resource_data.resource_type || 'Resource'}</p>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant/40 group-hover/res:text-primary-container transition-colors flex-shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8]/40 group-hover/res:text-[#f97316] transition-colors flex-shrink-0" />
             </div>
           )}
 
           {message.shared_assignment_data && (
-            <div className="mt-3 p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl flex flex-col gap-3">
+            <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl flex flex-col gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-xs font-medium text-on-surface truncate">{message.shared_assignment_data.title}</p>
-                  <p className="text-[10px] text-violet-400 mt-0.5">{message.shared_assignment_data.subject || 'Assignment'}</p>
+                  <p className="text-xs font-medium text-white truncate">{message.shared_assignment_data.title}</p>
+                  <p className="text-[10px] text-purple-400 mt-0.5">{message.shared_assignment_data.subject || 'Assignment'}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       toast.loading('Fetching intelligence...', { id: 'export-toast' })
@@ -1825,11 +1878,11 @@ function MessageBubble({
                       toast.error('Failed to export PDF.', { id: 'export-toast' })
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all min-h-[44px]"
+                  className="flex items-center justify-center gap-1.5 py-2 bg-[#12122a] hover:bg-white/[0.04] border border-white/[0.08] rounded-lg text-[10px] font-medium text-[#94a3b8] hover:text-white transition-all min-h-[44px]"
                 >
                   <Download className="w-3 h-3" /> PDF
                 </button>
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       toast.loading('Fetching intelligence...', { id: 'export-toast' })
@@ -1842,7 +1895,7 @@ function MessageBubble({
                       toast.error('Failed to export Word.', { id: 'export-toast' })
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 rounded-lg text-[10px] font-medium text-on-surface-variant hover:text-on-surface transition-all min-h-[44px]"
+                  className="flex items-center justify-center gap-1.5 py-2 bg-[#12122a] hover:bg-white/[0.04] border border-white/[0.08] rounded-lg text-[10px] font-medium text-[#94a3b8] hover:text-white transition-all min-h-[44px]"
                 >
                   <CloudDownload className="w-3 h-3" /> Word
                 </button>
@@ -1852,11 +1905,11 @@ function MessageBubble({
 
           {message.is_optimistic && (
             <div className="absolute -bottom-4 right-0 flex items-center gap-1">
-              <span className="text-[9px] text-on-surface-variant/40">Sending</span>
+              <span className="text-[9px] text-[#94a3b8]/40">Sending</span>
               <div className="flex gap-0.5">
-                <span className="w-0.5 h-0.5 bg-on-surface-variant/40 rounded-full animate-bounce" />
-                <span className="w-0.5 h-0.5 bg-on-surface-variant/40 rounded-full animate-bounce [animation-delay:0.15s]" />
-                <span className="w-0.5 h-0.5 bg-on-surface-variant/40 rounded-full animate-bounce [animation-delay:0.3s]" />
+                <span className="w-0.5 h-0.5 bg-[#94a3b8]/40 rounded-full animate-bounce" />
+                <span className="w-0.5 h-0.5 bg-[#94a3b8]/40 rounded-full animate-bounce [animation-delay:0.15s]" />
+                <span className="w-0.5 h-0.5 bg-[#94a3b8]/40 rounded-full animate-bounce [animation-delay:0.3s]" />
               </div>
             </div>
           )}
