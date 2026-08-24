@@ -214,7 +214,11 @@ class ResourceListCreateView(generics.ListCreateAPIView):
                             folder='resources',
                         )
                         cloudinary_id = result.get('public_id', '')
-                        if cloudinary_id and not os.path.splitext(cloudinary_id)[1]:
+                        _KNOWN_EXTENSIONS = {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.txt', '.md', '.csv',
+                                             '.mp4', '.mp3', '.wav', '.webm', '.m4a', '.ogg',
+                                             '.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic', '.heif'}
+                        _existing_ext = os.path.splitext(cloudinary_id)[1].lower() if cloudinary_id else ''
+                        if cloudinary_id and _existing_ext not in _KNOWN_EXTENSIONS:
                             cloudinary_id = cloudinary_id + ext
                         serializer.validated_data.pop('file', None)
                         resource = serializer.save(

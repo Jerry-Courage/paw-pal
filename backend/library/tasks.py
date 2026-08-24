@@ -125,6 +125,15 @@ def process_resource_task(res_id):
             raw_name = res.file.name if res.file else (res.r2_key or '')
             ext = os.path.splitext(raw_name)[1].lower()
 
+            # Validate extension — filenames with internal dots (e.g. "Intro.EnvEngineering_...pdf")
+            # cause splitext to return a bogus extension. Treat invalid extensions as empty.
+            _KNOWN_EXTENSIONS = {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.txt', '.md', '.csv',
+                                 '.mp4', '.mp3', '.wav', '.webm', '.m4a', '.ogg',
+                                 '.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic', '.heif'}
+            if ext and ext not in _KNOWN_EXTENSIONS:
+                logger.warning(f'[Task Queue] Bogus extension {ext!r} from {raw_name} for {res.id} — will infer')
+                ext = ''
+
             # macOS metadata files (._ prefix) — infer real extension from title/resource_type
             if ext.startswith('._'):
                 logger.warning(f'[Task Queue] macOS metadata file detected for {res.id}: {raw_name}')
@@ -559,6 +568,32 @@ def process_resource_task(res_id):
         except Exception as e:
             logger.warning(f'[Task Queue] AI Study kit failed for {res.id} (API rate limit / error: {e}). Deploying Fallback Synthesis Kit...')
             kit = get_fallback_study_kit(res, text)
+            # Attach YouTube videos to fallback kit sections
+            try:
+                from ai_assistant.youtube_search import search_section_video
+                resource_title = res.title or ''
+                subject = getattr(res, 'subject', '') or ''
+                used_video_ids = set()
+                for sec in kit.get('sections', []):
+                    title = sec.get('title', '')
+                    if not title:
+                        continue
+                    try:
+                        video = search_section_video(title, resource_title, subject)
+                        if video and video['video_id'] not in used_video_ids:
+                            sec['video'] = {
+                                'url': video['url'],
+                                'video_id': video['video_id'],
+                                'title': video['title'],
+                                'channel': video['channel'],
+                                'duration': video.get('duration_str', ''),
+                                'thumbnail': video['thumbnail'],
+                            }
+                            used_video_ids.add(video['video_id'])
+                    except Exception:
+                        pass
+            except ImportError:
+                pass
             res.ai_notes_json = _sanitize_for_json(kit)
             res.has_study_kit = True
             res.processing_progress = 100
