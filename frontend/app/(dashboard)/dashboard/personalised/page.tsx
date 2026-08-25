@@ -45,7 +45,7 @@ function base64ToPcmFloat(b64: string): Float32Array {
 
 export default function PersonalisedLearningPage() {
   const [phase, setPhase] = useState<Phase>('setup')
-  const [voice, setVoice] = useState<string>('Aoede')
+  const [voice, setVoice] = useState<string>('Leda')
   const [isConnecting, setIsConnecting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
@@ -561,8 +561,8 @@ export default function PersonalisedLearningPage() {
             {!isPremium ? (
               /* ── Premium Gate ── */
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto">
-                <div className="w-20 h-20 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto">
-                  <Headphones className="w-10 h-10 text-violet-400" />
+                <div className="w-20 h-20 rounded-2xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center mx-auto">
+                  <Headphones className="w-10 h-10 text-orange-400" />
                 </div>
                 <div>
                   <h1 className="text-2xl font-black tracking-tight mb-2">Personal Tutor</h1>
@@ -573,14 +573,14 @@ export default function PersonalisedLearningPage() {
                 <div className="space-y-3 text-left w-full">
                   {['Personalised to your curriculum & materials', 'Full conversation memory across sessions', 'Voice & text — study hands-free'].map((f, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                      <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-orange-400 shrink-0" />
                       <span className="text-xs text-white/60">{f}</span>
                     </div>
                   ))}
                 </div>
                 <button
                   onClick={() => setShowPaywall(true)}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all shadow-lg shadow-violet-500/25"
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all shadow-lg shadow-orange-500/25"
                 >
                   Unlock Personal Tutor
                 </button>
@@ -592,7 +592,7 @@ export default function PersonalisedLearningPage() {
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                   {/* Left — Hero + Stats */}
                   <div className="space-y-6">
-                    <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 p-8 text-white shadow-2xl">
+                    <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 p-8 text-white shadow-2xl">
                       <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
                       <div className="relative z-10 flex flex-col items-center text-center gap-4">
                         <div className="w-16 h-16 rounded-2xl bg-black/25 backdrop-blur-md flex items-center justify-center border border-white/10">
@@ -610,17 +610,17 @@ export default function PersonalisedLearningPage() {
                     {/* Stats Row */}
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-center">
-                        <p className="text-[10px] uppercase font-black text-violet-400 tracking-wider mb-1">Streak</p>
+                        <p className="text-[10px] uppercase font-black text-orange-400 tracking-wider mb-1">Streak</p>
                         <p className="text-2xl font-black">{studyStreak}</p>
                         <p className="text-[10px] text-white/30">days</p>
                       </div>
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-center">
-                        <p className="text-[10px] uppercase font-black text-violet-400 tracking-wider mb-1">XP</p>
+                        <p className="text-[10px] uppercase font-black text-orange-400 tracking-wider mb-1">XP</p>
                         <p className="text-2xl font-black">{totalXp.toLocaleString()}</p>
                         <p className="text-[10px] text-white/30">earned</p>
                       </div>
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-center">
-                        <p className="text-[10px] uppercase font-black text-violet-400 tracking-wider mb-1">Level</p>
+                        <p className="text-[10px] uppercase font-black text-orange-400 tracking-wider mb-1">Level</p>
                         <p className="text-2xl font-black">{userLevel.num}</p>
                         <p className="text-[10px] text-white/30">{userLevel.name}</p>
                       </div>
@@ -640,7 +640,7 @@ export default function PersonalisedLearningPage() {
                             className={cn(
                               "flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all text-center",
                               voice === v.id
-                                ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
+                                ? "bg-orange-500/15 border-orange-500/40 text-orange-300"
                                 : "bg-white/[0.02] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
                             )}
                           >
@@ -673,7 +673,7 @@ export default function PersonalisedLearningPage() {
                     <button
                       onClick={startSession}
                       disabled={isConnecting}
-                      className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25"
+                      className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25"
                     >
                       {isConnecting ? (
                         <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
@@ -734,14 +734,14 @@ export default function PersonalisedLearningPage() {
                       animate={{ scale: 2, opacity: 0.15 }}
                       exit={{ opacity: 0 }}
                       transition={{ repeat: Infinity, duration: 2, ease: 'easeOut' }}
-                      className="absolute inset-0 w-40 h-40 rounded-full border-2 border-violet-500 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
+                      className="absolute inset-0 w-40 h-40 rounded-full border-2 border-orange-500 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
                     />
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 2.5, opacity: 0.05 }}
                       exit={{ opacity: 0 }}
                       transition={{ repeat: Infinity, duration: 2, ease: 'easeOut', delay: 0.5 }}
-                      className="absolute inset-0 w-40 h-40 rounded-full border border-violet-400 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
+                      className="absolute inset-0 w-40 h-40 rounded-full border border-orange-400 -translate-x-[calc(50%-80px)] -translate-y-[calc(50%-80px)]"
                     />
                   </>
                 )}
@@ -761,18 +761,18 @@ export default function PersonalisedLearningPage() {
                 className={cn(
                   "w-36 h-36 rounded-full flex items-center justify-center border-2 transition-all duration-500",
                   isAiSpeaking
-                    ? "bg-violet-500/15 border-violet-500/50"
+                    ? "bg-orange-500/15 border-orange-500/50"
                     : isRecording && !isMicMuted
-                    ? "bg-violet-500/8 border-violet-500/25"
+                    ? "bg-orange-500/8 border-orange-500/25"
                     : "bg-white/[0.03] border-white/[0.08]"
                 )}
               >
                 {isAiSpeaking ? (
-                  <Volume2 className="w-14 h-14 text-violet-400 animate-pulse" />
+                  <Volume2 className="w-14 h-14 text-orange-400 animate-pulse" />
                 ) : isMicMuted ? (
-                  <MicOff className="w-14 h-14 text-violet-500/40" />
+                  <MicOff className="w-14 h-14 text-orange-500/40" />
                 ) : (
-                  <Mic className="w-14 h-14 text-violet-400" />
+                  <Mic className="w-14 h-14 text-orange-400" />
                 )}
               </motion.div>
             </div>
@@ -795,7 +795,7 @@ export default function PersonalisedLearningPage() {
               className={cn(
                 "flex-1 py-4 rounded-2xl border-2 font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2",
                 isMicMuted
-                  ? "bg-violet-500/15 border-violet-500/40 text-violet-300"
+                  ? "bg-orange-500/15 border-orange-500/40 text-orange-300"
                   : "bg-white/5 border-white/[0.08] text-white/70"
               )}
             >
@@ -807,7 +807,7 @@ export default function PersonalisedLearningPage() {
               className={cn(
                 "w-12 h-12 rounded-2xl border-2 flex items-center justify-center transition-all shrink-0",
                 showTextInput
-                  ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
+                  ? "bg-orange-500/20 border-orange-500/40 text-orange-300"
                   : "bg-white/5 border-white/[0.08] text-white/60"
               )}
             >
@@ -844,7 +844,7 @@ export default function PersonalisedLearningPage() {
                       <div className={cn(
                         "max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed",
                         entry.role === 'user'
-                          ? "bg-violet-600 text-white rounded-br-sm"
+                          ? "bg-orange-600 text-white rounded-br-sm"
                           : "bg-white/[0.06] text-white/80 border border-white/[0.06] rounded-bl-sm"
                       )}>
                         {entry.text}
@@ -857,8 +857,7 @@ export default function PersonalisedLearningPage() {
                     value={userTextInput}
                     onChange={e => setUserTextInput(e.target.value)}
                     placeholder="Ask your tutor anything..."
-                    className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-violet-500/40 transition-colors"
-                    rows={1}
+                    className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-orange-500/40 transition-colors"
                     autoFocus
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -870,7 +869,7 @@ export default function PersonalisedLearningPage() {
                   <button
                     type="submit"
                     disabled={!userTextInput.trim()}
-                    className="p-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                    className="p-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
                   >
                     <Send className="w-5 h-5" />
                   </button>
@@ -886,7 +885,7 @@ export default function PersonalisedLearningPage() {
       {phase === 'report' && report && (
         <div className="flex-1 flex flex-col px-5 sm:px-8 pt-10 pb-10 max-w-2xl mx-auto w-full overflow-y-auto">
           <div className="text-center mb-6">
-            <Award className="w-16 h-16 text-violet-400 mx-auto mb-3 animate-bounce" />
+            <Award className="w-16 h-16 text-orange-400 mx-auto mb-3 animate-bounce" />
             <h1 className="text-3xl font-black tracking-tight mb-1">Session Complete</h1>
             <p className="text-[11px] text-white/40 uppercase tracking-widest">Evaluation & Next Steps</p>
           </div>
@@ -895,10 +894,10 @@ export default function PersonalisedLearningPage() {
           <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-5">
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-black text-white/50 uppercase tracking-wider">Focus Score</span>
-              <span className="text-3xl font-black text-violet-400">{report.score}/100</span>
+              <span className="text-3xl font-black text-orange-400">{report.score}/100</span>
             </div>
             <div className="w-full h-3 bg-white/[0.05] rounded-full overflow-hidden mb-4">
-              <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" style={{ width: `${report.score}%` }} />
+              <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full" style={{ width: `${report.score}%` }} />
             </div>
             <p className="text-[13px] text-white/50 leading-relaxed">{report.summary}</p>
           </div>
@@ -934,8 +933,8 @@ export default function PersonalisedLearningPage() {
           </div>
 
           {/* Advice */}
-          <div className="p-5 rounded-2xl bg-violet-500/[0.04] border border-violet-500/10 mb-8">
-            <h4 className="text-xs font-black text-violet-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <div className="p-5 rounded-2xl bg-orange-500/[0.04] border border-orange-500/10 mb-8">
+            <h4 className="text-xs font-black text-orange-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4" /> Tutor Advice
             </h4>
             <p className="text-[13px] text-white/60 leading-relaxed">{report.recommendation}</p>
@@ -955,7 +954,7 @@ export default function PersonalisedLearningPage() {
         {isEndingSession && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
             <div className="text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto" />
+              <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto" />
               <p className="text-xs font-bold text-white uppercase tracking-wider">Generating Report...</p>
             </div>
           </div>

@@ -5,13 +5,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
-import { paymentsApi, workspaceApi } from '@/lib/api'
+import { paymentsApi, workspaceApi, authApi } from '@/lib/api'
 import { cn, getInitials } from '@/lib/utils'
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS = [
   { href: '/dashboard',   icon: 'home',            label: 'Home' },
   { href: '/library',     icon: 'menu_book',       label: 'My Library' },
-  { href: '/learn',       icon: 'school',          label: 'Learn' },
+  { href: '/learn',       icon: 'school',          label: 'Learn', shsOnly: true },
   { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
@@ -27,6 +27,16 @@ export default function Sidebar() {
   const [expanded, setExpanded] = useState(false)
   const leaveTimer = useRef<NodeJS.Timeout | null>(null)
   const name = session?.user?.name || session?.user?.email || 'Student'
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => authApi.me().then(r => r.data),
+    staleTime: 300000,
+    enabled: !!session,
+  })
+
+  const isSHS = profileData?.education_level === 'secondary'
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter(item => !item.shsOnly || isSHS)
 
   const { data: subStatus } = useQuery({
     queryKey: ['subscription-status'],

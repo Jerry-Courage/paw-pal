@@ -124,22 +124,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Stats Bar ─────────────────────────────────────── */}
-        <section className="px-margin-mobile md:px-margin-desktop py-stack-md bg-surface-container-lowest">
-          <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-gutter text-center">
-            {[
-              { val: '50K+', label: 'Students' },
-              { val: '2M+', label: 'Study Kits Generated' },
-              { val: '98%', label: 'Satisfaction Rate' },
-              { val: '4.9★', label: 'Average Rating' },
-            ].map((s, i) => (
-              <div key={i}>
-                <p className="text-[28px] md:text-[36px] font-bold text-primary">{s.val}</p>
-                <p className="text-on-surface-variant text-[13px] mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+
 
         {/* ── How It Works ──────────────────────────────────── */}
         <section id="how-it-works" className="px-margin-mobile md:px-margin-desktop py-stack-lg">

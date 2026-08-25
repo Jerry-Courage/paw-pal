@@ -14,12 +14,12 @@ import { getInitials } from '@/lib/utils'
 import NotificationsPanel from '@/components/layout/NotificationsPanel'
 import SearchBar from '@/components/layout/SearchBar'
 import { useQuery } from '@tanstack/react-query'
-import { workspaceApi } from '@/lib/api'
+import { workspaceApi, authApi } from '@/lib/api'
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS = [
   { href: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/library',     icon: BookOpen,        label: 'Library' },
-  { href: '/learn',       icon: BookOpen,        label: 'Learn' },
+  { href: '/learn',       icon: BookOpen,        label: 'Learn', shsOnly: true },
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab' },
   { href: '/ai',          icon: Sparkles,        label: 'AI' },
@@ -31,6 +31,16 @@ export default function TopNav() {
   const { data: session } = useSession()
   const [mobileOpen, setMobileOpen] = useState(false)
   const name = session?.user?.name || session?.user?.email || 'User'
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => authApi.me().then(r => r.data),
+    staleTime: 300000,
+    enabled: !!session,
+  })
+
+  const isSHS = profileData?.education_level === 'secondary'
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter(item => !item.shsOnly || isSHS)
 
   const { data: workspacesData } = useQuery({
     queryKey: ['workspaces'],

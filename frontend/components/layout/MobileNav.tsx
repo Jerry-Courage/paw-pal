@@ -4,20 +4,22 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-const BOTTOM_ITEMS = [
+const ALL_BOTTOM_ITEMS = [
   { href: '/dashboard',   icon: 'home',           label: 'Home' },
   { href: '/library',     icon: 'menu_book',      label: 'Library' },
   { href: '/groups',      icon: 'bolt',           label: 'Quiz' },
   { href: '/rankings',    icon: 'leaderboard',    label: 'Rankings' },
-  { href: '/learn',       icon: 'school',         label: 'Learn' },
+  { href: '/learn',       icon: 'school',         label: 'Learn', shsOnly: true },
 ]
 
-const DRAWER_ITEMS = [
+const ALL_DRAWER_ITEMS = [
   { href: '/dashboard',   icon: 'home',            label: 'Home' },
   { href: '/library',     icon: 'menu_book',       label: 'My Library' },
-  { href: '/learn',       icon: 'school',          label: 'Learn' },
+  { href: '/learn',       icon: 'school',          label: 'Learn', shsOnly: true },
   { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
@@ -35,6 +37,17 @@ export default function MobileNav() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => authApi.me().then(r => r.data),
+    staleTime: 300000,
+    enabled: !!session,
+  })
+
+  const isSHS = profileData?.education_level === 'secondary'
+  const BOTTOM_ITEMS = ALL_BOTTOM_ITEMS.filter(item => !item.shsOnly || isSHS)
+  const DRAWER_ITEMS = ALL_DRAWER_ITEMS.filter(item => !item.shsOnly || isSHS)
 
   const isFullViewport =
     pathname === '/groups' ||
