@@ -32,8 +32,16 @@ def search_youtube(query: str, max_results: int = 3, duration_limit: int = 900) 
     if key in _search_cache:
         return _search_cache[key][:max_results]
     
-    # Enhance query for educational content
-    educational_query = f"{query} tutorial explanation"
+    # Enhance query for educational content — use lighter suffix for specific topics
+    query_lower = query.lower()
+    has_suffix = any(kw in query_lower for kw in [
+        'tutorial', 'lecture', 'explained', 'introduction', 'overview',
+        'basics', 'fundamentals', 'guide', 'course', 'crash course',
+    ])
+    if has_suffix:
+        educational_query = query
+    else:
+        educational_query = f"{query} explained"
     
     ydl_opts = {
         'quiet': True,
@@ -120,17 +128,26 @@ def search_section_video(section_title: str, resource_title: str = '', subject: 
         resource_title: The parent resource title for context
         subject: The subject area (e.g. "Electronics", "Mathematics")
     """
-    # Build a targeted search query
+    # Build a targeted search query with context
     query_parts = [section_title]
-    if subject:
+    if subject and subject.lower() not in section_title.lower():
         query_parts.append(subject)
+    if resource_title:
+        # Add a short form of resource title for context, skip if redundant
+        short_title = resource_title[:60]
+        if not any(word in section_title.lower() for word in short_title.lower().split()[:3]):
+            query_parts.append(short_title)
     
     query = ' '.join(query_parts)
     
+    # Use section-specific cache key to avoid cross-section pollution
+    cache_key = f"{section_title}|{resource_title}|{subject}"
+    key = _cache_key(cache_key)
+    if key in _search_cache:
+        cached = _search_cache[key]
+        return cached[0] if cached else None
+    
     results = search_youtube(query, max_results=3, duration_limit=900)
     
-    if not results:
-        return None
-    
-    # Return the best educational match
+    _search_cache[key] = results
     return results[0] if results else None

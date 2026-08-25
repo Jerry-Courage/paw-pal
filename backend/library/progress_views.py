@@ -9,6 +9,18 @@ from .models import Resource, ResourceProgress
 STEP_ORDER = ['notes', 'flashcards', 'quiz', 'practice', 'examprep']
 STEP_XP = {'notes': 50, 'flashcards': 10, 'quiz': 10, 'practice': 100, 'examprep': 150}
 
+# Map study steps to RewardEngine activity types
+# notes and practice are unique study-step types.
+# flashcards, quiz, examprep route to standalone completion types
+# (ONE base reward per activity — no overlap with study_* variants).
+STEP_ACTIVITY_MAP = {
+    'notes': 'study_notes',
+    'flashcards': 'flashcard_session',
+    'quiz': 'quiz_completion',
+    'practice': 'study_practice',
+    'examprep': 'exam_prep_completion',
+}
+
 
 class ResourceProgressView(APIView):
     """GET / PUT /api/library/resources/<id>/progress/ — fetch or sync study progress."""
@@ -40,7 +52,6 @@ class ResourceProgressView(APIView):
             if current_section is not None:
                 progress.current_section = int(current_section)
             progress.save(update_fields=['completed_sections', 'current_section', 'updated_at'])
-            # Recalculate mastery based on sections completed
             total_sections = len((resource.ai_notes_json or {}).get('sections', []))
             progress.recalculate_mastery(total_sections)
             return Response(_serialize(progress))
@@ -52,7 +63,7 @@ class CompleteStepView(APIView):
     """
     POST /api/library/resources/<id>/progress/complete/
     Body: { "step": "notes"|"flashcards"|"quiz"|"practice"|"examprep", "score": 0-100 }
-    Awards XP and updates mastery.
+    Awards XP via RewardEngine and updates mastery.
     """
     permission_classes = [IsAuthenticated]
 
@@ -75,21 +86,32 @@ class CompleteStepView(APIView):
                 resource=resource,
             )
 
-            xp_gained = progress.complete_step(step, score)
+            # complete_step still updates ResourceProgress (backward compat)
+            # but we do NOT add to global XP here — RewardEngine handles that
+            already_done = progress.completed_steps.get(step, False)
+            current_score = progress.step_scores.get(step, 0)
+            progress.step_scores[step] = max(current_score, score)
+            if not already_done:
+                progress.completed_steps[step] = True
+            progress.save()
+            total_sections = len((resource.ai_notes_json or {}).get('sections', []))
+            progress.recalculate_mastery(total_sections)
 
-            # Fetch updated user XP
-            request.user.refresh_from_db()
-
-            from django.db.models import Sum
-            total_xp = ResourceProgress.objects.filter(user=request.user).aggregate(
-                total=Sum('xp_earned')
-            )['total'] or 0
-            total_xp += int((request.user.onboarding_status or {}).get('quiz_xp', 0))
+            # Award global XP via RewardEngine
+            from gamification.services import RewardEngine
+            activity_type = STEP_ACTIVITY_MAP.get(step, 'study_notes')
+            reward = RewardEngine.process(
+                user=request.user,
+                activity_type=activity_type,
+                source_id=str(resource.id),
+                context={'step': step, 'score': score, 'resource_id': resource.id},
+            )
 
             return Response({
                 **_serialize(progress),
-                'xp_gained': xp_gained,
-                'total_xp': total_xp,
+                'xp_gained': reward['xp'],
+                'total_xp': reward['level']['current'] if reward['xp'] > 0 else 0,
+                'reward': reward,
             })
         except (ProgrammingError, DatabaseError):
             return Response({

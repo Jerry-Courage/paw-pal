@@ -7,6 +7,8 @@ import { Screen, Avatar, StatCard, ProgressBar, SectionHeader, Skeleton, EmptySt
 import { useAuth } from '@/lib/auth-context';
 import { useResources } from '@/hooks/useResources';
 import { useDashboard } from '@/hooks/useDashboard';
+import { useLearningPaths } from '@/hooks/useLearningPaths';
+import { usePlannerSessions, useDeadlines } from '@/hooks/usePlanner';
 import { useThemeColors } from '@/hooks/useTheme';
 import { SPACING, FONT_SIZE, RADIUS } from '@/constants/theme';
 import { Resource } from '@/types';
@@ -45,6 +47,9 @@ export default function HomeScreen() {
   const colors = useThemeColors();
   const resourcesQuery = useResources();
   const { analytics, nudge } = useDashboard();
+  const learningPathsQuery = useLearningPaths();
+  const sessionsQuery = usePlannerSessions();
+  const deadlinesQuery = useDeadlines();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const resources = Array.isArray(resourcesQuery.data) ? resourcesQuery.data : [];
@@ -57,6 +62,9 @@ export default function HomeScreen() {
       resourcesQuery.refetch(),
       analytics.refetch(),
       nudge.refetch(),
+      learningPathsQuery.refetch(),
+      sessionsQuery.refetch(),
+      deadlinesQuery.refetch(),
     ]);
     setRefreshing(false);
   };
@@ -104,7 +112,7 @@ export default function HomeScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
             <View style={{ alignItems: 'flex-end', marginRight: SPACING.xs }}>
               <Text style={{ color: colors.primary, fontSize: FONT_SIZE.xs, fontWeight: '700' }}>
-                {user?.level?.name || 'Level 1'}
+                {user?.level?.rank || 'Level 1'}
               </Text>
               <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.xs }}>
                 {user?.xp ?? 0} XP
@@ -154,6 +162,75 @@ export default function HomeScreen() {
                 height={8}
               />
             </View>
+          </View>
+        )}
+
+        {/* ── CONTINUE LEARNING ── */}
+        {learningPathsQuery.data && learningPathsQuery.data.length > 0 && (
+          <View style={{ marginTop: SPACING.xl, paddingHorizontal: SPACING.lg }}>
+            <SectionHeader title="Continue Learning" action="View All" onAction={() => router.push('/(tabs)/learn')} />
+            {learningPathsQuery.data.slice(0, 3).map((path) => (
+              <TouchableOpacity
+                key={path.id}
+                onPress={() => router.push(`/(tabs)/learn/${path.id}` as any)}
+                activeOpacity={0.7}
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, gap: SPACING.md, marginBottom: SPACING.sm }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#8b5cf6' + '18', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="git-network" size={20} color="#8b5cf6" />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: colors.text, fontSize: FONT_SIZE.sm, fontWeight: '600' }} numberOfLines={1}>{path.title}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.xs, marginTop: 2 }}>{path.concepts_completed}/{path.total_concepts} concepts · {path.mastery_percent}%</Text>
+                  <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 4, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${path.mastery_percent}%`, backgroundColor: '#8b5cf6', borderRadius: 2 }} />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* ── TODAY'S PLAN ── */}
+        {sessionsQuery.data && sessionsQuery.data.filter((s) => new Date(s.start_time).toDateString() === new Date().toDateString() && s.status !== 'completed').length > 0 && (
+          <View style={{ marginTop: SPACING.xl, paddingHorizontal: SPACING.lg }}>
+            <SectionHeader title="Today's Plan" action="Planner" onAction={() => router.push('/(tabs)/more/planner')} />
+            {sessionsQuery.data.filter((s) => new Date(s.start_time).toDateString() === new Date().toDateString() && s.status !== 'completed').slice(0, 3).map((s) => {
+              const time = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              return (
+                <View key={s.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, gap: SPACING.md, marginBottom: SPACING.sm }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f97316' + '18', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#f97316', fontSize: 12, fontWeight: '700' }}>{time}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: FONT_SIZE.sm, fontWeight: '600' }} numberOfLines={1}>{s.title}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.xs }}>{s.duration_minutes}min · {s.subject || 'General'}</Text>
+                  </View>
+                  {s.is_ai_suggested && <Ionicons name="sparkles" size={12} color={colors.primary} />}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── NEXT DEADLINE ── */}
+        {deadlinesQuery.data && deadlinesQuery.data.length > 0 && (
+          <View style={{ marginTop: SPACING.xl, paddingHorizontal: SPACING.lg }}>
+            <SectionHeader title="Upcoming Deadline" />
+            {deadlinesQuery.data.slice(0, 1).map((d) => {
+              const dueColor = d.days_until <= 3 ? '#ef4444' : d.days_until <= 7 ? '#eab308' : '#22c55e';
+              return (
+                <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: dueColor + '30', gap: SPACING.md }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: dueColor + '18', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: dueColor, fontSize: 14, fontWeight: '800' }}>{d.days_until}d</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontSize: FONT_SIZE.sm, fontWeight: '600' }} numberOfLines={1}>{d.title}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.xs }}>{d.subject || 'No subject'} · Due {new Date(d.due_date).toLocaleDateString()}</Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 

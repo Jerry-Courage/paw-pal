@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
   { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
   { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
+  { href: '/dashboard/personalised', icon: 'headphones', label: 'Personal Tutor' },
   { href: '/groups',      icon: 'bolt',            label: 'Quiz Battle' },
   { href: '/rankings',    icon: 'leaderboard',     label: 'Rankings' },
   { href: '/marketplace', icon: 'storefront',      label: 'Marketplace' },

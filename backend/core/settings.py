@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'pgvector',
     'channels',
     'learning',
+    'gamification',
 ]
 
 MIDDLEWARE = [

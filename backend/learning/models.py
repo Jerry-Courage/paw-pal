@@ -4,14 +4,17 @@ from django.conf import settings
 
 
 class LearningPath(models.Model):
-    """A cross-resource learning roadmap — Duolingo-style concept progression."""
+    """A cross-resource learning roadmap — concept progression with unit hierarchy."""
     STATUS_CHOICES = [('draft', 'Draft'), ('active', 'Active'), ('paused', 'Paused'), ('completed', 'Completed')]
+    DEPTH_CHOICES = [('quick', 'Quick'), ('standard', 'Standard'), ('deep', 'Deep')]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='learning_paths')
     title = models.CharField(max_length=300)
     description = models.TextField(blank=True)
     subject = models.CharField(max_length=200, blank=True)
+    goal = models.CharField(max_length=300, blank=True, help_text='What the user wants to master')
+    depth = models.CharField(max_length=20, choices=DEPTH_CHOICES, default='standard')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     start_date = models.DateTimeField(null=True, blank=True, help_text='When to start studying')
     deadline = models.DateTimeField(null=True, blank=True, help_text='When the exam/goal is due')
@@ -42,12 +45,29 @@ class LearningPath(models.Model):
         self.save(update_fields=['total_concepts', 'concepts_completed', 'total_xp', 'updated_at'])
 
 
+class Unit(models.Model):
+    """A logical grouping of concepts within a learning path (e.g. 'Cell Foundations')."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    path = models.ForeignKey(LearningPath, on_delete=models.CASCADE, related_name='units')
+    title = models.CharField(max_length=300)
+    description = models.TextField(blank=True)
+    order_index = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order_index']
+
+    def __str__(self):
+        return f'{self.title} (unit {self.order_index + 1})'
+
+
 class ConceptNode(models.Model):
     """A single concept in a learning path — a node in the dependency graph."""
     STATUS_CHOICES = [('locked', 'Locked'), ('current', 'Current'), ('completed', 'Completed')]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     path = models.ForeignKey(LearningPath, on_delete=models.CASCADE, related_name='concepts')
+    unit = models.ForeignKey(Unit, on_delete=models.SET_NULL, null=True, blank=True, related_name='concepts')
     title = models.CharField(max_length=300)
     description = models.TextField(blank=True, help_text='Why this concept matters + key explanation')
     source_resource = models.ForeignKey('library.Resource', on_delete=models.SET_NULL, null=True, blank=True, related_name='concept_nodes')

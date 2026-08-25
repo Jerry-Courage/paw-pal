@@ -28,13 +28,6 @@ function getTypeColor(type: string): string {
   }
 }
 
-const STUDY_FEATURES = [
-  { key: 'notes', icon: 'book', label: 'Study Notes', color: '#f97316' },
-  { key: 'flashcards', icon: 'albums', label: 'Flashcards', color: '#8b5cf6' },
-  { key: 'quiz', icon: 'help-circle', label: 'Quiz', color: '#22c55e' },
-  { key: 'practice', icon: 'pencil', label: 'Practice', color: '#06b6d4' },
-  { key: 'podcast', icon: 'headset', label: 'Podcast', color: '#ec4899' },
-];
 
 export default function ResourceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -207,33 +200,59 @@ export default function ResourceDetailScreen() {
           <Text style={{ color: colors.text, fontSize: FONT_SIZE.md, fontWeight: '700', marginBottom: SPACING.md }}>
             Study Tools
           </Text>
-          <View style={{ gap: SPACING.sm }}>
-            {STUDY_FEATURES.map((feature) => (
-              <TouchableOpacity
-                key={feature.key}
-                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.card,
-                  borderRadius: RADIUS.lg,
-                  padding: SPACING.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  gap: SPACING.md,
-                }}
-              >
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: feature.color + '18', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={feature.icon as any} size={20} color={feature.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontSize: FONT_SIZE.md, fontWeight: '600' }}>{feature.label}</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.xs }}>Coming in next phase</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            ))}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push(`/(tabs)/library/${resourceId}/study` as any);
+            }}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.primary + '15',
+              borderRadius: RADIUS.lg,
+              padding: SPACING.lg,
+              borderWidth: 1,
+              borderColor: colors.primary + '30',
+              gap: SPACING.md,
+            }}
+          >
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="school" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontSize: FONT_SIZE.md, fontWeight: '600' }}>Start Studying</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.xs }}>
+                Notes, Flashcards, Quiz
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+          </TouchableOpacity>
+
+          {/* AI Quick Actions */}
+          <View style={{ flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md }}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push({ pathname: '/(tabs)/ai/chat' as any, params: { resourceId: resourceId } });
+              }}
+              activeOpacity={0.7}
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs, backgroundColor: colors.card, borderRadius: RADIUS.lg, paddingVertical: SPACING.md, borderWidth: 1, borderColor: colors.border }}
+            >
+              <Ionicons name="chatbubble-ellipses" size={14} color={colors.primary} />
+              <Text style={{ color: colors.text, fontSize: FONT_SIZE.xs, fontWeight: '600' }}>Ask Flow AI</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push({ pathname: '/(tabs)/library/podcast' as any, params: { resourceId: resourceId, resourceTitle: resource?.title } });
+              }}
+              activeOpacity={0.7}
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs, backgroundColor: colors.card, borderRadius: RADIUS.lg, paddingVertical: SPACING.md, borderWidth: 1, borderColor: colors.border }}
+            >
+              <Ionicons name="headset" size={14} color="#8b5cf6" />
+              <Text style={{ color: colors.text, fontSize: FONT_SIZE.xs, fontWeight: '600' }}>Podcast</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>

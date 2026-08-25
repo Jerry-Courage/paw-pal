@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { BookOpen, Calculator, Atom, Globe, ArrowRight } from 'lucide-react'
+import { BookOpen, Calculator, Atom, Globe, ArrowRight, Headphones } from 'lucide-react'
 
 const CORE_SUBJECTS = [
   { name: 'Core Mathematics', code: 'MATH-C', icon: Calculator, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', desc: 'Algebra, Geometry, Statistics, Vectors' },
@@ -43,6 +43,26 @@ export default function SecondaryDashboard({ profileData }: { profileData: any }
           </div>
         </div>
       </div>
+
+      {/* ── Personal Tutor CTA ── */}
+      <Link href="/dashboard/personalised"
+        className="flex items-center gap-4 rounded-2xl bg-surface-container border border-outline-variant/30 p-4 sm:p-5 hover:border-primary/50 hover:bg-surface-container-high transition-all group shadow-sm">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+          <Headphones className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <h3 className="text-sm sm:text-base font-black text-on-surface tracking-tight">Talk to Your Personal Tutor</h3>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />
+          </div>
+          <p className="text-xs text-on-surface-variant font-medium line-clamp-1">
+            Real-time voice conversations · Remembers everything · Adapts to your level
+          </p>
+        </div>
+        <div className="shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+          <ArrowRight className="w-5 h-5 text-primary group-hover:translate-x-0.5 transition-transform" />
+        </div>
+      </Link>
 
       {/* ── Core Subjects ── */}
       <div className="space-y-4">

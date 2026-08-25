@@ -33,14 +33,12 @@ class AwardXPView(APIView):
     """
     POST /api/auth/award-xp/
     Body: { "amount": 50, "reason": "Section 3 quiz", "resource_id": 123 }
-    Awards XP to the user by adding it to the ResourceProgress for that resource.
-    Creates a ResourceProgress if one doesn't exist yet.
+    Awards XP via RewardEngine. Creates a ResourceProgress if needed.
     Returns the new total XP.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        from django.db import models as db_models
         amount = int(request.data.get('amount', 0))
         resource_id = request.data.get('resource_id')
         reason = request.data.get('reason', 'Study activity')
@@ -49,39 +47,20 @@ class AwardXPView(APIView):
             return Response({'error': 'Invalid XP amount'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            if resource_id:
-                from library.models import Resource, ResourceProgress
-                resource = Resource.objects.filter(id=resource_id).first()
-                if resource:
-                    progress, _ = ResourceProgress.objects.get_or_create(
-                        user=request.user,
-                        resource=resource,
-                    )
-                    progress.xp_earned += amount
-                    progress.save(update_fields=['xp_earned', 'updated_at'])
-            else:
-                # No resource — create a dummy progress entry on first resource if exists
-                # or just log it (XP still shows via aggregate)
-                from library.models import ResourceProgress
-                # Get any resource owned by user and award there
-                from library.models import Resource
-                resource = Resource.objects.filter(owner=request.user).first()
-                if resource:
-                    progress, _ = ResourceProgress.objects.get_or_create(
-                        user=request.user, resource=resource
-                    )
-                    progress.xp_earned += amount
-                    progress.save(update_fields=['xp_earned', 'updated_at'])
+            from gamification.services import RewardEngine
+            reward = RewardEngine.process(
+                user=request.user,
+                activity_type='generic_award',
+                source_id=str(resource_id or ''),
+                context={'reason': reason, 'amount': amount},
+            )
 
-            # Calculate new total XP
-            from library.models import ResourceProgress
-            from django.db.models import Sum
-            total = ResourceProgress.objects.filter(user=request.user).aggregate(
-                total=Sum('xp_earned')
-            )['total'] or 0
-            total += int((request.user.onboarding_status or {}).get('quiz_xp', 0))
-
-            return Response({'xp_awarded': amount, 'total_xp': total, 'reason': reason})
+            return Response({
+                'xp_awarded': reward['xp'],
+                'total_xp': reward['level']['current'],
+                'reason': reason,
+                'reward': reward,
+            })
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -179,10 +158,38 @@ class LogStudyView(APIView):
         minutes = request.data.get('minutes')
         if not minutes or float(minutes) <= 0:
             return Response({'error': 'minutes required'}, status=status.HTTP_400_BAD_REQUEST)
-        request.user.log_study_time(float(minutes))
+        minutes = float(minutes)
+        request.user.log_study_time(minutes)
+
+        # Award study time milestone XP via RewardEngine
+        from gamification.services import RewardEngine
+        rewards = []
+        if minutes >= 120:
+            rewards.append(RewardEngine.process(
+                user=request.user,
+                activity_type='study_time_120m',
+                source_id=f'study_{request.user.id}',
+                context={'minutes': minutes},
+            ))
+        elif minutes >= 60:
+            rewards.append(RewardEngine.process(
+                user=request.user,
+                activity_type='study_time_60m',
+                source_id=f'study_{request.user.id}',
+                context={'minutes': minutes},
+            ))
+        elif minutes >= 30:
+            rewards.append(RewardEngine.process(
+                user=request.user,
+                activity_type='study_time_30m',
+                source_id=f'study_{request.user.id}',
+                context={'minutes': minutes},
+            ))
+
         return Response({
             'study_streak': request.user.study_streak,
             'total_study_time': request.user.total_study_time,
+            'rewards': rewards,
         })
 
 
@@ -450,29 +457,19 @@ class RankingsView(APIView):
 
     def get(self, request):
         from django.db.models import Sum
-        from library.models import ResourceProgress
+        from gamification.models import ProgressionProfile
 
-        # ── Aggregate earned XP per user ──────────────────────────
-        earned_qs = (
-            ResourceProgress.objects
-            .values('user_id')
-            .annotate(earned=Sum('xp_earned'))
+        # ── Aggregate lifetime XP per user from ProgressionProfile ──
+        profile_qs = ProgressionProfile.objects.values('user_id').annotate(
+            earned=Sum('lifetime_xp')
         )
-        earned_map = {row['user_id']: int(row['earned'] or 0) for row in earned_qs}
-
-        # ── Aggregate quiz XP per user ─────────────────────────────
-        quiz_users = User.objects.exclude(onboarding_status={}).only('id', 'onboarding_status')
-        quiz_xp_map = {}
-        for u in quiz_users:
-            qxp = int((u.onboarding_status or {}).get('quiz_xp', 0))
-            if qxp > 0:
-                quiz_xp_map[u.id] = qxp
+        xp_map = {row['user_id']: int(row['earned'] or 0) for row in profile_qs}
 
         # ── Build per-user list ────────────────────────────────────
         all_users = User.objects.only('id', 'email', 'first_name', 'last_name', 'study_streak')
         base_list = []
         for u in all_users:
-            earned = int(earned_map.get(u.id, 0)) + int(quiz_xp_map.get(u.id, 0))
+            earned = xp_map.get(u.id, 0)
             display_name = u.get_full_name().strip() or u.email.split('@')[0]
             base_list.append({
                 'user_id':   u.id,
@@ -543,14 +540,15 @@ class FeedbackView(APIView):
                 is_testimonial=bool(is_testimonial),
                 display_name=display_name
             )
-            # Award XP for giving feedback (+50 XP)
+            # Award XP for giving feedback via RewardEngine
             try:
-                from library.models import ResourceProgress, Resource
-                resource = Resource.objects.filter(owner=request.user).first()
-                if resource:
-                    progress, _ = ResourceProgress.objects.get_or_create(user=request.user, resource=resource)
-                    progress.xp_earned += 50
-                    progress.save(update_fields=['xp_earned', 'updated_at'])
+                from gamification.services import RewardEngine
+                RewardEngine.process(
+                    user=request.user,
+                    activity_type='feedback',
+                    source_id=str(feedback.id),
+                    context={'rating': int(rating)},
+                )
             except Exception:
                 pass
 

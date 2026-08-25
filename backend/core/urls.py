@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/workspace/', include('workspace.urls')),
     path('api/payments/', include('payments.urls')),
     path('api/learning/', include('learning.urls')),
+    path('api/gamification/', include('gamification.urls')),
     path('health/', health_check, name='health'),
     path('', health_check, name='root_health'),
     re_path(r'^media/(?P<path>.*)$', mediacors_serve, {'document_root': settings.MEDIA_ROOT}),

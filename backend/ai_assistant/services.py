@@ -1984,7 +1984,9 @@ class AIService:
             'exam_tips': list(dict.fromkeys(all_tips))[:50],
         }
         
-        return self._attach_images_to_sections(kit, page_image_map)
+        kit = self._attach_images_to_sections(kit, page_image_map)
+        kit = self._attach_youtube_videos(kit, resource)
+        return kit
 
     def _attach_images_to_sections(self, kit: dict, page_image_map: dict) -> dict:
         """Unified engine to match extracted diagrams to their relevant sections."""
@@ -2220,15 +2222,16 @@ class AIService:
         resource_title = resource.title or ''
         subject = getattr(resource, 'subject', '') or ''
         
-        # Only search for first 10 sections to avoid rate limiting
-        for sec in sections[:10]:
+        used_video_ids = set()
+        
+        for sec in sections:
             title = sec.get('title', '')
             if not title:
                 continue
             
             try:
                 video = search_section_video(title, resource_title, subject)
-                if video:
+                if video and video['video_id'] not in used_video_ids:
                     sec['video'] = {
                         'url': video['url'],
                         'video_id': video['video_id'],
@@ -2237,6 +2240,7 @@ class AIService:
                         'duration': video.get('duration_str', ''),
                         'thumbnail': video['thumbnail'],
                     }
+                    used_video_ids.add(video['video_id'])
                     logger.info(f"[StudyKit] Found video for '{title}': {video['title']}")
             except Exception as e:
                 logger.warning(f"[StudyKit] Video search failed for '{title}': {e}")

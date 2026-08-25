@@ -206,7 +206,7 @@ class QuizConsumer(AsyncWebsocketConsumer):
 
         perfect_users = await self._check_perfect_scores()
         for u in perfect_users:
-            await self._award_quiz_xp(u, 5)
+            await self._award_quiz_xp(u, 5, rank=0)
             xp_awards.append({'username': u, 'xp': 5, 'rank': 0, 'bonus': 'perfect_score'})
 
         if leaderboard:
@@ -474,18 +474,29 @@ class QuizConsumer(AsyncWebsocketConsumer):
         QuizRoom.objects.filter(pin=self.pin).update(status='lobby', current_q_idx=0)
 
     @database_sync_to_async
-    def _award_quiz_xp(self, username, amount):
+    def _award_quiz_xp(self, username, amount, rank=None):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
             return
-        obs = user.onboarding_status or {}
-        current = int(obs.get('quiz_xp', 0))
-        obs['quiz_xp'] = current + amount
-        user.onboarding_status = obs
-        user.save(update_fields=['onboarding_status'])
+
+        from gamification.services import RewardEngine
+        if rank == 1:
+            RewardEngine.process(
+                user=user,
+                activity_type='battle_win',
+                source_id=self.pin,
+                context={'rank': rank, 'battle_id': self.pin},
+            )
+        else:
+            RewardEngine.process(
+                user=user,
+                activity_type='battle_participation',
+                source_id=self.pin,
+                context={'rank': rank, 'battle_id': self.pin},
+            )
 
     @database_sync_to_async
     def _check_perfect_scores(self):

@@ -72,6 +72,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_xp(self, obj):
         try:
+            from gamification.models import ProgressionProfile
+            profile = ProgressionProfile.objects.filter(user=obj).first()
+            if profile:
+                return profile.lifetime_xp
+            # Fallback to legacy calculation
             from library.models import ResourceProgress
             earned = ResourceProgress.objects.filter(user=obj).aggregate(
                 total=models.Sum('xp_earned')
@@ -83,11 +88,16 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_level(self, obj):
         xp = self.get_xp(obj)
-        if xp < 500:    return {'num': 1, 'name': 'Freshman',  'next_xp': 500,  'current_xp': xp}
-        if xp < 1500:   return {'num': 2, 'name': 'Sophomore', 'next_xp': 1500, 'current_xp': xp}
-        if xp < 3500:   return {'num': 3, 'name': 'Junior',    'next_xp': 3500, 'current_xp': xp}
-        if xp < 7000:   return {'num': 4, 'name': 'Senior',    'next_xp': 7000, 'current_xp': xp}
-        return             {'num': 5, 'name': 'Graduate',  'next_xp': None, 'current_xp': xp}
+        from gamification.models import calculate_level, calculate_rank, get_level_threshold, MAX_LEVEL
+        level_num = calculate_level(xp)
+        rank_name = calculate_rank(xp)
+        next_threshold = get_level_threshold(level_num + 1) if level_num < MAX_LEVEL else None
+        return {
+            'num': level_num,
+            'rank': rank_name,
+            'next_xp': next_threshold,
+            'current_xp': xp,
+        }
 
     def get_notification_preferences(self, obj):
         return (obj.onboarding_status or {}).get('notification_preferences', {})

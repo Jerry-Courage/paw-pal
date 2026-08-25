@@ -13,3 +13,9 @@ class Migration(migrations.Migration):
             reverse_sql='ALTER TABLE users_user ADD COLUMN notification_preferences jsonb DEFAULT \'{}\' NOT NULL;',
         ),
     ]
+
+    def apply(self, project_state, schema_editor, collect_sql=False):
+        """Skip on SQLite (test DB) — column may not exist."""
+        if schema_editor.connection.vendor == 'sqlite':
+            return project_state
+        return super().apply(project_state, schema_editor, collect_sql)

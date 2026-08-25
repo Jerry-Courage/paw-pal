@@ -5,19 +5,22 @@ def fix_learning_path_table(apps, schema_editor):
     """
     Completely standalone: creates the table if missing, adds columns if missing.
     Works regardless of migration history.
+    Skips on SQLite (test DB) since Django's ORM handles the schema.
     """
+    if schema_editor.connection.vendor == 'sqlite':
+        return
+
     with schema_editor.connection.cursor() as cursor:
         # Check if table exists
         cursor.execute("""
             SELECT EXISTS (
-                SELECT FROM information_schema.tables
+                SELECT 1 FROM information_schema.tables
                 WHERE table_name = 'learning_learningpath'
             )
         """)
         table_exists = cursor.fetchone()[0]
 
         if not table_exists:
-            # Table doesn't exist — create it with all columns
             cursor.execute("""
                 CREATE TABLE learning_learningpath (
                     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,10 +39,8 @@ def fix_learning_path_table(apps, schema_editor):
                     user_id integer NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE
                 )
             """)
-            print('  [learning] Created learning_learningpath table')
             return
 
-        # Table exists — check which columns are missing and add them
         cursor.execute("""
             SELECT column_name FROM information_schema.columns
             WHERE table_name = 'learning_learningpath'
@@ -58,12 +59,10 @@ def fix_learning_path_table(apps, schema_editor):
         for col_name, col_def in columns_to_add:
             if col_name not in existing:
                 cursor.execute(f'ALTER TABLE learning_learningpath ADD COLUMN {col_name} {col_def}')
-                print(f'  [learning] Added column {col_name}')
 
-        # Also ensure ConceptNode and ConceptReview tables exist
         cursor.execute("""
             SELECT EXISTS (
-                SELECT FROM information_schema.tables
+                SELECT 1 FROM information_schema.tables
                 WHERE table_name = 'learning_conceptnode'
             )
         """)
@@ -89,11 +88,10 @@ def fix_learning_path_table(apps, schema_editor):
                     source_resource_id integer NULL REFERENCES library_resource(id) ON DELETE SET NULL
                 )
             """)
-            print('  [learning] Created learning_conceptnode table')
 
         cursor.execute("""
             SELECT EXISTS (
-                SELECT FROM information_schema.tables
+                SELECT 1 FROM information_schema.tables
                 WHERE table_name = 'learning_conceptreview'
             )
         """)
@@ -116,7 +114,6 @@ def fix_learning_path_table(apps, schema_editor):
                     UNIQUE(concept_id, user_id)
                 )
             """)
-            print('  [learning] Created learning_conceptreview table')
 
 
 class Migration(migrations.Migration):
@@ -125,7 +122,7 @@ class Migration(migrations.Migration):
     Safe to run regardless of what migrations have been applied.
     """
 
-    dependencies = []
+    dependencies = [('learning', '0001_initial')]
 
     operations = [
         migrations.RunPython(fix_learning_path_table, migrations.RunPython.noop),

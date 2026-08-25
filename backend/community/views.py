@@ -168,80 +168,57 @@ class RegisterEventView(APIView):
 
 
 class LeaderboardView(APIView):
-    """Global & Community Leaderboard — Ranked strictly by Earned Study XP and effort."""
+    """Global & Community Leaderboard — Ranked strictly by lifetime XP."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from django.contrib.auth import get_user_model
-        from library.models import ResourceProgress
+        from gamification.models import ProgressionProfile, calculate_level, LEVEL_NAMES
         from django.db.models import Sum, Coalesce
         User = get_user_model()
 
-        users = User.objects.filter(is_active=True).annotate(
-            earned_xp=Coalesce(Sum('resources__progress_records__xp_earned'), 0)
-        ).order_by('-earned_xp', '-study_streak', '-total_study_time')[:50]
-
-        # Build quiz_xp map for top users
-        user_ids = [u.id for u in users]
-        quiz_xp_map = {}
-        for u in User.objects.filter(id__in=user_ids).only('id', 'onboarding_status'):
-            qxp = int((u.onboarding_status or {}).get('quiz_xp', 0))
-            if qxp > 0:
-                quiz_xp_map[u.id] = qxp
+        # Get top users by lifetime XP from ProgressionProfile
+        profiles = ProgressionProfile.objects.select_related('user').filter(
+            user__is_active=True,
+        ).order_by('-lifetime_xp')[:50]
 
         leaderboard = []
-        for i, u in enumerate(users):
-            earned_xp = getattr(u, 'earned_xp', 0) + int(quiz_xp_map.get(u.id, 0))
-            if earned_xp < 500:
-                level_name = 'Freshman'
-            elif earned_xp < 1500:
-                level_name = 'Sophomore'
-            elif earned_xp < 3500:
-                level_name = 'Junior'
-            elif earned_xp < 7000:
-                level_name = 'Senior'
-            else:
-                level_name = 'Graduate'
-
+        for i, profile in enumerate(profiles):
+            u = profile.user
+            level_num = calculate_level(profile.lifetime_xp)
             leaderboard.append({
                 'rank': i + 1,
                 'user_id': u.id,
                 'username': u.username,
                 'full_name': u.get_full_name() or u.username,
                 'avatar_url': request.build_absolute_uri(u.avatar.url) if u.avatar else None,
-                'earned_xp': earned_xp,
-                'study_streak': u.study_streak,
+                'earned_xp': profile.lifetime_xp,
+                'study_streak': profile.current_streak,
                 'total_study_hours': round(u.total_study_time, 1),
                 'university': u.university or 'FlowState Scholar',
-                'level_name': level_name,
+                'level_name': LEVEL_NAMES.get(level_num, 'Freshman'),
                 'is_me': u.id == request.user.id,
             })
 
         # Find current user's rank
         my_rank = next((l for l in leaderboard if l['is_me']), None)
         if not my_rank:
-            all_users = list(User.objects.filter(is_active=True).order_by('-study_streak', '-total_study_time').values_list('id', flat=True))
-            try:
-                rank = all_users.index(request.user.id) + 1
-            except ValueError:
-                rank = len(all_users)
-            
-            my_earned_xp = ResourceProgress.objects.filter(user=request.user).aggregate(
-                total=Sum('xp_earned')
-            )['total'] or 0
-            my_quiz_xp = int((request.user.onboarding_status or {}).get('quiz_xp', 0))
-
+            my_profile = ProgressionProfile.objects.filter(user=request.user).first()
+            my_xp = my_profile.lifetime_xp if my_profile else 0
+            # Calculate rank by counting users with more XP
+            rank = ProgressionProfile.objects.filter(lifetime_xp__gt=my_xp).count() + 1
+            my_level = calculate_level(my_xp)
             my_rank = {
                 'rank': rank,
                 'user_id': request.user.id,
                 'username': request.user.username,
                 'full_name': request.user.get_full_name() or request.user.username,
                 'avatar_url': request.build_absolute_uri(request.user.avatar.url) if request.user.avatar else None,
-                'earned_xp': my_earned_xp + my_quiz_xp,
-                'study_streak': request.user.study_streak,
+                'earned_xp': my_xp,
+                'study_streak': my_profile.current_streak if my_profile else 0,
                 'total_study_hours': round(request.user.total_study_time, 1),
                 'university': request.user.university or 'FlowState Scholar',
-                'level_name': 'Freshman',
+                'level_name': LEVEL_NAMES.get(my_level, 'Freshman'),
                 'is_me': True,
             }
 

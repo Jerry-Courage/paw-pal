@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Screen, Chip, FloatingActionButton, Skeleton, EmptyState } from '@/components/ui';
 import { UploadSheet } from '@/components/ui/UploadSheet';
 import { useResources } from '@/hooks/useResources';
+import { useEntitlements } from '@/hooks/useSubscription';
 import { useThemeColors } from '@/hooks/useTheme';
 import { SPACING, FONT_SIZE, RADIUS } from '@/constants/theme';
 import { Resource } from '@/types';
@@ -59,6 +60,7 @@ function formatFileSize(bytes: number): string {
 
 export default function LibraryScreen() {
   const colors = useThemeColors();
+  const { canCreateResource } = useEntitlements();
   const resourcesQuery = useResources();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -266,7 +268,16 @@ export default function LibraryScreen() {
       {/* ── FAB: UPLOAD ── */}
       <FloatingActionButton
         icon={<Ionicons name="add" size={28} color="#ffffff" />}
-        onPress={() => setShowUploadSheet(true)}
+        onPress={() => {
+          if (!canCreateResource) {
+            Alert.alert('Free limit reached', 'You\'ve reached your free resource limit. Upgrade for unlimited access.', [
+              { text: 'View Plans', onPress: () => router.push('/(tabs)/more/subscription' as any) },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+            return;
+          }
+          setShowUploadSheet(true);
+        }}
       />
 
       {/* ── UPLOAD SHEET ── */}

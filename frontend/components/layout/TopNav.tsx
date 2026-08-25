@@ -7,7 +7,7 @@ import { signOut, useSession } from 'next-auth/react'
 import {
   Brain, LayoutDashboard, Calendar, BookOpen, FileText,
   LayoutGrid, Sparkles, Zap, Settings, LogOut,
-  Menu, X, Bell, Search, ChevronDown
+  Menu, X, Bell, Search, ChevronDown, Headphones
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getInitials } from '@/lib/utils'
@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/assignments', icon: FileText,        label: 'Assignments' },
   { href: '/workspace',   icon: LayoutGrid,      label: 'Collab' },
   { href: '/ai',          icon: Sparkles,        label: 'AI' },
+  { href: '/dashboard/personalised', icon: Headphones, label: 'Tutor' },
 ]
 
 export default function TopNav() {

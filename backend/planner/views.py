@@ -47,6 +47,29 @@ class StudySessionDetailView(generics.RetrieveUpdateDestroyAPIView):
             minutes = instance.duration_minutes or 0
             if minutes > 0:
                 self.request.user.log_study_time(minutes)
+                # Award study time milestone XP via RewardEngine
+                from gamification.services import RewardEngine
+                if minutes >= 120:
+                    RewardEngine.process(
+                        user=self.request.user,
+                        activity_type='study_time_120m',
+                        source_id=f'planner_{instance.id}',
+                        context={'minutes': minutes},
+                    )
+                elif minutes >= 60:
+                    RewardEngine.process(
+                        user=self.request.user,
+                        activity_type='study_time_60m',
+                        source_id=f'planner_{instance.id}',
+                        context={'minutes': minutes},
+                    )
+                elif minutes >= 30:
+                    RewardEngine.process(
+                        user=self.request.user,
+                        activity_type='study_time_30m',
+                        source_id=f'planner_{instance.id}',
+                        context={'minutes': minutes},
+                    )
 
 
 class CompleteSessionView(APIView):
@@ -70,6 +93,29 @@ class CompleteSessionView(APIView):
         minutes = session.duration_minutes or 0
         if minutes > 0:
             request.user.log_study_time(minutes)
+            # Award study time milestone XP via RewardEngine
+            from gamification.services import RewardEngine
+            if minutes >= 120:
+                RewardEngine.process(
+                    user=request.user,
+                    activity_type='study_time_120m',
+                    source_id=f'planner_{session.id}',
+                    context={'minutes': minutes},
+                )
+            elif minutes >= 60:
+                RewardEngine.process(
+                    user=request.user,
+                    activity_type='study_time_60m',
+                    source_id=f'planner_{session.id}',
+                    context={'minutes': minutes},
+                )
+            elif minutes >= 30:
+                RewardEngine.process(
+                    user=request.user,
+                    activity_type='study_time_30m',
+                    source_id=f'planner_{session.id}',
+                    context={'minutes': minutes},
+                )
 
         return Response({
             'detail': 'Session completed.',

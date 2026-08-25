@@ -8,6 +8,8 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { QueryProvider } from '@/lib/query-provider';
+import { NotificationProvider } from '@/components/NotificationProvider';
+import { ErrorBoundary as AppErrorBoundary } from '@/components/ErrorBoundary';
 import { useThemeColors } from '@/hooks/useTheme';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 
@@ -75,7 +77,11 @@ export default function RootLayout() {
   return (
     <QueryProvider>
       <AuthProvider>
-        <RootLayoutNav />
+        <AppErrorBoundary>
+          <NotificationProvider>
+            <RootLayoutNav />
+          </NotificationProvider>
+        </AppErrorBoundary>
       </AuthProvider>
     </QueryProvider>
   );

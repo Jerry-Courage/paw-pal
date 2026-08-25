@@ -285,12 +285,14 @@ class PaystackWebhookView(APIView):
                 try:
                     user = User.objects.get(id=user_id)
                     if payment_type == 'xp_pack':
+                        # XP packs are deprecated in FlowState 2.0.
+                        # Process the payment but do NOT award XP.
+                        # Old clients that still initiate this flow get a controlled no-op.
                         xp_amount = int(metadata.get('xp_amount', 0))
-                        obs = user.onboarding_status or {}
-                        obs['bonus_xp'] = obs.get('bonus_xp', 0) + xp_amount
-                        user.onboarding_status = obs
-                        user.save(update_fields=['onboarding_status'])
-                        logger.info(f"[Paystack Webhook] Added {xp_amount} bonus XP for user {user_id}")
+                        logger.warning(
+                            f"[Paystack Webhook] XP pack purchase deprecated — user {user_id}, "
+                            f"amount {xp_amount}. Payment recorded but no XP awarded."
+                        )
                     else:
                         _activate_premium(user)
                     PaymentTransaction.objects.filter(reference=reference).update(
@@ -531,58 +533,14 @@ class MarketplaceInventoryView(APIView):
 
 
 class MarketplaceBuyPowerupView(APIView):
-    """POST /api/payments/marketplace/buy-powerup/ — Spend XP to buy a Quiz Battle power-up."""
+    """POST /api/payments/marketplace/buy-powerup/ — DEPRECATED. XP marketplace retired in FlowState 2.0."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        item_id = request.data.get('item_id')
-        if item_id not in POWERUP_PRICES:
-            return Response({'error': 'Invalid power-up item.'}, status=400)
-
-        item = POWERUP_PRICES[item_id]
-        cost = item['cost_xp']
-
-        user = request.user
-        obs = user.onboarding_status or {}
-
-        from library.models import ResourceProgress
-        from django.db.models import Sum
-        earned_xp = ResourceProgress.objects.filter(user=user).aggregate(
-            total=Sum('xp_earned')
-        )['total'] or 0
-
-        quiz_xp = int(obs.get('quiz_xp', 0))
-        bonus_xp = int(obs.get('bonus_xp', 0))
-        spent_xp = int(obs.get('spent_xp', 0))
-        available_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
-
-        if available_xp < cost:
-            return Response({
-                'error': f"Not enough XP! You need {cost} XP but only have {available_xp} XP.",
-                'required': cost,
-                'available': available_xp,
-            }, status=400)
-
-        # Deduct XP and add to inventory
-        obs['spent_xp'] = spent_xp + cost
-        inventory = obs.get('inventory', {
-            'clue_5050': 0, 'time_extend': 0, 'streak_guard': 0, 'double_xp': 0, 'hint': 0
-        })
-        inventory[item_id] = inventory.get(item_id, 0) + 1
-        obs['inventory'] = inventory
-
-        user.onboarding_status = obs
-        user.save(update_fields=['onboarding_status'])
-
-        new_balance = max(0, earned_xp + bonus_xp - obs['spent_xp'])
-
         return Response({
-            'success': True,
-            'message': f"🎉 Purchased {item['name']}!",
-            'total_xp': new_balance,
-            'inventory': inventory,
-            'purchased': item_id,
-        })
+            'error': 'XP marketplace purchases are no longer available. FlowCoins will replace this feature.',
+            'deprecated': True,
+        }, status=410)
 
 
 class MarketplaceUsePowerupView(APIView):
@@ -612,115 +570,23 @@ class MarketplaceUsePowerupView(APIView):
 
 
 class MarketplaceBuyThemeView(APIView):
-    """POST /api/payments/marketplace/buy-theme/ — Spend XP to unlock an aesthetic theme."""
+    """POST /api/payments/marketplace/buy-theme/ — DEPRECATED. XP marketplace retired in FlowState 2.0."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        theme_id = request.data.get('theme_id')
-        if theme_id not in THEME_PRICES:
-            return Response({'error': 'Invalid theme selected.'}, status=400)
-
-        theme = THEME_PRICES[theme_id]
-        cost = theme['cost_xp']
-
-        user = request.user
-        obs = user.onboarding_status or {}
-        unlocked = obs.get('unlocked_themes', ['default', 'light'])
-
-        if theme_id in unlocked:
-            return Response({'error': 'You already unlocked this theme!'}, status=400)
-
-        from library.models import ResourceProgress
-        from django.db.models import Sum
-        earned_xp = ResourceProgress.objects.filter(user=user).aggregate(
-            total=Sum('xp_earned')
-        )['total'] or 0
-
-        quiz_xp = int(obs.get('quiz_xp', 0))
-        bonus_xp = int(obs.get('bonus_xp', 0))
-        spent_xp = int(obs.get('spent_xp', 0))
-        available_xp = max(0, earned_xp + quiz_xp + bonus_xp - spent_xp)
-
-        if available_xp < cost:
-            return Response({
-                'error': f"Not enough XP! You need {cost} XP but only have {available_xp} XP.",
-                'required': cost,
-                'available': available_xp,
-            }, status=400)
-
-        obs['spent_xp'] = spent_xp + cost
-        unlocked.append(theme_id)
-        obs['unlocked_themes'] = unlocked
-        user.onboarding_status = obs
-        user.save(update_fields=['onboarding_status'])
-
-        new_balance = max(0, earned_xp + bonus_xp - obs['spent_xp'])
-
         return Response({
-            'success': True,
-            'message': f"🎨 Unlocked {theme['name']} theme!",
-            'total_xp': new_balance,
-            'unlocked_themes': unlocked,
-        })
+            'error': 'XP theme purchases are no longer available. FlowCoins will replace this feature.',
+            'deprecated': True,
+        }, status=410)
 
 
 class MarketplaceBuyXPView(APIView):
-    """POST /api/payments/marketplace/buy-xp/ — Buy an XP pack using Paystack in GHS."""
+    """POST /api/payments/marketplace/buy-xp/ — DEPRECATED. XP packs retired in FlowState 2.0."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        from .models import PaymentTransaction
-        pack_id = request.data.get('pack_id')
-        if pack_id not in XP_PACKS:
-            return Response({'error': 'Invalid XP pack selected.'}, status=400)
-
-        pack = XP_PACKS[pack_id]
-        user = request.user
-
-        callback_url = request.data.get(
-            'callback_url',
-            f"{os.environ.get('FRONTEND_URL', 'https://flowstate-frontend-7irq.onrender.com')}/marketplace?payment=success"
-        )
-
-        payload = {
-            'email': user.email,
-            'amount': pack['amount_cents'],
-            'currency': 'GHS',
-            'callback_url': callback_url,
-            'metadata': {
-                'user_id': user.id,
-                'username': user.username,
-                'type': 'xp_pack',
-                'pack_id': pack_id,
-                'xp_amount': pack['xp'],
-            },
-        }
-
-        try:
-            resp = requests.post(
-                'https://api.paystack.co/transaction/initialize',
-                headers=_paystack_headers(),
-                json=payload,
-                timeout=10,
-            )
-            data = resp.json()
-            if data.get('status'):
-                ref = data['data']['reference']
-                PaymentTransaction.objects.create(
-                    user=user,
-                    email=user.email,
-                    reference=ref,
-                    amount=str(pack['price_ghs']),
-                    currency='GHS',
-                    status='pending',
-                )
-                return Response({
-                    'authorization_url': data['data']['authorization_url'],
-                    'access_code': data['data']['access_code'],
-                    'reference': ref,
-                    'xp_amount': pack['xp'],
-                })
-            return Response({'error': data.get('message', 'Payment init failed')}, status=502)
-        except Exception as e:
-            logger.error(f"[Paystack] XP buy error: {e}")
-            return Response({'error': 'Payment service unavailable'}, status=503)
+        # XP packs are deprecated. Return a controlled error for old clients.
+        return Response({
+            'error': 'XP packs are no longer available. Earn XP through learning activities instead.',
+            'deprecated': True,
+        }, status=410)

@@ -13,6 +13,11 @@ export function useResource(id: number) {
     queryKey: ['resource', id],
     queryFn: () => libraryService.getResource(id),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === 'processing') return 3000;
+      return false;
+    },
   });
 }
 
