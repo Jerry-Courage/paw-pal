@@ -1,18 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import MobileNav from '@/components/layout/MobileNav'
-import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
-import { getAuthToken, API_BASE } from '@/lib/api'
+import { authApi } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
 
 import SplashScreen from '@/components/ui/SplashScreen'
-const OnboardingWizard = dynamic(() => import('@/components/onboarding/OnboardingWizard'), { ssr: false })
-const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
-const FeedbackPopup = dynamic(() => import('@/components/ui/FeedbackPopup'), { ssr: false })
+import FeedbackPopup from '@/components/ui/FeedbackPopup'
 
 // Pages that need full-viewport (no padding/scroll)
 const FULL_VIEWPORT_PREFIXES = [
@@ -25,23 +23,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [showPostOnboardingPaywall, setShowPostOnboardingPaywall] = useState(false)
-  const [subStatus, setSubStatus] = useState<any>(null)
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => authApi.me().then(response => response.data),
+    enabled: status === 'authenticated',
+    staleTime: 0,
+  })
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login')
   }, [status, router])
 
-  // Onboarding
   useEffect(() => {
-    if (status !== 'authenticated' || !session) return
-    const onboardedLocal = localStorage.getItem('flowstate_onboarded') === 'true'
-    const onboardedServer = (session.user as any).onboarded
-    if (!onboardedLocal && !onboardedServer) {
-      setShowOnboarding(true)
-    }
-  }, [status, session])
+    if (status !== 'authenticated' || profileLoading || !profile) return
+    if (!profile.onboarding_status?.completed) router.replace('/onboarding')
+  }, [status, profileLoading, profile, router])
 
   // Push notifications — retry up to 3 times with backoff
   useEffect(() => {
@@ -61,26 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => { cancelled = true; clearTimeout(timer) }
   }, [status])
 
-  const handleOnboardingComplete = useCallback(async () => {
-    setShowOnboarding(false)
-    // Fetch subscription status and show paywall if not premium
-    try {
-      const token = await getAuthToken()
-      const res = await fetch(`${API_BASE}/payments/status/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      setSubStatus(data)
-      if (!data.is_premium) {
-        setShowPostOnboardingPaywall(true)
-      }
-    } catch {
-      // If we can't check, still show paywall (safe default)
-      setShowPostOnboardingPaywall(true)
-    }
-  }, [])
-
-  if (status === 'loading' || status === 'unauthenticated') {
+  if (status === 'loading' || status === 'unauthenticated' || profileLoading || (profile && !profile.onboarding_status?.completed)) {
     return <SplashScreen />
   }
 
@@ -119,24 +96,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </main>
 
-      {session?.user?.name && !showOnboarding && (
+      {session?.user?.name && (
         <FeedbackPopup userName={session.user.name} />
-      )}
-
-      {showOnboarding && (
-        <OnboardingWizard onComplete={handleOnboardingComplete} />
-      )}
-
-      {showPostOnboardingPaywall && subStatus && (
-        <PaywallModal
-          onClose={() => setShowPostOnboardingPaywall(false)}
-          notesUsed={subStatus.notes_used}
-          notesLimit={subStatus.notes_limit}
-          onSuccess={() => {
-            setSubStatus((prev: any) => prev ? { ...prev, is_premium: true } : prev)
-            setShowPostOnboardingPaywall(false)
-          }}
-        />
       )}
     </div>
   )

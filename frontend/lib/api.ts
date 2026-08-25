@@ -1,5 +1,11 @@
 import axios from 'axios'
 import { getSession, signOut } from 'next-auth/react'
+import type {
+  BuildJourneyRequest, BuildJourneyResponse, DueReviewsResponse,
+  JourneyAnalyticsResponse, JourneyPreviewRequest, JourneyPreviewResponse,
+  JourneyRoadmapResponse, RewardResponse,
+} from '@/types/journey'
+import type { OnboardingUpdate } from '@/types/onboarding'
 
 export const getAuthToken = async () => {
   for (let i = 0; i < 3; i++) {
@@ -77,6 +83,8 @@ export const authApi = {
   deleteNotification: (id: number) => api.delete(`/auth/notifications/${id}/`),
   registerPushSubscription: (sub: any) => api.post('/auth/push-notifications/', sub),
   updateOnboarding: (tourId: string) => api.post('/auth/onboarding/update/', { tour_id: tourId }),
+  updateOnboardingV2: (data: OnboardingUpdate) =>
+    api.post<{ onboarding_status: Record<string, unknown>; onboarding_v2: OnboardingUpdate }>('/auth/onboarding/update/', { onboarding_v2: data }),
   getConfig: () => api.get('/auth/config/'),
   awardXp: (amount: number, reason: string, resourceId?: number) =>
     api.post('/auth/award-xp/', { amount, reason, resource_id: resourceId }),
@@ -372,15 +380,20 @@ export const learningApi = {
   getPath: (id: string) => api.get(`/learning/paths/${id}/`),
   createPath: (data: any) => api.post('/learning/paths/', data),
   deletePath: (id: string) => api.delete(`/learning/paths/${id}/`),
+  /** @deprecated Legacy create-then-generate contract. Use generatePreview + buildJourney. */
   generateConcepts: (id: string, resources: number[]) =>
     api.post(`/learning/paths/${id}/generate/`, { resources }),
-  getRoadmap: (id: string) => api.get(`/learning/paths/${id}/roadmap/`),
-  getDueReviews: (id: string) => api.get(`/learning/paths/${id}/due-reviews/`),
-  getAnalytics: (id: string) => api.get(`/learning/paths/${id}/analytics/`),
+  generatePreview: (data: JourneyPreviewRequest) =>
+    api.post<JourneyPreviewResponse>('/learning/paths/generate-preview/', data),
+  buildJourney: (data: BuildJourneyRequest) =>
+    api.post<BuildJourneyResponse>('/learning/paths/build/', data),
+  getRoadmap: (id: string) => api.get<JourneyRoadmapResponse>(`/learning/paths/${id}/roadmap/`),
+  getDueReviews: (id: string) => api.get<DueReviewsResponse>(`/learning/paths/${id}/due-reviews/`),
+  getAnalytics: (id: string) => api.get<JourneyAnalyticsResponse>(`/learning/paths/${id}/analytics/`),
   // Concepts
   getConcept: (id: string) => api.get(`/learning/concepts/${id}/`),
   completeConcept: (id: string, score: number) =>
-    api.post(`/learning/concepts/${id}/complete/`, { score }),
+    api.post<{ message: string; xp_earned: number; unlocked: string[]; reward: RewardResponse }>(`/learning/concepts/${id}/complete/`, { score }),
   reviewConcept: (id: string, score: number) =>
     api.post(`/learning/concepts/${id}/review/`, { score }),
   getSourceContext: (id: string) => api.get(`/learning/concepts/${id}/source-context/`),

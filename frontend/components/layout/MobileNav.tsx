@@ -26,7 +26,6 @@ const ALL_DRAWER_ITEMS = [
   { href: '/dashboard/personalised', icon: 'headphones', label: 'Personal Tutor' },
   { href: '/groups',      icon: 'bolt',            label: 'Quiz Battle' },
   { href: '/rankings',    icon: 'leaderboard',     label: 'Rankings' },
-  { href: '/marketplace', icon: 'storefront',      label: 'Marketplace' },
   { href: '/settings',    icon: 'settings',        label: 'Settings' },
   { href: '/upgrade',     icon: 'workspace_premium', label: 'Upgrade' },
 ]

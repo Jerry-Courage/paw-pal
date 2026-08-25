@@ -12,6 +12,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        'flow-void': 'rgb(var(--flow-void) / <alpha-value>)',
+        'flow-raised': 'rgb(var(--flow-raised) / <alpha-value>)',
+        'flow-surface': 'rgb(var(--flow-surface) / <alpha-value>)',
+        'flow-orange': 'rgb(var(--flow-orange) / <alpha-value>)',
+        'flow-violet': 'rgb(var(--flow-violet) / <alpha-value>)',
+        'flow-ink': 'rgb(var(--flow-ink) / <alpha-value>)',
+        'flow-muted': 'rgb(var(--flow-muted) / <alpha-value>)',
+        'flow-success': 'rgb(var(--flow-success) / <alpha-value>)',
         // ── FlowState Design System (v2) — CSS variable driven ────
         'background': 'rgb(var(--background) / <alpha-value>)',
         'surface': 'rgb(var(--background) / <alpha-value>)',
@@ -27,7 +35,6 @@ const config: Config = {
         'on-surface-variant': 'rgb(var(--on-surface-variant) / <alpha-value>)',
         'on-background': 'rgb(var(--on-surface) / <alpha-value>)',
         // Primary
-        'primary': 'rgb(var(--primary) / <alpha-value>)',
         'primary-container': 'rgb(var(--primary-container) / <alpha-value>)',
         'primary-fixed': '#ffdbc9',
         'primary-fixed-dim': 'rgb(var(--primary) / <alpha-value>)',

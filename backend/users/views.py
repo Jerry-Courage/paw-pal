@@ -291,20 +291,50 @@ class PushSubscriptionView(APIView):
 from asgiref.sync import sync_to_async
 
 class UpdateOnboardingView(APIView):
-    """Mark a specific tour as completed in the onboarding_status."""
+    """Persist legacy tour flags or the whitelisted FlowState 2.0 onboarding profile."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         tour_id = request.data.get('tour_id')
-        if not tour_id:
-            return Response({'error': 'tour_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        onboarding_v2 = request.data.get('onboarding_v2')
+        if not tour_id and not isinstance(onboarding_v2, dict):
+            return Response({'error': 'tour_id or onboarding_v2 required'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = request.user
         if not user.onboarding_status:
             user.onboarding_status = {}
-        user.onboarding_status[tour_id] = True
+
+        if tour_id:
+            user.onboarding_status[tour_id] = True
+
+        if isinstance(onboarding_v2, dict):
+            allowed_learner_types = {'university', 'shs', 'professional', 'self_learning'}
+            allowed_difficulties = {'understanding', 'remembering', 'exam_prep', 'assignments', 'consistency', 'everything'}
+            allowed_identities = {'ember', 'pulse', 'orbit', 'nova'}
+            current = user.onboarding_status.get('onboarding_v2', {})
+
+            if 'current_step' in onboarding_v2:
+                current['current_step'] = max(0, min(3, int(onboarding_v2['current_step'])))
+            if onboarding_v2.get('learner_type') in allowed_learner_types:
+                current['learner_type'] = onboarding_v2['learner_type']
+            if isinstance(onboarding_v2.get('subjects'), list):
+                current['subjects'] = [str(item).strip()[:80] for item in onboarding_v2['subjects'] if str(item).strip()][:12]
+            if isinstance(onboarding_v2.get('difficulties'), list):
+                current['difficulties'] = [item for item in onboarding_v2['difficulties'] if item in allowed_difficulties][:6]
+            if onboarding_v2.get('starter_identity') in allowed_identities:
+                current['starter_identity'] = onboarding_v2['starter_identity']
+            if onboarding_v2.get('completed') is True:
+                current['completed'] = True
+                user.onboarding_status['completed'] = True
+
+            current['version'] = 2
+            user.onboarding_status['onboarding_v2'] = current
+
         user.save(update_fields=['onboarding_status'])
-        return Response({'onboarding_status': user.onboarding_status})
+        return Response({
+            'onboarding_status': user.onboarding_status,
+            'onboarding_v2': user.onboarding_status.get('onboarding_v2', {}),
+        })
 
 
 class GlobalConfigView(APIView):

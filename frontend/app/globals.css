@@ -25,6 +25,30 @@
   --nav-height: 56px;
 }
 
+/* FlowState 2.0 — isolated semantic foundation. Apply with .flow-v2 so
+   legacy product screens can migrate deliberately rather than all at once. */
+.flow-v2 {
+  --flow-void: 11 12 26;
+  --flow-raised: 20 22 40;
+  --flow-surface: 28 31 51;
+  --flow-orange: 255 122 26;
+  --flow-violet: 148 124 255;
+  --flow-ink: 248 246 242;
+  --flow-muted: 170 171 192;
+  --flow-success: 91 218 156;
+  color: rgb(var(--flow-ink));
+  background: rgb(var(--flow-void));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-v2 *, .flow-v2 *::before, .flow-v2 *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 * { box-sizing: border-box; }
 
 /* Material Symbols */
