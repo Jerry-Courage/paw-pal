@@ -103,7 +103,7 @@ export default function LibraryPage() {
       } else if (!status) {
         // No response — likely a network timeout after the upload already completed on the server
         // Refresh the list rather than showing a false error
-        toast.info('Upload may have completed — refreshing your library…')
+        toast.info('Upload may have completed — refreshing your Sources…')
         queryClient.invalidateQueries({ queryKey: ['resources'] })
       } else {
         toast.error(data?.error || data?.detail || 'Upload failed. Please try again.')
@@ -120,7 +120,7 @@ export default function LibraryPage() {
       fd.append('title', pastedTitle || 'Pasted Text')
       fd.append('text_content', pastedText)
       await libraryApi.uploadResource(fd)
-      toast.success('Text added to library!')
+      toast.success('Text added to Sources!')
       queryClient.invalidateQueries({ queryKey: ['resources'] })
       setPastedText(''); setPastedTitle(''); setTextMode(false)
     } catch { toast.error('Failed to add text.') }
@@ -165,7 +165,8 @@ export default function LibraryPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-stack-md mb-stack-lg">
         <div>
-          <h2 className="text-[32px] font-bold text-on-surface mb-base">My Library</h2>
+          <h2 className="text-[32px] font-bold text-on-surface mb-base">Sources</h2>
+          <p className="-mt-2 mb-base text-sm text-on-surface-variant">The material that grounds your Journeys, Tasks, and conversations with Flow.</p>
           <p className="text-on-surface-variant text-[16px]">All your study materials in one place.</p>
         </div>
         <div className="relative w-full md:w-96">
@@ -250,7 +251,7 @@ export default function LibraryPage() {
               disabled={uploading}
               className="bg-primary text-on-primary font-bold px-stack-lg py-stack-sm rounded-[1rem] btn-3d hover:brightness-110 transition-all disabled:opacity-50"
             >
-              {uploading ? 'Adding…' : 'Add to Library'}
+              {uploading ? 'Adding…' : 'Add to Sources'}
             </button>
             <button onClick={() => setTextMode(false)} className="bg-surface-container-high text-on-surface-variant font-bold px-stack-md py-stack-sm rounded-[1rem] hover:bg-surface-container-highest transition-all">
               Cancel
@@ -320,7 +321,7 @@ export default function LibraryPage() {
               <span className="material-symbols-outlined text-[36px] text-on-surface-variant/40">menu_book</span>
             </div>
             <div>
-              <p className="font-bold text-on-surface text-[16px] mb-1">{search ? 'No results found' : 'Library is empty'}</p>
+              <p className="font-bold text-on-surface text-[16px] mb-1">{search ? 'No results found' : 'Sources is empty'}</p>
               <p className="text-[13px] text-on-surface-variant">
                 {search ? 'Try a different search term.' : 'Upload your first material to unlock AI study tools.'}
               </p>

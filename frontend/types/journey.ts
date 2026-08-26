@@ -98,6 +98,28 @@ export interface JourneyConceptDetail extends JourneyRoadmapNode {
   key_definitions: Array<{ term?: string; name?: string; definition?: string; value?: string }>
 }
 
+export interface EncounterActivity {
+  id: string
+  stage: 'hook' | 'interact' | 'check' | 'reflect'
+  type: 'predict' | 'mcq' | 'short_answer' | 'reflection'
+  prompt: string
+  options?: string[]
+}
+
+export interface EncounterActivitiesResponse {
+  activities: EncounterActivity[]
+  subject_family: string
+  goal_mode: string
+}
+
+export interface EncounterAttemptResponse {
+  attempt_id: string
+  correct: boolean | null
+  score: number
+  feedback: string
+  evidence_score: number | null
+}
+
 export interface ProgressionSummary {
   level: { num: number; rank: string }
   lifetime_xp: number

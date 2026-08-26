@@ -122,3 +122,27 @@ class ConceptReview(models.Model):
         if self.total_reviews == 0:
             return 0
         return int((self.correct_reviews / self.total_reviews) * 100)
+
+
+class EncounterAttempt(models.Model):
+    """Server-evaluated evidence produced inside a Journey encounter."""
+    ACTIVITY_CHOICES = [
+        ('predict', 'Predict'), ('mcq', 'Multiple choice'),
+        ('short_answer', 'Short answer'), ('reflection', 'Reflection'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='encounter_attempts')
+    concept = models.ForeignKey(ConceptNode, on_delete=models.CASCADE, related_name='attempts')
+    activity_id = models.CharField(max_length=80)
+    activity_type = models.CharField(max_length=30, choices=ACTIVITY_CHOICES)
+    stage = models.CharField(max_length=20)
+    response = models.JSONField(default=dict)
+    correct = models.BooleanField(null=True, blank=True)
+    score = models.PositiveSmallIntegerField(default=0)
+    feedback = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [models.Index(fields=['user', 'concept', 'created_at'], name='learning_en_user_id_8208b9_idx')]

@@ -10,23 +10,22 @@ import { cn } from '@/lib/utils'
 
 const ALL_BOTTOM_ITEMS = [
   { href: '/dashboard',   icon: 'home',           label: 'Home' },
-  { href: '/library',     icon: 'menu_book',      label: 'Library' },
-  { href: '/groups',      icon: 'bolt',           label: 'Quiz' },
-  { href: '/rankings',    icon: 'leaderboard',    label: 'Rankings' },
-  { href: '/learn',       icon: 'school',         label: 'Learn', shsOnly: true },
+  { href: '/learn',       icon: 'route',          label: 'Journey' },
+  { href: '/ai',          icon: 'flare',          label: 'Flow' },
+  { href: '/settings',    icon: 'person',         label: 'You' },
 ]
 
 const ALL_DRAWER_ITEMS = [
   { href: '/dashboard',   icon: 'home',            label: 'Home' },
-  { href: '/library',     icon: 'menu_book',       label: 'My Library' },
-  { href: '/learn',       icon: 'school',          label: 'Learn', shsOnly: true },
-  { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
-  { href: '/workspace',   icon: 'group_work',      label: 'Collab Space' },
-  { href: '/ai',          icon: 'smart_toy',       label: 'AI Assistant' },
+  { href: '/library',     icon: 'menu_book',       label: 'Sources' },
+  { href: '/learn',       icon: 'school',          label: 'Journey', shsOnly: true },
+  { href: '/assignments', icon: 'edit_document',   label: 'Tasks' },
+  { href: '/workspace',   icon: 'group_work',      label: 'Collab' },
+  { href: '/ai',          icon: 'smart_toy',       label: 'Flow' },
   { href: '/dashboard/personalised', icon: 'headphones', label: 'Personal Tutor' },
-  { href: '/groups',      icon: 'bolt',            label: 'Quiz Battle' },
+  { href: '/groups',      icon: 'bolt',            label: 'Battle' },
   { href: '/rankings',    icon: 'leaderboard',     label: 'Rankings' },
-  { href: '/settings',    icon: 'settings',        label: 'Settings' },
+  { href: '/settings',    icon: 'settings',        label: 'You' },
   { href: '/upgrade',     icon: 'workspace_premium', label: 'Upgrade' },
 ]
 
@@ -44,9 +43,8 @@ export default function MobileNav() {
     enabled: !!session,
   })
 
-  const isSHS = profileData?.education_level === 'secondary'
-  const BOTTOM_ITEMS = ALL_BOTTOM_ITEMS.filter(item => !item.shsOnly || isSHS)
-  const DRAWER_ITEMS = ALL_DRAWER_ITEMS.filter(item => !item.shsOnly || isSHS)
+  const BOTTOM_ITEMS = ALL_BOTTOM_ITEMS
+  const DRAWER_ITEMS = ALL_DRAWER_ITEMS.filter(item => !item.shsOnly || profileData?.education_level === 'secondary')
 
   const isFullViewport =
     pathname === '/groups' ||

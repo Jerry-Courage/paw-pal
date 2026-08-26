@@ -397,6 +397,11 @@ export const learningApi = {
   getAnalytics: (id: string) => api.get<JourneyAnalyticsResponse>(`/learning/paths/${id}/analytics/`),
   // Concepts
   getConcept: (id: string) => api.get(`/learning/concepts/${id}/`),
+  getConceptActivities: (id: string) => api.get(`/learning/concepts/${id}/activities/`),
+  submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown }) =>
+    api.post(`/learning/concepts/${id}/attempt/`, data),
+  askFlowInConcept: (id: string, data: { question: string; stage: string }) =>
+    api.post(`/learning/concepts/${id}/ask-flow/`, data),
   completeConcept: (id: string, score: number) =>
     api.post<{ message: string; xp_earned: number; unlocked: string[]; reward: RewardResponse }>(`/learning/concepts/${id}/complete/`, { score }),
   reviewConcept: (id: string, score: number) =>

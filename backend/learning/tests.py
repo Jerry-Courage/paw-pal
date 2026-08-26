@@ -4,7 +4,7 @@ from django.urls import resolve
 from rest_framework.test import APIClient
 
 from library.models import Resource
-from learning.models import ConceptNode, LearningPath, Unit
+from learning.models import ConceptNode, EncounterAttempt, LearningPath, Unit
 
 
 class LearningPathRouteTests(SimpleTestCase):
@@ -59,3 +59,42 @@ class JourneyBuildRegressionTests(TestCase):
             self.assertEqual(list(node.prerequisites.values_list('id', flat=True)), [previous.id])
 
         self.assertEqual(response.data['id'], str(path.id))
+
+
+class EncounterEvidenceTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            email='encounter@example.com', username='encounter', password='test-pass-123'
+        )
+        self.path = LearningPath.objects.create(
+            user=self.user, title='Biology Journey', goal='Prepare for my biology exam', depth='standard'
+        )
+        self.unit = Unit.objects.create(path=self.path, title='Cell Systems', order_index=0)
+        self.concept = ConceptNode.objects.create(
+            path=self.path, unit=self.unit, title='Cell membrane', summary='The cell membrane controls what enters and leaves the cell.',
+            description='A selectively permeable boundary.', order_index=0, status='current'
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_activities_are_goal_adaptive_and_attempt_is_server_scored(self):
+        response = self.client.get(f'/api/learning/concepts/{self.concept.id}/activities/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['goal_mode'], 'exam')
+        self.assertEqual([item['stage'] for item in response.data['activities']], ['hook', 'interact', 'check', 'reflect'])
+
+        check = next(item for item in response.data['activities'] if item['stage'] == 'check')
+        attempt = self.client.post(f'/api/learning/concepts/{self.concept.id}/attempt/', {
+            'activity_id': check['id'], 'response': {'choice': 99},
+        }, format='json')
+        self.assertEqual(attempt.status_code, 201)
+        self.assertFalse(attempt.data['correct'])
+        self.assertEqual(attempt.data['score'], 25)
+        self.assertEqual(EncounterAttempt.objects.count(), 1)
+
+    def test_unknown_activity_is_not_persisted(self):
+        response = self.client.post(f'/api/learning/concepts/{self.concept.id}/attempt/', {
+            'activity_id': 'invented', 'response': {'choice': 0},
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(EncounterAttempt.objects.exists())
