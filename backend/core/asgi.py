@@ -24,7 +24,8 @@ try:
     call_command("migrate", no_input=True, verbosity=1)
     print("Core ASGI: Migrations completed.")
 except Exception as e:
-    print(f"Core ASGI Integrity/Migration Check Skipped: {e}")
+    print(f"Core ASGI migration failed; refusing to start with a stale schema: {e}")
+    raise
 
 # ── Rescue resources stuck in processing from a previous dyno ─────────────────
 # When Render kills a dyno mid-task the background thread dies without running

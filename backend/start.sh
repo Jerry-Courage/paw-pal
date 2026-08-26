@@ -26,7 +26,7 @@ except Exception as e:
 
 # Run database migrations
 echo "Running database migrations..."
-python manage.py migrate --noinput --verbosity 2 || echo "WARNING: migrate failed, attempting column-level fix..."
+python manage.py migrate --noinput --verbosity 2
 
 # Fallback: ensure quiz battle columns exist (handles migration desync)
 python -c "

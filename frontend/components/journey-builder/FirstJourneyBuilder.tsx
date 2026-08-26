@@ -57,6 +57,7 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
   const eventSourceRef = useRef<EventSource | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const resourceRef = useRef<ResourceState | null>(null)
+  const buildSubmittingRef = useRef(false)
   const resourceId = resource?.id || initialResourceIds[0]
 
   const applyResource = useCallback((next: ResourceState) => {
@@ -180,12 +181,13 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
   }
 
   const buildJourney = async () => {
-    if (!resourceId || !goal || busy) return
+    if (!resourceId || !goal || busy || buildSubmittingRef.current) return
+    buildSubmittingRef.current = true
     setBusy(true); setStage('building'); setError(''); onFlowState('thinking')
     try {
       const response = await learningApi.buildJourney({ title: `${resource?.title || 'My'} Journey`, goal, resources: [resourceId], depth })
       setJourney(response.data); setStage('ready'); await onPersist({ journey_id: response.data.id, journey_goal: goal, journey_depth: depth, completed: true })
-    } catch (caught) { setStage('preview'); setError('The Journey didn’t lock into place.'); setDebugError(errorMessage(caught)); onFlowState('idle') }
+    } catch (caught) { buildSubmittingRef.current = false; setStage('preview'); setError('The Journey didn’t lock into place.'); setDebugError(errorMessage(caught)); onFlowState('idle') }
     finally { setBusy(false) }
   }
 

@@ -6,6 +6,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Q, Count, Avg
 
 from .models import LearningPath, ConceptNode, ConceptReview, Unit
@@ -274,6 +275,7 @@ class LearningPathViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=False, methods=['post'])
+    @transaction.atomic
     def build(self, request):
         """
         Build a learning path from a previewed structure.
