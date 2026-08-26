@@ -323,6 +323,14 @@ class UpdateOnboardingView(APIView):
                 current['difficulties'] = [item for item in onboarding_v2['difficulties'] if item in allowed_difficulties][:6]
             if onboarding_v2.get('starter_identity') in allowed_identities:
                 current['starter_identity'] = onboarding_v2['starter_identity']
+            if isinstance(onboarding_v2.get('resource_ids'), list):
+                current['resource_ids'] = [int(item) for item in onboarding_v2['resource_ids'] if str(item).isdigit()][:5]
+            if isinstance(onboarding_v2.get('journey_goal'), str):
+                current['journey_goal'] = onboarding_v2['journey_goal'].strip()[:300]
+            if onboarding_v2.get('journey_depth') in {'quick', 'standard', 'deep'}:
+                current['journey_depth'] = onboarding_v2['journey_depth']
+            if isinstance(onboarding_v2.get('journey_id'), str):
+                current['journey_id'] = onboarding_v2['journey_id'][:40]
             if onboarding_v2.get('completed') is True:
                 current['completed'] = True
                 user.onboarding_status['completed'] = True

@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
-export type FlowCompanionState = 'idle' | 'thinking' | 'celebrating' | 'listening' | 'speaking'
+export type FlowCompanionState = 'idle' | 'receiving' | 'reading' | 'thinking' | 'celebrating' | 'listening' | 'speaking'
 
 interface FlowCompanionProps {
   state?: FlowCompanionState
@@ -14,7 +14,7 @@ interface FlowCompanionProps {
 export default function FlowCompanion({ state = 'idle', className, label = 'Flow companion' }: FlowCompanionProps) {
   const reduceMotion = useReducedMotion()
   const celebrating = state === 'celebrating'
-  const thinking = state === 'thinking'
+  const thinking = state === 'thinking' || state === 'reading'
 
   return (
     <motion.div
@@ -85,4 +85,3 @@ export default function FlowCompanion({ state = 'idle', className, label = 'Flow
     </motion.div>
   )
 }
-

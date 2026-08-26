@@ -9,6 +9,10 @@ export interface OnboardingProfile {
   subjects: string[]
   difficulties: LearningDifficulty[]
   starter_identity?: StarterIdentity
+  resource_ids?: number[]
+  journey_goal?: string
+  journey_depth?: 'quick' | 'standard' | 'deep'
+  journey_id?: string
   completed?: boolean
 }
 
@@ -18,6 +22,9 @@ export interface OnboardingUpdate {
   subjects?: string[]
   difficulties?: LearningDifficulty[]
   starter_identity?: StarterIdentity
+  resource_ids?: number[]
+  journey_goal?: string
+  journey_depth?: 'quick' | 'standard' | 'deep'
+  journey_id?: string
   completed?: boolean
 }
-

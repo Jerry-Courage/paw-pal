@@ -4,9 +4,10 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, BookOpen, BriefcaseBusiness, Check, GraduationCap, Plus, School, Sparkles, X } from 'lucide-react'
+import { ArrowRight, BookOpen, BriefcaseBusiness, Check, GraduationCap, Plus, School, X } from 'lucide-react'
 import { toast } from 'sonner'
 import FlowCompanion, { type FlowCompanionState } from '@/components/onboarding/FlowCompanion'
+import FirstJourneyBuilder from '@/components/journey-builder/FirstJourneyBuilder'
 import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { LearnerType, LearningDifficulty, OnboardingProfile, StarterIdentity } from '@/types/onboarding'
@@ -52,6 +53,7 @@ export default function OnboardingPage() {
   const [subjectInput, setSubjectInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const [builderFlowState, setBuilderFlowState] = useState<FlowCompanionState>('idle')
 
   const { data: user, isLoading, isError, refetch } = useQuery({
     queryKey: ['profile'],
@@ -72,7 +74,7 @@ export default function OnboardingPage() {
   }, [user, hydrated, router])
 
   const step = profile.current_step
-  const companionState: FlowCompanionState = step === 3 ? 'celebrating' : saving ? 'thinking' : profile.learner_type && step === 0 ? 'celebrating' : 'idle'
+  const companionState: FlowCompanionState = step === 3 ? builderFlowState : saving ? 'thinking' : profile.learner_type && step === 0 ? 'celebrating' : 'idle'
   const suggestions = SUGGESTIONS[profile.learner_type || 'university']
 
   const canContinue = useMemo(() => {
@@ -111,7 +113,6 @@ export default function OnboardingPage() {
       subjects: profile.subjects,
       difficulties: profile.difficulties,
       starter_identity: profile.starter_identity,
-      ...(nextStep === 3 ? { completed: true } : {}),
     })
     if (ok && nextStep === 1) setTimeout(() => inputRef.current?.focus(), 450)
   }
@@ -258,19 +259,14 @@ export default function OnboardingPage() {
               )}
 
               {step === 3 && (
-                <div>
-                  <p className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-[.22em] text-flow-success"><Sparkles className="h-4 w-4" /> You&apos;re in</p>
-                  <h1 className="max-w-3xl text-[clamp(2.4rem,6vw,5.5rem)] font-black leading-[.94] tracking-[-.055em]">Alright. Give me something you&apos;re studying.</h1>
-                  <p className="mt-5 max-w-xl text-base leading-relaxed text-flow-muted sm:text-lg">I&apos;ll read it, find the important ideas, and turn it into a structured learning Journey.</p>
-                  <div className="relative mt-8 max-w-2xl border-y border-white/12 py-7">
-                    <div className="flex items-center gap-5 opacity-70">
-                      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-[38%] border-2 border-dashed border-flow-orange/60 text-flow-orange"><Plus className="h-7 w-7" /></div>
-                      <div><p className="text-lg font-black">First material gateway</p><p className="mt-1 text-sm text-flow-muted">Upload, camera, and link options arrive in Phase C.</p></div>
-                    </div>
-                    <span className="absolute right-0 top-3 rounded-full bg-flow-violet/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-flow-violet">Next milestone</span>
-                  </div>
-                  <button type="button" onClick={() => router.replace('/dashboard')} className="mt-7 text-sm font-bold text-flow-muted underline decoration-white/20 underline-offset-4 hover:text-flow-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flow-orange">Return to the current product</button>
-                </div>
+                <FirstJourneyBuilder
+                  initialResourceIds={profile.resource_ids}
+                  initialGoal={profile.journey_goal}
+                  initialDepth={profile.journey_depth}
+                  initialJourneyId={profile.journey_id}
+                  onPersist={persist}
+                  onFlowState={setBuilderFlowState}
+                />
               )}
             </motion.div>
           </AnimatePresence>
