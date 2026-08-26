@@ -42,7 +42,9 @@ class LearningPath(models.Model):
         self.total_concepts = nodes.count()
         self.concepts_completed = nodes.filter(status='completed').count()
         self.total_xp = sum(n.xp_earned for n in nodes)
-        self.save(update_fields=['total_concepts', 'concepts_completed', 'total_xp', 'updated_at'])
+        if self.total_concepts and self.concepts_completed == self.total_concepts:
+            self.status = 'completed'
+        self.save(update_fields=['total_concepts', 'concepts_completed', 'total_xp', 'status', 'updated_at'])
 
 
 class Unit(models.Model):

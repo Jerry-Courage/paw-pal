@@ -585,17 +585,26 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Complete prerequisites first'}, status=400)
 
         score = int(request.data.get('score', 80))
+
+        # RewardEngine is the authoritative, idempotent reward source. Reusing
+        # the concept id means retries can never double-award XP/FlowCoins.
+        from gamification.services import RewardEngine
+        reward = RewardEngine.process(
+            user=request.user,
+            activity_type='concept_completion',
+            source_id=str(concept.id),
+            context={'score': score, 'path_id': str(concept.path_id)},
+        )
+
         concept.status = 'completed'
         concept.mastery = score
-        concept.xp_earned = max(concept.xp_earned, score)
+        concept.xp_earned = max(concept.xp_earned, reward['xp'])
         concept.save(update_fields=['status', 'mastery', 'xp_earned', 'updated_at'])
 
         # Unlock concepts that have this as a prerequisite
         unlocked = ConceptNode.objects.filter(
             prerequisites=concept,
             status='locked'
-        ).exclude(
-            prerequisites__status='completed'
         ).exclude(id=concept.id)
 
         newly_unlocked = []
@@ -608,15 +617,6 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
 
         # Update path progress
         concept.path.recalculate_progress()
-
-        # Award XP via RewardEngine
-        from gamification.services import RewardEngine
-        reward = RewardEngine.process(
-            user=request.user,
-            activity_type='concept_completion',
-            source_id=str(concept.id),
-            context={'score': score, 'path_id': str(concept.path_id)},
-        )
 
         return Response({
             'message': 'Concept completed',

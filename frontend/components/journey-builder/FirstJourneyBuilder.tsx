@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight, Check, RotateCcw, Sparkles } from 'lucide-react'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 import MaterialIntake, { MaterialObject, type MaterialDraft } from './MaterialIntake'
 import JourneyPreview from './JourneyPreview'
 import { API_BASE, getAuthToken, learningApi, libraryApi } from '@/lib/api'
@@ -40,6 +41,7 @@ interface Props {
 
 export default function FirstJourneyBuilder({ initialResourceIds = [], initialGoal = '', initialDepth = 'standard', initialJourneyId, onPersist, onFlowState }: Props) {
   const reduceMotion = useReducedMotion()
+  const router = useRouter()
   const [stage, setStage] = useState<Stage>(initialJourneyId ? 'ready' : initialResourceIds.length ? 'processing' : 'intake')
   const [material, setMaterial] = useState<MaterialDraft | null>(null)
   const [resource, setResource] = useState<ResourceState | null>(null)
@@ -255,7 +257,7 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
           {stage === 'ready' && <>
             <Eyebrow><Sparkles className="h-4 w-4" /> Route secured</Eyebrow><Title>Your Journey is ready.</Title><Lead>{goal || initialGoal || 'The path is built. What happens next becomes the Journey World.'}</Lead>
             <div className="mt-8 flex h-36 max-w-2xl items-center gap-4 border-y border-white/12 px-4" aria-hidden="true"><span className="h-5 w-5 rounded-full bg-flow-success" /><span className="h-1 flex-1 -rotate-2 bg-flow-orange/50" /><span className="h-8 w-8 rotate-3 bg-flow-orange shadow-[0_0_24px_rgba(255,122,26,.45)]" /><span className="h-1 flex-1 rotate-2 bg-flow-orange/25" /><span className="h-5 w-5 rounded-full border-4 border-flow-violet" /></div>
-            <PrimaryAction onClick={() => toast.message('Journey World arrives in Phase E. Your Journey is safely built.')}>Enter Journey</PrimaryAction>
+            <PrimaryAction onClick={() => journey?.id ? router.push(`/learn/${journey.id}`) : toast.error('Flow lost the Journey address. Please refresh.')}>Enter Journey</PrimaryAction>
             {journey?.id && <p className="mt-3 text-xs text-flow-muted">Journey ID {journey.id}</p>}
           </>}
         </motion.div>

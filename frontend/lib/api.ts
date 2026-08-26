@@ -4,6 +4,7 @@ import type {
   BuildJourneyRequest, BuildJourneyResponse, DueReviewsResponse,
   JourneyAnalyticsResponse, JourneyPreviewRequest, JourneyPreviewResponse,
   JourneyRoadmapResponse, RewardResponse,
+  ProgressionSummary,
 } from '@/types/journey'
 import type { OnboardingUpdate } from '@/types/onboarding'
 
@@ -66,6 +67,10 @@ api.interceptors.response.use(
 
 export const API_BASE = api.defaults.baseURL || ''
 export const SERVER_URL = API_BASE.replace(/\/api$/, '')
+
+export const gamificationApi = {
+  getProgress: () => api.get<ProgressionSummary>('/gamification/progress/'),
+}
 
 // Auth
 export const authApi = {

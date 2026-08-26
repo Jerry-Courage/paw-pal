@@ -5,6 +5,7 @@ import { Clock3, Map, Route } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { JourneyPreviewResponse } from '@/types/journey'
 import { cn } from '@/lib/utils'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
 export default function JourneyPreview({ preview }: { preview: JourneyPreviewResponse }) {
   const [activeUnit, setActiveUnit] = useState(0)
@@ -38,7 +39,7 @@ export default function JourneyPreview({ preview }: { preview: JourneyPreviewRes
             {nodes.map((node, index) => <button key={`${node.unitIndex}-${node.title}`} type="button" onClick={() => setActiveUnit(node.unitIndex)} className={cn('relative flex min-h-20 w-full items-center gap-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-flow-orange', index % 2 ? 'pl-[24%]' : 'pl-[5%]')}>
               {index < nodes.length - 1 && <span className={cn('absolute top-[58%] h-[70%] w-1 origin-top bg-flow-orange/45', index % 2 ? 'left-[31%] rotate-[22deg]' : 'left-[12%] -rotate-[22deg]')} />}
               <span className={cn('relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full border-4', activeUnit === node.unitIndex ? 'border-flow-orange bg-flow-violet' : 'border-flow-ink bg-flow-void')} />
-              <span className={cn('relative z-10 text-sm font-black', activeUnit === node.unitIndex ? 'text-flow-ink' : 'text-flow-muted')}>{node.title}</span>
+              <span className={cn('relative z-10 text-sm font-black', activeUnit === node.unitIndex ? 'text-flow-ink' : 'text-flow-muted')}>{normalizeReadableMath(node.title)}</span>
             </button>)}
           </div>
           <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMin meet" className="hidden h-auto min-h-[34rem] w-full md:block" aria-label="Journey preview route">
@@ -53,7 +54,7 @@ export default function JourneyPreview({ preview }: { preview: JourneyPreviewRes
                 onClick={() => setActiveUnit(node.unitIndex)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveUnit(node.unitIndex) } }} className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-flow-orange" role="button" tabIndex={0} aria-label={`${node.title}, unit ${node.unitIndex + 1}`}>
                 <circle cx={point.x} cy={point.y} r={radius + 10} fill={selected ? 'rgba(148,124,255,.18)' : 'transparent'} />
                 <circle cx={point.x} cy={point.y} r={radius} fill={selected ? '#A58CFF' : '#0B0C1A'} stroke={node.conceptIndex === 0 ? '#FF7A1A' : '#F8F6F2'} strokeWidth={node.conceptIndex === 0 ? 6 : 3} />
-                <text x={point.x + (point.x > width / 2 ? -22 : 22)} y={point.y + 5} textAnchor={point.x > width / 2 ? 'end' : 'start'} fill={selected ? '#F8F6F2' : '#AAABC0'} fontSize="15" fontWeight="800">{node.title.length > 38 ? `${node.title.slice(0, 36)}…` : node.title}</text>
+                <text x={point.x + (point.x > width / 2 ? -22 : 22)} y={point.y + 5} textAnchor={point.x > width / 2 ? 'end' : 'start'} fill={selected ? '#F8F6F2' : '#AAABC0'} fontSize="15" fontWeight="800">{normalizeReadableMath(node.title).slice(0, 38)}{normalizeReadableMath(node.title).length > 38 ? '…' : ''}</text>
               </motion.g>
             })}
             <text x={points[0]?.x || 80} y="35" textAnchor="middle" fill="#5BDA9C" fontSize="13" fontWeight="900" letterSpacing="3">START</text>
@@ -65,9 +66,9 @@ export default function JourneyPreview({ preview }: { preview: JourneyPreviewRes
           <p className="text-xs font-black uppercase tracking-[.2em] text-flow-violet">Zone {activeUnit + 1}</p>
           <AnimatePresence mode="wait">
             <motion.div key={activeUnit} initial={reduceMotion ? false : { opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? undefined : { opacity: 0, x: -10 }}>
-              <h3 className="mt-2 text-2xl font-black tracking-tight">{preview.units[activeUnit]?.title}</h3>
+              <h3 className="mt-2 text-2xl font-black tracking-tight">{normalizeReadableMath(preview.units[activeUnit]?.title || '')}</h3>
               <ol className="mt-5 space-y-3">
-                {preview.units[activeUnit]?.concepts.map((concept, index) => <li key={concept.title} className="flex gap-3 text-sm text-flow-muted"><span className="font-black text-flow-orange">{String(index + 1).padStart(2, '0')}</span><span>{concept.title}</span></li>)}
+                {preview.units[activeUnit]?.concepts.map((concept, index) => <li key={concept.title} className="flex gap-3 text-sm text-flow-muted"><span className="font-black text-flow-orange">{String(index + 1).padStart(2, '0')}</span><span>{normalizeReadableMath(concept.title)}</span></li>)}
               </ol>
             </motion.div>
           </AnimatePresence>

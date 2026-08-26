@@ -77,6 +77,35 @@ export interface JourneyRoadmapResponse {
   edges: Array<{ from: string; to: string }>
 }
 
+export interface JourneyPathDetail {
+  id: string
+  title: string
+  goal: string
+  depth: JourneyDepth
+  status: JourneyStatus
+  concepts_completed: number
+  total_concepts: number
+  mastery_percent: number
+}
+
+export interface JourneyConceptDetail extends JourneyRoadmapNode {
+  unit_title: string
+  description: string
+  summary: string
+  source_resource_title: string
+  source_page?: number | null
+  source_section?: string
+  key_definitions: Array<{ term?: string; name?: string; definition?: string; value?: string }>
+}
+
+export interface ProgressionSummary {
+  level: { num: number; rank: string }
+  lifetime_xp: number
+  flowcoins: number
+  current_streak: number
+  progress_percent: number
+}
+
 export interface JourneyAnalyticsResponse {
   total_concepts: number
   status_distribution: Partial<Record<ConceptStatus, number>>
@@ -107,4 +136,3 @@ export interface RewardResponse {
   missions: unknown[]
   achievements: unknown[]
 }
-
