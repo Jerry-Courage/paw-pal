@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
@@ -23,6 +23,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
+  const focusMainRef = useRef<HTMLElement>(null)
+  const isJourneyFocus = /^\/learn\/[^/]+$/.test(pathname)
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: () => authApi.me().then(response => response.data),
@@ -38,6 +40,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (status !== 'authenticated' || profileLoading || !profile) return
     if (!profile.onboarding_status?.completed) router.replace('/onboarding')
   }, [status, profileLoading, profile, router])
+
+  useEffect(() => {
+    if (!isJourneyFocus) return
+    const frame = requestAnimationFrame(() => focusMainRef.current?.focus({ preventScroll: true }))
+    return () => cancelAnimationFrame(frame)
+  }, [isJourneyFocus, pathname])
 
   // Push notifications — retry up to 3 times with backoff
   useEffect(() => {
@@ -74,7 +82,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAssignmentDetail = pathname.includes('/assignments/') && !pathname.endsWith('/new')
 
   const shouldFullViewport = isFullViewport || isAssignmentDetail
-  const isJourneyFocus = /^\/learn\/[^/]+$/.test(pathname)
 
   // Hide sidebar + mobile nav entirely on full-viewport pages (study, flashcards, quiz, workspace, quiz battle, etc.)
   const hideNav = pathname === '/groups' || pathname.startsWith('/groups/') || pathname === '/dashboard/personalised' || shouldFullViewport || isJourneyFocus
@@ -85,10 +92,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {!hideNav && <MobileNav />}
 
       <main
+        ref={focusMainRef}
+        tabIndex={isJourneyFocus ? 0 : undefined}
+        autoFocus={isJourneyFocus}
         className={cn(
           !hideNav && 'md:ml-[68px]',
           hideNav
-            ? 'fixed inset-0'
+            ? isJourneyFocus
+              ? 'fixed inset-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] touch-pan-y focus:outline-none'
+              : 'fixed inset-0'
             : shouldFullViewport
             ? 'fixed inset-0 md:left-[68px] overflow-hidden z-30'
             : 'min-h-screen main-safe-top md:pt-6 [padding-bottom:calc(7rem+env(safe-area-inset-bottom))] md:pb-8'

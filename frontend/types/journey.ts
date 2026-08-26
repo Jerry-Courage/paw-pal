@@ -100,16 +100,28 @@ export interface JourneyConceptDetail extends JourneyRoadmapNode {
 
 export interface EncounterActivity {
   id: string
-  stage: 'hook' | 'interact' | 'check' | 'reflect'
-  type: 'predict' | 'mcq' | 'short_answer' | 'reflection'
+  concept_id: string
+  purpose: 'diagnose' | 'learn' | 'apply' | 'check' | 'transfer' | 'reflect' | 'remediate'
+  stage: string
+  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example'
+  instructions?: string
   prompt: string
   options?: string[]
+  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string }
+  explanation?: string
+  hints?: string[]
+  difficulty: string
+  estimated_seconds: number
+  grounding?: { resource_id?: number; resource_title?: string; section?: string; page?: number; excerpt?: string }
+  goal_relevance: string
 }
 
 export interface EncounterActivitiesResponse {
   activities: EncounterActivity[]
   subject_family: string
   goal_mode: string
+  depth: JourneyDepth
+  attempt_count: number
 }
 
 export interface EncounterAttemptResponse {
@@ -117,7 +129,11 @@ export interface EncounterAttemptResponse {
   correct: boolean | null
   score: number
   feedback: string
+  explanation: string
+  hint: string
   evidence_score: number | null
+  attempt_number: number
+  recommend_flow: boolean
 }
 
 export interface ProgressionSummary {

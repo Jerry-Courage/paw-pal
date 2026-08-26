@@ -128,7 +128,9 @@ class EncounterAttempt(models.Model):
     """Server-evaluated evidence produced inside a Journey encounter."""
     ACTIVITY_CHOICES = [
         ('predict', 'Predict'), ('mcq', 'Multiple choice'),
-        ('short_answer', 'Short answer'), ('reflection', 'Reflection'),
+        ('scenario', 'Scenario'), ('short_answer', 'Short answer'),
+        ('reflection', 'Reflection'), ('comparison', 'Comparison'),
+        ('worked_example', 'Worked example'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

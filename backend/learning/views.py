@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Q, Count, Avg
+from django.db.models import Q, Count, Avg, Max
 
 from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit
 from .serializers import (LearningPathSerializer, LearningPathListSerializer,
@@ -26,79 +26,176 @@ DEPTH_LIMITS = {
 }
 
 
-def _activity_id(concept, stage):
-    return hashlib.sha256(f'{concept.id}:{stage}:v1'.encode()).hexdigest()[:24]
+def _activity_id(concept, key):
+    return hashlib.sha256(f'{concept.id}:{key}:v2'.encode()).hexdigest()[:24]
 
 
-def _concept_activities(concept):
-    """Build deterministic, resource-grounded encounter activities."""
-    definitions = concept.key_definitions or []
-    summary = (concept.summary or concept.description or concept.title).strip()
-    main_idea = summary.split('.')[0][:240] or concept.title
-    term = concept.title
-    definition = main_idea
-    if definitions:
-        first = definitions[0] if isinstance(definitions[0], dict) else {}
-        term = first.get('term') or first.get('name') or concept.title
-        definition = first.get('definition') or first.get('value') or main_idea
+def _subject_family(concept):
+    label = ' '.join(filter(None, [str(getattr(concept.source_resource, 'subject', '') or ''),
+                                  str(getattr(concept.source_resource, 'title', '') or ''), concept.title])).lower()
+    if any(word in label for word in ('python', 'code', 'program', 'algorithm', 'javascript')):
+        return 'programming'
+    if any(word in label for word in ('math', 'algebra', 'calculus', 'equation', 'solver', 'matrix', 'geometry', 'statistic')):
+        return 'mathematics'
+    if any(word in label for word in ('biology', 'cell', 'genetic', 'anatomy', 'ecology', 'organism')):
+        return 'biology'
+    return 'conceptual'
 
-    source_label = ' '.join(filter(None, [
-        str(getattr(concept.source_resource, 'subject', '') or ''),
-        str(getattr(concept.source_resource, 'title', '') or ''), concept.title,
-    ])).lower()
-    if any(word in source_label for word in ('python', 'code', 'program', 'algorithm', 'javascript')):
-        subject_family = 'programming'
-        interact_prompt = 'Describe the input, transformation, and expected output for one example.'
-    elif any(word in source_label for word in ('math', 'algebra', 'calculus', 'equation', 'geometry', 'statistic')):
-        subject_family = 'mathematics'
-        interact_prompt = 'What would you calculate or prove first, and why?'
-    elif any(word in source_label for word in ('biology', 'cell', 'genetic', 'anatomy', 'ecology')):
-        subject_family = 'biology'
-        interact_prompt = 'Name one structure or process involved and explain its role.'
-    else:
-        subject_family = 'conceptual'
-        interact_prompt = 'Give one real situation where this idea changes what happens next.'
 
+def _goal_mode(concept):
     goal = (concept.path.goal or '').lower()
-    goal_mode = 'exam' if any(word in goal for word in ('exam', 'test', 'quiz')) else 'revision' if 'revis' in goal else 'mastery'
-    check_prefix = {'exam': 'Exam-style check:', 'revision': 'High-yield recall:', 'mastery': 'Understanding check:'}[goal_mode]
+    if any(word in goal for word in ('exam', 'test', 'quiz')):
+        return 'exam'
+    if any(word in goal for word in ('revis', 'refresh', 'quickly')):
+        return 'revision'
+    if any(word in goal for word in ('understand', 'explain')):
+        return 'understand'
+    return 'mastery'
 
-    def choice_activity(stage, activity_type, prompt, correct_answer, distractors):
-        options = [correct_answer, *distractors]
-        shift = int(hashlib.sha256(f'{concept.id}:{stage}'.encode()).hexdigest()[:2], 16) % len(options)
+
+def _grounding(concept):
+    grounding = {'resource_id': concept.source_resource_id, 'resource_title': '',
+                 'section': concept.source_section or '', 'page': concept.source_page, 'excerpt': ''}
+    resource = concept.source_resource
+    if not resource:
+        return grounding
+    grounding['resource_title'] = resource.title
+    sections = (resource.ai_notes_json or {}).get('sections', [])
+    selected = None
+    if concept.source_section:
+        selected = next((item for item in sections if concept.source_section.lower() in str(item.get('title', '')).lower()), None)
+    if not selected and sections:
+        title_words = set(re.findall(r'[a-z]{4,}', concept.title.lower()))
+        selected = max(sections, key=lambda item: len(title_words & set(re.findall(r'[a-z]{4,}', str(item.get('title', '')).lower()))))
+    if selected:
+        grounding['section'] = grounding['section'] or selected.get('title', '')
+        grounding['page'] = grounding['page'] or selected.get('page')
+        grounding['excerpt'] = str(selected.get('plain_english') or selected.get('quick_summary') or selected.get('content') or '')[:700]
+    return grounding
+
+
+def _concept_activities(concept, user=None):
+    """Activity Engine V2: deterministic, grounded, depth-aware learning sequence."""
+    subject = _subject_family(concept)
+    goal_mode = _goal_mode(concept)
+    goal_text = concept.path.goal or goal_mode
+    check_lead = {'exam': 'Exam check — ', 'revision': 'Retrieval check — ',
+                  'understand': 'Concept check — ', 'mastery': 'Mastery check — '}[goal_mode]
+    depth = concept.path.depth or 'standard'
+    grounding = _grounding(concept)
+    summary = (grounding['excerpt'] or concept.summary or concept.description or '').strip()
+    if not summary:
+        summary = f'{concept.title} is the focus of this part of the Journey.'
+    main_idea = re.split(r'(?<=[.!?])\s+', summary)[0][:360]
+    provenance = {key: value for key, value in grounding.items() if value not in ('', None)}
+
+    def base(key, purpose, activity_type, prompt, **extra):
+        return {'id': _activity_id(concept, key), 'concept_id': str(concept.id), 'purpose': purpose,
+                'stage': purpose, 'type': activity_type, 'instructions': extra.pop('instructions', ''),
+                'prompt': prompt, 'difficulty': extra.pop('difficulty', concept.difficulty),
+                'estimated_seconds': extra.pop('estimated_seconds', 60), 'grounding': provenance,
+                'goal_relevance': goal_text, **extra}
+
+    def choice(key, purpose, prompt, correct, distractors, explanation, hint, activity_type='mcq', **extra):
+        options = [correct, *distractors]
+        shift = int(hashlib.sha256(f'{concept.id}:{key}'.encode()).hexdigest()[:2], 16) % len(options)
         options = options[shift:] + options[:shift]
-        return {
-            'id': _activity_id(concept, stage), 'stage': stage, 'type': activity_type,
-            'prompt': prompt, 'options': options, 'correct_choice': options.index(correct_answer),
-        }
+        return base(key, purpose, activity_type, prompt, options=options,
+                    correct_choice=options.index(correct), explanation=explanation, hints=[hint], **extra)
 
-    return [
-        choice_activity('hook', 'predict', f'Which description best fits {term}?', definition,
-                        [f'{term} is unrelated to this material.', f'{term} only matters after the Journey is complete.']),
-        {
-            'id': _activity_id(concept, 'interact'), 'stage': 'interact', 'type': 'short_answer',
-            'prompt': interact_prompt,
-        },
-        choice_activity('check', 'mcq', f'{check_prefix} What is the central idea behind {concept.title}?', main_idea,
-                        ['It has no relationship to the source material.', 'It is only a memorization label with no application.']),
-        {
-            'id': _activity_id(concept, 'reflect'), 'stage': 'reflect', 'type': 'reflection',
-            'prompt': 'Explain the idea to Flow in your own words.',
-        },
-    ]
+    title_lower = concept.title.lower()
+    iterative = any(word in title_lower for word in ('jacobi', 'gauss-seidel', 'gauss seidel', 'sor', 'iterative technique'))
+    if iterative:
+        hook = choice('iterative-hook', 'diagnose', 'During one sweep, which method calculates every new value using only values from the previous sweep?',
+                      'Jacobi', ['Gauss–Seidel', 'Successive over-relaxation (SOR)'],
+                      'Jacobi keeps the whole previous iterate fixed while it computes the next one. Gauss–Seidel reuses new values immediately.',
+                      'Ask whether a newly calculated value can be reused before the sweep ends.', activity_type='predict')
+        lesson = base('iterative-compare', 'learn', 'comparison', 'Follow one sweep across the three methods.', content={
+            'columns': ['Method', 'Values used during a sweep', 'What changes'],
+            'rows': [
+                ['Jacobi', 'Only values from the previous iterate', 'All components update together'],
+                ['Gauss–Seidel', 'Newest available values', 'Components update in sequence'],
+                ['SOR', 'Gauss–Seidel update plus relaxation ω', 'ω controls how far the update moves'],
+            ]}, explanation='The key distinction is when newly computed values become available.')
+        apply = choice('iterative-apply', 'apply', 'A solver computes x₁⁽ᵏ⁺¹⁾, then immediately uses it while computing x₂⁽ᵏ⁺¹⁾. Which method behavior is this?',
+                       'Gauss–Seidel', ['Jacobi', 'A direct factorization method'],
+                       'Immediate reuse within the same sweep is the defining update behavior of Gauss–Seidel.',
+                       'Track whether x₂ uses x₁ from iteration k or k+1.', activity_type='scenario')
+        check = choice('iterative-check', 'check', f'{check_lead}what does the relaxation factor ω change in SOR?',
+                       'How far the method moves from the old value toward or beyond the Gauss–Seidel update',
+                       ['Which equations belong to the linear system', 'Whether the method stores a previous iterate at all'],
+                       'SOR blends the old value with a Gauss–Seidel-style update. The factor ω controls the size of that move.',
+                       'ω modifies an update; it does not rewrite the original system.', difficulty='hard' if depth == 'deep' else 'medium')
+    else:
+        definitions = [item for item in (concept.key_definitions or []) if isinstance(item, dict)]
+        useful = [(str(item.get('term') or item.get('name') or '').strip(), str(item.get('definition') or item.get('value') or '').strip()) for item in definitions]
+        useful = [(term, definition) for term, definition in useful if term.lower() not in {'key concept', 'concept', 'definition'} and definition]
+        focus = useful[0][0] if useful else concept.title
+        definition = useful[0][1] if useful else main_idea
+        distractors = [value for _, value in useful[1:3] if value != definition]
+        while len(distractors) < 2:
+            distractors.append(('This describes an outcome rather than the mechanism.' if len(distractors) else 'This reverses the cause-and-effect relationship in the source.'))
+        hook = choice('concept-hook', 'diagnose', f'Which explanation captures the role of {focus}?', definition, distractors[:2],
+                      f'The source frames {focus} this way: {definition}', 'Look for the option that preserves the mechanism or relationship in the source.', activity_type='predict')
+        lesson = base('concept-model', 'learn', 'worked_example', f'Build a useful model of {concept.title}.',
+                      content={'idea': main_idea, 'example': summary[:600]}, explanation='Connect the central idea to one concrete case before testing recall.')
+        prompts = {'mathematics': 'What quantity or relationship would you determine first, and why?',
+                   'programming': 'Trace one input through the code or process. What output or state change should occur?',
+                   'biology': 'Name the structure or process that acts first, then explain its effect.',
+                   'conceptual': 'Give a concrete example and explain why it fits rather than merely naming it.'}
+        apply = base('concept-apply', 'apply', 'short_answer', prompts[subject], accepted_keywords=list(set(re.findall(r'[A-Za-z]{4,}', f'{concept.title} {main_idea}'.lower())))[:12],
+                     explanation=main_idea, hints=[f'Use the relationship described here: {main_idea[:180]}'])
+        check = choice('concept-check', 'check', f'{check_lead}which statement best preserves the central relationship in {concept.title}?', main_idea,
+                       distractors[:2], f'Remember this relationship: {main_idea}', 'Compare each option with the source summary, not just the vocabulary.', difficulty='hard' if depth == 'deep' else 'medium')
+
+    reflection = base('reflection', 'reflect', 'reflection', f'Explain {concept.title} to Flow in your own words, including one important relationship or example.',
+                      accepted_keywords=list(set(re.findall(r'[A-Za-z]{4,}', f'{concept.title} {summary}'.lower())))[:16],
+                      hints=['Name the idea, describe how it works, then give one consequence or example.'], explanation=main_idea)
+    remedial = base('remedial', 'remediate', 'worked_example', 'Pause and rebuild the distinction before trying again.',
+                    content={'idea': main_idea, 'example': summary[:600]}, explanation='Focus on one relationship at a time.', difficulty='easy')
+
+    attempts = EncounterAttempt.objects.filter(user=user, concept=concept) if user and getattr(user, 'is_authenticated', False) else EncounterAttempt.objects.none()
+    struggling = attempts.filter(correct=False).count() >= 2
+    sequence = [hook, lesson, apply, check, reflection]
+    if depth == 'quick':
+        sequence = [hook, lesson, check, reflection]
+    elif depth == 'deep':
+        transfer = base('transfer', 'transfer', 'short_answer', f'Apply {concept.title} in a new situation and justify the choice you make.',
+                        accepted_keywords=reflection['accepted_keywords'], hints=['State the new situation, choose the relevant idea, and justify the connection.'], explanation=main_idea, difficulty='hard')
+        sequence = [hook, lesson, apply, check, transfer, reflection]
+    elif goal_mode == 'revision':
+        sequence = [hook, apply, check, reflection]
+    elif goal_mode == 'mastery':
+        transfer = base('transfer', 'transfer', 'short_answer', f'Apply {concept.title} in a new situation and justify the choice you make.',
+                        accepted_keywords=reflection['accepted_keywords'], hints=['State the new situation, choose the relevant idea, and justify the connection.'], explanation=main_idea, difficulty='hard')
+        sequence = [hook, lesson, apply, check, transfer, reflection]
+    if struggling:
+        sequence.insert(max(1, len(sequence) - 2), remedial)
+    return [item for item in sequence if _valid_activity(item)] or [reflection]
+
+
+def _valid_activity(activity):
+    prompt = str(activity.get('prompt', '')).strip()
+    if not prompt or re.search(r'\bkey concept\b|\bplaceholder\b|\bundefined\b', prompt, re.I):
+        return False
+    if activity.get('type') in {'predict', 'mcq', 'scenario'}:
+        options = activity.get('options') or []
+        return len(options) >= 2 and all(str(option).strip() for option in options) and activity.get('correct_choice') in range(len(options))
+    return True
 
 
 def _evaluate_activity(concept, activity, response):
-    if activity['type'] in {'predict', 'mcq'}:
+    if activity['type'] in {'predict', 'mcq', 'scenario'}:
         try:
             correct = int(response.get('choice')) == activity['correct_choice']
         except (TypeError, ValueError):
             correct = False
-        return correct, 100 if correct else 25, 'That connection holds.' if correct else 'Look again at the explanation grounded in your source.'
+        feedback = activity.get('explanation', '') if correct else f"Not yet. {activity.get('hints', ['Recheck the source relationship.'])[0]}"
+        return correct, 100 if correct else 25, feedback
 
     answer = str(response.get('text', '')).strip()
     source = f"{concept.title} {concept.summary} {concept.description}".lower()
-    keywords = {word for word in re.findall(r'[a-zA-Z]{4,}', source) if word not in {'that', 'this', 'with', 'from', 'have', 'into'}}
+    keywords = set(activity.get('accepted_keywords') or []) or {word for word in re.findall(r'[a-zA-Z]{4,}', source) if word not in {'that', 'this', 'with', 'from', 'have', 'into'}}
     answer_words = set(re.findall(r'[a-zA-Z]{4,}', answer.lower()))
     overlap = len(keywords & answer_words)
     score = min(100, 35 + overlap * 12) if len(answer_words) >= 5 else 15
@@ -108,6 +205,15 @@ def _evaluate_activity(concept, activity, response):
     else:
         feedback = 'Understood—the key idea is present.' if correct else 'Missing idea—connect your explanation more directly to the source summary.'
     return correct, score, feedback
+
+
+def _evidence_score(user, concept, fallback=0):
+    """Use the learner's strongest persisted result per mastery activity."""
+    best = EncounterAttempt.objects.filter(
+        user=user, concept=concept, stage__in=['check', 'reflect', 'transfer']
+    ).values('activity_id').annotate(best=Max('score'))
+    scores = [item['best'] for item in best]
+    return int(sum(scores) / len(scores)) if scores else int(fallback)
 
 
 def _normalize_title(title: str) -> str:
@@ -661,21 +767,25 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def activities(self, request, pk=None):
         concept = self.get_object()
-        activities = _concept_activities(concept)
-        source_label = ' '.join(filter(None, [str(getattr(concept.source_resource, 'subject', '') or ''), str(getattr(concept.source_resource, 'title', '') or ''), concept.title])).lower()
-        subject_family = 'programming' if any(word in source_label for word in ('python', 'code', 'program', 'algorithm', 'javascript')) else 'mathematics' if any(word in source_label for word in ('math', 'algebra', 'calculus', 'equation', 'geometry', 'statistic')) else 'biology' if any(word in source_label for word in ('biology', 'cell', 'genetic', 'anatomy', 'ecology')) else 'conceptual'
-        goal = (concept.path.goal or '').lower()
-        goal_mode = 'exam' if any(word in goal for word in ('exam', 'test', 'quiz')) else 'revision' if 'revis' in goal else 'mastery'
-        public_activities = [{key: value for key, value in item.items() if key != 'correct_choice'} for item in activities]
-        return Response({'activities': public_activities, 'subject_family': subject_family, 'goal_mode': goal_mode})
+        activities = _concept_activities(concept, request.user)
+        private_keys = {'correct_choice', 'accepted_keywords'}
+        public_activities = []
+        for item in activities:
+            hidden = private_keys | ({'explanation'} if item['type'] in {'predict', 'mcq', 'scenario'} else set())
+            public_activities.append({key: value for key, value in item.items() if key not in hidden})
+        return Response({'activities': public_activities, 'subject_family': _subject_family(concept),
+                         'goal_mode': _goal_mode(concept), 'depth': concept.path.depth,
+                         'attempt_count': EncounterAttempt.objects.filter(user=request.user, concept=concept).count()})
 
     @action(detail=True, methods=['post'])
     def attempt(self, request, pk=None):
         concept = self.get_object()
         activity_id = request.data.get('activity_id', '')
-        activity = next((item for item in _concept_activities(concept) if item['id'] == activity_id), None)
+        activity = next((item for item in _concept_activities(concept, request.user) if item['id'] == activity_id), None)
         if not activity:
             return Response({'error': 'Unknown or expired activity'}, status=400)
+        if activity['type'] in {'comparison', 'worked_example'}:
+            return Response({'error': 'This learning activity does not accept an answer'}, status=400)
         response_data = request.data.get('response') or {}
         correct, score, feedback = _evaluate_activity(concept, activity, response_data)
         attempt = EncounterAttempt.objects.create(
@@ -683,21 +793,36 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             activity_type=activity['type'], stage=activity['stage'],
             response=response_data, correct=correct, score=score, feedback=feedback,
         )
-        evidence = EncounterAttempt.objects.filter(user=request.user, concept=concept, stage__in=['check', 'reflect'])
-        evidence_score = int(evidence.aggregate(avg=Avg('score'))['avg'] or score)
-        return Response({'attempt_id': str(attempt.id), 'correct': correct, 'score': score, 'feedback': feedback, 'evidence_score': evidence_score}, status=201)
+        evidence_score = _evidence_score(request.user, concept, score)
+        activity_attempts = EncounterAttempt.objects.filter(user=request.user, concept=concept, activity_id=activity_id).count()
+        hints = activity.get('hints') or ['']
+        hint = hints[min(max(activity_attempts - 1, 0), len(hints) - 1)]
+        return Response({'attempt_id': str(attempt.id), 'correct': correct, 'score': score,
+                         'feedback': feedback, 'explanation': activity.get('explanation', ''),
+                         'hint': hint,
+                         'evidence_score': evidence_score, 'attempt_number': activity_attempts,
+                         'recommend_flow': correct is False and activity_attempts >= 2}, status=201)
 
     @action(detail=True, methods=['post'], url_path='ask-flow')
     def ask_flow(self, request, pk=None):
         concept = self.get_object()
-        question = str(request.data.get('question', '')).strip()
+        question = str(request.data.get('question') or request.data.get('action') or '').strip()
         if not question:
             return Response({'error': 'Question is required'}, status=400)
         from ai_assistant.services import AIService
+        activity_id = str(request.data.get('activity_id', ''))
+        activity = next((item for item in _concept_activities(concept, request.user) if item['id'] == activity_id), None)
+        recent = list(EncounterAttempt.objects.filter(user=request.user, concept=concept).order_by('-created_at')[:5]
+                      .values('activity_id', 'stage', 'response', 'correct', 'feedback'))
+        learner_response = request.data.get('learner_response')
         context = (
+            "Respond in at most 120 words unless the learner explicitly asks for depth. Use clean Markdown and reveal no answer for a hint.\n"
             f"Journey: {concept.path.title}\nGoal: {concept.path.goal}\nUnit: {concept.unit.title if concept.unit else ''}\n"
-            f"Concept: {concept.title}\nStage: {request.data.get('stage', '')}\nMastery: {concept.mastery}\n"
-            f"Summary: {concept.summary}\nDescription: {concept.description}\nLearner question: {question}"
+            f"Depth: {concept.path.depth}\nConcept: {concept.title}\nStage: {request.data.get('stage', '')}\n"
+            f"Activity: {activity.get('prompt') if activity else ''}\nActivity type: {activity.get('type') if activity else ''}\n"
+            f"Learner response: {learner_response}\nCorrectness: {request.data.get('correct')}\nRecent attempts: {recent}\n"
+            f"Mastery: {concept.mastery}\nSource: {_grounding(concept)}\nSummary: {concept.summary}\n"
+            f"Learner request: {question}"
         )
         try:
             if concept.source_resource:
@@ -722,10 +847,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         if unmet.exists():
             return Response({'error': 'Complete prerequisites first'}, status=400)
 
-        evidence = EncounterAttempt.objects.filter(
-            user=request.user, concept=concept, stage__in=['check', 'reflect']
-        )
-        score = int(evidence.aggregate(avg=Avg('score'))['avg'] or request.data.get('score', 80))
+        score = _evidence_score(request.user, concept, request.data.get('score', 80))
 
         # RewardEngine is the authoritative, idempotent reward source. Reusing
         # the concept id means retries can never double-award XP/FlowCoins.
@@ -761,6 +883,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
 
         return Response({
             'message': 'Concept completed',
+            'mastery': concept.mastery,
             'xp_earned': concept.xp_earned,
             'unlocked': newly_unlocked,
             'reward': reward,
@@ -770,10 +893,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
     def review(self, request, pk=None):
         """Submit a review score and update spaced repetition."""
         concept = self.get_object()
-        evidence = EncounterAttempt.objects.filter(
-            user=request.user, concept=concept, stage__in=['check', 'reflect']
-        )
-        score = int(evidence.aggregate(avg=Avg('score'))['avg'] or request.data.get('score', 0))
+        score = _evidence_score(request.user, concept, request.data.get('score', 0))
 
         if not (0 <= score <= 100):
             return Response({'error': 'Score must be 0-100'}, status=400)

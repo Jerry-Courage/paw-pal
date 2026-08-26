@@ -2,9 +2,11 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 from django.urls import resolve
 from rest_framework.test import APIClient
+from unittest.mock import patch
 
 from library.models import Resource
 from learning.models import ConceptNode, EncounterAttempt, LearningPath, Unit
+from learning.views import _concept_activities, _valid_activity
 
 
 class LearningPathRouteTests(SimpleTestCase):
@@ -81,9 +83,12 @@ class EncounterEvidenceTests(TestCase):
         response = self.client.get(f'/api/learning/concepts/{self.concept.id}/activities/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['goal_mode'], 'exam')
-        self.assertEqual([item['stage'] for item in response.data['activities']], ['hook', 'interact', 'check', 'reflect'])
+        self.assertEqual(response.data['depth'], 'standard')
+        self.assertEqual([item['purpose'] for item in response.data['activities']], ['diagnose', 'learn', 'apply', 'check', 'reflect'])
+        self.assertTrue(all(item.get('grounding') is not None for item in response.data['activities']))
+        self.assertTrue(all('correct_choice' not in item for item in response.data['activities']))
 
-        check = next(item for item in response.data['activities'] if item['stage'] == 'check')
+        check = next(item for item in response.data['activities'] if item['purpose'] == 'check')
         attempt = self.client.post(f'/api/learning/concepts/{self.concept.id}/attempt/', {
             'activity_id': check['id'], 'response': {'choice': 99},
         }, format='json')
@@ -92,9 +97,82 @@ class EncounterEvidenceTests(TestCase):
         self.assertEqual(attempt.data['score'], 25)
         self.assertEqual(EncounterAttempt.objects.count(), 1)
 
+    def test_iterative_solver_benchmark_is_specific_and_never_exposes_placeholders(self):
+        self.concept.title = 'Core Iterative Techniques: Jacobi, Seidel, and SOR'
+        self.concept.summary = 'Jacobi uses old iterate values. Gauss-Seidel reuses new values immediately. SOR adds a relaxation factor.'
+        self.concept.save(update_fields=['title', 'summary'])
+
+        response = self.client.get(f'/api/learning/concepts/{self.concept.id}/activities/')
+        rendered = ' '.join([item['prompt'] + ' ' + ' '.join(item.get('options', [])) for item in response.data['activities']])
+        self.assertIn('Jacobi', rendered)
+        self.assertIn('Gauss–Seidel', rendered)
+        self.assertIn('relaxation factor', rendered)
+        self.assertNotIn('Key Concept', rendered)
+        self.assertNotIn('unrelated to this material', rendered)
+
+    def test_depth_changes_real_activity_count(self):
+        self.path.depth = 'quick'
+        self.path.save(update_fields=['depth'])
+        quick = self.client.get(f'/api/learning/concepts/{self.concept.id}/activities/').data['activities']
+        self.path.depth = 'deep'
+        self.path.save(update_fields=['depth'])
+        deep = self.client.get(f'/api/learning/concepts/{self.concept.id}/activities/').data['activities']
+        self.assertLess(len(quick), len(deep))
+        self.assertIn('transfer', [item['purpose'] for item in deep])
+
+    def test_malformed_activity_guard_rejects_generic_or_invalid_choices(self):
+        self.assertFalse(_valid_activity({'prompt': 'Which description best fits Key Concept?', 'type': 'mcq', 'options': ['a'], 'correct_choice': 0}))
+        self.assertFalse(_valid_activity({'prompt': 'Real question', 'type': 'mcq', 'options': ['a', 'b'], 'correct_choice': 4}))
+
+    def test_retry_persists_each_attempt_and_surfaces_remediation(self):
+        check = next(item for item in _concept_activities(self.concept, self.user) if item['purpose'] == 'check')
+        wrong = next(index for index in range(len(check['options'])) if index != check['correct_choice'])
+        endpoint = f'/api/learning/concepts/{self.concept.id}/attempt/'
+        first = self.client.post(endpoint, {'activity_id': check['id'], 'response': {'choice': wrong}}, format='json')
+        second = self.client.post(endpoint, {'activity_id': check['id'], 'response': {'choice': wrong}}, format='json')
+        self.assertEqual(first.data['attempt_number'], 1)
+        self.assertEqual(second.data['attempt_number'], 2)
+        self.assertTrue(second.data['recommend_flow'])
+        self.assertEqual(EncounterAttempt.objects.count(), 2)
+        adapted = self.client.get(f'/api/learning/concepts/{self.concept.id}/activities/').data['activities']
+        self.assertIn('remediate', [item['purpose'] for item in adapted])
+
+    def test_successful_retry_drives_mastery_and_reward_is_idempotent(self):
+        next_concept = ConceptNode.objects.create(path=self.path, unit=self.unit, title='Transport', order_index=1, status='locked')
+        next_concept.prerequisites.add(self.concept)
+        check = next(item for item in _concept_activities(self.concept, self.user) if item['purpose'] == 'check')
+        endpoint = f'/api/learning/concepts/{self.concept.id}/attempt/'
+        wrong = next(index for index in range(len(check['options'])) if index != check['correct_choice'])
+        self.client.post(endpoint, {'activity_id': check['id'], 'response': {'choice': wrong}}, format='json')
+        self.client.post(endpoint, {'activity_id': check['id'], 'response': {'choice': check['correct_choice']}}, format='json')
+        first = self.client.post(f'/api/learning/concepts/{self.concept.id}/complete/', {'score': 0}, format='json')
+        second = self.client.post(f'/api/learning/concepts/{self.concept.id}/complete/', {'score': 0}, format='json')
+        self.concept.refresh_from_db()
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(self.concept.mastery, 100)
+        next_concept.refresh_from_db()
+        self.assertEqual(next_concept.status, 'current')
+        self.assertEqual(first.data['unlocked'], [str(next_concept.id)])
+        self.assertEqual(first.data['reward']['xp'], second.data['reward']['xp'])
+
     def test_unknown_activity_is_not_persisted(self):
         response = self.client.post(f'/api/learning/concepts/{self.concept.id}/attempt/', {
             'activity_id': 'invented', 'response': {'choice': 0},
         }, format='json')
         self.assertEqual(response.status_code, 400)
         self.assertFalse(EncounterAttempt.objects.exists())
+
+    @patch('ai_assistant.services.AIService.chat_sync', return_value='**Concise** grounded help.')
+    def test_contextual_flow_receives_activity_and_learning_state(self, chat_sync):
+        activity = next(item for item in _concept_activities(self.concept, self.user) if item['purpose'] == 'check')
+        response = self.client.post(f'/api/learning/concepts/{self.concept.id}/ask-flow/', {
+            'action': 'Why was I wrong?', 'stage': 'check', 'activity_id': activity['id'],
+            'learner_response': {'choice': 2}, 'correct': False,
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        prompt = chat_sync.call_args.args[0][0]['content']
+        self.assertIn(self.path.goal, prompt)
+        self.assertIn('Depth: standard', prompt)
+        self.assertIn(activity['prompt'], prompt)
+        self.assertIn("Learner response: {'choice': 2}", prompt)
+        self.assertIn('at most 120 words', prompt)

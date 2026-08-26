@@ -400,7 +400,7 @@ export const learningApi = {
   getConceptActivities: (id: string) => api.get(`/learning/concepts/${id}/activities/`),
   submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown }) =>
     api.post(`/learning/concepts/${id}/attempt/`, data),
-  askFlowInConcept: (id: string, data: { question: string; stage: string }) =>
+  askFlowInConcept: (id: string, data: { question?: string; action?: string; stage: string; activity_id?: string; learner_response?: unknown; correct?: boolean | null }) =>
     api.post(`/learning/concepts/${id}/ask-flow/`, data),
   completeConcept: (id: string, score: number) =>
     api.post<{ message: string; xp_earned: number; unlocked: string[]; reward: RewardResponse }>(`/learning/concepts/${id}/complete/`, { score }),
