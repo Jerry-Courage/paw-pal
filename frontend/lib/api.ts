@@ -398,6 +398,12 @@ export const learningApi = {
   // Concepts
   getConcept: (id: string) => api.get(`/learning/concepts/${id}/`),
   getConceptActivities: (id: string) => api.get(`/learning/concepts/${id}/activities/`),
+  getTeachingSession: (id: string) => api.get(`/learning/concepts/${id}/teaching-session/`),
+  sendTeachingMessage: (id: string, data: { message: string; idempotency_key: string }) => api.post(`/learning/concepts/${id}/teaching-message/`, data),
+  submitTeachingResponse: (id: string, data: { activity_id: string; response: unknown }) => api.post(`/learning/concepts/${id}/teaching-response/`, data),
+  saveTeachingFlashcards: (id: string, cards: Array<{ question: string; answer: string; difficulty: string }>) => api.post(`/learning/concepts/${id}/teaching-flashcards/save/`, { cards }),
+  getTeachingVoiceContext: (id: string) => api.get(`/learning/concepts/${id}/teaching-voice-context/`),
+  sendTeachingVoiceEvent: (id: string, data: { event: string; objective_id?: string; misconception?: string; summary?: string }) => api.post(`/learning/concepts/${id}/teaching-voice-event/`, data),
   submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown }) =>
     api.post(`/learning/concepts/${id}/attempt/`, data),
   askFlowInConcept: (id: string, data: { question?: string; action?: string; stage: string; activity_id?: string; learner_response?: unknown; correct?: boolean | null }) =>

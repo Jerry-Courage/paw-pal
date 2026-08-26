@@ -130,7 +130,7 @@ class EncounterAttempt(models.Model):
         ('predict', 'Predict'), ('mcq', 'Multiple choice'),
         ('scenario', 'Scenario'), ('short_answer', 'Short answer'),
         ('reflection', 'Reflection'), ('comparison', 'Comparison'),
-        ('worked_example', 'Worked example'),
+        ('worked_example', 'Worked example'), ('ordering', 'Ordering'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -148,3 +148,49 @@ class EncounterAttempt(models.Model):
     class Meta:
         ordering = ['created_at']
         indexes = [models.Index(fields=['user', 'concept', 'created_at'], name='learning_en_user_id_8208b9_idx')]
+
+
+class TeachingSession(models.Model):
+    STATUS_CHOICES = [
+        ('not_started', 'Not started'), ('teaching', 'Teaching'), ('paused', 'Paused'),
+        ('remediation', 'Remediation'), ('practicing', 'Practicing'),
+        ('mastery_check', 'Mastery check'), ('completed', 'Completed'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='teaching_sessions')
+    concept = models.ForeignKey(ConceptNode, on_delete=models.CASCADE, related_name='teaching_sessions')
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default='not_started')
+    current_point = models.PositiveSmallIntegerField(default=0)
+    resume_point = models.PositiveSmallIntegerField(default=0)
+    objectives = models.JSONField(default=list)
+    objectives_covered = models.JSONField(default=list)
+    objectives_understood = models.JSONField(default=list)
+    unresolved_misconceptions = models.JSONField(default=list)
+    state = models.JSONField(default=dict)
+    conversation_summary = models.TextField(blank=True)
+    mastery = models.PositiveSmallIntegerField(default=0)
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_active_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'concept'], name='unique_user_concept_teaching_session')]
+
+
+class TeachingTurn(models.Model):
+    ROLE_CHOICES = [('flow', 'Flow'), ('learner', 'Learner'), ('system', 'System')]
+    KIND_CHOICES = [('message', 'Message'), ('activity', 'Activity'), ('video', 'Video'), ('flashcards', 'Flashcards'), ('voice', 'Voice'), ('completion', 'Completion')]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(TeachingSession, on_delete=models.CASCADE, related_name='turns')
+    role = models.CharField(max_length=12, choices=ROLE_CHOICES)
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default='message')
+    content = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    idempotency_key = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        constraints = [models.UniqueConstraint(fields=['session', 'idempotency_key'], condition=~models.Q(idempotency_key=''), name='unique_teaching_turn_idempotency')]

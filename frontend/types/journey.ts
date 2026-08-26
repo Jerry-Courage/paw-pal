@@ -103,11 +103,11 @@ export interface EncounterActivity {
   concept_id: string
   purpose: 'diagnose' | 'learn' | 'apply' | 'check' | 'transfer' | 'reflect' | 'remediate'
   stage: string
-  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example'
+  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example' | 'ordering'
   instructions?: string
   prompt: string
   options?: string[]
-  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string }
+  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[] }
   explanation?: string
   hints?: string[]
   difficulty: string
@@ -134,6 +134,32 @@ export interface EncounterAttemptResponse {
   evidence_score: number | null
   attempt_number: number
   recommend_flow: boolean
+}
+
+export interface TeachingTurn {
+  id: string
+  role: 'flow' | 'learner' | 'system'
+  kind: 'message' | 'activity' | 'video' | 'flashcards' | 'voice' | 'completion'
+  content: string
+  payload: { activity?: EncounterActivity; videos?: Array<{ video_id: string; title: string; channel: string; duration_str: string; thumbnail: string; url: string }>; cards?: Array<{ question: string; answer: string; difficulty: string }>; correct?: boolean | null; score?: number }
+  created_at: string
+}
+
+export interface TeachingSessionResponse {
+  id: string
+  status: string
+  current_point: number
+  resume_point: number
+  objectives: Array<{ id: string; text: string }>
+  objectives_covered: string[]
+  objectives_understood: string[]
+  unresolved_misconceptions: string[]
+  mastery: number
+  conversation_summary: string
+  turns: TeachingTurn[]
+  last_active_at: string
+  completed: boolean
+  evaluation?: { correct: boolean | null; score: number; feedback: string; attempt_id: string }
 }
 
 export interface ProgressionSummary {

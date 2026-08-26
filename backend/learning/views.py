@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, Avg, Max
 
-from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit
+from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit, TeachingSession, TeachingTurn
 from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptNodeSerializer, ConceptNodeDetailSerializer,
                            ConceptReviewSerializer, UnitSerializer)
@@ -35,7 +35,7 @@ def _subject_family(concept):
                                   str(getattr(concept.source_resource, 'title', '') or ''), concept.title])).lower()
     if any(word in label for word in ('python', 'code', 'program', 'algorithm', 'javascript')):
         return 'programming'
-    if any(word in label for word in ('math', 'algebra', 'calculus', 'equation', 'solver', 'matrix', 'geometry', 'statistic')):
+    if any(word in label for word in ('math', 'algebra', 'calculus', 'equation', 'solver', 'matrix', 'geometry', 'statistic', 'numerical analysis', 'jacobi', 'gauss-seidel', 'sor')):
         return 'mathematics'
     if any(word in label for word in ('biology', 'cell', 'genetic', 'anatomy', 'ecology', 'organism')):
         return 'biology'
@@ -84,6 +84,12 @@ def _concept_activities(concept, user=None):
     depth = concept.path.depth or 'standard'
     grounding = _grounding(concept)
     summary = (grounding['excerpt'] or concept.summary or concept.description or '').strip()
+    for internal_phrase, learner_phrase in {
+        'key concept': 'main idea', 'mechanism in the source': 'way it works',
+        'relationship in the source': 'connection between the ideas',
+        'expected relationship': 'important connection', 'source alignment': 'fit with the material',
+    }.items():
+        summary = re.sub(re.escape(internal_phrase), learner_phrase, summary, flags=re.I)
     if not summary:
         summary = f'{concept.title} is the focus of this part of the Journey.'
     main_idea = re.split(r'(?<=[.!?])\s+', summary)[0][:360]
@@ -96,12 +102,15 @@ def _concept_activities(concept, user=None):
                 'estimated_seconds': extra.pop('estimated_seconds', 60), 'grounding': provenance,
                 'goal_relevance': goal_text, **extra}
 
-    def choice(key, purpose, prompt, correct, distractors, explanation, hint, activity_type='mcq', **extra):
+    def choice(key, purpose, prompt, correct, distractors, explanation, hint, activity_type='mcq', misconception_feedback=None, **extra):
         options = [correct, *distractors]
+        feedback = [explanation, *(misconception_feedback or [hint] * len(distractors))]
         shift = int(hashlib.sha256(f'{concept.id}:{key}'.encode()).hexdigest()[:2], 16) % len(options)
         options = options[shift:] + options[:shift]
+        feedback = feedback[shift:] + feedback[:shift]
         return base(key, purpose, activity_type, prompt, options=options,
-                    correct_choice=options.index(correct), explanation=explanation, hints=[hint], **extra)
+                    correct_choice=options.index(correct), feedback_by_choice=feedback,
+                    explanation=explanation, hints=[hint], **extra)
 
     title_lower = concept.title.lower()
     iterative = any(word in title_lower for word in ('jacobi', 'gauss-seidel', 'gauss seidel', 'sor', 'iterative technique'))
@@ -109,7 +118,11 @@ def _concept_activities(concept, user=None):
         hook = choice('iterative-hook', 'diagnose', 'During one sweep, which method calculates every new value using only values from the previous sweep?',
                       'Jacobi', ['Gauss–Seidel', 'Successive over-relaxation (SOR)'],
                       'Jacobi keeps the whole previous iterate fixed while it computes the next one. Gauss–Seidel reuses new values immediately.',
-                      'Ask whether a newly calculated value can be reused before the sweep ends.', activity_type='predict')
+                      'Ask whether a newly calculated value can be reused before the sweep ends.', activity_type='predict',
+                      misconception_feedback=[
+                          'Gauss–Seidel is the tempting choice, but it immediately reuses each new value during the same sweep. Jacobi waits until the next sweep.',
+                          'SOR also starts from a Gauss–Seidel-style update, so it can reuse new values immediately. Jacobi alone keeps every update tied to the previous sweep.',
+                      ])
         lesson = base('iterative-compare', 'learn', 'comparison', 'Follow one sweep across the three methods.', content={
             'columns': ['Method', 'Values used during a sweep', 'What changes'],
             'rows': [
@@ -117,15 +130,37 @@ def _concept_activities(concept, user=None):
                 ['Gauss–Seidel', 'Newest available values', 'Components update in sequence'],
                 ['SOR', 'Gauss–Seidel update plus relaxation ω', 'ω controls how far the update moves'],
             ]}, explanation='The key distinction is when newly computed values become available.')
-        apply = choice('iterative-apply', 'apply', 'A solver computes x₁⁽ᵏ⁺¹⁾, then immediately uses it while computing x₂⁽ᵏ⁺¹⁾. Which method behavior is this?',
+        apply = choice('iterative-apply', 'apply', 'A solver computes x₁⁽ᵏ⁺¹⁾, then immediately uses it while computing x₂⁽ᵏ⁺¹⁾. Which method is it using?',
                        'Gauss–Seidel', ['Jacobi', 'A direct factorization method'],
                        'Immediate reuse within the same sweep is the defining update behavior of Gauss–Seidel.',
-                       'Track whether x₂ uses x₁ from iteration k or k+1.', activity_type='scenario')
+                       'Track whether x₂ uses x₁ from iteration k or k+1.', activity_type='scenario',
+                       misconception_feedback=[
+                           'Jacobi would use x₁ from iteration k, not the newly calculated x₁ from k+1. Immediate reuse points to Gauss–Seidel.',
+                           'Direct factorization solves through a decomposition rather than repeated sweeps. This scenario describes an iterative Gauss–Seidel update.',
+                       ])
+        order_items = [
+            'Use the current iterate as the starting point',
+            'Compute the first new component',
+            'Reuse that new component in the next calculation',
+            'Finish the sweep with the newest available values',
+        ]
+        order_shift = 1 + int(hashlib.sha256(f'{concept.id}:iterative-order'.encode()).hexdigest()[:2], 16) % (len(order_items) - 1)
+        shuffled_items = order_items[order_shift:] + order_items[:order_shift]
+        correct_order = [shuffled_items.index(item) for item in order_items]
+        ordering = base('iterative-order', 'apply', 'ordering', 'Put one Gauss–Seidel sweep in the order it happens.',
+                        instructions='Move the steps until the new value is reused at the right moment.',
+                        content={'items': shuffled_items}, correct_order=correct_order,
+                        explanation='Gauss–Seidel moves component by component, immediately feeding each new value into the next calculation.',
+                        hints=['The key moment comes just after the first new component is calculated.'])
         check = choice('iterative-check', 'check', f'{check_lead}what does the relaxation factor ω change in SOR?',
                        'How far the method moves from the old value toward or beyond the Gauss–Seidel update',
-                       ['Which equations belong to the linear system', 'Whether the method stores a previous iterate at all'],
+                       ['Which equation is updated first during a sweep', 'Whether new values can be reused during the same sweep'],
                        'SOR blends the old value with a Gauss–Seidel-style update. The factor ω controls the size of that move.',
-                       'ω modifies an update; it does not rewrite the original system.', difficulty='hard' if depth == 'deep' else 'medium')
+                       'ω modifies an update; it does not rewrite the original system.', difficulty='hard' if depth == 'deep' else 'medium',
+                       misconception_feedback=[
+                           'The equation order comes from the chosen sweep. The relaxation factor controls the size of the move after that update is calculated.',
+                           'Reusing new values is a Gauss–Seidel feature that SOR builds on. The relaxation factor controls how far the estimate moves.',
+                       ])
     else:
         definitions = [item for item in (concept.key_definitions or []) if isinstance(item, dict)]
         useful = [(str(item.get('term') or item.get('name') or '').strip(), str(item.get('definition') or item.get('value') or '').strip()) for item in definitions]
@@ -134,21 +169,28 @@ def _concept_activities(concept, user=None):
         definition = useful[0][1] if useful else main_idea
         distractors = [value for _, value in useful[1:3] if value != definition]
         while len(distractors) < 2:
-            distractors.append(('This describes an outcome rather than the mechanism.' if len(distractors) else 'This reverses the cause-and-effect relationship in the source.'))
-        hook = choice('concept-hook', 'diagnose', f'Which explanation captures the role of {focus}?', definition, distractors[:2],
-                      f'The source frames {focus} this way: {definition}', 'Look for the option that preserves the mechanism or relationship in the source.', activity_type='predict')
-        lesson = base('concept-model', 'learn', 'worked_example', f'Build a useful model of {concept.title}.',
-                      content={'idea': main_idea, 'example': summary[:600]}, explanation='Connect the central idea to one concrete case before testing recall.')
+            distractors.append((f'{focus} changes the final outcome directly, without affecting the steps that produce it.' if len(distractors) else f'{focus} only becomes relevant after the process is complete.'))
+        generic_misconceptions = [
+            f'That answer gives {focus} the wrong job. Start with what changes first, then follow its effect through the process.',
+            f'The timing is off in that answer. {focus} matters while the process is happening, not only after it finishes.',
+        ]
+        hook = choice('concept-hook', 'diagnose', f'Before we begin, which explanation best describes what {focus} does?', definition, distractors[:2],
+                      f'{focus} is best understood this way: {definition}', f'Focus on what {focus} changes and when it acts.', activity_type='predict',
+                      misconception_feedback=generic_misconceptions)
+        lesson = base('concept-model', 'learn', 'worked_example', f'Let’s work through {concept.title} once.',
+                      content={'idea': main_idea, 'example': summary[:600]}, explanation='Connect the main idea to the example, one step at a time.')
         prompts = {'mathematics': 'What quantity or relationship would you determine first, and why?',
                    'programming': 'Trace one input through the code or process. What output or state change should occur?',
                    'biology': 'Name the structure or process that acts first, then explain its effect.',
                    'conceptual': 'Give a concrete example and explain why it fits rather than merely naming it.'}
         apply = base('concept-apply', 'apply', 'short_answer', prompts[subject], accepted_keywords=list(set(re.findall(r'[A-Za-z]{4,}', f'{concept.title} {main_idea}'.lower())))[:12],
                      explanation=main_idea, hints=[f'Use the relationship described here: {main_idea[:180]}'])
-        check = choice('concept-check', 'check', f'{check_lead}which statement best preserves the central relationship in {concept.title}?', main_idea,
-                       distractors[:2], f'Remember this relationship: {main_idea}', 'Compare each option with the source summary, not just the vocabulary.', difficulty='hard' if depth == 'deep' else 'medium')
+        check = choice('concept-check', 'check', f'{check_lead}which statement best explains how {concept.title} works?', main_idea,
+                       distractors[:2], f'Keep this distinction in mind: {main_idea}', f'Ask what changes first and what follows from it.',
+                       misconception_feedback=generic_misconceptions, difficulty='hard' if depth == 'deep' else 'medium')
 
-    reflection = base('reflection', 'reflect', 'reflection', f'Explain {concept.title} to Flow in your own words, including one important relationship or example.',
+    reflection_prompt = ('In your own words, explain the one difference that separates Jacobi from Gauss–Seidel, then say what SOR adds.' if iterative else f'Explain {concept.title} to Flow in your own words, including one important relationship or example.')
+    reflection = base('reflection', 'reflect', 'reflection', reflection_prompt,
                       accepted_keywords=list(set(re.findall(r'[A-Za-z]{4,}', f'{concept.title} {summary}'.lower())))[:16],
                       hints=['Name the idea, describe how it works, then give one consequence or example.'], explanation=main_idea)
     remedial = base('remedial', 'remediate', 'worked_example', 'Pause and rebuild the distinction before trying again.',
@@ -157,18 +199,22 @@ def _concept_activities(concept, user=None):
     attempts = EncounterAttempt.objects.filter(user=user, concept=concept) if user and getattr(user, 'is_authenticated', False) else EncounterAttempt.objects.none()
     struggling = attempts.filter(correct=False).count() >= 2
     sequence = [hook, lesson, apply, check, reflection]
+    if iterative and depth != 'quick':
+        sequence = [hook, lesson, ordering, apply, check, reflection]
     if depth == 'quick':
         sequence = [hook, lesson, check, reflection]
     elif depth == 'deep':
-        transfer = base('transfer', 'transfer', 'short_answer', f'Apply {concept.title} in a new situation and justify the choice you make.',
+        transfer_prompt = ('You want many processors to calculate components at the same time. Which method would you start with, and what update tradeoff are you accepting?' if iterative else f'Apply {concept.title} in a new situation and justify the choice you make.')
+        transfer = base('transfer', 'transfer', 'short_answer', transfer_prompt,
                         accepted_keywords=reflection['accepted_keywords'], hints=['State the new situation, choose the relevant idea, and justify the connection.'], explanation=main_idea, difficulty='hard')
-        sequence = [hook, lesson, apply, check, transfer, reflection]
+        sequence = [hook, lesson, ordering, apply, check, transfer, reflection] if iterative else [hook, lesson, apply, check, transfer, reflection]
     elif goal_mode == 'revision':
         sequence = [hook, apply, check, reflection]
     elif goal_mode == 'mastery':
-        transfer = base('transfer', 'transfer', 'short_answer', f'Apply {concept.title} in a new situation and justify the choice you make.',
+        transfer_prompt = ('You want many processors to calculate components at the same time. Which method would you start with, and what update tradeoff are you accepting?' if iterative else f'Apply {concept.title} in a new situation and justify the choice you make.')
+        transfer = base('transfer', 'transfer', 'short_answer', transfer_prompt,
                         accepted_keywords=reflection['accepted_keywords'], hints=['State the new situation, choose the relevant idea, and justify the connection.'], explanation=main_idea, difficulty='hard')
-        sequence = [hook, lesson, apply, check, transfer, reflection]
+        sequence = [hook, lesson, ordering, apply, check, transfer, reflection] if iterative else [hook, lesson, apply, check, transfer, reflection]
     if struggling:
         sequence.insert(max(1, len(sequence) - 2), remedial)
     return [item for item in sequence if _valid_activity(item)] or [reflection]
@@ -176,11 +222,16 @@ def _concept_activities(concept, user=None):
 
 def _valid_activity(activity):
     prompt = str(activity.get('prompt', '')).strip()
-    if not prompt or re.search(r'\bkey concept\b|\bplaceholder\b|\bundefined\b', prompt, re.I):
+    learner_copy = json.dumps({key: value for key, value in activity.items() if key not in {'correct_choice', 'correct_order', 'accepted_keywords', 'feedback_by_choice'}}, default=str)
+    banned = r'\bkey concept\b|\bplaceholder\b|\bundefined\b|mechanism in the source|relationship in the source|expected relationship|source alignment'
+    if not prompt or re.search(banned, learner_copy, re.I):
         return False
     if activity.get('type') in {'predict', 'mcq', 'scenario'}:
         options = activity.get('options') or []
         return len(options) >= 2 and all(str(option).strip() for option in options) and activity.get('correct_choice') in range(len(options))
+    if activity.get('type') == 'ordering':
+        items = (activity.get('content') or {}).get('items') or []
+        return len(items) >= 3 and sorted(activity.get('correct_order') or []) == list(range(len(items)))
     return True
 
 
@@ -190,8 +241,16 @@ def _evaluate_activity(concept, activity, response):
             correct = int(response.get('choice')) == activity['correct_choice']
         except (TypeError, ValueError):
             correct = False
-        feedback = activity.get('explanation', '') if correct else f"Not yet. {activity.get('hints', ['Recheck the source relationship.'])[0]}"
+        choice_index = int(response.get('choice')) if str(response.get('choice', '')).isdigit() else -1
+        feedback_options = activity.get('feedback_by_choice') or []
+        feedback = activity.get('explanation', '') if correct else (feedback_options[choice_index] if 0 <= choice_index < len(feedback_options) else activity.get('hints', ['Try the distinction again.'])[0])
         return correct, 100 if correct else 25, feedback
+
+    if activity['type'] == 'ordering':
+        submitted = response.get('order') or []
+        correct = submitted == activity.get('correct_order')
+        feedback = activity.get('explanation', '') if correct else 'The new value needs to be calculated before it can be reused. Move that reuse step directly after the first calculation.'
+        return correct, 100 if correct else 30, feedback
 
     answer = str(response.get('text', '')).strip()
     source = f"{concept.title} {concept.summary} {concept.description}".lower()
@@ -201,9 +260,9 @@ def _evaluate_activity(concept, activity, response):
     score = min(100, 35 + overlap * 12) if len(answer_words) >= 5 else 15
     correct = None if activity['type'] == 'reflection' else score >= 60
     if activity['type'] == 'reflection':
-        feedback = 'Understood—the key idea is present.' if score >= 60 else ('Missing idea—connect this more directly to the source summary.' if overlap == 0 else 'Possible misconception—one source idea is present, but the connection needs clarification.')
+        feedback = 'Yes—the main idea comes through clearly.' if score >= 60 else ('Try naming what changes first, then explain what happens because of it.' if overlap == 0 else 'You have part of it. Make the connection between the two ideas more explicit.')
     else:
-        feedback = 'Understood—the key idea is present.' if correct else 'Missing idea—connect your explanation more directly to the source summary.'
+        feedback = 'Yes—the main idea comes through clearly.' if correct else 'Start with the most important change, then explain why it matters in this situation.'
     return correct, score, feedback
 
 
@@ -214,6 +273,62 @@ def _evidence_score(user, concept, fallback=0):
     ).values('activity_id').annotate(best=Max('score'))
     scores = [item['best'] for item in best]
     return int(sum(scores) / len(scores)) if scores else int(fallback)
+
+
+def _teaching_objectives(concept):
+    title = concept.title.lower()
+    if any(term in title for term in ('jacobi', 'gauss-seidel', 'gauss seidel', 'sor')):
+        return [
+            {'id': 'iterative-purpose', 'text': 'Explain why iterative methods improve an estimate over repeated sweeps.'},
+            {'id': 'jacobi-update', 'text': 'Explain how Jacobi uses values from the previous iterate.'},
+            {'id': 'seidel-update', 'text': 'Explain how Gauss–Seidel reuses newly calculated values.'},
+            {'id': 'compare-reuse', 'text': 'Compare old-value and new-value reuse.'},
+            {'id': 'sor-role', 'text': 'Explain what the SOR relaxation factor changes.'},
+            {'id': 'transfer', 'text': 'Apply the distinctions in a new situation.'},
+        ]
+    summary = (_grounding(concept).get('excerpt') or concept.summary or concept.description or '').strip()
+    sentences = [sentence.strip() for sentence in re.split(r'(?<=[.!?])\s+', summary) if sentence.strip()]
+    objectives = [{'id': f'objective-{index + 1}', 'text': sentence[:220]} for index, sentence in enumerate(sentences[:4])]
+    objectives.append({'id': 'apply', 'text': f'Apply {concept.title} in a concrete situation.'})
+    return objectives
+
+
+def _public_activity(activity):
+    hidden = {'correct_choice', 'correct_order', 'accepted_keywords', 'feedback_by_choice', 'explanation', 'hints'}
+    return {key: value for key, value in activity.items() if key not in hidden}
+
+
+def _turn_data(turn):
+    return {'id': str(turn.id), 'role': turn.role, 'kind': turn.kind, 'content': turn.content,
+            'payload': turn.payload, 'created_at': turn.created_at.isoformat()}
+
+
+def _session_data(session):
+    turns = list(session.turns.order_by('-created_at')[:40])
+    turns.reverse()
+    return {
+        'id': str(session.id), 'status': session.status, 'current_point': session.current_point,
+        'resume_point': session.resume_point, 'objectives': session.objectives,
+        'objectives_covered': session.objectives_covered, 'objectives_understood': session.objectives_understood,
+        'unresolved_misconceptions': session.unresolved_misconceptions, 'mastery': session.mastery,
+        'conversation_summary': session.conversation_summary, 'turns': [_turn_data(turn) for turn in turns],
+        'last_active_at': session.last_active_at.isoformat(), 'completed': session.status == 'completed',
+    }
+
+
+def _get_teaching_session(concept, user):
+    objectives = _teaching_objectives(concept)
+    session, created = TeachingSession.objects.get_or_create(user=user, concept=concept, defaults={'objectives': objectives})
+    if not session.objectives:
+        session.objectives = objectives
+        session.save(update_fields=['objectives', 'last_active_at'])
+    if created:
+        profile = (getattr(user, 'onboarding_status', None) or {}).get('onboarding_v2', {})
+        learner_name = (getattr(user, 'first_name', '') or getattr(user, 'username', '') or 'there').split()[0]
+        TeachingTurn.objects.create(session=session, role='flow', content=f"Hey {learner_name} 👋 Ready to learn {concept.title}?")
+        session.state = {'learner_type': profile.get('learner_type'), 'difficulty_areas': profile.get('difficulty_areas', []), 'resource_ids': [concept.source_resource_id] if concept.source_resource_id else []}
+        session.save(update_fields=['state', 'last_active_at'])
+    return session
 
 
 def _normalize_title(title: str) -> str:
@@ -764,11 +879,180 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return ConceptNodeDetailSerializer
         return ConceptNodeSerializer
 
+    @action(detail=True, methods=['get'], url_path='teaching-session')
+    def teaching_session(self, request, pk=None):
+        concept = self.get_object()
+        return Response(_session_data(_get_teaching_session(concept, request.user)))
+
+    @action(detail=True, methods=['post'], url_path='teaching-message')
+    @transaction.atomic
+    def teaching_message(self, request, pk=None):
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        text = str(request.data.get('message', '')).strip()
+        key = str(request.data.get('idempotency_key', '')).strip()[:80]
+        if not text:
+            return Response({'error': 'Message is required'}, status=400)
+        if key and TeachingTurn.objects.filter(session=session, idempotency_key=key).exists():
+            return Response(_session_data(session))
+        TeachingTurn.objects.create(session=session, role='learner', content=text, idempotency_key=key)
+        lowered = text.lower()
+        activities = _concept_activities(concept, request.user)
+        flow_text, kind, payload = '', 'message', {}
+
+        if any(phrase in lowered for phrase in ('show me a video', 'find a video', 'need to see this', 'video')):
+            from ai_assistant.youtube_search import search_youtube
+            query = f'{concept.title} {text} {getattr(concept.source_resource, "subject", "")} explained'
+            videos = search_youtube(query, max_results=3, duration_limit=1200)
+            kind, payload = 'video', {'videos': videos[:2]}
+            flow_text = ('I found a focused visual explanation. Watch for the exact distinction we were discussing, then we’ll check whether it clicked.' if videos else "I couldn't find a video I'd trust enough to recommend. No detour—we can keep working through it here.")
+        elif any(phrase in lowered for phrase in ('make flashcards', 'create flashcards', 'revise later', 'flash cards')):
+            grounding = _grounding(concept)
+            cards = [{'question': objective['text'], 'answer': (grounding.get('excerpt') or concept.summary or concept.description)[:420], 'difficulty': concept.difficulty} for objective in session.objectives[:3]]
+            kind, payload = 'flashcards', {'cards': cards, 'saved': False}
+            flow_text = 'Here are three grounded cards from what we’re learning. Save them if they feel useful for revision.'
+        elif any(phrase in lowered for phrase in ("don't understand", 'do not understand', "don't get", 'wait', 'why?', 'explain that', 'slow down', 'confused')):
+            session.resume_point = session.current_point
+            session.status = 'remediation'
+            misconception = text[:240]
+            issues = list(session.unresolved_misconceptions)
+            if misconception not in issues:
+                issues.append(misconception)
+            session.unresolved_misconceptions = issues[-8:]
+            main = (_grounding(concept).get('excerpt') or concept.summary or concept.description or concept.title)
+            flow_text = f"Let’s slow it down. **Key distinction:** {main[:360]}\n\nTry picturing one value being updated, then ask: can the next calculation use it immediately? Tell me when that part feels clearer."
+        elif session.status == 'remediation' and any(word in lowered for word in ('okay', 'continue', 'got it', 'makes sense', 'yes')):
+            session.status = 'teaching'
+            session.current_point = session.resume_point
+            flow_text = "Good. Back to the exact point we paused: the timing of when a fresh value becomes available changes the method’s behavior. Let’s use that in the next example."
+            next_activity = next((item for item in activities if item['purpose'] in {'apply', 'check'}), None)
+            if next_activity:
+                kind, payload = 'activity', {'activity': _public_activity(next_activity)}
+        elif session.status == 'not_started' or session.current_point == 0:
+            session.status = 'teaching'
+            session.current_point = 1
+            first_objective = session.objectives[0]['id'] if session.objectives else ''
+            session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, first_objective]))
+            teaching = next((item for item in activities if item['type'] in {'comparison', 'worked_example'}), None)
+            flow_text = "Perfect. We’ll build this one distinction at a time—no formula avalanche. **Key distinction:** iterative methods improve a current estimate through repeated sweeps."
+            if teaching:
+                kind, payload = 'activity', {'activity': _public_activity(teaching)}
+        elif any(phrase in lowered for phrase in ('practice', 'quiz me', 'question', 'test me', 'example')):
+            activity = next((item for item in activities if item['purpose'] in {'apply', 'check', 'transfer'} and item['id'] not in session.state.get('shown_activity_ids', [])), None)
+            if activity:
+                shown = [*session.state.get('shown_activity_ids', []), activity['id']]
+                session.state = {**session.state, 'shown_activity_ids': shown[-12:]}
+                session.status = 'practicing'
+                flow_text, kind, payload = "Let’s test the idea with one useful move—not a question barrage.", 'activity', {'activity': _public_activity(activity)}
+            else:
+                flow_text = "You’ve worked through the useful checks here. Let’s explain the distinction once in your own words."
+        else:
+            recent = list(session.turns.order_by('-created_at')[:8].values('role', 'content'))
+            prompt = ("You are Flow, a warm, witty, concise personal tutor. Answer the learner in under 100 words. "
+                      "Teach before assessing, use at most one light joke, and end with a natural continuation only when useful. "
+                      f"Concept: {concept.title}\nGoal: {concept.path.goal}\nDepth: {concept.path.depth}\n"
+                      f"Teaching point: {session.current_point}\nResume point: {session.resume_point}\nMisconceptions: {session.unresolved_misconceptions}\n"
+                      f"Grounding: {_grounding(concept)}\nRecent turns: {recent}\nLearner: {text}")
+            try:
+                from ai_assistant.services import AIService
+                flow_text = AIService().ask_about_resource(concept.source_resource, prompt) if concept.source_resource else AIService().chat_sync([{'role': 'user', 'content': prompt}])
+            except Exception:
+                logger.exception('Teaching conversation failed for %s', concept.id)
+                flow_text = "I lost the thread for a second, but your progress is safe. Try that question once more and I’ll pick it up from here."
+
+        turn = TeachingTurn.objects.create(session=session, role='flow', kind=kind, content=flow_text, payload=payload)
+        session.conversation_summary = f"At teaching point {session.current_point}. Latest learner need: {text[:180]}. Latest Flow response: {flow_text[:260]}"
+        session.save()
+        data = _session_data(session)
+        data['new_turn_id'] = str(turn.id)
+        return Response(data, status=201)
+
+    @action(detail=True, methods=['post'], url_path='teaching-response')
+    @transaction.atomic
+    def teaching_response(self, request, pk=None):
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        activity_id = str(request.data.get('activity_id', ''))
+        activity = next((item for item in _concept_activities(concept, request.user) if item['id'] == activity_id), None)
+        if not activity or activity['type'] in {'comparison', 'worked_example'}:
+            return Response({'error': 'This response cannot be evaluated'}, status=400)
+        response_data = request.data.get('response') or {}
+        correct, score, feedback = _evaluate_activity(concept, activity, response_data)
+        attempt = EncounterAttempt.objects.create(user=request.user, concept=concept, activity_id=activity_id, activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
+        objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+        objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
+        session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
+        if correct is not False:
+            session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
+            session.current_point = min(len(session.objectives), session.current_point + 1)
+            session.status = 'mastery_check' if session.current_point >= len(session.objectives) - 1 else 'teaching'
+            content = f"Yep. You caught the useful distinction. {feedback}"
+        else:
+            session.status = 'remediation'
+            session.resume_point = session.current_point
+            session.unresolved_misconceptions = [*session.unresolved_misconceptions[-7:], feedback]
+            content = feedback
+        session.mastery = _evidence_score(request.user, concept, score)
+        TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', payload={'activity_id': activity_id, 'response': response_data})
+        TeachingTurn.objects.create(session=session, role='flow', content=content, payload={'correct': correct, 'score': score, 'attempt_id': str(attempt.id)})
+        session.save()
+        return Response({**_session_data(session), 'evaluation': {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id)}} , status=201)
+
+    @action(detail=True, methods=['post'], url_path='teaching-flashcards/save')
+    def save_teaching_flashcards(self, request, pk=None):
+        concept = self.get_object()
+        if not concept.source_resource:
+            return Response({'error': 'A source resource is required to save these cards'}, status=400)
+        from library.models import Flashcard
+        cards = request.data.get('cards') or []
+        saved = [Flashcard.objects.create(resource=concept.source_resource, owner=request.user, question=str(card.get('question', ''))[:1000], answer=str(card.get('answer', ''))[:3000], subject=getattr(concept.source_resource, 'subject', '') or concept.path.title, difficulty=card.get('difficulty', 'medium')) for card in cards[:10] if card.get('question') and card.get('answer')]
+        return Response({'saved': len(saved), 'ids': [card.id for card in saved]}, status=201)
+
+    @action(detail=True, methods=['get'], url_path='teaching-voice-context')
+    def teaching_voice_context(self, request, pk=None):
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        recent = [_turn_data(turn) for turn in session.turns.order_by('-created_at')[:8]][::-1]
+        return Response({'teaching_session_id': str(session.id), 'journey_id': str(concept.path_id), 'unit_id': str(concept.unit_id) if concept.unit_id else None, 'concept_id': str(concept.id), 'current_teaching_point': session.current_point, 'resume_point': session.resume_point, 'resource_ids': session.state.get('resource_ids', []), 'goal': concept.path.goal, 'depth': concept.path.depth, 'mastery': session.mastery, 'unresolved_misconceptions': session.unresolved_misconceptions, 'recent_context': recent, 'conversation_summary': session.conversation_summary})
+
+    @action(detail=True, methods=['post'], url_path='teaching-voice-event')
+    @transaction.atomic
+    def teaching_voice_event(self, request, pk=None):
+        """Merge meaningful voice-tutor events into the persistent teaching state."""
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        event = str(request.data.get('event', '')).strip().lower()
+        if event not in {'point_covered', 'point_understood', 'misconception', 'misconception_resolved', 'paused'}:
+            return Response({'error': 'Unknown voice teaching event'}, status=400)
+        objective_id = str(request.data.get('objective_id', '')).strip()
+        misconception = str(request.data.get('misconception', '')).strip()[:500]
+        if event == 'point_covered' and objective_id:
+            session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
+        elif event == 'point_understood' and objective_id:
+            session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
+            session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
+        elif event == 'misconception' and misconception:
+            session.unresolved_misconceptions = [*session.unresolved_misconceptions[-7:], misconception]
+            session.status = 'remediation'
+            session.resume_point = session.current_point
+        elif event == 'misconception_resolved' and misconception:
+            session.unresolved_misconceptions = [item for item in session.unresolved_misconceptions if item != misconception]
+            session.status = 'teaching'
+        elif event == 'paused':
+            session.resume_point = session.current_point
+            session.status = 'paused'
+        summary = str(request.data.get('summary', '')).strip()[:1000]
+        if summary:
+            session.conversation_summary = summary
+        TeachingTurn.objects.create(session=session, role='system', kind='voice', content=summary, payload={'event': event, 'objective_id': objective_id, 'misconception': misconception})
+        session.save()
+        return Response(_session_data(session))
+
     @action(detail=True, methods=['get'])
     def activities(self, request, pk=None):
         concept = self.get_object()
         activities = _concept_activities(concept, request.user)
-        private_keys = {'correct_choice', 'accepted_keywords'}
+        private_keys = {'correct_choice', 'correct_order', 'accepted_keywords', 'feedback_by_choice'}
         public_activities = []
         for item in activities:
             hidden = private_keys | ({'explanation'} if item['type'] in {'predict', 'mcq', 'scenario'} else set())
@@ -816,7 +1100,9 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                       .values('activity_id', 'stage', 'response', 'correct', 'feedback'))
         learner_response = request.data.get('learner_response')
         context = (
-            "Respond in at most 120 words unless the learner explicitly asks for depth. Use clean Markdown and reveal no answer for a hint.\n"
+            "Respond like a patient human tutor in at most 80 words unless the learner explicitly asks for depth. "
+            "Begin with '**Key distinction:**' followed by one crisp sentence. Use clean Markdown. "
+            "For a hint, guide the next thought without revealing the answer. Never mention rubrics, evaluation, source alignment, generation, or internal activity terminology.\n"
             f"Journey: {concept.path.title}\nGoal: {concept.path.goal}\nUnit: {concept.unit.title if concept.unit else ''}\n"
             f"Depth: {concept.path.depth}\nConcept: {concept.title}\nStage: {request.data.get('stage', '')}\n"
             f"Activity: {activity.get('prompt') if activity else ''}\nActivity type: {activity.get('type') if activity else ''}\n"
@@ -863,6 +1149,16 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         concept.mastery = score
         concept.xp_earned = max(concept.xp_earned, reward['xp'])
         concept.save(update_fields=['status', 'mastery', 'xp_earned', 'updated_at'])
+
+        teaching_session = TeachingSession.objects.filter(user=request.user, concept=concept).first()
+        if teaching_session and teaching_session.status != 'completed':
+            teaching_session.status = 'completed'
+            teaching_session.mastery = score
+            teaching_session.current_point = len(teaching_session.objectives)
+            teaching_session.objectives_covered = [item['id'] for item in teaching_session.objectives]
+            teaching_session.objectives_understood = [item['id'] for item in teaching_session.objectives]
+            TeachingTurn.objects.create(session=teaching_session, role='flow', kind='completion', content='You did it. This concept is complete, and your Journey is ready for the next step.', payload={'mastery': score})
+            teaching_session.save()
 
         # Unlock concepts that have this as a prerequisite
         unlocked = ConceptNode.objects.filter(
