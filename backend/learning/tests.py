@@ -19,6 +19,21 @@ class LearningPathRouteTests(SimpleTestCase):
         self.assertEqual(match.func.actions, {'post': 'generate_preview'})
 
 
+class ActiveJourneySelectionTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(email='active@example.com', username='active', password='test-pass-123')
+        self.first = LearningPath.objects.create(user=self.user, title='First', status='active')
+        self.second = LearningPath.objects.create(user=self.user, title='Second', status='paused')
+        self.client = APIClient(); self.client.force_authenticate(self.user)
+
+    def test_selecting_active_journey_pauses_the_previous_one(self):
+        response = self.client.post(f'/api/learning/paths/{self.second.id}/set-active/')
+        self.assertEqual(response.status_code, 200)
+        self.first.refresh_from_db(); self.second.refresh_from_db()
+        self.assertEqual(self.first.status, 'paused')
+        self.assertEqual(self.second.status, 'active')
+
+
 class JourneyBuildRegressionTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

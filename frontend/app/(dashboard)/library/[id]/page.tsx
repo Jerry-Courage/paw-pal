@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useStudyTimer } from '@/hooks/useStudyTimer'
+import FlowLoader from '@/components/ui/FlowLoader'
 
 const MusicGeneratorModal = dynamic(() => import('@/components/library/MusicGeneratorModal'), { ssr: false })
 const ProcessingView = dynamic(() => import('@/components/library/ProcessingView'), { ssr: false })
@@ -139,14 +140,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
     },
   })
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-full border-2 border-primary-container border-t-transparent animate-spin" />
-        <p className="text-on-surface-variant text-sm">Loading resource…</p>
-      </div>
-    </div>
-  )
+  if (isLoading) return <FlowLoader state="reading" message="Opening this Source." className="min-h-screen" />
 
   if (!resource) return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-4">
@@ -172,7 +166,7 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
 
         {/* ── Breadcrumb ─────────────────────────────────────────── */}
         <nav className="flex items-center gap-2 text-[13px] text-on-surface-variant mb-6">
-          <Link href="/library" className="hover:text-primary transition-colors">Library</Link>
+          <Link href="/library" className="hover:text-primary transition-colors">Sources</Link>
           <span className="material-symbols-outlined text-[14px]">chevron_right</span>
           <span className="text-on-surface font-medium truncate max-w-xs">{resource.title}</span>
         </nav>
@@ -250,6 +244,12 @@ export default function ResourcePage({ params }: { params: { id: string } }) {
             </button>
           </div>
         </div>
+
+        {!isProcessing && <section aria-label="Choose how to use this Source" className="flow-v2 mb-9 grid gap-5 border-y border-white/10 bg-flow-void px-5 py-7 md:grid-cols-3">
+          <Link href={`/library/${id}/read`} className="group border-l-4 border-flow-orange pl-5"><p className="flow-eyebrow">Read with Flow</p><h2 className="mt-2 text-2xl font-black">Understand it calmly.</h2><p className="mt-2 text-sm text-flow-muted">A focused reading surface with Flow quietly nearby.</p><span className="mt-4 inline-block font-black text-flow-orange">Start reading →</span></Link>
+          <Link href={`/library/${id}/study`} className="group border-l-4 border-flow-violet pl-5"><p className="flow-eyebrow text-flow-violet">Study with Flow</p><h2 className="mt-2 text-2xl font-black">Work through it together.</h2><p className="mt-2 text-sm text-flow-muted">Use the existing source-grounded conversational Study Mode.</p><span className="mt-4 inline-block font-black text-flow-violet">Start studying →</span></Link>
+          <Link href={`/learn?source=${id}`} className="group border-l-4 border-flow-success pl-5"><p className="flow-eyebrow text-flow-success">Build Journey</p><h2 className="mt-2 text-2xl font-black">Turn it into a route.</h2><p className="mt-2 text-sm text-flow-muted">Reuse the proven goal, depth, preview, and build flow.</p><span className="mt-4 inline-block font-black text-flow-success">Shape a Journey →</span></Link>
+        </section>}
 
         {/* ── Main 2-column layout ───────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">

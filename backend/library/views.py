@@ -9,10 +9,10 @@ from django.conf import settings
 from django.db.models import Count, Q, F
 from django.utils import timezone
 
-from .models import Resource, Flashcard, Quiz, Deck, ResourceImage
+from .models import Resource, Flashcard, Quiz, Deck, ResourceImage, SourceBookmark
 from .serializers import (
     ResourceSerializer, ResourceListSerializer, ResourceUploadSerializer,
-    FlashcardSerializer, QuizSerializer, DeckSerializer
+    FlashcardSerializer, QuizSerializer, DeckSerializer, SourceBookmarkSerializer
 )
 from .youtube import process_youtube_url
 from .pdf_extractor import extract_pdf_text
@@ -21,6 +21,27 @@ from core.throttling import UploadRateThrottle, AIRateThrottle
 from .sketchfab_service import get_model_uid, get_embed_url
 
 logger = logging.getLogger('nitemind')
+
+
+class SourceBookmarkListCreateView(generics.ListCreateAPIView):
+    serializer_class = SourceBookmarkSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_resource(self):
+        return get_object_or_404(Resource, Q(id=self.kwargs['resource_id']) & (Q(owner=self.request.user) | Q(is_public=True)))
+
+    def get_queryset(self):
+        return SourceBookmark.objects.filter(user=self.request.user, resource=self.get_resource())
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user, resource=self.get_resource())
+
+
+class SourceBookmarkDetailView(generics.DestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return SourceBookmark.objects.filter(user=self.request.user)
 
 def trigger_github_synthesis(resource_id):
     """

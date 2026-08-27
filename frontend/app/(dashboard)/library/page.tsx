@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
+import FlowCompanion from '@/components/onboarding/FlowCompanion'
+import FlowLoader from '@/components/ui/FlowLoader'
 
 const PaywallModal = dynamic(() => import('@/components/ui/PaywallModal'), { ssr: false })
 
@@ -161,15 +163,14 @@ export default function LibraryPage() {
   }, [handleFileUpload])
 
   return (
-    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
+    <div className="flow-v2 flow-atmosphere min-h-[calc(100dvh-4rem)] px-5 py-9 md:px-10 lg:px-14"><div className="mx-auto max-w-[88rem]">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-stack-md mb-stack-lg">
+      <div className="grid gap-8 lg:grid-cols-[1fr_18rem] lg:items-center mb-12">
         <div>
-          <h2 className="text-[32px] font-bold text-on-surface mb-base">Sources</h2>
-          <p className="-mt-2 mb-base text-sm text-on-surface-variant">The material that grounds your Journeys, Tasks, and conversations with Flow.</p>
-          <p className="text-on-surface-variant text-[16px]">All your study materials in one place.</p>
+          <p className="flow-eyebrow">Sources</p><h2 className="mt-2 text-[clamp(3rem,7vw,6rem)] font-black leading-none tracking-[-.06em]">What Flow is learning from.</h2>
+          <p className="mt-5 max-w-2xl text-lg text-flow-muted">Your material grounds every Journey, explanation, and study session.</p>
         </div>
-        <div className="relative w-full md:w-96">
+        <div><FlowCompanion state={uploading ? 'processing' : 'reading'} className="mx-auto hidden w-36 lg:block" /><div className="relative w-full">
           <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
           <input
             className="w-full bg-surface-container-high border border-outline-variant rounded-full py-4 pl-12 pr-stack-md text-on-surface text-[16px] focus:outline-none focus:border-secondary transition-all placeholder:text-on-surface-variant/60"
@@ -177,13 +178,13 @@ export default function LibraryPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-        </div>
+        </div></div>
       </div>
 
       {/* Upload action buttons */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-stack-md mb-stack-lg">
+      <section className="grid grid-cols-2 gap-0 border-y border-white/10 mb-12 md:grid-cols-4">
         <div
-          className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group"
+          className="flex flex-col items-center justify-center border-r border-white/10 p-6 cursor-pointer group"
           onClick={() => fileRef.current?.click()}
           onDrop={handleDrop}
           onDragOver={e => e.preventDefault()}
@@ -204,7 +205,7 @@ export default function LibraryPage() {
           <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.pptx,.txt,.py,.js,.ts,.jpg,.jpeg,.png,.mp4" multiple onChange={e => handleFileUpload(e.target.files)} />
         </div>
 
-        <button onClick={() => setTextMode(!textMode)} className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy group">
+        <button onClick={() => setTextMode(!textMode)} className="flex flex-col items-center justify-center border-r border-white/10 p-6 group">
           <div className="w-16 h-16 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
             <span className="material-symbols-outlined text-[32px]">edit_note</span>
           </div>
@@ -212,7 +213,7 @@ export default function LibraryPage() {
           <span className="text-[13px] text-on-surface-variant mt-1">Notes &amp; Summaries</span>
         </button>
 
-        <button onClick={() => { setLinkMode(!linkMode); setTextMode(false) }} className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy group">
+        <button onClick={() => { setLinkMode(!linkMode); setTextMode(false) }} className="flex flex-col items-center justify-center border-r border-white/10 p-6 group">
           <div className="w-16 h-16 bg-tertiary-container text-on-tertiary-container rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
             <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>link</span>
           </div>
@@ -220,7 +221,7 @@ export default function LibraryPage() {
           <span className="text-[13px] text-on-surface-variant mt-1">YouTube &amp; Web Articles</span>
         </button>
 
-        <div className="flex flex-col items-center justify-center p-stack-lg bg-surface-container-high rounded-[2rem] border-b-4 border-surface-container-highest btn-squishy cursor-pointer group opacity-50">
+        <div className="flex flex-col items-center justify-center p-6 group opacity-50">
           <div className="w-16 h-16 bg-surface-container-highest text-on-surface-variant rounded-full flex items-center justify-center mb-stack-sm shadow-lg group-hover:scale-110 transition-transform">
             <span className="material-symbols-outlined text-[32px]">mic</span>
           </div>
@@ -228,6 +229,8 @@ export default function LibraryPage() {
           <span className="text-[13px] text-on-surface-variant mt-1">Voice memos (soon)</span>
         </div>
       </section>
+
+      {(uploading || resources.some((item: any) => item.status === 'processing')) && <div className="mb-10 border-y border-white/10 py-5"><FlowLoader state={uploading ? 'processing' : 'reading'} message={uploading ? 'Getting this into place.' : 'Reading your material.'} className="min-h-44" /></div>}
 
       {/* Text paste panel */}
       {textMode && (
@@ -268,7 +271,7 @@ export default function LibraryPage() {
             <h3 className="font-bold text-on-surface text-[18px]">Paste a Link</h3>
           </div>
           <p className="text-[13px] text-on-surface-variant">
-            Paste a YouTube video URL or any web article link. We'll extract the content and generate a study kit.
+            Paste a YouTube video URL or any web article link. We&apos;ll extract the content and generate a study kit.
           </p>
           <input
             className="w-full bg-surface-container-high border border-outline-variant rounded-[1rem] px-stack-md py-3 text-on-surface focus:outline-none focus:border-tertiary transition-all"
@@ -306,15 +309,7 @@ export default function LibraryPage() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-surface-container rounded-[1.5rem] p-5 border border-outline-variant/20 animate-pulse">
-                <div className="w-10 h-10 bg-surface-container-high rounded-[1rem] mb-4" />
-                <div className="h-4 bg-surface-container-high rounded w-3/4 mb-2" />
-                <div className="h-3 bg-surface-container-high rounded w-1/2" />
-              </div>
-            ))}
-          </div>
+          <FlowLoader state="reading" message="Reading your material." className="min-h-80" />
         ) : filtered.length === 0 ? (
           <div className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] py-16 text-center flex flex-col items-center gap-4">
             <div className="w-16 h-16 bg-surface-container rounded-full flex items-center justify-center">
@@ -337,7 +332,7 @@ export default function LibraryPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {filtered.map((r: any) => {
               const progress = progressMap.get(r.id)
               const mastery = progress?.mastery ?? 0
@@ -352,10 +347,10 @@ export default function LibraryPage() {
                 <Link
                   key={r.id}
                   href={`/library/${r.id}`}
-                  className="group flex flex-col bg-surface-container rounded-[1.5rem] border border-outline-variant/30 hover:border-outline-variant hover:bg-surface-container-high transition-all overflow-hidden"
+                  className="group grid min-h-48 grid-cols-[7rem_1fr] overflow-hidden border-y border-white/10 bg-white/[.015] transition hover:bg-white/[.035] sm:grid-cols-[10rem_1fr]"
                 >
                   {/* Top color band with icon */}
-                  <div className="relative h-28 bg-surface-container-high flex items-center justify-center border-b border-outline-variant/20">
+                  <div className="relative h-full min-h-48 bg-gradient-to-br from-flow-raised to-flow-void flex items-center justify-center border-r border-white/10">
                     <span
                       className={cn('material-symbols-outlined text-[52px] opacity-60 group-hover:opacity-90 transition-opacity', typeColor)}
                       style={{ fontVariationSettings: "'FILL' 1" }}
@@ -453,6 +448,6 @@ export default function LibraryPage() {
           onSuccess={() => { refetchSub(); setShowPaywall(false) }}
         />
       )}
-    </div>
+    </div></div>
   )
 }

@@ -9,7 +9,7 @@ from .views import (
     CloneResourceView, ResourceFileView, CuratedLibraryView,
     ReprocessResourceView, DBStatusView, DebugResourceView,
     ResourceVRLayoutView, SketchfabModelView,
-    SectionQuizView, ResourceSceneView
+    SectionQuizView, ResourceSceneView, SourceBookmarkListCreateView, SourceBookmarkDetailView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
@@ -41,6 +41,8 @@ urlpatterns = [
     # Study Path Progress
     path('resources/<int:resource_id>/progress/', ResourceProgressView.as_view(), name='resource-progress'),
     path('resources/<int:resource_id>/progress/complete/', CompleteStepView.as_view(), name='complete-step'),
+    path('resources/<int:resource_id>/bookmarks/', SourceBookmarkListCreateView.as_view(), name='source-bookmarks'),
+    path('bookmarks/<int:pk>/', SourceBookmarkDetailView.as_view(), name='source-bookmark-detail'),
     # Section quiz for Study Mode
     path('resources/<int:resource_id>/section-quiz/', SectionQuizView.as_view(), name='section-quiz'),
     path('flashcards/', FlashcardListView.as_view(), name='flashcard-list'),

@@ -171,6 +171,9 @@ export const libraryApi = {
   reprocessResource: (id: number) => api.post(`/library/resources/${id}/reprocess/`),
   getSectionQuiz: (id: number, section_title: string, section_content: string) =>
     api.post(`/library/resources/${id}/section-quiz/`, { section_title, section_content }),
+  getBookmarks: (id: number) => api.get(`/library/resources/${id}/bookmarks/`),
+  createBookmark: (id: number, data: { section_key: string; section_title?: string; excerpt?: string; page_number?: number | null }) => api.post(`/library/resources/${id}/bookmarks/`, data),
+  deleteBookmark: (bookmarkId: number) => api.delete(`/library/bookmarks/${bookmarkId}/`),
 }
 
 // AI
@@ -384,6 +387,7 @@ export const learningApi = {
   getPaths: () => api.get('/learning/paths/'),
   getPath: (id: string) => api.get(`/learning/paths/${id}/`),
   createPath: (data: any) => api.post('/learning/paths/', data),
+  setActivePath: (id: string) => api.post(`/learning/paths/${id}/set-active/`),
   deletePath: (id: string) => api.delete(`/learning/paths/${id}/`),
   /** @deprecated Legacy create-then-generate contract. Use generatePreview + buildJourney. */
   generateConcepts: (id: string, resources: number[]) =>

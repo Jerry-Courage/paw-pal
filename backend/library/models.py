@@ -243,3 +243,17 @@ class ResourceProgress(models.Model):
         else:
             self.mastery = 0
         self.save(update_fields=['mastery', 'updated_at'])
+
+
+class SourceBookmark(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='source_bookmarks')
+    resource = models.ForeignKey(Resource, on_delete=models.CASCADE, related_name='bookmarks')
+    section_key = models.CharField(max_length=160)
+    section_title = models.CharField(max_length=300, blank=True)
+    excerpt = models.TextField(blank=True)
+    page_number = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [models.UniqueConstraint(fields=['user', 'resource', 'section_key'], name='unique_user_source_bookmark')]

@@ -523,6 +523,18 @@ class LearningPathViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    @action(detail=True, methods=['post'], url_path='set-active')
+    @transaction.atomic
+    def set_active(self, request, pk=None):
+        path = LearningPath.objects.select_for_update().get(pk=pk, user=request.user)
+        if path.status == 'completed':
+            return Response({'error': 'A completed Journey cannot become active.'}, status=409)
+        LearningPath.objects.select_for_update().filter(user=request.user, status='active').exclude(pk=path.pk).update(status='paused')
+        if path.status != 'active':
+            path.status = 'active'
+            path.save(update_fields=['status', 'updated_at'])
+        return Response(LearningPathListSerializer(path).data)
+
     @action(detail=False, methods=['post'])
     def generate_preview(self, request):
         """

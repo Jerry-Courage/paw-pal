@@ -1,45 +1,29 @@
 'use client'
-
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { aiApi, authApi, paymentsApi } from '@/lib/api'
-import { toast } from 'sonner'
-import { usePricing } from '@/hooks/usePricing'
-import SecondaryDashboard from '@/components/dashboard/SecondaryDashboard'
-import UniDashboard from '@/components/dashboard/UniDashboard'
+import Link from 'next/link'
+import { ArrowRight, Clock3, Swords } from 'lucide-react'
+import { assignmentsApi, learningApi } from '@/lib/api'
+import FlowCompanion from '@/components/onboarding/FlowCompanion'
+import FlowLoader from '@/components/ui/FlowLoader'
+import { normalizeReadableMath } from '@/lib/mathFormatting'
 
-export default function DashboardPage() {
-  const { data: session } = useSession()
-  const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: () => authApi.me().then(r => r.data) })
-  const { refetch: refetchSub } = useQuery({ queryKey: ['subscription-status'], queryFn: () => paymentsApi.getStatus().then(r => r.data), staleTime: 60000 })
-
-  // Handle payment return
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const reference = params.get('reference')
-    const payment = params.get('payment')
-    if (reference && payment === 'success') {
-      window.history.replaceState({}, document.title, window.location.pathname)
-      paymentsApi.verify(reference).then(res => {
-        if (res.data.success) { toast.success('Payment confirmed! You\'re now Premium 🎉'); refetchSub() }
-      }).catch(() => {})
-    }
-  }, [refetchSub])
-
-  // SHS students get a completely different dashboard
-  if (profileData?.education_level === 'secondary') {
-    return (
-      <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto space-y-stack-md">
-        <SecondaryDashboard profileData={profileData} />
-      </div>
-    )
-  }
-
-  // University students get simplified dashboard
-  return (
-    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto space-y-stack-md">
-      <UniDashboard />
-    </div>
-  )
+export default function HomePage() {
+  const { data: auth } = useSession(); const name = auth?.user?.name?.split(' ')[0] || 'there'
+  const pathsQuery = useQuery({ queryKey: ['learning-paths'], queryFn: () => learningApi.getPaths().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []) })
+  const paths = useMemo(() => pathsQuery.data || [], [pathsQuery.data])
+  const active = useMemo(() => paths.find((p: any) => p.status === 'active') || paths.find((p: any) => p.status !== 'completed'), [paths])
+  const pathQuery = useQuery({ queryKey: ['learning-path', active?.id], queryFn: () => learningApi.getPath(active.id).then(r => r.data), enabled: Boolean(active?.id) })
+  const current = pathQuery.data?.concepts?.find((c: any) => c.status === 'current')
+  const teachingQuery = useQuery({ queryKey: ['teaching-session', current?.id], queryFn: () => learningApi.getTeachingSession(current.id).then(r => r.data), enabled: Boolean(current?.id), retry: false })
+  const assignmentsQuery = useQuery({ queryKey: ['assignments'], queryFn: () => assignmentsApi.getAll().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []), retry: false })
+  const due = paths.reduce((total: number, path: any) => total + Number(path.due_reviews || 0), 0)
+  const upcoming = [...(assignmentsQuery.data || [])].filter((item: any) => item.due_date || item.deadline).sort((a: any, b: any) => +new Date(a.due_date || a.deadline) - +new Date(b.due_date || b.deadline))[0]
+  const openSession = teachingQuery.data && !['completed', 'not_started'].includes(teachingQuery.data.status)
+  if (pathsQuery.isLoading) return <FlowLoader state="thinking" message="Checking where we left off." className="min-h-[80dvh]" />
+  if (!active) return <main className="flow-v2 flow-atmosphere min-h-[calc(100dvh-4rem)] px-5 py-10 md:px-12"><div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-[1fr_26rem]"><section><p className="flow-eyebrow">Your next move</p><h1 className="mt-3 max-w-4xl text-[clamp(3rem,8vw,7rem)] font-black leading-[.88] tracking-[-.065em]">Bring the material.<br /><span className="text-flow-orange">I’ll find the route.</span></h1><p className="mt-7 max-w-xl text-lg text-flow-muted">Give me something you’re learning and I’ll build us a Journey grounded in it.</p><div className="mt-8 flex flex-wrap gap-5"><Link href="/learn?create=1" className="inline-flex min-h-14 items-center gap-2 bg-flow-orange px-7 py-4 font-black text-flow-void shadow-[0_6px_0_#8f3600]">Create a Journey <ArrowRight /></Link><Link href="/library" className="inline-flex min-h-14 items-center py-4 font-black text-flow-violet">Choose from Sources</Link></div></section><FlowCompanion state="encouraging" className="mx-auto w-full max-w-sm" /></div></main>
+  return <main className="flow-v2 flow-atmosphere min-h-[calc(100dvh-4rem)] overflow-hidden px-5 py-9 md:px-10 lg:px-14"><div className="mx-auto max-w-[88rem]"><div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]"><section><p className="flow-eyebrow">Welcome back, {name}</p><h1 className="mt-3 max-w-5xl text-[clamp(2.8rem,7vw,6.5rem)] font-black leading-[.9] tracking-[-.06em]">{openSession ? <>We were halfway through <span className="text-flow-orange">{normalizeReadableMath(current?.title || 'this idea')}.</span></> : <>Your next move is <span className="text-flow-orange">ready.</span></>}</h1><p className="mt-5 max-w-2xl text-lg text-flow-muted">{active.title}{current ? ` · ${normalizeReadableMath(current.title)}` : ''}</p><div className="relative mt-10 overflow-hidden border-y border-white/10 py-8"><div className="absolute inset-0 bg-gradient-to-r from-flow-orange/10 via-transparent to-flow-violet/10" /><div className="relative grid gap-7 sm:grid-cols-[1fr_auto] sm:items-end"><div><p className="flow-eyebrow">{openSession ? 'Continue Journey' : 'Your next move'}</p><h2 className="mt-2 text-3xl font-black sm:text-5xl">{normalizeReadableMath(current?.title || active.title)}</h2>{openSession ? <p className="mt-4 font-bold text-flow-muted">{teachingQuery.data.completion_evaluation?.objectives_satisfied || 0} / {teachingQuery.data.completion_evaluation?.objectives_total || teachingQuery.data.objectives?.length || 0} objectives securely understood</p> : <p className="mt-4 flex items-center gap-2 font-bold text-flow-muted"><Clock3 className="h-4 w-4" />{current?.estimated_minutes || 12} min · 25 XP</p>}</div><Link href={`/learn/${active.id}${openSession ? `?concept=${current.id}` : ''}`} className="inline-flex min-h-14 items-center justify-center gap-2 bg-flow-orange px-7 font-black text-flow-void shadow-[0_6px_0_#8f3600]">{openSession ? 'Continue with Flow' : 'Enter Journey'} <ArrowRight /></Link></div></div></section><aside className="lg:pt-6"><FlowCompanion state={due ? 'encouraging' : 'idle'} className="mx-auto w-48" /><p className="mt-2 text-center text-sm font-bold text-flow-muted">{due ? `${due} ${due === 1 ? 'idea is' : 'ideas are'} getting a little fuzzy.` : 'Your place is saved. I’ve got it.'}</p></aside></div><section className="mt-12 grid gap-8 border-t border-white/10 pt-8 md:grid-cols-3">{due > 0 && <HomeSignal eyebrow="Worth revisiting" title={`${due} due ${due === 1 ? 'review' : 'reviews'}`} href={`/learn/${active.id}`} action="Quick review" />}{upcoming && <HomeSignal eyebrow="Coming up" title={upcoming.title || upcoming.name} detail={formatDeadline(upcoming.due_date || upcoming.deadline)} href="/assignments" action="See task" />}{active.concepts_completed >= 3 && <HomeSignal eyebrow="Feeling confident?" title={`Battle someone on ${active.subject || 'this Journey'}`} href="/groups" action="Enter Battle" icon={<Swords className="h-5 w-5 text-flow-violet" />} />}{!due && !upcoming && <HomeSignal eyebrow="Flow suggestion" title="Ask for one focused practice question" href="/ai" action="Open Flow" />}</section></div></main>
 }
+function HomeSignal({ eyebrow, title, detail, href, action, icon }: { eyebrow: string; title: string; detail?: string; href: string; action: string; icon?: React.ReactNode }) { return <article className="border-l-2 border-white/10 pl-5">{icon}<p className="flow-eyebrow">{eyebrow}</p><h3 className="mt-2 text-xl font-black">{title}</h3>{detail && <p className="mt-1 text-sm text-flow-muted">{detail}</p>}<Link href={href} className="mt-4 inline-flex items-center gap-1 text-sm font-black text-flow-violet">{action} <ArrowRight className="h-4 w-4" /></Link></article> }
+function formatDeadline(value: string) { const date = new Date(value); const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); return date.toDateString() === tomorrow.toDateString() ? 'Due tomorrow' : `Due ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` }

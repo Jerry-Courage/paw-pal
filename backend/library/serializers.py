@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.conf import settings
-from .models import Resource, Deck, Flashcard, Quiz, ResourceImage
+from .models import Resource, Deck, Flashcard, Quiz, ResourceImage, SourceBookmark
 
 
 class ResourceImageSerializer(serializers.ModelSerializer):
@@ -163,3 +163,10 @@ class QuizSerializer(serializers.ModelSerializer):
         model = Quiz
         fields = ('id', 'resource', 'title', 'format', 'questions', 'academic_level', 'created_at')
         read_only_fields = ('id', 'created_at')
+
+
+class SourceBookmarkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SourceBookmark
+        fields = ('id', 'resource', 'section_key', 'section_title', 'excerpt', 'page_number', 'created_at')
+        read_only_fields = ('id', 'resource', 'created_at')

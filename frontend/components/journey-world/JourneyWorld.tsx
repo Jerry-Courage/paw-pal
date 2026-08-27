@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Check, ChevronLeft, ChevronRight, Clock3, Coins, Crown, Flame, Lightbulb, LockKeyhole, Menu, MessageCircle, Mic, Play, Plus, RefreshCw, RotateCw, Send, ShieldCheck, Swords, Target, X } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -21,6 +22,7 @@ type NodeKind = 'lesson' | 'practice' | 'review' | 'checkpoint' | 'challenge' | 
 type WorldNode = JourneyRoadmapNode & { kind: NodeKind; unitIndex: number; unitTitle: string; displayState: 'locked' | 'available' | 'current' | 'in_progress' | 'completed' | 'mastered' | 'review_due' }
 
 export default function JourneyWorld({ pathId }: { pathId: string }) {
+  const searchParams = useSearchParams()
   const qc = useQueryClient()
   const reduceMotion = useReducedMotion()
   const currentRef = useRef<HTMLButtonElement>(null)
@@ -38,6 +40,8 @@ export default function JourneyWorld({ pathId }: { pathId: string }) {
 
   const nodes = useMemo(() => mapWorldNodes(roadmapQuery.data), [roadmapQuery.data])
   const current = nodes.find(node => node.displayState === 'review_due') || nodes.find(node => node.status === 'current') || [...nodes].reverse().find(node => node.status === 'completed')
+
+  useEffect(() => { const requested = searchParams.get('concept'); if (!requested || encounter || !nodes.length) return; const node = nodes.find(item => item.id === requested); if (node && node.displayState !== 'locked') setEncounter(node) }, [searchParams, nodes, encounter])
 
   useEffect(() => {
     if (!currentRef.current || didAutoPosition.current) return
