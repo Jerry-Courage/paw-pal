@@ -3,41 +3,57 @@
 @tailwind utilities;
 
 /* ── FlowState Design System v2 ─────────────────────────────────── */
-/* Base: #121416 bg, #1a1c1e sidebar, #ffb68d primary orange         */
+/* One semantic dark family shared by the shell and migrated experiences. */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
 
 :root {
-  --background: 18 20 22;
-  --surface-container-low: 26 28 30;
-  --surface-container: 30 32 34;
-  --surface-container-high: 40 42 44;
-  --primary: 255 182 141;
-  --primary-container: 255 138 61;
-  --on-primary: 83 34 0;
-  --on-primary-fixed-variant: 118 51 0;
-  --secondary: 191 194 255;
-  --tertiary: 212 187 255;
-  --outline-variant: 86 67 56;
-  --on-surface: 226 226 229;
-  --on-surface-variant: 221 193 179;
+  --background: 11 12 26;
+  --background-elevated: 15 17 32;
+  --surface-container-low: 17 19 35;
+  --surface-container: 22 24 42;
+  --surface-container-high: 29 32 52;
+  --surface-hover: 34 37 59;
+  --surface-active: 43 39 62;
+  --surface-soft: 20 22 40;
+  --border: 255 255 255;
+  --border-strong: 112 106 139;
+  --primary: 255 122 26;
+  --primary-container: 255 122 26;
+  --on-primary: 31 18 8;
+  --on-primary-fixed-variant: 91 37 0;
+  --secondary: 148 124 255;
+  --tertiary: 148 124 255;
+  --outline-variant: 76 73 99;
+  --on-surface: 248 246 242;
+  --on-surface-variant: 170 171 192;
+  --success: 91 218 156;
+  --warning: 255 190 92;
+  --danger: 255 107 124;
+  --flow-glow: 148 124 255;
+  --flow-void: var(--background);
+  --flow-raised: var(--surface-soft);
+  --flow-surface: var(--surface-container-high);
+  --flow-orange: var(--primary);
+  --flow-violet: var(--secondary);
+  --flow-ink: var(--on-surface);
+  --flow-muted: var(--on-surface-variant);
+  --flow-success: var(--success);
   --nav-height: 56px;
 }
 
 /* FlowState 2.0 — isolated semantic foundation. Apply with .flow-v2 so
    legacy product screens can migrate deliberately rather than all at once. */
 .flow-v2 {
-  --flow-void: 11 12 26;
-  --flow-raised: 20 22 40;
-  --flow-surface: 28 31 51;
-  --flow-orange: 255 122 26;
-  --flow-violet: 148 124 255;
-  --flow-ink: 248 246 242;
-  --flow-muted: 170 171 192;
-  --flow-success: 91 218 156;
   color: rgb(var(--flow-ink));
   background: rgb(var(--flow-void));
+}
+
+.flow-app-canvas {
+  background:
+    radial-gradient(circle at 82% 8%, rgb(var(--flow-glow) / .07), transparent 28rem),
+    rgb(var(--background));
 }
 
 .flow-atmosphere {

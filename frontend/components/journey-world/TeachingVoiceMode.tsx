@@ -16,7 +16,7 @@ function decodePcm(value: string) {
   return Float32Array.from(samples, sample => sample / 32768)
 }
 
-export default function TeachingVoiceMode({ session, onClose }: { session: TeachingSessionResponse; onClose: () => void }) {
+export default function TeachingVoiceMode({ session, onClose, feynman = false }: { session: TeachingSessionResponse; onClose: () => void; feynman?: boolean }) {
   const reduceMotion = useReducedMotion()
   const [state, setState] = useState<VoiceState>('connecting')
   const [muted, setMuted] = useState(false)
@@ -65,7 +65,7 @@ export default function TeachingVoiceMode({ session, onClose }: { session: Teach
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         const socket = new WebSocket(`${protocol}//${host}/ws/personalised/?token=${token}`)
         socketRef.current = socket
-        socket.onopen = () => socket.send(JSON.stringify({ type: 'start', voice: 'Aoede', teaching_session_id: session.id }))
+        socket.onopen = () => socket.send(JSON.stringify({ type: 'start', voice: 'Aoede', teaching_session_id: session.id, feynman_mode: feynman }))
         socket.onmessage = async event => {
           const message = JSON.parse(event.data)
           if (message.type === 'ready') {
@@ -104,7 +104,7 @@ export default function TeachingVoiceMode({ session, onClose }: { session: Teach
       playbackContextRef.current?.close().catch(() => {})
       sourcesRef.current.forEach(source => { try { source.stop() } catch {} })
     }
-  }, [play, session.id])
+  }, [play, session.id, feynman])
 
   const end = () => {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: 'end_session' }))
@@ -112,15 +112,15 @@ export default function TeachingVoiceMode({ session, onClose }: { session: Teach
   }
   const avatarState = state === 'speaking' ? 'speaking' : state === 'thinking' ? 'thinking' : state === 'listening' ? 'listening' : 'idle'
 
-  return <motion.section role="dialog" aria-modal="true" aria-label="Talk with Flow" className="fixed inset-0 z-[80] grid place-items-center overflow-hidden bg-[#080914] px-5 text-flow-ink" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+  return <motion.section role="dialog" aria-modal="true" aria-label={feynman ? 'Teach Flow' : 'Talk with Flow'} className="fixed inset-0 z-[80] grid place-items-center overflow-hidden bg-flow-void px-5 text-flow-ink" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(124,92,255,.20),transparent_32%),radial-gradient(circle_at_50%_45%,rgba(255,122,26,.10),transparent_52%)]" />
     <div className="relative flex w-full max-w-xl flex-col items-center text-center">
-      <p className="text-xs font-black uppercase tracking-[.28em] text-flow-violet">Same lesson · voice mode</p>
+      <p className="text-xs font-black uppercase tracking-[.28em] text-flow-violet">{feynman ? 'Final understanding check · teach Flow' : 'Same lesson · voice mode'}</p>
       <div className="relative mt-10 grid h-52 w-52 place-items-center">
         <AnimatePresence>{state !== 'error' && [0, 1, 2].map(index => <motion.i key={index} aria-hidden="true" className="absolute inset-0 rounded-full border border-flow-violet/40" animate={reduceMotion ? undefined : { scale: [0.72, 1.12], opacity: [.55, 0] }} transition={{ duration: 2.2, repeat: Infinity, delay: index * .5 }} />)}</AnimatePresence>
         <FlowCompanion state={avatarState} className="relative z-10 w-32 drop-shadow-[0_18px_40px_rgba(124,92,255,.35)]" />
       </div>
-      <h2 className="mt-6 text-3xl font-black tracking-[-.04em]">{state === 'connecting' ? 'Flow is joining…' : state === 'listening' ? 'Listening' : state === 'thinking' ? 'Thinking' : state === 'speaking' ? 'Speaking' : 'Voice paused'}</h2>
+      <h2 className="mt-6 text-3xl font-black tracking-[-.04em]">{state === 'connecting' ? 'Flow is joining…' : state === 'listening' ? (feynman ? 'Teach me.' : 'Listening') : state === 'thinking' ? 'Thinking' : state === 'speaking' ? (feynman ? 'Flow has a question' : 'Speaking') : 'Voice paused'}</h2>
       <p aria-live="polite" className="mt-4 min-h-14 max-w-md text-sm leading-relaxed text-flow-muted">{subtitle}</p>
       <div className="mt-10 flex items-center gap-5">
         <button onClick={() => setMuted(value => !value)} aria-pressed={muted} aria-label={muted ? 'Unmute microphone' : 'Mute microphone'} className="grid h-14 w-14 place-items-center rounded-full border border-white/15 bg-white/[.06] focus-visible:ring-2 focus-visible:ring-flow-orange">{muted ? <MicOff /> : <Mic />}</button>

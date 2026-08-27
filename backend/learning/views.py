@@ -11,7 +11,7 @@ from django.db import transaction
 from django.db.models import Q, Count, Avg, Max
 
 from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit, TeachingSession, TeachingTurn
-from .completion import evaluate_session_completion, finalize_teaching_session, record_objective_evidence
+from .completion import evaluate_feynman_explanation, evaluate_session_completion, finalize_teaching_session, record_objective_evidence
 from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptNodeSerializer, ConceptNodeDetailSerializer,
                            ConceptReviewSerializer, UnitSerializer)
@@ -1001,6 +1001,21 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             next_activity = next((item for item in activities if item['purpose'] in {'check', 'apply'}), None)
             if next_activity:
                 kind, payload = 'activity', {'activity': _public_activity(next_activity), 'supported_by_video': video['video_id']}
+        elif any(phrase == lowered or lowered.startswith(f'{phrase} ') for phrase in ('got it', 'okay', 'makes sense', 'continue', 'next', "let's move on", 'yeah', 'i understand', 'cool')):
+            completion_state = evaluate_session_completion(session)
+            if completion_state['normal_requirements_met']:
+                session.status = 'mastery_check'
+                flow_text = "Nice — the lesson pieces are locked in. One final boss: teach the idea back to me in your own words. 👀"
+                payload = {'transition': 'feynman', 'completion_evaluation': completion_state}
+            else:
+                unresolved = completion_state['unresolved_objectives']
+                current_result = next((item for item in completion_state['objectives'] if item['id'] == (session.objectives[min(session.current_point, len(session.objectives) - 1)]['id'] if session.objectives else '')), None)
+                if current_result and current_result['taught'] and not current_result['understood']:
+                    flow_text = "Cool. Before we move on, explain that bit back to me in one sentence — just enough to show the idea is yours."
+                else:
+                    session.current_point = min(session.current_point + 1, max(0, len(session.objectives) - 1))
+                    objective = unresolved[0] if unresolved else None
+                    flow_text = f"Yep, that part’s locked in 🔥. Next up: {objective['text']}" if objective else "Nice. Let’s build on it."
         elif session.status == 'not_started':
             session.status = 'teaching'
             session.current_point = 0
@@ -1098,7 +1113,8 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         concept = self.get_object()
         session = _get_teaching_session(concept, request.user)
         recent = [_turn_data(turn) for turn in session.turns.order_by('-created_at')[:8]][::-1]
-        return Response({'teaching_session_id': str(session.id), 'journey_id': str(concept.path_id), 'unit_id': str(concept.unit_id) if concept.unit_id else None, 'concept_id': str(concept.id), 'current_teaching_point': session.current_point, 'resume_point': session.resume_point, 'resource_ids': session.state.get('resource_ids', []), 'goal': concept.path.goal, 'depth': concept.path.depth, 'mastery': session.mastery, 'unresolved_misconceptions': session.unresolved_misconceptions, 'recent_context': recent, 'conversation_summary': session.conversation_summary})
+        completion = evaluate_session_completion(session)
+        return Response({'teaching_session_id': str(session.id), 'journey_id': str(concept.path_id), 'journey_title': concept.path.title, 'unit_id': str(concept.unit_id) if concept.unit_id else None, 'unit_title': concept.unit.title if concept.unit else '', 'concept_id': str(concept.id), 'concept_title': concept.title, 'current_teaching_point': session.current_point, 'resume_point': session.resume_point, 'resource_ids': session.state.get('resource_ids', []), 'source_context': _grounding(concept), 'goal': concept.path.goal, 'depth': concept.path.depth, 'mastery': session.mastery, 'objectives': session.objectives, 'objective_evidence': session.state.get('objective_evidence', {}), 'completion_evaluation': completion, 'unresolved_misconceptions': session.unresolved_misconceptions, 'recent_context': recent, 'conversation_summary': session.conversation_summary, 'teaching_preferences': session.state.get('teaching_preferences', {})})
 
     @action(detail=True, methods=['post'], url_path='teaching-voice-event')
     @transaction.atomic
@@ -1171,6 +1187,36 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'More learning evidence is required', **evaluation}, status=409)
         next_node = ConceptNode.objects.filter(path=concept.path, status='current').exclude(id=concept.id).order_by('order_index').first()
         return Response({'message': 'Concept completed', 'mastery': concept.mastery, 'reward': reward, 'unlocked': unlocked, 'next_node': str(next_node.id) if next_node else None, 'completion_evaluation': evaluation})
+
+    @action(detail=True, methods=['post'], url_path='feynman-evaluation')
+    @transaction.atomic
+    def feynman_evaluation(self, request, pk=None):
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        explanation = str(request.data.get('explanation', '')).strip()
+        source = str(request.data.get('source', 'text')).strip().lower()
+        key = str(request.data.get('idempotency_key', '')).strip()[:80]
+        if source not in {'text', 'voice'}:
+            return Response({'error': 'Unknown Feynman evidence source'}, status=400)
+        if len(explanation.split()) < 5:
+            return Response({'error': 'Explain the idea in at least one complete thought.'}, status=400)
+        if key:
+            existing = TeachingTurn.objects.filter(session=session, idempotency_key=key).first()
+            if existing:
+                return Response({'result': existing.payload.get('feynman_evaluation', {}), **_session_data(session)})
+        prerequisites = evaluate_session_completion(session)
+        if not prerequisites['normal_requirements_met']:
+            return Response({'error': 'Required lesson evidence is still incomplete', **prerequisites}, status=409)
+        result = evaluate_feynman_explanation(session, explanation)
+        attempt = TeachingTurn.objects.create(session=session, role='learner', kind='voice' if source == 'voice' else 'message', content=explanation[:4000], idempotency_key=key, payload={'feynman_evaluation': result, 'server_verified': True, 'source': source})
+        previous = session.state.get('feynman_evidence', {})
+        if int(result['score']) >= int(previous.get('score', -1)):
+            session.state = {**session.state, 'feynman_evidence': {**result, 'evidence_id': str(attempt.id), 'source': source}}
+        session.status = 'mastery_check' if result['passed'] else 'remediation'
+        session.resume_point = session.current_point
+        TeachingTurn.objects.create(session=session, role='flow', content=result['feedback'], payload={'feynman_result': result})
+        session.save()
+        return Response({'result': result, **_session_data(session)}, status=201)
 
     @action(detail=True, methods=['get'])
     def activities(self, request, pk=None):

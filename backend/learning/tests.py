@@ -314,14 +314,62 @@ class ConversationalTeachingSessionTests(TestCase):
         objective = valid.data['completion_evaluation']['objectives'][0]
         self.assertTrue(objective['satisfied'])
 
-    def _satisfy_all_objectives(self, score=88):
+    def _satisfy_all_objectives(self, score=88, feynman=True):
         session = TeachingSession.objects.get(user=self.user, concept=self.concept)
         for index, objective in enumerate(session.objectives):
             record_objective_evidence(session, objective['id'], taught=True, interaction=True, score=score, source='activity', evidence_id=f'attempt-{index}')
             session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective['id']]))
             session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective['id']]))
+        if feynman:
+            session.state = {**session.state, 'feynman_evidence': {'server_verified': True, 'score': score, 'passed': True, 'critical_misconceptions': [], 'feedback': 'Verified in test.', 'dimensions': {}}}
         session.save()
         return session
+
+    def test_objectives_alone_reach_feynman_but_cannot_complete(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        session = self._satisfy_all_objectives(feynman=False)
+        evaluation = evaluate_session_completion(session)
+        self.assertFalse(evaluation['complete'])
+        self.assertTrue(evaluation['normal_requirements_met'])
+        self.assertEqual(evaluation['recommended_next_action'], 'start_feynman')
+        self.assertEqual(self.client.post(f'{self.base}/teaching-completion/', format='json').status_code, 409)
+
+    def test_feynman_score_is_server_derived_and_text_fallback_persists(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        self._satisfy_all_objectives(feynman=False)
+        response = self.client.post(f'{self.base}/feynman-evaluation/', {
+            'explanation': 'Jacobi uses old values during each iteration because updates wait for the next sweep, while Gauss Seidel uses fresh values immediately and SOR controls relaxation.',
+            'source': 'text', 'score': 100, 'idempotency_key': 'feynman-text',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertNotEqual(response.data['result']['score'], 100)
+        self.assertTrue(response.data['result']['server_verified'])
+        self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, idempotency_key='feynman-text').count(), 1)
+
+    def test_failed_feynman_remediates_and_retry_is_idempotent(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        self._satisfy_all_objectives(feynman=False)
+        failed = self.client.post(f'{self.base}/feynman-evaluation/', {'explanation': 'It is a thing that does some useful calculations.', 'source': 'voice', 'idempotency_key': 'weak'}, format='json')
+        self.assertFalse(failed.data['result']['passed'])
+        self.assertEqual(failed.data['status'], 'remediation')
+        count = TeachingTurn.objects.count()
+        retry = self.client.post(f'{self.base}/feynman-evaluation/', {'explanation': 'It is a thing that does some useful calculations.', 'source': 'voice', 'idempotency_key': 'weak'}, format='json')
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(TeachingTurn.objects.count(), count)
+
+    def test_critical_misconception_blocks_passing_feynman(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        session = self._satisfy_all_objectives(feynman=False)
+        session.unresolved_misconceptions = ['Jacobi uses fresh values immediately.']
+        session.save()
+        response = self.client.post(f'{self.base}/feynman-evaluation/', {'explanation': 'Jacobi iteration uses old values for a sweep because calculations update an approximation and Gauss Seidel uses fresh values.', 'source': 'text'}, format='json')
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(response.data['complete'])
+
+    def test_acknowledgement_moves_to_check_instead_of_repeating_explanation(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        response = self.client.post(f'{self.base}/teaching-message/', {'message': 'got it', 'idempotency_key': 'ack'}, format='json')
+        self.assertIn('explain that bit back', response.data['turns'][-1]['content'].lower())
 
     def test_incomplete_objectives_cannot_complete_or_reward(self):
         self.client.get(f'{self.base}/teaching-session/')

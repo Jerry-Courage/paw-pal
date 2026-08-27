@@ -63,17 +63,17 @@ export default function AssignmentsPage() {
   })
 
   return (
-    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-6xl mx-auto">
+    <main className="flow-v2 flow-atmosphere min-h-[calc(100dvh-4rem)] px-5 py-9 md:px-10 lg:px-14"><div className="mx-auto max-w-[96rem]">
 
       {/* ── AI Processing Banner ──────────────────────── */}
       {processing.length > 0 && (
-        <div className="mb-stack-lg relative overflow-hidden rounded-[1.5rem] bg-secondary-container p-stack-sm md:p-stack-md flex items-center gap-gutter text-on-secondary-container shadow-lg pulse-ai">
+        <div className="mb-stack-lg relative overflow-hidden border-l-4 border-flow-violet bg-surface-soft p-stack-sm md:p-stack-md flex items-center gap-gutter text-on-surface pulse-ai">
           <div className="relative z-10 flex items-center justify-center bg-white/20 p-2 rounded-full backdrop-blur-sm">
             <span className="material-symbols-outlined text-[24px] animate-spin">autorenew</span>
           </div>
           <div className="relative z-10">
-            <h3 className="font-bold text-[18px]">AI Writing Assistant Active</h3>
-            <p className="text-[14px] opacity-90">Synthesizing {processing.length} assignment{processing.length > 1 ? 's' : ''}…</p>
+            <h3 className="font-bold text-[18px]">Flow is working through the material.</h3>
+            <p className="text-[14px] text-flow-muted">Preparing {processing.length} assignment{processing.length > 1 ? 's' : ''} for guided work…</p>
           </div>
           <div className="relative z-10 ml-auto hidden sm:block">
             <div className="w-32 h-3 bg-white/20 rounded-full overflow-hidden">
@@ -86,11 +86,11 @@ export default function AssignmentsPage() {
       {/* ── Header ───────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-stack-md mb-stack-lg">
         <div>
-          <span className="text-secondary font-bold tracking-widest text-[13px] mb-2 block uppercase">Academic Suite</span>
-          <h2 className="text-[32px] font-bold text-on-surface flex items-center gap-base">
-            My Assignments
+          <span className="flow-eyebrow mb-2 block">Assignments</span>
+          <h1 className="text-[clamp(2.5rem,6vw,5.5rem)] font-black leading-none tracking-[-.055em] text-on-surface flex flex-wrap items-center gap-base">
+            Bring the work.
             <span className="bg-surface-container-highest text-primary text-[15px] px-3 py-1 rounded-full">{assignments.length} active</span>
-          </h2>
+          </h1><p className="mt-3 max-w-xl text-lg text-flow-muted">Flow helps you work through it—without taking the learning away from you.</p>
         </div>
         <div className="flex flex-wrap items-center gap-base">
           {/* Search */}
@@ -144,7 +144,7 @@ export default function AssignmentsPage() {
           </div>
           <div>
             <p className="font-bold text-on-surface text-[18px] mb-base">{search ? 'No results found' : 'No assignments yet'}</p>
-            <p className="text-[14px] text-on-surface-variant mb-stack-md">Create your first assignment and let AI help you write it.</p>
+            <p className="text-[14px] text-on-surface-variant mb-stack-md">Bring a PDF, photo, screenshot, or pasted question. Flow will help you reason through it.</p>
             <Link href="/assignments/new" className="inline-flex items-center gap-base bg-primary text-on-primary text-[14px] font-bold px-stack-md py-2 rounded-[1rem] btn-3d hover:brightness-110 transition-all">
               <span className="material-symbols-outlined text-[18px]">add</span>
               New Assignment
@@ -156,7 +156,7 @@ export default function AssignmentsPage() {
           {filtered.map((a: any) => {
             const status = STATUS_STYLES[a.status] || STATUS_STYLES.pending
             return (
-              <div key={a.id} className="bg-surface-container-low rounded-[1.5rem] p-stack-md flex flex-col border border-outline-variant hover:-translate-y-1 transition-all card-shadow">
+              <div key={a.id} className="bg-surface-soft rounded-[1.5rem] p-stack-md flex flex-col border border-white/[.07] hover:-translate-y-1 hover:bg-surface-hover transition-all card-shadow">
                 {/* Status + overflow */}
                 <div className="flex justify-between items-start mb-stack-sm">
                   <span className={cn('flex items-center gap-1 text-[13px] px-3 py-1 rounded-full font-bold', status.badge)}>
@@ -240,6 +240,6 @@ export default function AssignmentsPage() {
           onSuccess={() => { refetchSub(); setShowPaywall(false) }}
         />
       )}
-    </div>
+    </div></main>
   )
 }

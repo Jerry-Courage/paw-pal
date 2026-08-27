@@ -38,7 +38,7 @@ export default function Sidebar() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
-        'fixed left-0 top-0 h-screen flex flex-col bg-surface-container-low shadow-lg z-40 hidden md:flex',
+        'fixed left-0 top-0 h-screen flex flex-col border-r border-white/[.055] bg-background-elevated/95 shadow-[18px_0_50px_rgba(0,0,0,.12)] backdrop-blur-xl z-40 hidden md:flex',
         'transition-[width] duration-300 ease-in-out overflow-hidden',
         // Collapsed: icon-only (w-[68px]), Expanded: full width (w-64)
         expanded ? 'w-64 rounded-r-[1rem]' : 'w-[68px] rounded-r-[1rem]'
@@ -105,7 +105,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-between gap-1">
           <button
             onClick={() => setSecondaryOpen(true)}
-            title={!expanded ? 'More' : undefined}
+            title={!expanded ? 'Explore' : undefined}
             className={cn(
               'flex items-center gap-3 px-[10px] py-2 rounded-[1rem] text-on-surface-variant hover:bg-surface-container-high transition-all text-[13px] font-semibold overflow-hidden whitespace-nowrap',
               expanded ? 'flex-1' : ''
@@ -113,7 +113,7 @@ export default function Sidebar() {
           >
             <span className="material-symbols-outlined text-[18px] shrink-0">apps</span>
             <span className={cn('transition-all duration-200', expanded ? 'opacity-100' : 'opacity-0 w-0')}>
-              More
+              Explore
             </span>
           </button>
           <button
@@ -125,9 +125,9 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-      {secondaryOpen && <div className="fixed inset-0 z-50 bg-black/55" onClick={() => setSecondaryOpen(false)}><section role="dialog" aria-modal="true" aria-label="More FlowState destinations" onClick={event => event.stopPropagation()} className="absolute bottom-6 left-20 w-72 rounded-[1.25rem] bg-surface-container p-4 shadow-2xl"><div className="grid gap-1">{[
-        ['Sources', '/library', 'menu_book'], ['Tasks', '/assignments', 'edit_document'], ['Collab', '/workspace', 'group_work'], ['Battle', '/groups', 'bolt'], ['Settings', '/settings', 'settings'], ['Subscription', '/upgrade', 'workspace_premium'],
-      ].map(([label, href, icon]) => <Link key={href} href={href} onClick={() => setSecondaryOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 font-bold text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"><span className="material-symbols-outlined">{icon}</span>{label}</Link>)}</div></section></div>}
+      {secondaryOpen && <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setSecondaryOpen(false)}><section role="dialog" aria-modal="true" aria-label="Explore FlowState" onClick={event => event.stopPropagation()} className="absolute bottom-6 left-20 w-[23rem] max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-[1.5rem] border border-white/[.08] bg-surface-soft p-5 shadow-2xl"><p className="flow-eyebrow">Explore</p><h2 className="mt-1 text-2xl font-black text-on-surface">More ways to learn.</h2><div className="mt-4 grid gap-1">{[
+        ['Sources', '/library', 'menu_book', 'Your learning material'], ['Assignments', '/assignments', 'edit_document', 'Work through coursework with Flow'], ['Battle', '/groups', 'bolt', 'Challenge friends'], ['Collab', '/workspace', 'group_work', 'Learn together'], ['Marketplace', '/marketplace', 'storefront', 'Spend FlowCoins'], ['VR', '/library', 'view_in_ar', 'Immersive learning from a Source'],
+      ].map(([label, href, icon, description]) => <Link key={label} href={href} onClick={() => setSecondaryOpen(false)} className="group flex items-start gap-3 rounded-xl px-3 py-3 hover:bg-surface-hover"><span className="material-symbols-outlined mt-0.5 text-flow-orange">{icon}</span><span><strong className="block text-sm text-on-surface">{label}</strong><span className="text-xs text-on-surface-variant">{description}</span></span></Link>)}</div><div className="mt-4 border-t border-white/[.07] pt-3">{[['Settings', '/settings', 'settings'], ['Subscription', '/upgrade', 'workspace_premium']].map(([label, href, icon]) => <Link key={href} href={href} onClick={() => setSecondaryOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-on-surface-variant hover:bg-surface-hover hover:text-on-surface"><span className="material-symbols-outlined text-lg">{icon}</span>{label}</Link>)}</div></section></div>}
     </aside>
   )
 }

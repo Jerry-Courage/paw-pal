@@ -899,7 +899,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="fixed inset-x-0 top-0 md:bottom-0 md:left-64 mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface" style={{ bottom: 'max(3.5rem, calc(3.5rem + env(safe-area-inset-bottom)))' }}>
+    <div className="flow-v2 flow-atmosphere fixed inset-x-0 top-0 md:bottom-0 md:left-[68px] mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface" style={{ bottom: 'max(3.5rem, calc(3.5rem + env(safe-area-inset-bottom)))' }}>
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -1075,9 +1075,9 @@ function AIChat() {
               <div className="w-12 h-12 sm:w-14 sm:h-14 bg-primary/10 border border-primary/20 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-primary/10 animate-pulse">
                 <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
               </div>
-              <h1 className="text-xl sm:text-2xl font-black text-on-surface mb-1.5 sm:mb-2 tracking-tight">Hi, I'm Flow AI</h1>
+              <h1 className="text-2xl sm:text-4xl font-black text-on-surface mb-1.5 sm:mb-2 tracking-[-.04em]">Yo 👋 What are we figuring out today?</h1>
               <p className="text-on-surface-variant/60 text-xs sm:text-sm max-w-sm mb-6 sm:mb-8 leading-relaxed">
-                Your brilliant AI study partner. Drop a PDF, paste an image, or just start asking questions below!
+                Continue something you were learning, bring me a problem, or show me what has you stuck.
               </p>
               <div className="flex items-center gap-3 mb-6">
                 <button

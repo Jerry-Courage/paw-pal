@@ -87,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const hideNav = pathname === '/groups' || pathname.startsWith('/groups/') || pathname === '/dashboard/personalised' || shouldFullViewport || isJourneyFocus
 
   return (
-    <div className="min-h-screen bg-background text-on-surface font-sans">
+    <div className="flow-v2 flow-app-canvas min-h-screen bg-background text-on-surface font-sans">
       {!hideNav && <Sidebar />}
       {!hideNav && <MobileNav />}
 

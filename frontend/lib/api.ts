@@ -410,6 +410,7 @@ export const learningApi = {
   sendTeachingVoiceEvent: (id: string, data: { event: string; objective_id?: string; misconception?: string; summary?: string; evidence_type?: 'explanation' | 'application' | 'calculation' | 'prediction'; evidence_score?: number; evidence_id?: string }) => api.post(`/learning/concepts/${id}/teaching-voice-event/`, data),
   getTeachingCompletion: (id: string) => api.get(`/learning/concepts/${id}/teaching-completion/`),
   finalizeTeachingSession: (id: string) => api.post(`/learning/concepts/${id}/teaching-completion/`),
+  evaluateFeynman: (id: string, data: { explanation: string; source: 'text' | 'voice'; idempotency_key: string }) => api.post(`/learning/concepts/${id}/feynman-evaluation/`, data),
   submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown }) =>
     api.post(`/learning/concepts/${id}/attempt/`, data),
   askFlowInConcept: (id: string, data: { question?: string; action?: string; stage: string; activity_id?: string; learner_response?: unknown; correct?: boolean | null }) =>

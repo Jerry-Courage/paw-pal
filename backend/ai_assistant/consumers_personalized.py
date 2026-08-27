@@ -134,6 +134,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         self.ai_audio_b64_chunks = []  # buffer PCM chunks for STT on turn complete
         self.teaching_session_id = None
         self.teaching_context = None
+        self.feynman_mode = False
 
     @sync_to_async
     def _get_teaching_context_sync(self, user, session_id):
@@ -153,6 +154,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             'misconceptions': session.unresolved_misconceptions,
             'preferences': session.state.get('teaching_preferences', {}),
             'source': concept.summary or concept.description,
+            'objectives': session.objectives,
+            'objective_evidence': session.state.get('objective_evidence', {}),
             'recent': recent,
         }
 
@@ -165,9 +168,21 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         if not session:
             return
         recap = ' '.join(text for _, text in self.transcript_log[-4:])[:900]
-        TeachingTurn.objects.create(session=session, role='system', kind='voice', content='Voice session complete. Flow kept the lesson context and is ready to continue.', payload={'recap': recap, 'exchanges': len(self.transcript_log)})
+        if self.feynman_mode:
+            from learning.completion import evaluate_feynman_explanation
+            explanation = ' '.join(text for role, text in self.transcript_log if role == 'user')[:4000]
+            result = evaluate_feynman_explanation(session, explanation)
+            turn = TeachingTurn.objects.create(session=session, role='learner', kind='voice', content=explanation, payload={'feynman_evaluation': result, 'server_verified': True, 'source': 'voice'})
+            previous = session.state.get('feynman_evidence', {})
+            if int(result['score']) >= int(previous.get('score', -1)):
+                session.state = {**session.state, 'feynman_evidence': {**result, 'evidence_id': str(turn.id), 'source': 'voice'}}
+            TeachingTurn.objects.create(session=session, role='flow', kind='voice', content=result['feedback'], payload={'feynman_result': result})
+            session.status = 'mastery_check' if result['passed'] else 'remediation'
+        else:
+            TeachingTurn.objects.create(session=session, role='system', kind='voice', content='Voice session complete. Flow kept the lesson context and is ready to continue.', payload={'recap': recap, 'exchanges': len(self.transcript_log)})
         session.conversation_summary = f"Voice continuation at teaching point {session.current_point}: {recap}"
-        session.status = 'teaching' if session.status != 'completed' else session.status
+        if not self.feynman_mode:
+            session.status = 'teaching' if session.status != 'completed' else session.status
         session.save()
 
     @sync_to_async
@@ -237,6 +252,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         if msg_type == 'start':
             self.voice_override = msg.get('voice') or None
             self.teaching_session_id = msg.get('teaching_session_id') or None
+            self.feynman_mode = bool(msg.get('feynman_mode'))
             self.teaching_context = await self._get_teaching_context_sync(self.scope['user'], self.teaching_session_id)
             logger.info(f'[PersonalisedVoice] Starting: voice={self.voice_override or "auto"}')
             await self._start_gemini_session()
@@ -328,7 +344,14 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             "Analysis mode: Honest feedback using PERFORMANCE data.\n\n"
             "Always be encouraging. Use their name naturally."
         )
-        if self.teaching_context:
+        if self.teaching_context and self.feynman_mode:
+            system_prompt += (
+                "\nThis is the final Journey Feynman check. Act as a curious student, not a lecturer. "
+                "Ask the learner to teach the concept in their own words, interrupt only for useful clarification, "
+                "challenge contradictions gently, and do not reveal scores or claim completion. The server decides completion. "
+                f"Required lesson context: {json.dumps(self.teaching_context, default=str)}\n"
+            )
+        elif self.teaching_context:
             system_prompt += (
                 "\n\nACTIVE FLOW TEACHING SESSION:\n"
                 f"{json.dumps(self.teaching_context, default=str)}\n"

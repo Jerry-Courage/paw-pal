@@ -169,6 +169,16 @@ export interface TeachingSessionResponse {
     unresolved_objectives: Array<{ id: string; text: string; taught: boolean; interacted: boolean; understood: boolean; best_score: number; unresolved_misconception: string; satisfied: boolean }>
     unresolved_misconceptions: string[]
     recommended_next_action: string
+    normal_requirements_met: boolean
+    feynman: {
+      required: boolean
+      attempted: boolean
+      passed: boolean
+      score: number
+      feedback: string
+      dimensions: Record<string, number>
+      critical_misconceptions: string[]
+    }
   }
   evaluation?: { correct: boolean | null; score: number; feedback: string; attempt_id: string }
 }

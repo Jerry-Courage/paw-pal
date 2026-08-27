@@ -20,7 +20,7 @@ const ALL_DRAWER_ITEMS = [
   { href: '/dashboard',   icon: 'home',            label: 'Home' },
   { href: '/library',     icon: 'menu_book',       label: 'Sources' },
   { href: '/learn',       icon: 'school',          label: 'Journey', shsOnly: true },
-  { href: '/assignments', icon: 'edit_document',   label: 'Tasks' },
+  { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
   { href: '/workspace',   icon: 'group_work',      label: 'Collab' },
   { href: '/ai',          icon: 'smart_toy',       label: 'Flow' },
   { href: '/dashboard/personalised', icon: 'headphones', label: 'Personal Tutor' },
@@ -111,7 +111,7 @@ export default function MobileNav() {
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="fixed top-0 left-0 h-full w-72 bg-surface-container-low z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-250">
+          <div className="fixed top-0 left-0 h-full w-[min(22rem,88vw)] border-r border-white/[.06] bg-background-elevated z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-250">
             <div className="flex items-center justify-between px-stack-md pb-stack-md border-b border-outline-variant/20 mobile-drawer-header-safe">
               <div className="flex items-center gap-2">
                 <img src="/images/logo-icon.png" alt="FlowState" className="w-8 h-8 rounded-[0.5rem] object-contain" />
@@ -121,7 +121,7 @@ export default function MobileNav() {
                 <span className="material-symbols-outlined text-on-surface-variant">close</span>
               </button>
             </div>
-            <nav className="flex-1 px-stack-sm py-stack-md space-y-base overflow-y-auto">
+            <nav className="flex-1 px-stack-sm py-stack-md space-y-base overflow-y-auto"><p className="px-stack-sm text-[10px] font-black uppercase tracking-[.2em] text-flow-orange">Explore FlowState</p>
               {DRAWER_ITEMS.map(item => {
                 const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
                 return (
