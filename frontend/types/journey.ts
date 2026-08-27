@@ -141,7 +141,7 @@ export interface TeachingTurn {
   role: 'flow' | 'learner' | 'system'
   kind: 'message' | 'activity' | 'video' | 'flashcards' | 'voice' | 'completion'
   content: string
-  payload: { activity?: EncounterActivity; videos?: Array<{ video_id: string; title: string; channel: string; duration_str: string; thumbnail: string; url: string }>; cards?: Array<{ question: string; answer: string; difficulty: string }>; correct?: boolean | null; score?: number }
+  payload: { activity?: EncounterActivity; videos?: Array<{ video_id: string; title: string; channel: string; duration_str: string; thumbnail: string; url: string; embed_url?: string; why?: string; objective_id?: string }>; cards?: Array<{ question: string; answer: string; difficulty: string }>; correct?: boolean | null; score?: number }
   created_at: string
 }
 
@@ -159,6 +159,17 @@ export interface TeachingSessionResponse {
   turns: TeachingTurn[]
   last_active_at: string
   completed: boolean
+  teaching_preferences: Record<string, string>
+  completion_evaluation: {
+    complete: boolean
+    mastery: number
+    objectives_total: number
+    objectives_satisfied: number
+    objectives: Array<{ id: string; text: string; taught: boolean; interacted: boolean; understood: boolean; best_score: number; unresolved_misconception: string; satisfied: boolean }>
+    unresolved_objectives: Array<{ id: string; text: string; taught: boolean; interacted: boolean; understood: boolean; best_score: number; unresolved_misconception: string; satisfied: boolean }>
+    unresolved_misconceptions: string[]
+    recommended_next_action: string
+  }
   evaluation?: { correct: boolean | null; score: number; feedback: string; attempt_id: string }
 }
 

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
+import FlowSoundControl from '@/components/ui/FlowSoundControl'
 
 const ALL_NAV_ITEMS = [
   { href: '/dashboard',   icon: 'home',            label: 'Home' },
@@ -96,6 +97,9 @@ export default function Sidebar() {
 
       {/* ── Bottom section ──────────────────────────── */}
       <div className="px-[10px] pb-4 mt-auto space-y-2 shrink-0">
+        <div className={cn('transition-opacity', expanded ? 'opacity-100' : 'opacity-80')}>
+          <FlowSoundControl compact={!expanded} />
+        </div>
 
         {/* Secondary destinations + logout */}
         <div className="flex items-center justify-between gap-1">

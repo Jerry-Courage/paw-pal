@@ -132,6 +132,43 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
         self.text_fallback_mode = False
         self.text_fallback_reason = ''
         self.ai_audio_b64_chunks = []  # buffer PCM chunks for STT on turn complete
+        self.teaching_session_id = None
+        self.teaching_context = None
+
+    @sync_to_async
+    def _get_teaching_context_sync(self, user, session_id):
+        if not session_id:
+            return None
+        from learning.models import TeachingSession
+        session = TeachingSession.objects.select_related('concept__path', 'concept__unit', 'concept__source_resource').filter(id=session_id, user=user).first()
+        if not session:
+            return None
+        concept = session.concept
+        recent = list(session.turns.order_by('-created_at').values('role', 'content')[:8])[::-1]
+        return {
+            'session_id': str(session.id), 'journey': concept.path.title,
+            'unit': concept.unit.title if concept.unit else '', 'concept': concept.title,
+            'current_point': session.current_point, 'resume_point': session.resume_point,
+            'goal': concept.path.goal, 'depth': concept.path.depth, 'mastery': session.mastery,
+            'misconceptions': session.unresolved_misconceptions,
+            'preferences': session.state.get('teaching_preferences', {}),
+            'source': concept.summary or concept.description,
+            'recent': recent,
+        }
+
+    @sync_to_async
+    def _merge_teaching_transcript_sync(self, user):
+        if not self.teaching_session_id or not self.transcript_log:
+            return
+        from learning.models import TeachingSession, TeachingTurn
+        session = TeachingSession.objects.filter(id=self.teaching_session_id, user=user).first()
+        if not session:
+            return
+        recap = ' '.join(text for _, text in self.transcript_log[-4:])[:900]
+        TeachingTurn.objects.create(session=session, role='system', kind='voice', content='Voice session complete. Flow kept the lesson context and is ready to continue.', payload={'recap': recap, 'exchanges': len(self.transcript_log)})
+        session.conversation_summary = f"Voice continuation at teaching point {session.current_point}: {recap}"
+        session.status = 'teaching' if session.status != 'completed' else session.status
+        session.save()
 
     @sync_to_async
     def _save_transcript_sync(self, user):
@@ -199,6 +236,8 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
 
         if msg_type == 'start':
             self.voice_override = msg.get('voice') or None
+            self.teaching_session_id = msg.get('teaching_session_id') or None
+            self.teaching_context = await self._get_teaching_context_sync(self.scope['user'], self.teaching_session_id)
             logger.info(f'[PersonalisedVoice] Starting: voice={self.voice_override or "auto"}')
             await self._start_gemini_session()
 
@@ -289,6 +328,13 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             "Analysis mode: Honest feedback using PERFORMANCE data.\n\n"
             "Always be encouraging. Use their name naturally."
         )
+        if self.teaching_context:
+            system_prompt += (
+                "\n\nACTIVE FLOW TEACHING SESSION:\n"
+                f"{json.dumps(self.teaching_context, default=str)}\n"
+                "Continue this exact lesson. The learner's references such as 'that last part' refer to the recent teaching turns. "
+                "Be concise, preserve the current objective, and do not restart or turn this into generic study coaching."
+            )
 
         voice_name = self.voice_override or 'Aoede'
 
@@ -338,7 +384,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
             }
             await self.gemini_ws.send(json.dumps(config))
 
-            initial_instruction = f"Hi {ctx['username']}! I'm ready. What would you like to study?"
+            initial_instruction = (f"Welcome back to {self.teaching_context['concept']}. Continue naturally from teaching point {self.teaching_context['current_point']}; do not restart the lesson." if self.teaching_context else f"Hi {ctx['username']}! I'm ready. What would you like to study?")
 
             # Wait for setupComplete — retry recv on timeout instead of giving up immediately
             setup_ready = False
@@ -605,6 +651,7 @@ class PersonalisedConsumer(AsyncWebsocketConsumer):
                 user = self.scope.get('user')
                 if user and user.is_authenticated:
                     await self._save_transcript(user)
+                    await self._merge_teaching_transcript_sync(user)
             except Exception as e:
                 logger.error(f'[PersonalisedVoice] Failed to save transcript: {e}')
 

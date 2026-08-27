@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Q, Count, Avg, Max
 
 from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit, TeachingSession, TeachingTurn
+from .completion import evaluate_session_completion, finalize_teaching_session, record_objective_evidence
 from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptNodeSerializer, ConceptNodeDetailSerializer,
                            ConceptReviewSerializer, UnitSerializer)
@@ -306,13 +307,16 @@ def _turn_data(turn):
 def _session_data(session):
     turns = list(session.turns.order_by('-created_at')[:40])
     turns.reverse()
+    evaluation = evaluate_session_completion(session)
     return {
         'id': str(session.id), 'status': session.status, 'current_point': session.current_point,
         'resume_point': session.resume_point, 'objectives': session.objectives,
         'objectives_covered': session.objectives_covered, 'objectives_understood': session.objectives_understood,
         'unresolved_misconceptions': session.unresolved_misconceptions, 'mastery': session.mastery,
         'conversation_summary': session.conversation_summary, 'turns': [_turn_data(turn) for turn in turns],
+        'teaching_preferences': session.state.get('teaching_preferences', {}),
         'last_active_at': session.last_active_at.isoformat(), 'completed': session.status == 'completed',
+        'completion_evaluation': evaluation,
     }
 
 
@@ -326,7 +330,8 @@ def _get_teaching_session(concept, user):
         profile = (getattr(user, 'onboarding_status', None) or {}).get('onboarding_v2', {})
         learner_name = (getattr(user, 'first_name', '') or getattr(user, 'username', '') or 'there').split()[0]
         TeachingTurn.objects.create(session=session, role='flow', content=f"Hey {learner_name} 👋 Ready to learn {concept.title}?")
-        session.state = {'learner_type': profile.get('learner_type'), 'difficulty_areas': profile.get('difficulty_areas', []), 'resource_ids': [concept.source_resource_id] if concept.source_resource_id else []}
+        stable_preferences = (getattr(user, 'onboarding_status', None) or {}).get('teaching_preferences', {})
+        session.state = {'learner_type': profile.get('learner_type'), 'difficulty_areas': profile.get('difficulty_areas', []), 'resource_ids': [concept.source_resource_id] if concept.source_resource_id else [], 'teaching_preferences': stable_preferences}
         session.save(update_fields=['state', 'last_active_at'])
     return session
 
@@ -900,11 +905,60 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         activities = _concept_activities(concept, request.user)
         flow_text, kind, payload = '', 'message', {}
 
-        if any(phrase in lowered for phrase in ('show me a video', 'find a video', 'need to see this', 'video')):
+        preference_updates = {}
+        preference_rules = [
+            (('keep it short', 'make it shorter', 'be concise'), {'explanation_length': 'short'}, "Got it. Short, clear, useful — no scenic route."),
+            (('more examples', 'give me an example', 'give me more examples'), {'example_preference': 'more'}, "Deal. I’ll use more worked examples and fewer abstract speeches."),
+            (('ask fewer questions', 'no more questions', 'fewer questions'), {'check_frequency': 'low'}, "Understood. I’ll teach for a while before I check in again."),
+            (('use visuals', 'show me visually', 'use diagrams'), {'visual_preference': 'high'}, "Got you. I’ll reach for diagrams and comparisons when they clarify the idea."),
+            (('be serious', 'no jokes'), {'tone': 'serious'}, "Absolutely. Straight teaching for this topic."),
+            (('challenge me more', 'go harder'), {'challenge': 'high'}, "Alright — gloves off, but I’ll keep it fair."),
+            (('slow down', 'make it simpler', 'simpler please'), {'pace': 'slow'}, "Yep. Smaller steps, plain language. The fresh value is the whole trick here."),
+            (('go deeper', 'give me the formula'), {'depth_preference': 'deep'}, "Let’s go one layer deeper and connect the intuition to the rule."),
+            (("don't use analogies", 'no analogies'), {'analogy_preference': 'off'}, "No analogies. We’ll keep it literal and precise."),
+            (('use an analogy',), {'analogy_preference': 'on'}, "Sure. I’ll use an analogy when it earns its place."),
+        ]
+        preference_reply = ''
+        for phrases, update, reply in preference_rules:
+            if any(phrase in lowered for phrase in phrases):
+                preference_updates.update(update)
+                preference_reply = reply
+        if preference_updates:
+            onboarding = request.user.onboarding_status or {}
+            stable = {**onboarding.get('teaching_preferences', {}), **preference_updates}
+            onboarding['teaching_preferences'] = stable
+            request.user.onboarding_status = onboarding
+            request.user.save(update_fields=['onboarding_status'])
+            session.state = {**session.state, 'teaching_preferences': stable}
+
+        if preference_updates:
+            flow_text = preference_reply
+        elif any(phrase in lowered for phrase in ('skip this', 'skip the topic', 'move on without this')):
+            session.status = 'paused'
+            session.resume_point = session.current_point
+            session.state = {**session.state, 'skipped': True}
+            flow_text = "We can pause this topic, but I won’t pretend it’s mastered. Your progress is saved and we can return when you’re ready."
+        elif any(phrase in lowered for phrase in ('are we done', 'can we move on', 'how much is left', 'am i done')):
+            evaluation = evaluate_session_completion(session)
+            remaining = evaluation['objectives_total'] - evaluation['objectives_satisfied']
+            if evaluation['complete']:
+                flow_text = "Yes — the evidence is there. I’m locking in your mastery now."
+                session.status = 'mastery_check'
+            elif evaluation['unresolved_misconceptions']:
+                flow_text = f"Almost. {remaining} objective{'s' if remaining != 1 else ''} remain, and one misconception still needs clearing. We’ll target only that shaky part."
+            else:
+                flow_text = f"Not quite. You’ve secured {evaluation['objectives_satisfied']} of {evaluation['objectives_total']} objectives. We’ll focus only on what’s left."
+            payload = {'completion_evaluation': evaluation}
+        elif any(phrase in lowered for phrase in ('show me a video', 'find a video', 'need to see this', 'video')):
             from ai_assistant.youtube_search import search_youtube
             query = f'{concept.title} {text} {getattr(concept.source_resource, "subject", "")} explained'
             videos = search_youtube(query, max_results=3, duration_limit=1200)
-            kind, payload = 'video', {'videos': videos[:2]}
+            objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+            objective = session.objectives[objective_index] if session.objectives else {}
+            safe_videos = [{**video, 'embed_url': f"https://www.youtube-nocookie.com/embed/{video.get('video_id')}?rel=0", 'why': f"A visual explanation for {objective.get('text', concept.title).rstrip('.').lower()}.", 'objective_id': objective.get('id', '')} for video in videos[:2] if video.get('video_id')]
+            kind, payload = 'video', {'videos': safe_videos}
+            if safe_videos:
+                session.state = {**session.state, 'last_video': {'video_id': safe_videos[0]['video_id'], 'objective_id': objective.get('id', ''), 'why': safe_videos[0]['why']}}
             flow_text = ('I found a focused visual explanation. Watch for the exact distinction we were discussing, then we’ll check whether it clicked.' if videos else "I couldn't find a video I'd trust enough to recommend. No detour—we can keep working through it here.")
         elif any(phrase in lowered for phrase in ('make flashcards', 'create flashcards', 'revise later', 'flash cards')):
             grounding = _grounding(concept)
@@ -928,11 +982,19 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             next_activity = next((item for item in activities if item['purpose'] in {'apply', 'check'}), None)
             if next_activity:
                 kind, payload = 'activity', {'activity': _public_activity(next_activity)}
-        elif session.status == 'not_started' or session.current_point == 0:
+        elif session.state.get('last_video') and any(phrase in lowered for phrase in ('cool continue', 'continue', 'that helped', 'finished the video')):
+            video = session.state.pop('last_video')
+            session.state = {**session.state, 'used_video_ids': [*session.state.get('used_video_ids', [])[-7:], video['video_id']]}
+            flow_text = "Nice. That visual did the heavy lifting; now let’s make sure the idea is yours. The fresh value is still the deciding clue."
+            next_activity = next((item for item in activities if item['purpose'] in {'check', 'apply'}), None)
+            if next_activity:
+                kind, payload = 'activity', {'activity': _public_activity(next_activity), 'supported_by_video': video['video_id']}
+        elif session.status == 'not_started':
             session.status = 'teaching'
-            session.current_point = 1
+            session.current_point = 0
             first_objective = session.objectives[0]['id'] if session.objectives else ''
             session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, first_objective]))
+            record_objective_evidence(session, first_objective, taught=True)
             teaching = next((item for item in activities if item['type'] in {'comparison', 'worked_example'}), None)
             flow_text = "Perfect. We’ll build this one distinction at a time—no formula avalanche. **Key distinction:** iterative methods improve a current estimate through repeated sweeps."
             if teaching:
@@ -948,9 +1010,14 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                 flow_text = "You’ve worked through the useful checks here. Let’s explain the distinction once in your own words."
         else:
             recent = list(session.turns.order_by('-created_at')[:8].values('role', 'content'))
-            prompt = ("You are Flow, a warm, witty, concise personal tutor. Answer the learner in under 100 words. "
-                      "Teach before assessing, use at most one light joke, and end with a natural continuation only when useful. "
+            preferences = session.state.get('teaching_preferences') or (request.user.onboarding_status or {}).get('teaching_preferences', {})
+            completion_state = evaluate_session_completion(session)
+            prompt = ("You are Flow, a brilliant, warm, slightly cheeky personal tutor. Default to under 100 words. "
+                      "Teach naturally; do not ask a question after every response. Humor must make the idea easier to remember, never replace it. "
+                      "Never say 'based on the provided context', 'the mechanism described', 'the learner should', or expose evaluation/generation language. "
                       f"Concept: {concept.title}\nGoal: {concept.path.goal}\nDepth: {concept.path.depth}\n"
+                      f"Teaching preferences: {preferences}\n"
+                      f"Unresolved objectives: {completion_state['unresolved_objectives']}\nRecommended next action: {completion_state['recommended_next_action']}\n"
                       f"Teaching point: {session.current_point}\nResume point: {session.resume_point}\nMisconceptions: {session.unresolved_misconceptions}\n"
                       f"Grounding: {_grounding(concept)}\nRecent turns: {recent}\nLearner: {text}")
             try:
@@ -982,6 +1049,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
         objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
         session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
+        record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score, source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
         if correct is not False:
             session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
             session.current_point = min(len(session.objectives), session.current_point + 1)
@@ -995,6 +1063,11 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         session.mastery = _evidence_score(request.user, concept, score)
         TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', payload={'activity_id': activity_id, 'response': response_data})
         TeachingTurn.objects.create(session=session, role='flow', content=content, payload={'correct': correct, 'score': score, 'attempt_id': str(attempt.id)})
+        evaluation = evaluate_session_completion(session)
+        session.mastery = evaluation['mastery']
+        session.unresolved_misconceptions = evaluation['unresolved_misconceptions']
+        if evaluation['complete']:
+            session.status = 'mastery_check'
         session.save()
         return Response({**_session_data(session), 'evaluation': {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id)}} , status=201)
 
@@ -1026,27 +1099,66 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Unknown voice teaching event'}, status=400)
         objective_id = str(request.data.get('objective_id', '')).strip()
         misconception = str(request.data.get('misconception', '')).strip()[:500]
+        valid_objective_ids = {item['id'] for item in session.objectives}
+        if objective_id and objective_id not in valid_objective_ids:
+            return Response({'error': 'Unknown teaching objective'}, status=400)
         if event == 'point_covered' and objective_id:
             session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
+            record_objective_evidence(session, objective_id, taught=True, interaction=True, source='voice')
         elif event == 'point_understood' and objective_id:
             session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
-            session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
+            evidence_id = str(request.data.get('evidence_id', '')).strip()
+            voice_turn = TeachingTurn.objects.filter(id=evidence_id, session=session, kind='voice').first() if evidence_id else None
+            verified = (voice_turn.payload or {}).get('verified_evidence', {}) if voice_turn else {}
+            evidence_type = str(verified.get('evidence_type', ''))
+            evidence_score = int(verified.get('score', 0) or 0)
+            valid_demonstration = (
+                bool(verified.get('server_verified'))
+                and str(verified.get('objective_id', '')) == objective_id
+                and evidence_type in {'explanation', 'application', 'calculation', 'prediction'}
+                and evidence_score >= 70
+            )
+            record_objective_evidence(session, objective_id, taught=True, interaction=True, score=evidence_score if valid_demonstration else 0, source='voice', evidence_id=evidence_id)
+            if valid_demonstration:
+                session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
         elif event == 'misconception' and misconception:
             session.unresolved_misconceptions = [*session.unresolved_misconceptions[-7:], misconception]
             session.status = 'remediation'
             session.resume_point = session.current_point
+            if objective_id:
+                record_objective_evidence(session, objective_id, taught=True, interaction=True, source='voice', misconception=misconception)
         elif event == 'misconception_resolved' and misconception:
             session.unresolved_misconceptions = [item for item in session.unresolved_misconceptions if item != misconception]
             session.status = 'teaching'
+            if objective_id:
+                existing_score = session.state.get('objective_evidence', {}).get(objective_id, {}).get('best_score', 0)
+                record_objective_evidence(session, objective_id, taught=True, interaction=True, score=existing_score, source='voice')
         elif event == 'paused':
             session.resume_point = session.current_point
             session.status = 'paused'
         summary = str(request.data.get('summary', '')).strip()[:1000]
         if summary:
             session.conversation_summary = summary
+        completion_state = evaluate_session_completion(session)
+        session.mastery = completion_state['mastery']
+        session.unresolved_misconceptions = completion_state['unresolved_misconceptions']
+        if completion_state['complete']:
+            session.status = 'mastery_check'
         TeachingTurn.objects.create(session=session, role='system', kind='voice', content=summary, payload={'event': event, 'objective_id': objective_id, 'misconception': misconception})
         session.save()
         return Response(_session_data(session))
+
+    @action(detail=True, methods=['get', 'post'], url_path='teaching-completion')
+    def teaching_completion(self, request, pk=None):
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        if request.method == 'GET':
+            return Response(evaluate_session_completion(session))
+        session, concept, evaluation, reward, unlocked = finalize_teaching_session(session.id, request.user)
+        if not evaluation['complete']:
+            return Response({'error': 'More learning evidence is required', **evaluation}, status=409)
+        next_node = ConceptNode.objects.filter(path=concept.path, status='current').exclude(id=concept.id).order_by('order_index').first()
+        return Response({'message': 'Concept completed', 'mastery': concept.mastery, 'reward': reward, 'unlocked': unlocked, 'next_node': str(next_node.id) if next_node else None, 'completion_evaluation': evaluation})
 
     @action(detail=True, methods=['get'])
     def activities(self, request, pk=None):
@@ -1124,6 +1236,14 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark concept as completed, unlock next concepts."""
         concept = self.get_object()
+
+        teaching_session = TeachingSession.objects.filter(user=request.user, concept=concept).first()
+        if teaching_session:
+            teaching_session, concept, evaluation, reward, unlocked = finalize_teaching_session(teaching_session.id, request.user)
+            if not evaluation['complete']:
+                return Response({'error': 'More learning evidence is required', **evaluation}, status=409)
+            next_node = ConceptNode.objects.filter(path=concept.path, status='current').exclude(id=concept.id).order_by('order_index').first()
+            return Response({'message': 'Concept completed', 'mastery': concept.mastery, 'reward': reward, 'unlocked': unlocked, 'next_node': str(next_node.id) if next_node else None, 'completion_evaluation': evaluation})
 
         if concept.status == 'locked':
             return Response({'error': 'Concept is locked'}, status=400)

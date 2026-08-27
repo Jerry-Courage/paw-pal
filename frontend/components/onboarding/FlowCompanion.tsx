@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
-export type FlowCompanionState = 'idle' | 'receiving' | 'reading' | 'thinking' | 'celebrating' | 'listening' | 'speaking'
+export type FlowCompanionState = 'idle' | 'receiving' | 'reading' | 'thinking' | 'teaching' | 'celebrating' | 'listening' | 'speaking' | 'confused' | 'encouraging' | 'battle-ready' | 'sleepy' | 'warning' | 'processing'
 
 interface FlowCompanionProps {
   state?: FlowCompanionState
@@ -14,7 +14,10 @@ interface FlowCompanionProps {
 export default function FlowCompanion({ state = 'idle', className, label = 'Flow companion' }: FlowCompanionProps) {
   const reduceMotion = useReducedMotion()
   const celebrating = state === 'celebrating'
-  const thinking = state === 'thinking' || state === 'reading'
+  const thinking = ['thinking', 'reading', 'processing', 'confused'].includes(state)
+  const sleepy = state === 'sleepy'
+  const warning = state === 'warning'
+  const energetic = ['teaching', 'encouraging', 'battle-ready', 'speaking'].includes(state)
 
   return (
     <motion.div
@@ -49,8 +52,8 @@ export default function FlowCompanion({ state = 'idle', className, label = 'Flow
         <motion.g
           filter="url(#flow-shadow)"
           animate={reduceMotion ? undefined : {
-            y: celebrating ? [0, -24, 0] : thinking ? [0, -7, 0] : [0, -10, 0],
-            rotate: celebrating ? [0, -4, 5, 0] : [0, 1.5, 0],
+            y: celebrating ? [0, -24, 0] : energetic ? [0, -13, 0] : thinking ? [0, -7, 0] : sleepy ? [4, 7, 4] : [0, -10, 0],
+            rotate: celebrating ? [0, -4, 5, 0] : state === 'battle-ready' ? [-3, 3, -3] : [0, 1.5, 0],
           }}
           transition={{ duration: celebrating ? .8 : 3.2, repeat: Infinity, ease: 'easeInOut' }}
         >
@@ -65,12 +68,12 @@ export default function FlowCompanion({ state = 'idle', className, label = 'Flow
             animate={reduceMotion ? undefined : { rotate: celebrating ? [0, 18, -10, 0] : [0, 3, 0] }} style={{ transformOrigin: '293px 248px' }} />
 
           <motion.g animate={thinking && !reduceMotion ? { x: [-3, 7, -3] } : undefined} transition={{ duration: 2.2, repeat: Infinity }}>
-            <ellipse cx="177" cy="194" rx="12" ry="16" fill="#0B0C1A" />
-            <ellipse cx="248" cy="194" rx="12" ry="16" fill="#0B0C1A" />
+            <ellipse cx="177" cy="194" rx="12" ry={sleepy ? 3 : warning ? 19 : 16} fill="#0B0C1A" />
+            <ellipse cx="248" cy="194" rx="12" ry={sleepy ? 3 : warning ? 19 : 16} fill="#0B0C1A" />
             <circle cx="181" cy="189" r="4" fill="#FFF8F0" />
             <circle cx="252" cy="189" r="4" fill="#FFF8F0" />
           </motion.g>
-          <path d={celebrating ? 'M184 231c18 24 43 24 61 0' : thinking ? 'M201 238c9-5 19-5 28 0' : 'M190 232c14 15 29 18 46 3'} fill="none" stroke="#0B0C1A" strokeWidth="8" strokeLinecap="round" />
+          <path d={celebrating || state === 'encouraging' ? 'M184 231c18 24 43 24 61 0' : state === 'confused' || warning ? 'M198 241c12-10 24-10 36 0' : thinking ? 'M201 238c9-5 19-5 28 0' : 'M190 232c14 15 29 18 46 3'} fill="none" stroke="#0B0C1A" strokeWidth="8" strokeLinecap="round" />
         </motion.g>
 
         {celebrating && [

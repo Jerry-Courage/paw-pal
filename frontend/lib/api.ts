@@ -403,7 +403,9 @@ export const learningApi = {
   submitTeachingResponse: (id: string, data: { activity_id: string; response: unknown }) => api.post(`/learning/concepts/${id}/teaching-response/`, data),
   saveTeachingFlashcards: (id: string, cards: Array<{ question: string; answer: string; difficulty: string }>) => api.post(`/learning/concepts/${id}/teaching-flashcards/save/`, { cards }),
   getTeachingVoiceContext: (id: string) => api.get(`/learning/concepts/${id}/teaching-voice-context/`),
-  sendTeachingVoiceEvent: (id: string, data: { event: string; objective_id?: string; misconception?: string; summary?: string }) => api.post(`/learning/concepts/${id}/teaching-voice-event/`, data),
+  sendTeachingVoiceEvent: (id: string, data: { event: string; objective_id?: string; misconception?: string; summary?: string; evidence_type?: 'explanation' | 'application' | 'calculation' | 'prediction'; evidence_score?: number; evidence_id?: string }) => api.post(`/learning/concepts/${id}/teaching-voice-event/`, data),
+  getTeachingCompletion: (id: string) => api.get(`/learning/concepts/${id}/teaching-completion/`),
+  finalizeTeachingSession: (id: string) => api.post(`/learning/concepts/${id}/teaching-completion/`),
   submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown }) =>
     api.post(`/learning/concepts/${id}/attempt/`, data),
   askFlowInConcept: (id: string, data: { question?: string; action?: string; stage: string; activity_id?: string; learner_response?: unknown; correct?: boolean | null }) =>

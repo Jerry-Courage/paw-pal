@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import FlowSoundControl from '@/components/ui/FlowSoundControl'
 
 const ALL_BOTTOM_ITEMS = [
   { href: '/dashboard',   icon: 'home',           label: 'Home' },
@@ -142,6 +143,7 @@ export default function MobileNav() {
               })}
             </nav>
             <div className="p-stack-md border-t border-outline-variant/20">
+              <div className="mb-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Sound</p><FlowSoundControl /></div>
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
                 className="flex items-center gap-base px-stack-sm py-[10px] rounded-[1rem] text-error hover:bg-error-container/10 w-full font-semibold text-[14px] transition-all"

@@ -5,6 +5,8 @@ from rest_framework.test import APIClient
 from unittest.mock import patch
 
 from library.models import Resource
+from gamification.models import XPTransaction
+from learning.completion import evaluate_session_completion, record_objective_evidence
 from learning.models import ConceptNode, EncounterAttempt, LearningPath, TeachingSession, TeachingTurn, Unit
 from learning.views import _concept_activities, _valid_activity
 
@@ -231,13 +233,13 @@ class ConversationalTeachingSessionTests(TestCase):
     def test_interruption_preserves_resume_point_and_continue_restores_it(self):
         self.client.get(f'{self.base}/teaching-session/')
         started = self.client.post(f'{self.base}/teaching-message/', {'message': "let's go", 'idempotency_key': 'start'}, format='json')
-        self.assertEqual(started.data['current_point'], 1)
+        self.assertEqual(started.data['current_point'], 0)
         interrupted = self.client.post(f'{self.base}/teaching-message/', {'message': "I don't understand that", 'idempotency_key': 'interrupt'}, format='json')
         self.assertEqual(interrupted.data['status'], 'remediation')
-        self.assertEqual(interrupted.data['resume_point'], 1)
+        self.assertEqual(interrupted.data['resume_point'], 0)
         resumed = self.client.post(f'{self.base}/teaching-message/', {'message': 'okay continue', 'idempotency_key': 'resume'}, format='json')
         self.assertEqual(resumed.data['status'], 'teaching')
-        self.assertEqual(resumed.data['current_point'], 1)
+        self.assertEqual(resumed.data['current_point'], 0)
         self.assertIn('exact point we paused', resumed.data['turns'][-1]['content'])
 
     def test_message_idempotency_prevents_duplicate_turns(self):
@@ -258,7 +260,7 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertEqual(EncounterAttempt.objects.count(), 1)
         voice = self.client.get(f'{self.base}/teaching-voice-context/')
         self.assertEqual(voice.data['teaching_session_id'], response.data['id'])
-        self.assertEqual(voice.data['current_teaching_point'], 2)
+        self.assertEqual(voice.data['current_teaching_point'], 1)
         self.assertIn('recent_context', voice.data)
 
     @patch('ai_assistant.youtube_search.search_youtube', return_value=[{'video_id': 'abc', 'title': 'Jacobi vs Gauss-Seidel', 'channel': 'MIT', 'duration': 480, 'duration_str': '8:00', 'thumbnail': 'https://img.youtube.com/vi/abc/mqdefault.jpg', 'url': 'https://www.youtube.com/watch?v=abc'}])
@@ -272,18 +274,123 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertEqual(saved.data['saved'], 1)
         self.assertEqual(self.resource.flashcards.filter(owner=self.user).count(), 1)
 
-    def test_voice_events_merge_state_and_completion_closes_session(self):
+    def test_voice_evidence_requires_a_valid_demonstration(self):
         session = self.client.get(f'{self.base}/teaching-session/').data
         objective_id = session['objectives'][0]['id']
-        voice = self.client.post(f'{self.base}/teaching-voice-event/', {
+        invalid = self.client.post(f'{self.base}/teaching-voice-event/', {
             'event': 'point_understood', 'objective_id': objective_id,
             'summary': 'The learner explained why Jacobi uses old values.',
+            'evidence_type': 'explanation', 'evidence_score': 100,
         }, format='json')
-        self.assertEqual(voice.status_code, 200)
-        self.assertIn(objective_id, voice.data['objectives_understood'])
-        completed = self.client.post(f'{self.base}/complete/', {'score': 90}, format='json')
-        self.assertEqual(completed.status_code, 200)
-        teaching = TeachingSession.objects.get(concept=self.concept, user=self.user)
-        self.assertEqual(teaching.status, 'completed')
-        self.assertEqual(teaching.mastery, 90)
-        self.assertTrue(teaching.turns.filter(kind='completion').exists())
+        self.assertNotIn(objective_id, invalid.data['objectives_understood'])
+        voice_turn = TeachingTurn.objects.create(
+            session=TeachingSession.objects.get(id=session['id']), role='system', kind='voice',
+            content='Verified voice demonstration.',
+            payload={'verified_evidence': {
+                'server_verified': True, 'objective_id': objective_id,
+                'evidence_type': 'explanation', 'score': 86,
+            }},
+        )
+        valid = self.client.post(f'{self.base}/teaching-voice-event/', {
+            'event': 'point_understood', 'objective_id': objective_id,
+            'evidence_type': 'prediction', 'evidence_score': 0, 'evidence_id': str(voice_turn.id),
+        }, format='json')
+        self.assertIn(objective_id, valid.data['objectives_understood'])
+        objective = valid.data['completion_evaluation']['objectives'][0]
+        self.assertTrue(objective['satisfied'])
+
+    def _satisfy_all_objectives(self, score=88):
+        session = TeachingSession.objects.get(user=self.user, concept=self.concept)
+        for index, objective in enumerate(session.objectives):
+            record_objective_evidence(session, objective['id'], taught=True, interaction=True, score=score, source='activity', evidence_id=f'attempt-{index}')
+            session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective['id']]))
+            session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective['id']]))
+        session.save()
+        return session
+
+    def test_incomplete_objectives_cannot_complete_or_reward(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        response = self.client.post(f'{self.base}/teaching-completion/', format='json')
+        self.assertEqual(response.status_code, 409)
+        self.concept.refresh_from_db()
+        self.assertNotEqual(self.concept.status, 'completed')
+        self.assertFalse(XPTransaction.objects.filter(source_id=str(self.concept.id)).exists())
+
+    def test_critical_misconception_prevents_completion(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        session = self._satisfy_all_objectives()
+        objective_id = session.objectives[0]['id']
+        record_objective_evidence(session, objective_id, misconception='The learner still swaps old and fresh values.')
+        session.save()
+        evaluation = evaluate_session_completion(session)
+        self.assertFalse(evaluation['complete'])
+        self.assertEqual(evaluation['recommended_next_action'], 'remediate_misconception')
+
+    def test_satisfied_objectives_complete_once_and_return_next_node(self):
+        next_node = ConceptNode.objects.create(path=self.path, unit=self.unit, title='Convergence', order_index=1, status='locked')
+        next_node.prerequisites.add(self.concept)
+        self.client.get(f'{self.base}/teaching-session/')
+        self._satisfy_all_objectives(score=88)
+        first = self.client.post(f'{self.base}/teaching-completion/', format='json')
+        second = self.client.post(f'{self.base}/teaching-completion/', format='json')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.data['mastery'], 88)
+        self.assertEqual(first.data['next_node'], str(next_node.id))
+        self.assertEqual(XPTransaction.objects.filter(source_id=str(self.concept.id), source_type='concept_completion').count(), 1)
+        self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, kind='completion').count(), 1)
+        next_node.refresh_from_db()
+        self.assertEqual(next_node.status, 'current')
+
+    def test_refresh_cannot_duplicate_completion(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        self._satisfy_all_objectives()
+        self.client.post(f'{self.base}/teaching-completion/', format='json')
+        refreshed = self.client.get(f'{self.base}/teaching-session/')
+        retried = self.client.post(f'{self.base}/teaching-completion/', format='json')
+        self.assertTrue(refreshed.data['completed'])
+        self.assertEqual(retried.status_code, 200)
+        self.assertEqual(XPTransaction.objects.filter(source_id=str(self.concept.id), source_type='concept_completion').count(), 1)
+
+    @patch('ai_assistant.youtube_search.search_youtube', return_value=[{'video_id': 'only-video', 'title': 'Visual', 'url': 'https://youtube.com/watch?v=only-video'}])
+    def test_video_and_flashcards_alone_never_complete(self, _search):
+        self.client.post(f'{self.base}/teaching-message/', {'message': 'show me a video', 'idempotency_key': 'video-only'}, format='json')
+        self.client.post(f'{self.base}/teaching-message/', {'message': 'make flashcards', 'idempotency_key': 'cards-only'}, format='json')
+        evaluation = self.client.get(f'{self.base}/teaching-completion/')
+        self.assertFalse(evaluation.data['complete'])
+        self.assertEqual(evaluation.data['objectives_satisfied'], 0)
+
+    def test_skip_pauses_without_mastery_or_reward(self):
+        skipped = self.client.post(f'{self.base}/teaching-message/', {'message': 'skip this topic', 'idempotency_key': 'skip'}, format='json')
+        self.assertEqual(skipped.data['status'], 'paused')
+        completed = self.client.post(f'{self.base}/teaching-completion/', format='json')
+        self.assertEqual(completed.status_code, 409)
+        self.assertFalse(XPTransaction.objects.filter(source_id=str(self.concept.id)).exists())
+
+    def test_direct_teaching_preferences_persist_across_concepts(self):
+        response = self.client.post(f'{self.base}/teaching-message/', {
+            'message': 'Keep it short and ask fewer questions.', 'idempotency_key': 'preferences'
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['teaching_preferences']['explanation_length'], 'short')
+        self.assertEqual(response.data['teaching_preferences']['check_frequency'], 'low')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.onboarding_status['teaching_preferences']['check_frequency'], 'low')
+        other = ConceptNode.objects.create(path=self.path, unit=self.unit, title='Convergence', order_index=1, status='current')
+        resumed = self.client.get(f'/api/learning/concepts/{other.id}/teaching-session/')
+        self.assertEqual(resumed.data['teaching_preferences']['explanation_length'], 'short')
+
+    @patch('ai_assistant.youtube_search.search_youtube', return_value=[{'video_id': 'embed1', 'title': 'A visual explanation', 'channel': 'Tutor', 'duration_str': '6:20', 'url': 'https://www.youtube.com/watch?v=embed1'}])
+    def test_video_payload_prefers_privacy_enhanced_inline_embed(self, _search):
+        response = self.client.post(f'{self.base}/teaching-message/', {
+            'message': 'show me a video', 'idempotency_key': 'inline-video'
+        }, format='json')
+        video = response.data['turns'][-1]['payload']['videos'][0]
+        self.assertEqual(video['embed_url'], 'https://www.youtube-nocookie.com/embed/embed1?rel=0')
+        self.assertIn('why', video)
+        self.assertIn('objective_id', video)
+        resumed = self.client.post(f'{self.base}/teaching-message/', {
+            'message': 'cool continue', 'idempotency_key': 'after-video'
+        }, format='json')
+        self.assertEqual(resumed.data['turns'][-1]['kind'], 'activity')
+        self.assertEqual(resumed.data['turns'][-1]['payload']['supported_by_video'], 'embed1')

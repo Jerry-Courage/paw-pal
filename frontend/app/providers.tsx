@@ -8,6 +8,7 @@ import { AudioProvider } from '@/context/AudioContext'
 import { FlowThemeProvider } from '@/context/FlowThemeContext'
 import FloatingMiniPlayer from '@/components/ui/FloatingMiniPlayer'
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt'
+import { FlowSoundProvider } from '@/context/FlowSoundContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -31,11 +32,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <FlowThemeProvider>
-            <AudioProvider>
-              {children}
-              <FloatingMiniPlayer />
-              <PWAInstallPrompt />
-            </AudioProvider>
+            <FlowSoundProvider>
+              <AudioProvider>
+                {children}
+                <FloatingMiniPlayer />
+                <PWAInstallPrompt />
+              </AudioProvider>
+            </FlowSoundProvider>
           </FlowThemeProvider>
         </ThemeProvider>
       </QueryClientProvider>

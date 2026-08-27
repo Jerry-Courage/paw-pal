@@ -40,6 +40,35 @@
   background: rgb(var(--flow-void));
 }
 
+.flow-atmosphere {
+  background:
+    radial-gradient(circle at 78% 18%, rgb(var(--flow-violet) / .11), transparent 32rem),
+    radial-gradient(circle at 12% 72%, rgb(var(--flow-orange) / .08), transparent 30rem),
+    rgb(var(--flow-void));
+}
+.flow-learning-object {
+  border-block: 1px solid rgb(255 255 255 / .09);
+  background: linear-gradient(120deg, rgb(255 255 255 / .025), transparent 72%);
+}
+.flow-eyebrow {
+  color: rgb(var(--flow-orange));
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+.flow-focus-ring:focus-visible { outline: 2px solid rgb(var(--flow-orange)); outline-offset: 3px; }
+
+@media (min-width: 1100px) {
+  .flow-teaching-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    gap: clamp(2rem, 4vw, 5rem);
+    max-width: 82rem;
+    margin-inline: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flow-v2 *, .flow-v2 *::before, .flow-v2 *::after {
     scroll-behavior: auto !important;
