@@ -74,6 +74,27 @@
   text-transform: uppercase;
 }
 .flow-focus-ring:focus-visible { outline: 2px solid rgb(var(--flow-orange)); outline-offset: 3px; }
+.flow-hero {
+  font-size: clamp(2.25rem, 10vw, 6rem);
+  font-weight: 900;
+  line-height: .94;
+  letter-spacing: -.055em;
+}
+.flow-primary-button {
+  display: inline-flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  background: rgb(var(--flow-orange));
+  color: rgb(var(--flow-void));
+  padding: .75rem 1.25rem;
+  font-weight: 900;
+  box-shadow: 0 5px 0 #8f3600;
+}
+.flow-primary-button:active { transform: translateY(3px); box-shadow: 0 2px 0 #8f3600; }
+.flow-primary-button:focus-visible { outline: 2px solid white; outline-offset: 3px; }
+@media (min-width: 48rem) { .flow-hero { font-size: clamp(3.5rem, 7vw, 6rem); } }
 
 @media (min-width: 1100px) {
   .flow-teaching-grid {
@@ -83,6 +104,18 @@
     max-width: 82rem;
     margin-inline: auto;
   }
+}
+
+@media (max-width: 600px) {
+  .flow-teaching-grid,
+  .flow-teaching-grid > * { min-width: 0; max-width: 100%; }
+  .flow-teaching-grid img,
+  .flow-teaching-grid video,
+  .flow-teaching-grid iframe,
+  .flow-teaching-grid svg { max-width: 100%; }
+  .flow-teaching-grid pre,
+  .flow-teaching-grid code,
+  .flow-teaching-grid .katex-display { max-width: 100%; overflow-x: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

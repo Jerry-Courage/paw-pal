@@ -111,7 +111,7 @@ export default function MobileNav() {
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="fixed top-0 left-0 h-full w-[min(22rem,88vw)] border-r border-white/[.06] bg-background-elevated z-[70] flex flex-col md:hidden animate-in slide-in-from-left duration-250">
+          <div className="fixed inset-x-0 bottom-0 z-[70] flex max-h-[92dvh] flex-col overflow-hidden rounded-t-[2rem] border-t border-white/[.08] bg-background-elevated shadow-[0_-24px_80px_rgba(0,0,0,.55)] md:hidden animate-in slide-in-from-bottom duration-250">
             <div className="flex items-center justify-between px-stack-md pb-stack-md border-b border-outline-variant/20 mobile-drawer-header-safe">
               <div className="flex items-center gap-2">
                 <img src="/images/logo-icon.png" alt="FlowState" className="w-8 h-8 rounded-[0.5rem] object-contain" />

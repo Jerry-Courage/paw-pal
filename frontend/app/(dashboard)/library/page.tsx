@@ -167,7 +167,7 @@ export default function LibraryPage() {
       {/* Header */}
       <div className="grid gap-8 lg:grid-cols-[1fr_18rem] lg:items-center mb-12">
         <div>
-          <p className="flow-eyebrow">Sources</p><h2 className="mt-2 text-[clamp(3rem,7vw,6rem)] font-black leading-none tracking-[-.06em]">What Flow is learning from.</h2>
+          <p className="flow-eyebrow">Sources</p><h2 className="flow-hero mt-2">What Flow is learning from.</h2>
           <p className="mt-5 max-w-2xl text-lg text-flow-muted">Your material grounds every Journey, explanation, and study session.</p>
         </div>
         <div><FlowCompanion state={uploading ? 'processing' : 'reading'} className="mx-auto hidden w-36 lg:block" /><div className="relative w-full">

@@ -87,7 +87,7 @@ export default function AssignmentsPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-stack-md mb-stack-lg">
         <div>
           <span className="flow-eyebrow mb-2 block">Assignments</span>
-          <h1 className="text-[clamp(2.5rem,6vw,5.5rem)] font-black leading-none tracking-[-.055em] text-on-surface flex flex-wrap items-center gap-base">
+          <h1 className="flow-hero flex flex-wrap items-center gap-base text-on-surface">
             Bring the work.
             <span className="bg-surface-container-highest text-primary text-[15px] px-3 py-1 rounded-full">{assignments.length} active</span>
           </h1><p className="mt-3 max-w-xl text-lg text-flow-muted">Flow helps you work through it—without taking the learning away from you.</p>
