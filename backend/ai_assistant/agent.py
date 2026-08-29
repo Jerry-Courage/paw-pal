@@ -22,17 +22,12 @@ DIRECT RESPONSE PROTOCOL (CRITICAL):
 - NO INTERNAL MONOLOGUE: Never output your internal planning, tool-choice logic, or "chain of thought" to the user.
 - SPEAK DIRECTLY: Start your response directly with your answer or acknowledgement. Never begin with "Hey [name]" or address the user by any name. Just dive straight into the response.
 - COLLEGIATE WIT: Use clever academic humor or encouraging slang (e.g., "Let's crush this," "Awesome logic there").
-- BE THOROUGH: Give complete, detailed answers. Explain concepts fully with examples, step-by-step reasoning, and real-world analogies. Don't leave the user confused or wanting more. A thorough answer builds real understanding — short vague answers don't.
+- CONVERSATIONAL CHUNKS: Prefer one meaningful idea, a concise explanation, then an interaction or useful next step. Expand only when the learner asks or the material genuinely needs it. Never dump a five-paragraph lecture by default.
 - NO DATA REFUSALS: Use the USER CONTEXT directly.
 - FORMATTING: Use Markdown headers (##, ###) for sections, **bold** for key terms, bullet/numbered lists for multiple items. Wrap ALL math in $...$ (inline) or $$...$$ (block). Never output raw LaTeX without delimiters.
 
 EXPLANATION STYLE (CRITICAL — Be the Funniest Tutor They've Ever Had):
-- For ANY study question or concept explanation:
-  1. HOOK: Start with something funny or surprising — "Okay so get this..." or "Plot twist..."
-  2. Simple one-sentence answer anyone would understand
-  3. Break it down step-by-step with FUNNY analogies — "It's like ordering Uber Eats but for molecules"
-  4. Then add the deeper academic detail
-  5. End with a quick example or mini quiz
+- For study questions, adapt the rhythm to the learner's persisted teaching preferences. Humor and analogies are tools, not a compulsory template. Give the direct answer first when preferred, teach one idea at a time, and check understanding only when useful.
 - NO JARGON DUMPS: Never throw technical terms without explaining them first. Build from simple → complex.
 - CELEBRATE WINS: When the user gets something right, hype them up! "You nailed it! 🔥" or "That's literally perfect!"
 - POP CULTURE: Compare concepts to memes, movies, games — whatever makes it click
@@ -136,6 +131,7 @@ class GlobalContextBuilder:
         from assignments.models import Assignment
         from planner.models import StudySession, Deadline
         from library.models import Resource
+        from learning.models import LearningPath, TeachingSession
         from django.db.models import Count
         
         now = timezone.now()
@@ -160,6 +156,27 @@ class GlobalContextBuilder:
         resources = Resource.objects.filter(owner=user).order_by('-created_at')[:3]
         res_count = Resource.objects.filter(owner=user).count()
         res_text = "\n".join([f"ID {r.id}: {r.title} ({r.resource_type})" for r in resources])
+
+        # Journey context is deliberately bounded: one active path and its current node.
+        journey = LearningPath.objects.filter(user=user, status='active').prefetch_related('concepts').first()
+        journey_text = "No active Journey."
+        if journey:
+            current = journey.concepts.filter(status='current').first()
+            journey_text = (
+                f"ID {journey.id}: {journey.title}; goal={journey.goal or 'not set'}; "
+                f"depth={journey.depth}; progress={journey.concepts_completed}/{journey.total_concepts}; "
+                f"current concept={current.title if current else 'none'}"
+            )
+
+        recent_teaching = TeachingSession.objects.filter(user=user).select_related('concept').order_by('-last_active_at').first()
+        teaching_text = "No recent Journey teaching session."
+        if recent_teaching:
+            teaching_text = (
+                f"{recent_teaching.concept.title}; status={recent_teaching.status}; mastery={recent_teaching.mastery}; "
+                f"unresolved misconceptions={recent_teaching.unresolved_misconceptions[:3]}"
+            )
+
+        teaching_preferences = (getattr(user, 'onboarding_status', None) or {}).get('teaching_preferences', {})
         
         return f"""
 USER CONTEXT:
@@ -171,6 +188,15 @@ Upcoming Sessions (Next 48h):
 
 Recent Library Items: ({res_count} total)
 {res_text}
+
+Active Journey:
+{journey_text}
+
+Recent Journey Teaching State:
+{teaching_text}
+
+Persisted Learning-Style Preferences:
+{json.dumps(teaching_preferences)}
 """
 
 class FlowAgent:
@@ -307,7 +333,11 @@ class FlowAgent:
         base_prompt = f"{AGENT_SYSTEM_PROMPT}\n\n{TUTOR_SYSTEM_PROMPT}" if is_tutor_mode else AGENT_SYSTEM_PROMPT
         
         if current_page_context:
-            mode_indicator = "MODE: DOCUMENT — Stay focused on the assigned study material."
+            mode_indicator = (
+                "MODE: EXPLICIT LEARNING CONTEXT — The learner deliberately attached the context below. "
+                "Treat it as authoritative, use only the parts relevant to the request, and do not replace it "
+                "with inferred context. Subtly name the Source when grounding an answer; never invent pages."
+            )
         else:
             mode_indicator = "MODE: FREE — No document assigned. You are in free conversational mode. Chat about anything, be entertaining, engage casually."
 

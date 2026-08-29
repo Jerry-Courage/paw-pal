@@ -96,14 +96,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         tabIndex={isJourneyFocus ? 0 : undefined}
         autoFocus={isJourneyFocus}
         className={cn(
-          !hideNav && 'md:ml-[68px]',
+          !hideNav && 'md:ml-[68px] md:transition-[margin-left] md:duration-300 md:ease-in-out peer-data-[expanded=true]/sidebar:md:ml-64',
           hideNav
             ? isJourneyFocus
               ? 'fixed inset-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] touch-pan-y focus:outline-none'
               : 'fixed inset-0'
             : shouldFullViewport
             ? 'fixed inset-0 md:left-[68px] overflow-hidden z-30'
-            : 'min-h-screen main-safe-top md:pt-6 [padding-bottom:calc(7rem+env(safe-area-inset-bottom))] md:pb-8'
+            : 'relative min-h-screen main-safe-top md:pt-6 [padding-bottom:calc(7rem+env(safe-area-inset-bottom))] md:pb-8'
         )}
       >
         {children}

@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, Suspense, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
-import { aiApi, libraryApi } from '@/lib/api'
+import { useSession } from 'next-auth/react'
+import { aiApi, libraryApi, learningApi, assignmentsApi } from '@/lib/api'
 import {
   Sparkles, Send, Plus, Loader2, Paperclip, X,
   Network, GitBranch, Menu, BarChart2, Wand2,
@@ -21,7 +22,9 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { normalizeForRendering } from '@/lib/mathFormatting'
 import dynamic from 'next/dynamic'
+import FlowMascot from '@/components/learning/FlowMascot'
 const CameraVisionModal = dynamic(() => import('@/components/ai/CameraVisionModal'), { ssr: false })
+const FlowVoice = dynamic(() => import('../dashboard/personalised/page').then(mod => mod.PersonalisedLearningPage), { ssr: false })
 
 // â”€â”€â”€ LIGHTBOX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Lightbox({ src, type, onClose }: { src: string; type: 'image' | 'svg'; onClose: () => void }) {
@@ -568,6 +571,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
 function AIChat() {
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  const { data: authSession } = useSession()
   
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
@@ -580,7 +584,10 @@ function AIChat() {
   const [activeSession, setActiveSession] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [voiceDictating, setVoiceDictating] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
+  const [plusOpen, setPlusOpen] = useState(false)
+  const [selectedJourney, setSelectedJourney] = useState<any>(null)
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null)
   
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -594,6 +601,23 @@ function AIChat() {
     queryKey: ['resources-library'], 
     queryFn: () => libraryApi.getResources().then(res => Array.isArray(res.data) ? res.data : (res.data.results || [])) 
   })
+  const { data: journeys = [] } = useQuery({
+    queryKey: ['learning-paths'],
+    queryFn: () => learningApi.getPaths().then(res => Array.isArray(res.data) ? res.data : (res.data.results || [])),
+  })
+  const { data: assignments = [] } = useQuery({
+    queryKey: ['assignments'],
+    queryFn: () => assignmentsApi.getAll().then(res => Array.isArray(res.data) ? res.data : (res.data.results || [])),
+  })
+
+  const selectedResourceData = resources.find((resource: any) => resource.id === selectedResource)
+  const explicitContext = [
+    selectedResourceData && `SOURCE ${selectedResourceData.id}: ${selectedResourceData.title}`,
+    selectedJourney && `JOURNEY ${selectedJourney.id}: ${selectedJourney.title}; goal=${selectedJourney.goal || 'not set'}; progress=${selectedJourney.concepts_completed || 0}/${selectedJourney.total_concepts || 0}`,
+    selectedAssignment && `ASSIGNMENT ${selectedAssignment.id}: ${selectedAssignment.title}; due=${selectedAssignment.due_date || 'not set'}; instructions=${selectedAssignment.instructions || ''}`,
+  ].filter(Boolean).join('\n')
+  const activeJourney = journeys.find((journey: any) => journey.status === 'active') || journeys[0]
+  const firstName = authSession?.user?.name?.split(' ')[0]
 
   useEffect(() => {
     const q = searchParams.get('q')
@@ -805,7 +829,7 @@ function AIChat() {
 
           const response = await aiApi.askAgent(
             query,
-            contextType === 'resource' ? `resource_id:${selectedResource}` : '',
+            explicitContext || (contextType === 'resource' ? `SOURCE ${selectedResource}` : ''),
             false,
             undefined,
             history.map(m => ({ role: m.role, content: m.content })),
@@ -899,7 +923,7 @@ function AIChat() {
   const isEmpty = messages.length === 0
 
   return (
-    <div className="flow-v2 flow-atmosphere fixed inset-x-0 top-0 md:bottom-0 md:left-[68px] mt-14 md:mt-0 flex bg-background overflow-hidden text-on-surface" style={{ bottom: 'max(3.5rem, calc(3.5rem + env(safe-area-inset-bottom)))' }}>
+    <div className="flow-v2 flow-atmosphere fixed inset-x-0 top-0 mt-14 flex bg-background overflow-hidden text-on-surface md:absolute md:inset-0 md:mt-0" style={{ bottom: 'max(3.5rem, calc(3.5rem + env(safe-area-inset-bottom)))' }}>
       
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -1072,24 +1096,29 @@ function AIChat() {
         <div className="flex-1 overflow-y-auto w-full scrollbar-hide relative z-10">
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center min-h-full px-4 py-6 sm:py-8 text-center max-w-2xl mx-auto">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-primary/10 border border-primary/20 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-primary/10 animate-pulse">
-                <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-              </div>
-              <h1 className="text-2xl sm:text-4xl font-black text-on-surface mb-1.5 sm:mb-2 tracking-[-.04em]">Yo 👋 What are we figuring out today?</h1>
-              <p className="text-on-surface-variant/60 text-xs sm:text-sm max-w-sm mb-6 sm:mb-8 leading-relaxed">
-                Continue something you were learning, bring me a problem, or show me what has you stuck.
+              <FlowMascot mood="wave" size={92} className="mb-2" />
+              <h1 className="text-2xl sm:text-4xl font-black text-on-surface mb-1.5 sm:mb-2 tracking-[-.04em]">Yo{firstName ? ` ${firstName}` : ''} 👋 What are we figuring out?</h1>
+              <p className="text-on-surface-variant/70 text-sm max-w-lg mb-5 leading-relaxed">
+                {activeJourney
+                  ? `You’re ${activeJourney.concepts_completed || 0} concepts into ${activeJourney.title}. We can continue there, tackle an assignment, or start somewhere completely different.`
+                  : 'Blank canvas 👀 What are we learning? Bring a question, a source, or something that has you stuck.'}
               </p>
               <div className="flex items-center gap-3 mb-6">
                 <button
-                  onClick={() => setCameraOpen(true)}
-                  className="flex items-center gap-2.5 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => setVoiceOpen(true)}
+                  className="flex items-center gap-2.5 px-5 py-3 bg-primary-container text-on-primary-container rounded-2xl text-sm font-black hover:brightness-110 transition-all"
                 >
-                  <Video className="w-4 h-4" />
-                  Live Camera Vision
+                  <Mic className="w-4 h-4" /> Talk to Flow
                 </button>
+                <button onClick={() => setCameraOpen(true)} className="flex items-center gap-2.5 px-5 py-3 bg-surface-container-high rounded-2xl text-sm font-bold text-on-surface hover:bg-surface-hover transition-all"><Video className="w-4 h-4" /> Show Flow</button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 w-full max-w-xl">
-                {SUGGESTIONS.map((s, i) => (
+                {[
+                  ...(activeJourney ? [{ icon: 'route', text: `Continue ${activeJourney.title}` }] : []),
+                  ...(assignments[0] ? [{ icon: 'assignment', text: `Help with ${assignments[0].title}` }] : []),
+                  ...(resources[0] ? [{ icon: 'menu_book', text: `Review ${resources[0].title}` }] : []),
+                  ...SUGGESTIONS,
+                ].slice(0, 5).map((s, i) => (
                   <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus() }}
                     className={cn('flex items-start gap-2.5 p-3 sm:p-3.5 bg-surface-container/30 border border-outline-variant/30 rounded-xl sm:rounded-2xl text-left transition-all hover:border-primary/20 hover:bg-surface-container/40 hover:shadow-lg hover:shadow-orange-500/5 group cursor-pointer',
                       i === SUGGESTIONS.length - 1 && 'sm:col-span-2 lg:col-span-1'
@@ -1124,6 +1153,14 @@ function AIChat() {
           style={{ paddingBottom: 'max(0.5rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}
         >
           <div className="max-w-3xl mx-auto">
+            {(selectedResourceData || selectedJourney || selectedAssignment) && (
+              <div className="mb-2 flex flex-wrap items-center gap-2" aria-label="Attached learning context">
+                <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Context</span>
+                {selectedJourney && <button onClick={() => setSelectedJourney(null)} className="flow-context-chip">{selectedJourney.title}<X className="h-3 w-3" /></button>}
+                {selectedResourceData && <button onClick={() => { setSelectedResource(null); setContextType('global') }} className="flow-context-chip">{selectedResourceData.title}<X className="h-3 w-3" /></button>}
+                {selectedAssignment && <button onClick={() => setSelectedAssignment(null)} className="flow-context-chip">{selectedAssignment.title}<X className="h-3 w-3" /></button>}
+              </div>
+            )}
             
             {/* Attached file preview */}
             {attachedFile && (
@@ -1150,96 +1187,26 @@ function AIChat() {
               <div className="flex items-end gap-1.5">
                 
                 {/* Upload button */}
-                <button onClick={() => fileRef.current?.click()}
-                  className="p-2 text-on-surface-variant/40 hover:text-primary transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer" title="Upload">
+                <button onClick={() => setPlusOpen(open => !open)}
+                  aria-label="Add context or attachment"
+                  aria-expanded={plusOpen}
+                  className="p-2 text-on-surface-variant/50 hover:text-primary transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer" title="Add context">
                   <Plus className="w-4 h-4" />
                 </button>
+                {plusOpen && <div className="absolute bottom-[calc(100%+.65rem)] left-0 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-outline-variant/30 bg-background-elevated p-2 text-left shadow-2xl">
+                  <p className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Bring something in</p>
+                  <button onClick={() => { fileRef.current?.click(); setPlusOpen(false) }} className="flow-attachment-row"><Paperclip className="h-4 w-4" /> Upload file or image</button>
+                  <button onClick={() => { setInput(previous => `${previous}${previous ? '\n\n' : ''}Paste text here: `); setPlusOpen(false); textareaRef.current?.focus() }} className="flow-attachment-row"><Copy className="h-4 w-4" /> Paste text</button>
+                  {(resources.length > 0 || journeys.length > 0 || assignments.length > 0) && <div className="my-1 border-t border-outline-variant/20" />}
+                  {resources.slice(0, 3).map((resource: any) => <button key={`resource-${resource.id}`} onClick={() => { setSelectedResource(resource.id); setContextType('resource'); setPlusOpen(false) }} className="flow-attachment-row"><BookOpen className="h-4 w-4" /><span className="truncate">{resource.title}</span></button>)}
+                  {journeys.slice(0, 2).map((journey: any) => <button key={`journey-${journey.id}`} onClick={() => { setSelectedJourney(journey); setPlusOpen(false) }} className="flow-attachment-row"><GitBranch className="h-4 w-4" /><span className="truncate">{journey.title}</span></button>)}
+                  {assignments.slice(0, 2).map((assignment: any) => <button key={`assignment-${assignment.id}`} onClick={() => { setSelectedAssignment(assignment); setPlusOpen(false) }} className="flow-attachment-row"><Check className="h-4 w-4" /><span className="truncate">{assignment.title}</span></button>)}
+                </div>}
                 <input type="file" ref={fileRef} onChange={handleFile} className="hidden" accept="image/*,.pdf,.txt,.doc,.docx" />
 
-                {/* Voice Dictation Button */}
-                <button
-                  onClick={async () => {
-                    if (voiceDictating) {
-                      setVoiceDictating(false)
-                      if ((window as any)._voiceRecognition) {
-                        try { (window as any)._voiceRecognition.stop() } catch {}
-                        (window as any)._voiceRecognition = null
-                      }
-                      toast.info('Dictation stopped')
-                      return
-                    }
-                    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-                    if (!SpeechRecognition) {
-                      toast.error('Speech recognition not supported in this browser')
-                      return
-                    }
-                    // Request mic permission explicitly first
-                    try {
-                      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-                      stream.getTracks().forEach(t => t.stop())
-                    } catch {
-                      toast.error('Microphone permission denied. Please allow mic access in your browser settings.')
-                      return
-                    }
-                    const recognition = new SpeechRecognition()
-                    recognition.continuous = true
-                    recognition.interimResults = true
-                    recognition.lang = 'en-US'
-                    recognition.maxAlternatives = 1
-                    let finalTranscript = input || ''
-                    recognition.onresult = (event: any) => {
-                      let interimTranscript = ''
-                      for (let i = event.resultIndex; i < event.results.length; i++) {
-                        if (event.results[i].isFinal) {
-                          finalTranscript += event.results[i][0].transcript + ' '
-                          setInput(finalTranscript.trim())
-                        } else {
-                          interimTranscript += event.results[i][0].transcript
-                        }
-                      }
-                      if (interimTranscript) setInput((finalTranscript + interimTranscript).trim())
-                    }
-                    recognition.onerror = (e: any) => {
-                      if (e.error === 'no-speech' || e.error === 'aborted') return
-                      if (e.error === 'not-allowed') {
-                        toast.error('Microphone permission denied')
-                      } else {
-                        toast.error(`Voice error: ${e.error}`)
-                      }
-                      setVoiceDictating(false)
-                    }
-                    recognition.onend = () => {
-                      // Auto-restart if still in dictation mode (mobile browsers kill it frequently)
-                      if ((window as any)._voiceDictating && (window as any)._voiceRecognition) {
-                        try {
-                          setTimeout(() => {
-                            if ((window as any)._voiceDictating) {
-                              (window as any)._voiceRecognition.start()
-                            }
-                          }, 300)
-                        } catch {
-                          setVoiceDictating(false)
-                        }
-                      } else {
-                        setVoiceDictating(false)
-                      }
-                    }
-                    ;(window as any)._voiceRecognition = recognition
-                    ;(window as any)._voiceDictating = true
-                    try {
-                      recognition.start()
-                      setVoiceDictating(true)
-                      toast.info('Listening... speak now')
-                    } catch {
-                      toast.error('Could not start speech recognition')
-                      setVoiceDictating(false)
-                      ;(window as any)._voiceDictating = false
-                    }
-                  }}
-                  className={cn('p-2 transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer',
-                    voiceDictating ? 'text-red-400 animate-pulse' : 'text-on-surface-variant/40 hover:text-primary'
-                  )} title="Voice Dictation">
-                  {voiceDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                {/* Same Flow, spoken live through the existing personalised realtime stack. */}
+                <button onClick={() => setVoiceOpen(true)} aria-label="Talk to Flow" className="p-2 text-on-surface-variant/50 hover:text-primary transition-colors rounded-xl shrink-0 mb-0.5 cursor-pointer" title="Talk to Flow">
+                  <Mic className="w-4 h-4" />
                 </button>
 
                 {/* Camera Vision Button */}
@@ -1255,7 +1222,7 @@ function AIChat() {
                   value={input}
                   onChange={handleInput}
                   onKeyDown={handleKeyDown}
-                  placeholder={voiceDictating ? 'Listening...' : 'Ask Flow AI anything...'}
+                  placeholder="Ask Flow anything..."
                   className="flex-1 bg-transparent border-0 outline-none resize-none text-[15px] text-on-surface placeholder-on-surface-variant/40 py-2 px-1 min-h-[36px] max-h-[120px]"
                   style={{ lineHeight: '1.5' }}
                   rows={1}
@@ -1278,6 +1245,7 @@ function AIChat() {
 
       {/* Camera Vision Modal */}
       {cameraOpen && <CameraVisionModal onClose={() => setCameraOpen(false)} />}
+      {voiceOpen && <div className="fixed inset-0 z-[100]"><FlowVoice embedded onClose={() => setVoiceOpen(false)} /></div>}
     </div>
   )
 }

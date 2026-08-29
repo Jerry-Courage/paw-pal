@@ -2,10 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { signOut, useSession } from 'next-auth/react'
+import { signOut } from 'next-auth/react'
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import FlowSoundControl from '@/components/ui/FlowSoundControl'
 
@@ -17,35 +15,24 @@ const ALL_BOTTOM_ITEMS = [
 ]
 
 const ALL_DRAWER_ITEMS = [
-  { href: '/dashboard',   icon: 'home',            label: 'Home' },
   { href: '/library',     icon: 'menu_book',       label: 'Sources' },
-  { href: '/learn',       icon: 'school',          label: 'Journey', shsOnly: true },
   { href: '/assignments', icon: 'edit_document',   label: 'Assignments' },
-  { href: '/workspace',   icon: 'group_work',      label: 'Collab' },
-  { href: '/ai',          icon: 'smart_toy',       label: 'Flow' },
-  { href: '/dashboard/personalised', icon: 'headphones', label: 'Personal Tutor' },
   { href: '/groups',      icon: 'bolt',            label: 'Battle' },
-  { href: '/rankings',    icon: 'leaderboard',     label: 'Rankings' },
-  { href: '/settings',    icon: 'settings',        label: 'You' },
-  { href: '/upgrade',     icon: 'workspace_premium', label: 'Upgrade' },
+  { href: '/workspace',   icon: 'group_work',      label: 'Collab' },
+  { href: '/marketplace', icon: 'storefront',      label: 'Marketplace' },
+  { href: '/library',     icon: 'view_in_ar',      label: 'VR' },
+  { href: '/settings',    icon: 'settings',        label: 'Settings', utility: true },
+  { href: '/upgrade',     icon: 'workspace_premium', label: 'Subscription', utility: true },
 ]
 
 const FULL_VIEWPORT_PREFIXES = ['/workspace/', '/library/', '/groups']
 
 export default function MobileNav() {
   const pathname = usePathname()
-  const { data: session } = useSession()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const { data: profileData } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => authApi.me().then(r => r.data),
-    staleTime: 300000,
-    enabled: !!session,
-  })
-
   const BOTTOM_ITEMS = ALL_BOTTOM_ITEMS
-  const DRAWER_ITEMS = ALL_DRAWER_ITEMS.filter(item => !item.shsOnly || profileData?.education_level === 'secondary')
+  const DRAWER_ITEMS = ALL_DRAWER_ITEMS
 
   const isFullViewport =
     pathname === '/groups' ||
@@ -117,20 +104,26 @@ export default function MobileNav() {
                 <img src="/images/logo-icon.png" alt="FlowState" className="w-8 h-8 rounded-[0.5rem] object-contain" />
                 <span className="text-[22px] font-bold text-primary">FlowState</span>
               </div>
-              <button onClick={() => setDrawerOpen(false)}>
+              <button
+                type="button"
+                aria-label="Close Explore"
+                onClick={() => setDrawerOpen(false)}
+                className="grid h-11 w-11 place-items-center rounded-full hover:bg-surface-hover"
+              >
                 <span className="material-symbols-outlined text-on-surface-variant">close</span>
               </button>
             </div>
             <nav className="flex-1 px-stack-sm py-stack-md space-y-base overflow-y-auto"><p className="px-stack-sm text-[10px] font-black uppercase tracking-[.2em] text-flow-orange">Explore FlowState</p>
-              {DRAWER_ITEMS.map(item => {
+              {DRAWER_ITEMS.map((item, index) => {
                 const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
                 return (
                   <Link
-                    key={item.href}
+                    key={item.label}
                     href={item.href}
                     onClick={() => setDrawerOpen(false)}
                     className={cn(
                       'flex items-center gap-base px-stack-sm py-[10px] rounded-[1rem] font-semibold text-[14px] transition-all',
+                      item.utility && !DRAWER_ITEMS[index - 1]?.utility && 'mt-3 border-t border-white/[.08] pt-4',
                       active
                         ? 'bg-primary-container text-on-primary-container'
                         : 'text-on-surface-variant hover:bg-surface-container-high'

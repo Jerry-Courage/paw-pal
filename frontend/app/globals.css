@@ -43,6 +43,45 @@
   --nav-height: 56px;
 }
 
+.flow-context-chip {
+  display: inline-flex;
+  min-height: 2rem;
+  max-width: min(16rem, 70vw);
+  align-items: center;
+  gap: .375rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, rgb(var(--primary)) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
+  padding: .35rem .7rem;
+  color: rgb(var(--on-surface));
+  font-size: .75rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-attachment-row {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: .65rem;
+  border-radius: .75rem;
+  padding: .55rem .65rem;
+  color: rgb(var(--on-surface-variant));
+  font-size: .8125rem;
+  font-weight: 700;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.flow-attachment-row:hover,
+.flow-attachment-row:focus-visible {
+  background: color-mix(in srgb, white 7%, transparent);
+  color: rgb(var(--on-surface));
+  outline: none;
+}
+
 /* FlowState 2.0 — isolated semantic foundation. Apply with .flow-v2 so
    legacy product screens can migrate deliberately rather than all at once. */
 .flow-v2 {

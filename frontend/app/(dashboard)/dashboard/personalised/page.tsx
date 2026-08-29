@@ -43,7 +43,7 @@ function base64ToPcmFloat(b64: string): Float32Array {
   return float32
 }
 
-export default function PersonalisedLearningPage() {
+export function PersonalisedLearningPage({ embedded = false, onClose }: { embedded?: boolean; onClose?: () => void } = {}) {
   const [phase, setPhase] = useState<Phase>('setup')
   const [voice, setVoice] = useState<string>('Leda')
   const [isConnecting, setIsConnecting] = useState(false)
@@ -554,9 +554,15 @@ export default function PersonalisedLearningPage() {
           <div className="flex-1 flex flex-col px-5 sm:px-8 py-8 max-w-5xl mx-auto w-full">
 
             {/* Back link */}
-            <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors mb-8">
-              <ChevronLeft className="w-4 h-4" /> Dashboard
-            </Link>
+            {embedded ? (
+              <button onClick={onClose} className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white transition-colors mb-8">
+                <ChevronLeft className="w-4 h-4" /> Back to conversation
+              </button>
+            ) : (
+              <Link href="/ai" className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors mb-8">
+                <ChevronLeft className="w-4 h-4" /> Flow
+              </Link>
+            )}
 
             {!isPremium ? (
               /* ── Premium Gate ── */
@@ -565,7 +571,7 @@ export default function PersonalisedLearningPage() {
                   <Headphones className="w-10 h-10 text-orange-400" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-black tracking-tight mb-2">Personal Tutor</h1>
+                  <h1 className="text-2xl font-black tracking-tight mb-2">Talk to Flow</h1>
                   <p className="text-sm text-white/50 leading-relaxed max-w-xs mx-auto">
                     Real-time voice conversations with an AI that knows your study history and teaches you like a real tutor.
                   </p>
@@ -582,7 +588,7 @@ export default function PersonalisedLearningPage() {
                   onClick={() => setShowPaywall(true)}
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:brightness-110 text-white font-black text-sm uppercase tracking-wider active:scale-[0.98] transition-all shadow-lg shadow-orange-500/25"
                 >
-                  Unlock Personal Tutor
+                  Unlock Flow Voice
                 </button>
                 <p className="text-[11px] text-white/30">Requires Premium subscription</p>
               </div>
@@ -599,7 +605,7 @@ export default function PersonalisedLearningPage() {
                           <Headphones className="w-8 h-8" />
                         </div>
                         <div>
-                          <h1 className="text-3xl font-black tracking-tight mb-2">Personal Tutor</h1>
+                          <h1 className="text-3xl font-black tracking-tight mb-2">Talk to Flow</h1>
                           <p className="text-white/80 text-sm leading-relaxed">
                             Real-time voice conversations with an AI that knows your study history.
                           </p>
@@ -972,3 +978,5 @@ export default function PersonalisedLearningPage() {
     </div>
   )
 }
+
+export default PersonalisedLearningPage
