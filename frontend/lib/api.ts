@@ -181,6 +181,8 @@ export const aiApi = {
   getSessions: () => api.get('/ai/sessions/'),
   createSession: (data: any) => api.post('/ai/sessions/', data),
   getSession: (id: number) => api.get(`/ai/sessions/${id}/`),
+  submitFlowObject: (sessionId: number, objectId: string, response: unknown, idempotencyKey: string) =>
+    api.post(`/ai/sessions/${sessionId}/objects/${objectId}/respond/`, { response, idempotency_key: idempotencyKey }),
   deleteSession: (id: number) => api.delete(`/ai/sessions/${id}/`),
   sendMessage: (sessionId: number, content: string, config?: any) =>
     api.post(`/ai/sessions/${sessionId}/message/`, { content }, config),

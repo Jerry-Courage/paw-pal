@@ -7,7 +7,7 @@ from .views import (
     MindMapView, PracticeQuestionsView, ChapterSummariesView,
     SaveContentView, GradeAnswerView,
     VisionMessageView, GenerateDiagramView, GenerateImageView,
-    AgentView, AgentStreamView, AgentAudioView,
+    AgentView, AgentStreamView, AgentAudioView, FlowObjectResponseView,
     TextToSpeechView, EdgeTTSView,
 )
 
@@ -19,6 +19,7 @@ urlpatterns = [
     path('agent/', AgentView.as_view(), name='platform_agent'),
     path('agent/stream/', AgentStreamView.as_view(), name='platform_agent_stream'),
     path('agent/audio/', AgentAudioView.as_view(), name='agent_audio'),
+    path('sessions/<int:session_id>/objects/<uuid:object_id>/respond/', FlowObjectResponseView.as_view(), name='flow_object_response'),
     path('sessions/', ChatSessionListCreateView.as_view()),
     path('sessions/<int:pk>/', ChatSessionDetailView.as_view()),
     path('sessions/<int:session_id>/message/', SendMessageView.as_view()),

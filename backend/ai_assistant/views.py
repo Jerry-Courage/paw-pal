@@ -12,6 +12,7 @@ from rest_framework import generics, permissions, status, parsers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.db.models import Q
 from django.http import StreamingHttpResponse
 from asgiref.sync import async_to_sync
@@ -1042,6 +1043,94 @@ class AgentView(APIView):
                 'reply': f"Intelligence Signal Interrupted: {str(e)}",
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class FlowObjectResponseView(APIView):
+    """Server-authoritative interaction boundary for persisted Flow learning objects."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    @transaction.atomic
+    def post(self, request, session_id, object_id):
+        from django.core import signing
+        session = get_object_or_404(ChatSession.objects.select_for_update(), id=session_id, user=request.user)
+        message = None
+        object_index = -1
+        flow_object_data = None
+        for candidate in ChatMessage.objects.select_for_update().filter(session=session, role='assistant').order_by('-created_at'):
+            for index, item in enumerate(candidate.flow_objects or []):
+                if str(item.get('id')) == str(object_id):
+                    message, object_index, flow_object_data = candidate, index, item
+                    break
+            if message:
+                break
+        if not message or not flow_object_data or flow_object_data.get('type') != 'practice':
+            return Response({'error': 'Practice activity not found'}, status=404)
+        payload = flow_object_data.get('payload') or {}
+        if payload.get('status') == 'completed':
+            return Response({'object': flow_object_data, 'evaluation': payload.get('last_evaluation', {}), 'next_decision': payload.get('next_decision', ''), 'idempotent': True})
+        supplied_key = str(request.data.get('idempotency_key') or '')[:72]
+        prior = next((item for item in payload.get('responses', []) if supplied_key and item.get('idempotency_key') == supplied_key), None)
+        if prior:
+            return Response({'object': flow_object_data, 'evaluation': prior.get('evaluation', {}), 'next_decision': payload.get('next_decision', ''), 'idempotent': True})
+        questions = payload.get('questions') or []
+        index = int(payload.get('question_index', 0))
+        if index < 0 or index >= len(questions):
+            return Response({'error': 'Practice activity has expired or is invalid'}, status=409)
+        question = questions[index]
+        response_data = request.data.get('response') or {}
+        request_key = str(request.data.get('idempotency_key') or f'{object_id}:{question.get("id", index)}')[:72]
+
+        if payload.get('mode') == 'journey':
+            from learning.models import ConceptNode
+            from learning.views import _session_data, submit_teaching_activity
+            concept = get_object_or_404(ConceptNode, id=payload.get('concept_id'), path__user=request.user)
+            try:
+                teaching_session, evaluation, _ = submit_teaching_activity(concept, request.user, question.get('id'), response_data, request_key)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=400)
+            completion = _session_data(teaching_session)['completion_evaluation']
+            if completion.get('complete'):
+                next_decision = 'That evidence holds. Your Journey is ready for its authoritative completion check.'
+            elif evaluation.get('correct') is False:
+                next_decision = 'That exposed the shaky part. Let’s repair that distinction before another check.'
+            else:
+                next_decision = completion.get('recommended_next_action') or 'Nice. We can move to the next unresolved objective.'
+        else:
+            try:
+                hidden = signing.loads(question.get('evaluation_token', ''), salt='flow-practice-v1', max_age=60 * 60 * 24 * 7)
+            except signing.BadSignature:
+                return Response({'error': 'This practice activity has expired or is invalid'}, status=409)
+            if hidden.get('type') == 'mcq':
+                try:
+                    correct = int(response_data.get('choice')) == int(hidden.get('correct_choice'))
+                except (TypeError, ValueError):
+                    correct = False
+                score = 100 if correct else 25
+            else:
+                answer_words = set(re.findall(r'[a-z0-9]+', str(response_data.get('text', '')).lower()))
+                keywords = set(hidden.get('accepted_keywords') or [])
+                overlap = len(answer_words & keywords)
+                score = min(100, 35 + overlap * 15) if len(answer_words) >= 4 else 15
+                correct = score >= 65
+            feedback = hidden.get('feedback_correct') if correct else hidden.get('feedback_incorrect')
+            evaluation = {'correct': correct, 'score': score, 'feedback': feedback, 'free_flow': True}
+            next_decision = ('That held up. Want another one, or should we make it harder?' if correct else 'Let’s tighten that distinction, then you can retry or ask for an easier question.')
+
+        responses = [*payload.get('responses', []), {'question_id': question.get('id'), 'response': response_data, 'evaluation': evaluation, 'idempotency_key': request_key}]
+        next_index = index + 1
+        completed = next_index >= len(questions)
+        payload.update({
+            'responses': responses, 'question_index': next_index if not completed else index,
+            'status': 'completed' if completed else 'active', 'last_evaluation': evaluation,
+            'next_decision': next_decision if completed else ('Good. Here’s the next one.' if evaluation.get('correct') is not False else 'Use that feedback, then try the next check.'),
+        })
+        flow_object_data['payload'] = payload
+        objects = list(message.flow_objects)
+        objects[object_index] = flow_object_data
+        message.flow_objects = objects
+        message.save(update_fields=['flow_objects'])
+        return Response({'object': flow_object_data, 'evaluation': evaluation, 'next_decision': payload['next_decision'], 'idempotent': False})
+
 
 class AgentStreamView(APIView):
     """Universal platform agent endpoint (Streaming SSE - Hybrid)."""

@@ -427,7 +427,7 @@ function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | 'web_sea
 }
 
 // â”€â”€â”€ MESSAGE COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function MessageBubble({ msg, index, isLast, onRegenerate, onAction }: { msg: Message; index: number; isLast?: boolean; onRegenerate?: (index: number) => void; onAction: (text: string) => void }) {
+function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }: { msg: Message; index: number; isLast?: boolean; onRegenerate?: (index: number) => void; onAction: (text: string) => void; sessionId?: number }) {
   const [copied, setCopied] = useState(false)
   const [imgLightbox, setImgLightbox] = useState<string | null>(null)
   const isUser = msg.role === 'user'
@@ -503,7 +503,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction }: { msg: Me
                 <MermaidChart chart={msg.diagram} />
               </div>
             )}
-            {!!msg.flow_objects?.length && <div className="mt-4 space-y-4">{msg.flow_objects.map(object => <FlowObjectRenderer key={object.id} object={object} onAction={onAction} />)}</div>}
+            {!!msg.flow_objects?.length && <div className="mt-4 space-y-4">{msg.flow_objects.map(object => <FlowObjectRenderer key={object.id} object={object} onAction={onAction} sessionId={sessionId} />)}</div>}
           </div>
         )}
 
@@ -619,6 +619,7 @@ function AIChat() {
     selectedResourceData && `SOURCE ${selectedResourceData.id}: ${selectedResourceData.title}`,
     selectedJourney && `JOURNEY ${selectedJourney.id}: ${selectedJourney.title}; goal=${selectedJourney.goal || 'not set'}; progress=${selectedJourney.concepts_completed || 0}/${selectedJourney.total_concepts || 0}`,
     selectedAssignment && `ASSIGNMENT ${selectedAssignment.id}: ${selectedAssignment.title}; due=${selectedAssignment.due_date || 'not set'}; instructions=${selectedAssignment.instructions || ''}`,
+    searchParams.get('concept') && `CONCEPT ${searchParams.get('concept')}`,
   ].filter(Boolean).join('\n')
   const activeJourney = journeys.find((journey: any) => journey.status === 'active') || journeys[0]
   const firstName = authSession?.user?.name?.split(' ')[0]
@@ -637,6 +638,11 @@ function AIChat() {
       }
     }
   }, [searchParams])
+
+  useEffect(() => {
+    const journeyId = searchParams.get('journey')
+    if (journeyId && journeys.length) setSelectedJourney(journeys.find((journey: any) => String(journey.id) === journeyId) || null)
+  }, [journeys, searchParams])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -1148,6 +1154,7 @@ function AIChat() {
                   isLast={i === messages.length - 1} 
                   onRegenerate={handleRegenerate}
                   onAction={(text) => { setInput(text); setTimeout(() => textareaRef.current?.focus(), 0) }}
+                  sessionId={activeSession?.id}
                 />
               ))}
               {sending && <ThinkingIndicator action={pendingAction} />}

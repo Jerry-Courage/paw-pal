@@ -336,6 +336,47 @@ def _get_teaching_session(concept, user):
     return session
 
 
+@transaction.atomic
+def submit_teaching_activity(concept, user, activity_id, response_data, idempotency_key=''):
+    """Evaluate one Activity Engine V2 response and record authoritative Journey evidence once."""
+    session = _get_teaching_session(concept, user)
+    key = f'activity:{str(idempotency_key).strip()}'[:80] if idempotency_key else ''
+    if key:
+        existing = TeachingTurn.objects.filter(session=session, role='learner', kind='activity', idempotency_key=key).first()
+        if existing:
+            return session, existing.payload.get('evaluation', {}), False
+    activity = next((item for item in _concept_activities(concept, user) if item['id'] == str(activity_id)), None)
+    if not activity or activity['type'] in {'comparison', 'worked_example'}:
+        raise ValueError('This response cannot be evaluated')
+    correct, score, feedback = _evaluate_activity(concept, activity, response_data)
+    attempt = EncounterAttempt.objects.create(user=user, concept=concept, activity_id=activity['id'], activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
+    objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+    objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
+    session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
+    record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score, source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
+    if correct is not False:
+        session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
+        session.current_point = min(len(session.objectives), session.current_point + 1)
+        session.status = 'mastery_check' if session.current_point >= len(session.objectives) - 1 else 'teaching'
+        content = f"Yep. You caught the useful distinction. {feedback}"
+    else:
+        session.status = 'remediation'
+        session.resume_point = session.current_point
+        session.unresolved_misconceptions = [*session.unresolved_misconceptions[-7:], feedback]
+        content = feedback
+    session.mastery = _evidence_score(user, concept, score)
+    result = {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id), 'objective_id': objective_id}
+    TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key, payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
+    TeachingTurn.objects.create(session=session, role='flow', content=content, payload=result)
+    evaluation = evaluate_session_completion(session)
+    session.mastery = evaluation['mastery']
+    session.unresolved_misconceptions = evaluation['unresolved_misconceptions']
+    if evaluation['complete']:
+        session.status = 'mastery_check'
+    session.save()
+    return session, result, True
+
+
 def _normalize_title(title: str) -> str:
     """Normalize a concept title for dedup comparison."""
     t = title.lower().strip()
@@ -1065,38 +1106,14 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def teaching_response(self, request, pk=None):
         concept = self.get_object()
-        session = _get_teaching_session(concept, request.user)
-        activity_id = str(request.data.get('activity_id', ''))
-        activity = next((item for item in _concept_activities(concept, request.user) if item['id'] == activity_id), None)
-        if not activity or activity['type'] in {'comparison', 'worked_example'}:
-            return Response({'error': 'This response cannot be evaluated'}, status=400)
-        response_data = request.data.get('response') or {}
-        correct, score, feedback = _evaluate_activity(concept, activity, response_data)
-        attempt = EncounterAttempt.objects.create(user=request.user, concept=concept, activity_id=activity_id, activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
-        objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
-        objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
-        session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
-        record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score, source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
-        if correct is not False:
-            session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
-            session.current_point = min(len(session.objectives), session.current_point + 1)
-            session.status = 'mastery_check' if session.current_point >= len(session.objectives) - 1 else 'teaching'
-            content = f"Yep. You caught the useful distinction. {feedback}"
-        else:
-            session.status = 'remediation'
-            session.resume_point = session.current_point
-            session.unresolved_misconceptions = [*session.unresolved_misconceptions[-7:], feedback]
-            content = feedback
-        session.mastery = _evidence_score(request.user, concept, score)
-        TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', payload={'activity_id': activity_id, 'response': response_data})
-        TeachingTurn.objects.create(session=session, role='flow', content=content, payload={'correct': correct, 'score': score, 'attempt_id': str(attempt.id)})
-        evaluation = evaluate_session_completion(session)
-        session.mastery = evaluation['mastery']
-        session.unresolved_misconceptions = evaluation['unresolved_misconceptions']
-        if evaluation['complete']:
-            session.status = 'mastery_check'
-        session.save()
-        return Response({**_session_data(session), 'evaluation': {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id)}} , status=201)
+        try:
+            session, evaluation, created = submit_teaching_activity(
+                concept, request.user, request.data.get('activity_id', ''),
+                request.data.get('response') or {}, request.data.get('idempotency_key', ''),
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        return Response({**_session_data(session), 'evaluation': evaluation}, status=201 if created else 200)
 
     @action(detail=True, methods=['post'], url_path='teaching-flashcards/save')
     def save_teaching_flashcards(self, request, pk=None):

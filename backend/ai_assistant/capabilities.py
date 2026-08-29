@@ -8,6 +8,7 @@ import json
 from dataclasses import dataclass
 from typing import Callable
 
+from django.core import signing
 from django.db.models import Q
 from library.models import PodcastSession, Resource
 
@@ -59,11 +60,117 @@ def _resource(user, context: str) -> Resource | None:
 
 def _topic(query: str, resource: Resource | None) -> str:
     cleaned = re.sub(
-        r'\b(find|show|give|make|create|generate|let|teach|you|test|active|recall|feynman|explain|explains|that|me|a|an|the|on|about|this|please|podcast|video|flashcards?|deck)\b',
+        r'\b(find|show|give|make|create|generate|let|teach|you|test|quiz|practice|questions?|quick|some|active|recall|feynman|explain|explains|that|me|a|an|the|on|about|this|please|podcast|video|flashcards?|deck|understand|want|can|we|do|see|if|know)\b',
         ' ', query, flags=re.I,
     )
     cleaned = re.sub(r'\s+', ' ', cleaned).strip(' .?!')
     return cleaned or (resource.title if resource else '')
+
+
+def _requested_count(query: str) -> int:
+    match = re.search(r'\b(\d{1,2}|one|two|three|four|five)\s+(?:quick\s+)?questions?\b', query, re.I)
+    words = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5}
+    raw = match.group(1).lower() if match else ''
+    return max(1, min(5, words.get(raw, int(raw) if raw.isdigit() else 1)))
+
+
+def _practice_concept(user, query: str, context: str):
+    from learning.models import ConceptNode, TeachingSession
+    concept_match = re.search(r'\bCONCEPT\s+([0-9a-f-]{36})\b', context or '', re.I)
+    if concept_match:
+        concept = ConceptNode.objects.filter(id=concept_match.group(1), path__user=user).first()
+        if concept:
+            return concept
+    journey_match = re.search(r'\bJOURNEY\s+([0-9a-f-]{36})\b', context or '', re.I)
+    if journey_match:
+        concept = ConceptNode.objects.filter(path_id=journey_match.group(1), path__user=user, status='current').first()
+        if concept:
+            return concept
+    topic = _topic(query, _resource(user, context))
+    if topic:
+        words = [word for word in re.findall(r'[a-z0-9]+', topic.lower()) if len(word) > 2]
+        candidates = ConceptNode.objects.filter(path__user=user)
+        for word in words[:5]:
+            candidates = candidates.filter(Q(title__icontains=word) | Q(summary__icontains=word) | Q(description__icontains=word))
+        concept = candidates.order_by('-updated_at').first()
+        if concept:
+            return concept
+        # An explicit topic outranks an unrelated active Journey. It becomes
+        # free-Flow practice when it does not map to one of the user's concepts.
+        return None
+    active_session = TeachingSession.objects.filter(user=user, status__in=['teaching', 'remediation', 'practicing', 'mastery_check']).select_related('concept').order_by('-last_active_at').first()
+    if active_session:
+        return active_session.concept
+    return None
+
+
+def _free_practice_questions(topic: str, count: int, difficulty: str) -> list[dict]:
+    from .services import AIService
+    prompt = (
+        f'Create {count} interactive practice question(s) about {topic} at {difficulty} difficulty. '
+        'Return strict JSON array. Each item: type (mcq or short_answer), prompt, options (only for mcq), '
+        'correct_choice (only for mcq), accepted_keywords (only for short_answer), feedback_correct, feedback_incorrect. '
+        'Distractors must be plausible. Feedback must teach the misconception. No markdown.'
+    )
+    raw = AIService().chat_sync([{'role': 'user', 'content': prompt}])
+    data = json.loads(re.sub(r'^```json|```$', '', raw.strip(), flags=re.I).strip())
+    if not isinstance(data, list):
+        raise ValueError('Practice generation did not return a list')
+    questions = []
+    for index, item in enumerate(data[:count]):
+        kind = item.get('type') if item.get('type') in {'mcq', 'short_answer'} else 'short_answer'
+        prompt_text = str(item.get('prompt', '')).strip()
+        options = [str(option).strip() for option in item.get('options', []) if str(option).strip()][:5]
+        try:
+            correct_choice = int(item.get('correct_choice'))
+        except (TypeError, ValueError):
+            correct_choice = -1
+        if not prompt_text or (kind == 'mcq' and (len(options) < 2 or correct_choice not in range(len(options)))):
+            continue
+        hidden = {
+            'type': kind, 'correct_choice': correct_choice,
+            'accepted_keywords': [str(word).lower() for word in item.get('accepted_keywords', [])[:12]],
+            'feedback_correct': str(item.get('feedback_correct', 'That distinction holds.'))[:500],
+            'feedback_incorrect': str(item.get('feedback_incorrect', 'Let’s revisit the key distinction and try again.'))[:500],
+        }
+        questions.append({
+            'id': f'free-{index + 1}', 'type': kind, 'prompt': prompt_text[:700], 'options': options,
+            'difficulty': difficulty, 'evaluation_token': signing.dumps(hidden, salt='flow-practice-v1', compress=True),
+        })
+    return questions
+
+
+def _practice(user, query: str, context: str) -> dict:
+    count = _requested_count(query)
+    difficulty = 'hard' if re.search(r'\b(hard|harder|challenge)\b', query, re.I) else 'easy' if re.search(r'\b(easy|easier|simple)\b', query, re.I) else 'medium'
+    concept = _practice_concept(user, query, context)
+    if concept:
+        from learning.views import _concept_activities, _public_activity, _get_teaching_session
+        session = _get_teaching_session(concept, user)
+        candidates = [item for item in _concept_activities(concept, user) if item['type'] not in {'comparison', 'worked_example'}]
+        objective_id = session.objectives[min(session.current_point, max(0, len(session.objectives) - 1))]['id'] if session.objectives else ''
+        questions = [_public_activity(item) for item in candidates[:count]]
+        if not questions:
+            return {'clarification': 'I couldn’t build a trustworthy check for that objective yet. Want me to explain it another way?'}
+        return {'reply': 'Let’s see what stuck.', 'objects': [flow_object('practice', {
+            'mode': 'journey', 'topic': concept.title, 'concept_id': str(concept.id),
+            'teaching_session_id': str(session.id), 'objective_id': objective_id,
+            'question_index': 0, 'question_total': len(questions), 'questions': questions,
+            'responses': [], 'status': 'active',
+        }, provenance={'source_id': concept.source_resource_id, 'source_title': getattr(concept.source_resource, 'title', '')})]}
+    topic = _topic(query, _resource(user, context))
+    if not topic:
+        return {'clarification': 'What should I quiz you on? Give me a topic or attach a Journey or Source.'}
+    try:
+        questions = _free_practice_questions(topic, count, difficulty)
+    except Exception:
+        questions = []
+    if not questions:
+        return {'clarification': f'I couldn’t build a trustworthy check on {topic} just now. Want to try again?'}
+    return {'reply': 'Let’s see what stuck.', 'objects': [flow_object('practice', {
+        'mode': 'free', 'topic': topic, 'question_index': 0, 'question_total': len(questions),
+        'questions': questions, 'responses': [], 'status': 'active',
+    })]}
 
 
 def _podcast(user, query: str, context: str) -> dict:
@@ -143,13 +250,18 @@ REGISTRY = (
     Capability('podcast', ('podcast', 'audio episode'), True, _podcast, 'podcast', 'clarify'),
     Capability('video', ('video', 'youtube', 'watch'), False, _video, 'video', 'error'),
     Capability('flashcards', ('flashcard', 'flashcards', 'deck of cards'), True, _flashcards, 'flashcards', 'clarify'),
-    Capability('active_recall', ('active recall', 'test me', 'make me remember', 'recall me'), False, _active_recall, 'active_recall', 'error'),
+    Capability('active_recall', ('active recall', 'make me remember', 'recall me'), False, _active_recall, 'active_recall', 'error'),
+    Capability('practice', ('quiz me', 'give me a question', 'give me some questions', 'test me', 'practice this', 'practice the concept', 'quick quiz', 'see if i understand'), False, _practice, 'practice', 'clarify'),
     Capability('general_feynman', ('let me teach you', 'feynman', 'i will explain it'), False, _feynman, 'feynman', 'error'),
 )
 
 
 def resolve_capability(query: str) -> Capability | None:
     lowered = query.lower()
+    if re.search(r'\b(active recall|make me remember|recall me)\b', lowered):
+        return next(item for item in REGISTRY if item.name == 'active_recall')
+    if re.search(r'\b(quiz me|test me|practice (?:this|that|the|my)|give me (?:\w+\s+){0,3}questions?|quick quiz|see if i understand)\b', lowered):
+        return next(item for item in REGISTRY if item.name == 'practice')
     for capability in REGISTRY:  # Priority is explicit and stable.
         if any(alias in lowered for alias in capability.aliases):
             return capability

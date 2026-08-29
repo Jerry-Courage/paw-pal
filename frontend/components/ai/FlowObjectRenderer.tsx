@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookOpen, ChevronLeft, ChevronRight, Headphones, Lightbulb, Play, RefreshCw, RotateCcw } from 'lucide-react'
-import { libraryApi, podcastApi } from '@/lib/api'
+import { AlertCircle, BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Headphones, Lightbulb, Play, RefreshCw, RotateCcw } from 'lucide-react'
+import { aiApi, libraryApi, podcastApi } from '@/lib/api'
 import FlowCompanion from '@/components/onboarding/FlowCompanion'
 import type { FlowObject } from '@/types/flow-object'
 import { cn } from '@/lib/utils'
@@ -73,12 +73,51 @@ function FocusObject({ object, onAction }: { object: FlowObject; onAction: (text
   return <section className="flow-native-object p-5" aria-label={recall ? 'Active Recall' : 'Feynman mode'}><div className="flex items-center gap-3"><FlowCompanion state={recall ? 'thinking' : 'teaching'} className="w-14 shrink-0" label="Flow" /><div><span className="flow-object-label">{recall ? 'Active Recall' : 'Feynman mode'}</span><p className="font-black text-on-surface">{recall ? `Question ${object.payload.question_index} of ${object.payload.question_total}` : `Teach Flow · ${object.payload.topic}`}</p></div></div><p className="mt-4 text-base font-bold leading-relaxed text-on-surface">{recall ? object.payload.question : object.payload.prompt}</p><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => onAction(recall ? 'I need a hint, but do not reveal the answer.' : `Here is my explanation of ${object.payload.topic}: `)} className="flow-object-button"><Lightbulb className="h-4 w-4" />{recall ? 'Hint' : 'Start explaining'}</button>{recall && <button onClick={() => onAction('I do not know. Teach me the smallest missing piece, then ask again.')} className="flow-object-button">I don’t know</button>}</div></section>
 }
 
+function PracticeObject({ object: initialObject, sessionId }: { object: FlowObject; sessionId?: number }) {
+  const [object, setObject] = useState(initialObject)
+  const [choice, setChoice] = useState<number | null>(null)
+  const [answer, setAnswer] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const payload = object.payload
+  const question = payload.questions?.[payload.question_index]
+  const evaluation = payload.last_evaluation
+  useEffect(() => { setChoice(null); setAnswer(''); setError('') }, [payload.question_index])
+  if (!question) return <ObjectError label="This practice activity is unavailable." />
+  const completed = payload.status === 'completed'
+  const canSubmit = question.type === 'mcq' ? choice !== null : answer.trim().length >= 2
+  const submit = async () => {
+    if (!sessionId || !canSubmit || submitting || completed) return
+    setSubmitting(true); setError('')
+    try {
+      const response = await aiApi.submitFlowObject(sessionId, object.id, question.type === 'mcq' ? { choice } : { text: answer.trim() }, `${object.id}:${question.id}`)
+      setObject(response.data.object)
+    } catch (caught: any) {
+      setError(caught?.response?.data?.error || 'Your answer did not reach Flow. It is still here—try again.')
+    } finally { setSubmitting(false) }
+  }
+  return <section className="flow-native-object overflow-hidden" aria-label="Interactive practice">
+    <div className="border-b border-white/[.08] bg-flow-violet/[.07] px-4 py-3 sm:px-5"><div className="flex items-center justify-between gap-3"><span className="flow-object-label">Quick check · {payload.mode === 'journey' ? 'Journey evidence' : 'Practice'}</span><span className="text-xs font-black text-on-surface-variant">{Math.min(payload.question_index + 1, payload.question_total)} / {payload.question_total}</span></div><p className="mt-1 truncate text-xs font-bold text-flow-violet">{payload.topic}</p></div>
+    <div className="p-4 sm:p-5">
+      <h3 className="text-base font-black leading-relaxed text-on-surface sm:text-lg">{question.prompt}</h3>
+      {!completed && question.type === 'mcq' && <fieldset className="mt-4 space-y-2"><legend className="sr-only">Choose one answer</legend>{question.options?.map((option: string, index: number) => <label key={`${question.id}-${index}`} className={cn('flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 text-sm font-bold transition focus-within:ring-2 focus-within:ring-flow-orange', choice === index ? 'border-flow-orange/60 bg-flow-orange/10 text-on-surface' : 'border-white/[.08] bg-surface-container-low text-on-surface-variant hover:bg-surface-hover')}><input type="radio" name={`practice-${object.id}-${question.id}`} value={index} checked={choice === index} onChange={() => setChoice(index)} className="mt-0.5 h-4 w-4 accent-orange-500" /><span>{option}</span></label>)}</fieldset>}
+      {!completed && question.type !== 'mcq' && <label className="mt-4 block"><span className="sr-only">Your answer</span><textarea value={answer} onChange={event => setAnswer(event.target.value)} onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') submit() }} rows={3} placeholder="Explain it in your own words…" className="w-full resize-y rounded-xl border border-white/10 bg-surface-container-low p-3 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-flow-orange focus:ring-2 focus:ring-flow-orange/30" /></label>}
+      {evaluation && <div role="status" aria-live="polite" className={cn('mt-4 flex items-start gap-3 rounded-xl border p-3 text-sm', evaluation.correct === false ? 'border-warning/25 bg-warning/[.07]' : 'border-flow-success/25 bg-flow-success/[.07]')}>{evaluation.correct === false ? <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" /> : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-flow-success" />}<div><p className="font-black text-on-surface">{evaluation.correct === false ? 'Not quite yet.' : 'That holds.'}</p><p className="mt-1 leading-relaxed text-on-surface-variant">{evaluation.feedback}</p></div></div>}
+      {payload.next_decision && <p className="mt-3 text-sm font-bold leading-relaxed text-flow-violet">Flow: {payload.next_decision}</p>}
+      {error && <p role="alert" className="mt-3 text-sm font-bold text-danger">{error}</p>}
+      {!completed && <button onClick={submit} disabled={!sessionId || !canSubmit || submitting} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary-container px-4 font-black text-on-primary-container shadow-[0_4px_0_rgba(143,54,0,1)] transition active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">{submitting ? 'Checking…' : 'Check answer'} <ChevronRight className="h-4 w-4" /></button>}
+      {completed && <p className="mt-4 text-xs font-black uppercase tracking-[.15em] text-flow-success">Practice complete · response saved</p>}
+    </div>
+  </section>
+}
+
 function ObjectError({ label }: { label: string }) { return <section className="flow-native-object flex items-center gap-3 p-4 text-warning"><RefreshCw className="h-5 w-5" /><p className="font-bold">{label} Your context is still here—try again.</p></section> }
 
-export default function FlowObjectRenderer({ object, onAction }: { object: FlowObject; onAction: (text: string) => void }) {
+export default function FlowObjectRenderer({ object, onAction, sessionId }: { object: FlowObject; onAction: (text: string) => void; sessionId?: number }) {
   if (object.type === 'video') return <VideoObject object={object} />
   if (object.type === 'podcast') return <PodcastObject object={object} />
   if (object.type === 'flashcards') return <FlashcardObject object={object} />
   if (object.type === 'active_recall' || object.type === 'feynman') return <FocusObject object={object} onAction={onAction} />
+  if (object.type === 'practice') return <PracticeObject object={object} sessionId={sessionId} />
   return null
 }

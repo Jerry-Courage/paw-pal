@@ -2,8 +2,9 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from unittest.mock import patch
+from rest_framework.test import APIClient
 
-from learning.models import ConceptNode, LearningPath, TeachingSession
+from learning.models import ConceptNode, EncounterAttempt, LearningPath, TeachingSession
 from library.models import Resource
 
 from .agent import FlowAgent, GlobalContextBuilder
@@ -148,3 +149,55 @@ class FlowCapabilityRoutingTests(TestCase):
         result = execute_capability(self.user, 'Find me a video that explains this', '', session=session)
         self.assertEqual(result['objects'][0]['type'], 'video')
         self.assertIn("Newton's method", search.call_args.args[0])
+
+    def test_practice_routes_to_real_journey_activity_without_hidden_answer(self):
+        path = LearningPath.objects.create(user=self.user, title='Numerical Analysis', status='active', goal='Understand it')
+        concept = ConceptNode.objects.create(path=path, title="Newton's Method", description='Improve a guess using a derivative.', status='current')
+        TeachingSession.objects.create(user=self.user, concept=concept, status='teaching')
+        result = execute_capability(self.user, 'Quiz me on this', '')
+        practice = result['objects'][0]
+        self.assertEqual(practice['type'], 'practice')
+        self.assertEqual(practice['payload']['mode'], 'journey')
+        self.assertEqual(practice['payload']['concept_id'], str(concept.id))
+        self.assertNotIn('correct_choice', practice['payload']['questions'][0])
+        self.assertNotIn('accepted_keywords', practice['payload']['questions'][0])
+
+    def test_practice_without_resolvable_context_clarifies(self):
+        result = execute_capability(self.user, 'quiz me', '')
+        self.assertTrue(result['needs_context'])
+        self.assertEqual(result['objects'], [])
+
+
+class FlowPracticeRuntimeTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='practice-runtime', email='practice-runtime@example.com', password='test-password')
+        self.path = LearningPath.objects.create(user=self.user, title='Numerical Analysis', status='active', goal='Understand it')
+        self.concept = ConceptNode.objects.create(path=self.path, title="Newton's Method", description='Improve a guess using a derivative.', status='current')
+        TeachingSession.objects.create(user=self.user, concept=self.concept, status='teaching')
+        self.session = ChatSession.objects.create(user=self.user, title='Practice')
+        result = execute_capability(self.user, 'Give me one question', f'CONCEPT {self.concept.id}')
+        self.practice = result['objects'][0]
+        ChatMessage.objects.create(session=self.session, role='assistant', content=result['reply'], flow_objects=[self.practice])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_journey_practice_records_evidence_once_and_restores_completed_state(self):
+        question = self.practice['payload']['questions'][0]
+        response = {'choice': 0} if question['type'] in {'mcq', 'predict', 'scenario'} else {'text': 'The method improves the current guess using derivative information.'}
+        url = f'/api/ai/sessions/{self.session.id}/objects/{self.practice["id"]}/respond/'
+        first = self.client.post(url, {'response': response, 'idempotency_key': 'same-answer'}, content_type='application/json')
+        second = self.client.post(url, {'response': response, 'idempotency_key': 'same-answer'}, content_type='application/json')
+        self.assertIn(first.status_code, (200, 201))
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(EncounterAttempt.objects.filter(user=self.user, concept=self.concept).count(), 1)
+        saved = ChatMessage.objects.get(session=self.session, role='assistant').flow_objects[0]
+        self.assertEqual(saved['payload']['status'], 'completed')
+        self.assertTrue(second.json()['idempotent'])
+
+    def test_object_id_is_scoped_to_owning_user(self):
+        other = get_user_model().objects.create_user(username='practice-intruder', email='practice-intruder@example.com', password='test-password')
+        self.client.force_authenticate(other)
+        url = f'/api/ai/sessions/{self.session.id}/objects/{self.practice["id"]}/respond/'
+        response = self.client.post(url, {'response': {'choice': 0}, 'idempotency_key': 'intruder'}, content_type='application/json')
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(EncounterAttempt.objects.filter(user=other).exists())
