@@ -8,7 +8,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatMessage
-        fields = ('id', 'role', 'content', 'image', 'diagram', 'diagram_code', 'created_at')
+        fields = ('id', 'role', 'content', 'image', 'diagram', 'diagram_code', 'flow_objects', 'created_at')
         read_only_fields = ('id', 'created_at')
 
     def get_image(self, obj):

@@ -71,7 +71,7 @@ export default function Sidebar() {
                 'flex items-center gap-3 px-[10px] py-[10px] rounded-[1rem] font-semibold text-[14px] transition-all relative',
                 'whitespace-nowrap overflow-hidden',
                 active
-                  ? 'bg-primary-container text-on-primary-container shadow-[0_4px_0_0_#763300] active:translate-y-1 active:shadow-none'
+                  ? 'bg-primary-container text-on-primary-container shadow-md active:translate-y-0.5 active:shadow-none'
                   : 'text-on-surface-variant hover:bg-surface-container-high'
               )}
             >

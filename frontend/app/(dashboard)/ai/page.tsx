@@ -22,7 +22,9 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { normalizeForRendering } from '@/lib/mathFormatting'
 import dynamic from 'next/dynamic'
-import FlowMascot from '@/components/learning/FlowMascot'
+import FlowCompanion from '@/components/onboarding/FlowCompanion'
+import FlowObjectRenderer from '@/components/ai/FlowObjectRenderer'
+import type { FlowObject } from '@/types/flow-object'
 const CameraVisionModal = dynamic(() => import('@/components/ai/CameraVisionModal'), { ssr: false })
 const FlowVoice = dynamic(() => import('../dashboard/personalised/page').then(mod => mod.PersonalisedLearningPage), { ssr: false })
 
@@ -71,6 +73,7 @@ type Message = {
   // what the AI is currently doing (for loading indicator)
   pending_action?: 'diagram' | 'image' | null
   file?: File // Store original file for regeneration
+  flow_objects?: FlowObject[]
 }
 
 const SUGGESTIONS = [
@@ -122,17 +125,17 @@ function MermaidChart({ chart }: { chart: string }) {
           fontFamily: 'Outfit, Inter, system-ui, sans-serif',
           suppressErrorRendering: true,
           themeVariables: {
-            background: '#0d0d0d',
-            primaryColor: '#f97316',
-            primaryTextColor: '#f1f5f9',
-            primaryBorderColor: '#f97316',
-            lineColor: '#475569',
-            secondaryColor: '#1a1a1a',
-            tertiaryColor: '#1f1f1f',
-            edgeLabelBackground: '#1a1a1a',
-            clusterBkg: '#1a1a1a',
-            titleColor: '#f1f5f9',
-            nodeTextColor: '#f1f5f9',
+            background: '#0B0C1A',
+            primaryColor: '#FF7A1A',
+            primaryTextColor: '#F8F6F2',
+            primaryBorderColor: '#FF7A1A',
+            lineColor: '#AAAAC0',
+            secondaryColor: '#16182A',
+            tertiaryColor: '#1D2034',
+            edgeLabelBackground: '#16182A',
+            clusterBkg: '#16182A',
+            titleColor: '#F8F6F2',
+            nodeTextColor: '#F8F6F2',
             fontFamily: 'Outfit, Inter, system-ui, sans-serif',
           },
         })
@@ -359,7 +362,7 @@ function RichContent({ content }: { content: string }) {
                         <Copy className="w-3 h-3" /> Copy
                       </button>
                     </div>
-                    <pre className="p-4 overflow-x-auto bg-[#0a0a0a]">
+                    <pre className="overflow-x-auto bg-background p-4">
                       <code className="text-sm font-mono text-on-surface/80 leading-relaxed">{children}</code>
                     </pre>
                   </div>
@@ -424,7 +427,7 @@ function ThinkingIndicator({ action }: { action?: 'diagram' | 'image' | 'web_sea
 }
 
 // â”€â”€â”€ MESSAGE COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; index: number; isLast?: boolean; onRegenerate?: (index: number) => void }) {
+function MessageBubble({ msg, index, isLast, onRegenerate, onAction }: { msg: Message; index: number; isLast?: boolean; onRegenerate?: (index: number) => void; onAction: (text: string) => void }) {
   const [copied, setCopied] = useState(false)
   const [imgLightbox, setImgLightbox] = useState<string | null>(null)
   const isUser = msg.role === 'user'
@@ -455,7 +458,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
       )}>
         {isUser ? (
           /* User: clean right-aligned text, no bubble */
-          <div className="text-on-surface/90">
+          <div className="rounded-2xl bg-surface-container-high px-4 py-2.5 text-on-surface/90">
             <p className="text-[16px] leading-[1.8] whitespace-pre-wrap">{msg.content}</p>
             {msg.image && (
               <div className="mt-3 rounded-2xl overflow-hidden border border-outline-variant/30 max-w-sm">
@@ -465,7 +468,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
           </div>
         ) : (
           /* AI: ChatGPT-style — clean, no bubble, full width */
-          <div className="w-full">
+          <div className="w-full max-w-[48rem]">
             {/* Main content — no bubble, just structured text */}
             <div className="text-[16px] leading-relaxed w-full">
               <RichContent content={msg.content} />
@@ -500,6 +503,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate }: { msg: Message; ind
                 <MermaidChart chart={msg.diagram} />
               </div>
             )}
+            {!!msg.flow_objects?.length && <div className="mt-4 space-y-4">{msg.flow_objects.map(object => <FlowObjectRenderer key={object.id} object={object} onAction={onAction} />)}</div>}
           </div>
         )}
 
@@ -673,6 +677,7 @@ function AIChat() {
         content: m.content || '',
         diagram: m.diagram_code || m.diagram || undefined,
         image: m.image || undefined,
+        flow_objects: m.flow_objects || [],
       }))
       setMessages(mappedMessages)
       setActiveSession(fullSession)
@@ -682,6 +687,7 @@ function AIChat() {
         content: m.content || '',
         diagram: m.diagram_code || m.diagram || undefined,
         image: m.image || undefined,
+        flow_objects: m.flow_objects || [],
       }))
       setMessages(mappedMessages)
     }
@@ -856,6 +862,7 @@ function AIChat() {
               content: response.data.reply,
               image: imageUrl || undefined,
               diagram: diagramCode || undefined,
+              flow_objects: response.data.objects || response.data.message?.flow_objects || [],
             }
 
             setMessages(prev => [...prev, assistantMsg])
@@ -1096,7 +1103,7 @@ function AIChat() {
         <div className="flex-1 overflow-y-auto w-full scrollbar-hide relative z-10">
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center min-h-full px-4 py-6 sm:py-8 text-center max-w-2xl mx-auto">
-              <FlowMascot mood="wave" size={92} className="mb-2" />
+              <FlowCompanion state="idle" className="mb-2 w-24" label="Flow" />
               <h1 className="text-2xl sm:text-4xl font-black text-on-surface mb-1.5 sm:mb-2 tracking-[-.04em]">Yo{firstName ? ` ${firstName}` : ''} 👋 What are we figuring out?</h1>
               <p className="text-on-surface-variant/70 text-sm max-w-lg mb-5 leading-relaxed">
                 {activeJourney
@@ -1140,6 +1147,7 @@ function AIChat() {
                   index={i} 
                   isLast={i === messages.length - 1} 
                   onRegenerate={handleRegenerate}
+                  onAction={(text) => { setInput(text); setTimeout(() => textareaRef.current?.focus(), 0) }}
                 />
               ))}
               {sending && <ThinkingIndicator action={pendingAction} />}

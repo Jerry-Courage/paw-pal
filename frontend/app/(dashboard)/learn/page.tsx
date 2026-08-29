@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Plus, X } from 'lucide-react'
 import { learningApi } from '@/lib/api'
@@ -12,10 +12,20 @@ import { normalizeReadableMath } from '@/lib/mathFormatting'
 import type { FlowCompanionState } from '@/components/onboarding/FlowCompanion'
 
 export default function JourneyHubPage() {
-  const params = useSearchParams(); const qc = useQueryClient()
-  const [creating, setCreating] = useState(false); const [flowState, setFlowState] = useState<FlowCompanionState>('idle')
-  const initialSource = Number(params.get('source')) || undefined
-  useEffect(() => { if (params.get('create') === '1' || initialSource) setCreating(true) }, [params, initialSource])
+  const params = useSearchParams(); const router = useRouter(); const qc = useQueryClient()
+  const requestedSource = Number(params.get('source')) || undefined
+  const requestedCreate = params.get('create') === '1'
+  const [creating, setCreating] = useState(() => requestedCreate || Boolean(requestedSource)); const [flowState, setFlowState] = useState<FlowCompanionState>('idle')
+  const [builderSource, setBuilderSource] = useState<number | undefined>(() => requestedSource)
+  useEffect(() => {
+    if (!requestedCreate && !requestedSource) return
+    setBuilderSource(requestedSource)
+    setCreating(true)
+    const next = new URLSearchParams(params.toString())
+    next.delete('source')
+    next.delete('create')
+    router.replace(next.size ? `/learn?${next.toString()}` : '/learn', { scroll: false })
+  }, [params, requestedCreate, requestedSource, router])
   const pathsQuery = useQuery({ queryKey: ['learning-paths'], queryFn: () => learningApi.getPaths().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []) })
   const paths = useMemo(() => pathsQuery.data || [], [pathsQuery.data])
   const active = useMemo(() => paths.find((path: any) => path.status === 'active') || paths.find((path: any) => path.status !== 'completed'), [paths])
@@ -25,6 +35,21 @@ export default function JourneyHubPage() {
   const sessionQuery = useQuery({ queryKey: ['teaching-session', current?.id], queryFn: () => learningApi.getTeachingSession(current.id).then(r => r.data), enabled: Boolean(current?.id), retry: false })
   const open = sessionQuery.data && !['completed', 'not_started'].includes(sessionQuery.data.status)
   const activate = useMutation({ mutationFn: (id: string) => learningApi.setActivePath(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['learning-paths'] }) })
+  const openBuilder = () => { setBuilderSource(undefined); setFlowState('idle'); setCreating(true) }
+  const closeBuilder = () => { setCreating(false); setBuilderSource(undefined); setFlowState('idle') }
+
+  if (creating) return <main className="flow-atmosphere min-h-[calc(100dvh-4rem)] overflow-x-hidden px-4 pb-20 pt-[max(1.25rem,env(safe-area-inset-top))] text-flow-ink min-[390px]:px-5 sm:px-8 sm:pt-8 md:px-10 lg:px-14">
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6 flex justify-end sm:mb-8">
+        <button onClick={closeBuilder} aria-label="Close Journey builder" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-flow-raised text-flow-muted transition hover:text-flow-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flow-orange"><X className="h-5 w-5" /></button>
+      </div>
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_15rem] xl:gap-12">
+        <FirstJourneyBuilder initialResourceIds={builderSource ? [builderSource] : []} onPersist={async () => true} onFlowState={setFlowState} />
+        <aside className="hidden lg:flex lg:justify-center" aria-hidden="true"><FlowCompanion state={flowState} className="sticky top-10 w-44 max-w-full xl:w-48" /></aside>
+      </div>
+    </div>
+  </main>
+
   if (pathsQuery.isLoading) return <FlowLoader state="thinking" message="Finding your spot." className="min-h-[75dvh]" />
   if (pathsQuery.isError) return <main className="flow-atmosphere grid min-h-[70dvh] place-items-center px-5 text-center"><div><FlowCompanion state="encouraging" className="mx-auto w-28" /><h1 className="mt-4 text-3xl font-black">Your Journeys are still safe.</h1><p className="mt-2 text-flow-muted">The connection dropped before Flow could load them.</p><button onClick={() => pathsQuery.refetch()} className="flow-primary-button mt-6">Try again</button></div></main>
 
@@ -32,7 +57,7 @@ export default function JourneyHubPage() {
     <div className="mx-auto max-w-[96rem]">
       <header className="grid gap-5 sm:flex sm:items-end sm:justify-between">
         <div><p className="flow-eyebrow">Journey</p><h1 className="flow-hero mt-2 max-w-4xl">Where you’re<br className="sm:hidden" /> going.</h1></div>
-        <button onClick={() => setCreating(true)} className="flow-primary-button w-full sm:w-auto"><Plus className="h-5 w-5" />New Journey</button>
+        <button onClick={openBuilder} className="flow-primary-button w-full sm:w-auto"><Plus className="h-5 w-5" />New Journey</button>
       </header>
 
       {active ? <section className="relative mt-7 overflow-hidden border-y border-white/10 py-6 sm:mt-8 sm:py-7">
@@ -44,11 +69,10 @@ export default function JourneyHubPage() {
           </div>
           <div className="flex items-center gap-4 lg:block"><FlowCompanion state={open ? 'teaching' : 'idle'} className="w-20 shrink-0 sm:w-24 lg:mx-auto lg:w-36" /><p className="text-sm font-bold text-flow-muted lg:text-center">{current ? `Next: ${normalizeReadableMath(current.title)}` : 'Your route is complete.'}</p></div>
         </div>
-      </section> : <section className="mt-10 grid items-center gap-6 border-y border-white/10 py-8 sm:grid-cols-[1fr_12rem]"><div><h2 className="text-3xl font-black">No Journey yet.</h2><p className="mt-3 text-flow-muted">Bring a Source and Flow will turn it into a route.</p><button onClick={() => setCreating(true)} className="flow-primary-button mt-6 w-full sm:w-auto">Create a Journey</button></div><FlowCompanion state="encouraging" className="mx-auto w-28 sm:w-44" /></section>}
+      </section> : <section className="mt-10 grid items-center gap-6 border-y border-white/10 py-8 sm:grid-cols-[1fr_12rem]"><div><h2 className="text-3xl font-black">No Journey yet.</h2><p className="mt-3 text-flow-muted">Bring a Source and Flow will turn it into a route.</p><button onClick={openBuilder} className="flow-primary-button mt-6 w-full sm:w-auto">Create a Journey</button></div><FlowCompanion state="encouraging" className="mx-auto w-28 sm:w-44" /></section>}
 
       {others.length > 0 && <section className="mt-10 sm:mt-14"><p className="flow-eyebrow">Your Journeys</p><div className="mt-4 divide-y divide-white/10 border-y border-white/10">{others.map((path: any) => <article key={path.id} className="grid gap-4 py-5 sm:grid-cols-[1fr_auto] sm:items-center"><Link href={`/learn/${path.id}`} className="min-w-0"><h3 className="break-words text-xl font-black sm:text-2xl">{path.title}</h3><p className="mt-1 line-clamp-2 text-sm text-flow-muted">{path.subject || path.goal}</p></Link><div className="flex flex-wrap items-center gap-4"><span className="font-black text-flow-violet">{path.mastery_percent}%</span><button disabled={activate.isPending} onClick={() => activate.mutate(path.id)} className="min-h-11 text-sm font-black text-flow-orange">Make current</button><Link href={`/learn/${path.id}`} className="min-h-11 py-3 font-black">Open →</Link></div></article>)}</div></section>}
       {completed.length > 0 && <details className="mt-10 border-t border-white/10 pt-5"><summary className="min-h-11 cursor-pointer py-3 font-black text-flow-muted">Completed Journeys ({completed.length})</summary><div className="space-y-3">{completed.map((path: any) => <Link key={path.id} href={`/learn/${path.id}`} className="block py-2 text-sm font-bold text-flow-muted">{path.title} · {path.total_xp} XP</Link>)}</div></details>}
     </div>
-    {creating && <div className="fixed inset-0 z-[70] overflow-y-auto bg-flow-void/98 px-4 pb-20 pt-[max(4.5rem,env(safe-area-inset-top))] text-flow-ink sm:px-6 md:p-12"><button onClick={() => setCreating(false)} aria-label="Close Journey builder" className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 grid h-12 w-12 place-items-center bg-flow-raised"><X /></button><div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]"><FirstJourneyBuilder initialResourceIds={initialSource ? [initialSource] : []} onPersist={async () => true} onFlowState={setFlowState} /><aside className="hidden lg:block"><FlowCompanion state={flowState} className="sticky top-12 w-full" /></aside></div></div>}
   </main>
 }

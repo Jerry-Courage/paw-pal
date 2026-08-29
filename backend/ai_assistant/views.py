@@ -878,6 +878,28 @@ class AgentView(APIView):
         try:
             # Save User Message
             ChatMessage.objects.create(session=session, role='user', content=query)
+
+            # Explicit product capabilities outrank model prose and legacy heuristics.
+            from .capabilities import execute_capability
+            capability_result = execute_capability(request.user, query, context, session=session)
+            if capability_result is not None:
+                assistant_msg = ChatMessage.objects.create(
+                    session=session,
+                    role='assistant',
+                    content=capability_result['reply'],
+                    flow_objects=capability_result.get('objects', []),
+                )
+                session.save()
+                return Response({
+                    'done': True,
+                    'message_id': assistant_msg.id,
+                    'session_id': session.id,
+                    'reply': assistant_msg.content,
+                    'capability': capability_result.get('capability'),
+                    'needs_context': capability_result.get('needs_context', False),
+                    'objects': assistant_msg.flow_objects,
+                    'message': ChatMessageSerializer(assistant_msg, context={'request': request}).data,
+                })
             
             # Pull history from DATABASE (authoritative source) — avoids frontend stale closure bugs
             history = _get_history(session, exclude_last=True)
@@ -903,11 +925,6 @@ class AgentView(APIView):
                     r'\b(need|want|get|give|send|show|display)\b.*(image|pic|picture|photo|illustration)',
                     r'\b(can you|could you|please)\b.*(image|pic|picture|photo|draw|generate|create)',
                     r'\b(what does|how does|what would).*(look like)\b',
-                    r'\bi need (a |an |one )\b',
-                    r'\bi want (a |an |one )\b',
-                    r'\bhow about\b',
-                    r'\bone (of|on|for)\b.*\bthat\b',
-                    r'\bgive me (a |an |one )\b',
                 ]
                 query_has_image_intent = (
                     any(_re.search(p, q_lower) for p in image_patterns)

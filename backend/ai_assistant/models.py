@@ -31,6 +31,7 @@ class ChatMessage(models.Model):
     content = models.TextField()
     image = models.TextField(null=True, blank=True)  # Stores base64 data URIs or absolute URLs
     diagram_code = models.TextField(null=True, blank=True)
+    flow_objects = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
