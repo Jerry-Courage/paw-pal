@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.db.models import Count, Q, F
 from django.utils import timezone
+from django.urls import reverse
 
 from .models import Resource, Flashcard, Quiz, Deck, ResourceImage, SourceBookmark
 from .serializers import (
@@ -366,6 +367,53 @@ class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_serializer_context(self):
         return {'request': self.request}
+
+
+class ResourceReadingView(APIView):
+    """Durable, compact reading payload independent of the uploaded binary."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, resource_id):
+        resource = get_object_or_404(Resource.objects.filter(
+            Q(owner=request.user) | Q(workspaces__members=request.user) | Q(is_public=True)
+        ).distinct(), id=resource_id)
+        notes = resource.ai_notes_json if isinstance(resource.ai_notes_json, dict) else {}
+        has_original_reference = self._original_exists(resource)
+        original_url = request.build_absolute_uri(
+            reverse('resource-file', kwargs={'resource_id': resource.id})
+        ) if has_original_reference else None
+        return Response({
+            'id': resource.id,
+            'title': resource.title,
+            'resource_type': resource.resource_type,
+            'subject': resource.subject,
+            'status': resource.status,
+            'ai_summary': resource.ai_summary,
+            'sections': notes.get('sections', []),
+            'original_available': has_original_reference,
+            'original_url': original_url,
+            'processed_content_available': bool(resource.ai_summary or notes.get('sections')),
+        })
+
+    @staticmethod
+    def _original_exists(resource):
+        if resource.resource_type == 'video' and resource.url:
+            return True
+        if resource.storage_backend == 'r2' and resource.r2_key:
+            try:
+                from library.hybrid_storage import _get_r2_client
+                _get_r2_client().head_object(Bucket=settings.R2_BUCKET_NAME, Key=resource.r2_key)
+                return True
+            except Exception as exc:
+                logger.warning('[ResourceReadingView] R2 original unavailable for %s: %s', resource.id, exc)
+                return False
+        if not resource.file:
+            return False
+        try:
+            return resource.file.storage.exists(resource.file.name)
+        except Exception as exc:
+            logger.warning('[ResourceReadingView] Original availability check failed for %s: %s', resource.id, exc)
+            return False
 
 
 class GenerateFlashcardsView(APIView):

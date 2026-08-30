@@ -19,3 +19,23 @@ class SourceBookmarkTests(TestCase):
         self.assertEqual(SourceBookmark.objects.filter(user=self.user).count(), 1)
         other_client = APIClient(); other_client.force_authenticate(self.other)
         self.assertEqual(other_client.get(url).status_code, 404)
+
+
+class ResourceReadingTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='source-reader', email='source@example.com', password='test-pass-123')
+        self.other = get_user_model().objects.create_user(username='source-other', email='source-other@example.com', password='test-pass-123')
+        self.client = APIClient(); self.client.force_authenticate(self.user)
+
+    def test_processed_content_survives_missing_original(self):
+        resource = Resource.objects.create(owner=self.user, title='Durable notes', status='ready', has_study_kit=True, ai_summary='A persisted summary.', ai_notes_json={'sections': [{'title': 'Convergence', 'plain_english': 'A durable explanation.'}]})
+        response = self.client.get(f'/api/library/resources/{resource.id}/reading/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['processed_content_available'])
+        self.assertFalse(response.data['original_available'])
+        self.assertEqual(response.data['sections'][0]['title'], 'Convergence')
+
+    def test_reading_payload_is_user_scoped(self):
+        resource = Resource.objects.create(owner=self.other, title='Private notes', ai_summary='Private')
+        response = self.client.get(f'/api/library/resources/{resource.id}/reading/')
+        self.assertEqual(response.status_code, 404)

@@ -19,7 +19,7 @@ export default function ResourceError({
       <span className="material-symbols-outlined text-error text-[56px]">error</span>
       <h1 className="text-[22px] font-bold text-on-surface">Something went wrong</h1>
       <p className="text-on-surface-variant text-[14px] max-w-sm">
-        This resource couldn&apos;t load. It may be too large or the file may have been cleared after a server restart.
+        We couldn&apos;t load this Source just now. Your saved Source has not been deleted.
       </p>
       <div className="flex gap-3 mt-2">
         <button

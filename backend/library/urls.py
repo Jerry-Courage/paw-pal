@@ -8,7 +8,7 @@ from .views import (
     DeckListCreateView, DeckDetailView, SaveFlashcardsView,
     CloneResourceView, ResourceFileView, CuratedLibraryView,
     ReprocessResourceView, DBStatusView, DebugResourceView,
-    ResourceVRLayoutView, SketchfabModelView,
+    ResourceVRLayoutView, SketchfabModelView, ResourceReadingView,
     SectionQuizView, ResourceSceneView, SourceBookmarkListCreateView, SourceBookmarkDetailView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
@@ -24,6 +24,7 @@ urlpatterns = [
     path('resources/curated/', CuratedLibraryView.as_view(), name='resource-curated'),
     path('resources/', ResourceListCreateView.as_view(), name='resource-list'),
     path('resources/<int:pk>/', ResourceDetailView.as_view(), name='resource-detail'),
+    path('resources/<int:resource_id>/reading/', ResourceReadingView.as_view(), name='resource-reading'),
     path('resources/<int:pk>/vr-layout/', ResourceVRLayoutView.as_view(), name='resource-vr-layout'),
     path('resources/<int:pk>/scene/', ResourceSceneView.as_view(), name='resource-scene'),
     path('sketchfab-model/', SketchfabModelView.as_view(), name='sketchfab-model'),
