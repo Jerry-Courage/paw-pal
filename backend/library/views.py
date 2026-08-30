@@ -378,6 +378,8 @@ class ResourceReadingView(APIView):
             Q(owner=request.user) | Q(workspaces__members=request.user) | Q(is_public=True)
         ).distinct(), id=resource_id)
         notes = resource.ai_notes_json if isinstance(resource.ai_notes_json, dict) else {}
+        sections = self._normalize_sections(notes.get('sections'))
+        summary = self._text(resource.ai_summary)
         has_original_reference = self._original_exists(resource)
         original_url = request.build_absolute_uri(
             reverse('resource-file', kwargs={'resource_id': resource.id})
@@ -388,12 +390,69 @@ class ResourceReadingView(APIView):
             'resource_type': resource.resource_type,
             'subject': resource.subject,
             'status': resource.status,
-            'ai_summary': resource.ai_summary,
-            'sections': notes.get('sections', []),
+            'ai_summary': summary,
+            'summary': summary,
+            'sections': sections,
             'original_available': has_original_reference,
+            'original_file_available': has_original_reference,
             'original_url': original_url,
-            'processed_content_available': bool(resource.ai_summary or notes.get('sections')),
+            'processed_content_available': bool(summary or sections),
         })
+
+    @classmethod
+    def _normalize_sections(cls, raw_sections):
+        if isinstance(raw_sections, dict):
+            raw_sections = list(raw_sections.values())
+        if not isinstance(raw_sections, list):
+            return []
+        normalized = []
+        for index, raw in enumerate(raw_sections):
+            item = raw if isinstance(raw, dict) else {'content': raw}
+            key_points = cls._list(item.get('key_points'))
+            examples = cls._list(item.get('examples'))
+            normalized.append({
+                'id': cls._text(item.get('id') or item.get('slug') or f'section-{index}'),
+                'title': cls._text(item.get('title') or item.get('heading') or f'Section {index + 1}'),
+                'content': cls._text(item.get('content') or item.get('notes')),
+                'plain_english': cls._text(item.get('plain_english')),
+                'deep_dive': cls._text(item.get('deep_dive')),
+                'summary': cls._text(item.get('summary')),
+                'key_points': key_points,
+                'examples': examples,
+                'page': cls._page(item.get('page', item.get('page_number'))),
+            })
+        return normalized
+
+    @staticmethod
+    def _text(value):
+        if value is None:
+            return ''
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (int, float, bool)):
+            return str(value)
+        if isinstance(value, list):
+            return '\n'.join(ResourceReadingView._text(item) for item in value if item is not None)
+        if isinstance(value, dict):
+            for key in ('text', 'content', 'title', 'value', 'description'):
+                if value.get(key) is not None:
+                    return ResourceReadingView._text(value[key])
+            return ''
+        return str(value)
+
+    @classmethod
+    def _list(cls, value):
+        if value is None:
+            return []
+        values = value if isinstance(value, list) else [value]
+        return [text for text in (cls._text(item) for item in values) if text]
+
+    @staticmethod
+    def _page(value):
+        try:
+            return int(value) if value is not None and str(value).strip() else None
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _original_exists(resource):
