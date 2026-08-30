@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const focusMainRef = useRef<HTMLElement>(null)
   const isJourneyFocus = /^\/learn\/[^/]+$/.test(pathname)
+  const isReadingMode = /^\/library\/[^/]+\/read$/.test(pathname)
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: () => authApi.me().then(response => response.data),
@@ -98,7 +99,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         className={cn(
           !hideNav && 'md:ml-[68px] md:transition-[margin-left] md:duration-300 md:ease-in-out peer-data-[expanded=true]/sidebar:md:ml-64',
           hideNav
-            ? isJourneyFocus
+            ? isJourneyFocus || isReadingMode
               ? 'fixed inset-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] touch-pan-y focus:outline-none'
               : 'fixed inset-0'
             : shouldFullViewport
