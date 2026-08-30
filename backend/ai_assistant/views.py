@@ -884,13 +884,19 @@ class AgentView(APIView):
             from .capabilities import execute_capability
             capability_result = execute_capability(request.user, query, context, session=session)
             if capability_result is not None:
+                if capability_result.get('pending_intent'):
+                    session.state = {**(session.state or {}), 'pending_capability': capability_result['pending_intent']}
+                elif capability_result.get('clear_pending_intent') or (session.state or {}).get('pending_capability'):
+                    next_state = {**(session.state or {})}
+                    next_state.pop('pending_capability', None)
+                    session.state = next_state
                 assistant_msg = ChatMessage.objects.create(
                     session=session,
                     role='assistant',
                     content=capability_result['reply'],
                     flow_objects=capability_result.get('objects', []),
                 )
-                session.save()
+                session.save(update_fields=['state', 'updated_at'])
                 return Response({
                     'done': True,
                     'message_id': assistant_msg.id,

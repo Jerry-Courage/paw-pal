@@ -136,6 +136,18 @@ export function normalizeForRendering(content: string): string {
 
   let text = content
 
+  // Normalize common model output where display environments arrive without
+  // delimiters. Keeping the complete environment together prevents remark
+  // from wrapping \begin and \end as separate inline fragments.
+  text = text.replace(
+    /(?:\$\$\s*)?(\\begin\{(?:matrix|pmatrix|bmatrix|vmatrix|Vmatrix|aligned|cases)\}[\s\S]*?\\end\{(?:matrix|pmatrix|bmatrix|vmatrix|Vmatrix|aligned|cases)\})(?:\s*\$\$)?/g,
+    (_, environment) => `\n\n$$${environment.trim()}$$\n\n`,
+  )
+
+  // Repair a lone display delimiter around a formula instead of exposing it.
+  const displayMarkers = (text.match(/\$\$/g) || []).length
+  if (displayMarkers % 2 === 1) text = `${text.trim()}$$`
+
   // 1. Normalize \[...\] → $$...$$ and \(...\) → $...$
   text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner.trim()}$$`)
   text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$${inner.trim()}$`)

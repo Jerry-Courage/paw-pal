@@ -29,7 +29,7 @@ class ChatSessionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatSession
-        fields = ('id', 'context_type', 'resource', 'group', 'title', 'last_message', 'created_at', 'updated_at')
+        fields = ('id', 'context_type', 'resource', 'group', 'title', 'last_message', 'state', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
 
     def get_last_message(self, obj):
@@ -45,7 +45,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatSession
-        fields = ('id', 'context_type', 'resource', 'group', 'title', 'messages', 'last_message', 'created_at', 'updated_at')
+        fields = ('id', 'context_type', 'resource', 'group', 'title', 'messages', 'last_message', 'state', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
 
     def get_last_message(self, obj):

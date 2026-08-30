@@ -14,6 +14,7 @@ class ChatSession(models.Model):
     resource = models.ForeignKey('library.Resource', on_delete=models.SET_NULL, null=True, blank=True)
     group = models.ForeignKey('groups.StudyGroup', on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=300, blank=True)
+    state = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

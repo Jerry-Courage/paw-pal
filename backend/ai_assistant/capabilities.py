@@ -68,10 +68,10 @@ def _topic(query: str, resource: Resource | None) -> str:
 
 
 def _requested_count(query: str) -> int:
-    match = re.search(r'\b(\d{1,2}|one|two|three|four|five)\s+(?:quick\s+)?questions?\b', query, re.I)
-    words = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5}
+    match = re.search(r'\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:quick\s+|hard\s+|easy\s+)?questions?\b', query, re.I)
+    words = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10}
     raw = match.group(1).lower() if match else ''
-    return max(1, min(5, words.get(raw, int(raw) if raw.isdigit() else 1)))
+    return max(1, min(10, words.get(raw, int(raw) if raw.isdigit() else 1)))
 
 
 def _practice_concept(user, query: str, context: str):
@@ -309,12 +309,48 @@ def _continue_mode(user, query: str, previous: dict) -> dict:
 
 
 def execute_capability(user, query: str, context: str, session=None) -> dict | None:
+    pending = (session.state or {}).get('pending_capability') if session is not None else None
+    if pending:
+        capability = next((item for item in REGISTRY if item.name == pending.get('name')), None)
+        if capability:
+            pending_context = pending.get('context', '')
+            result = capability.handler(user, query, '\n'.join(filter(None, [context, pending_context])))
+            if 'clarification' in result:
+                return {'capability': capability.name, 'reply': result['clarification'], 'objects': [], 'needs_context': True,
+                        'pending_intent': {'name': capability.name, 'missing': pending.get('missing', 'topic'), 'context': pending_context}}
+            return {'capability': capability.name, **result, 'clear_pending_intent': True}
     if session is not None:
         previous_message = session.messages.filter(role='assistant').exclude(flow_objects=[]).order_by('-created_at').first()
         if previous_message and previous_message.flow_objects:
             previous = previous_message.flow_objects[-1]
             if previous.get('type') in {'active_recall', 'feynman'} and previous.get('payload', {}).get('mode') == 'active':
                 return _continue_mode(user, query, previous)
+            if previous.get('type') == 'practice' and re.search(r'^\s*(continue (?:the )?(?:quiz|practice)|resume (?:the )?(?:quiz|practice))\s*[.!?]*$', query, re.I):
+                # Move the same persisted object forward instead of regenerating or duplicating it.
+                previous_message.flow_objects = [item for item in previous_message.flow_objects if str(item.get('id')) != str(previous.get('id'))]
+                previous_message.save(update_fields=['flow_objects'])
+                payload = previous.get('payload', {})
+                return {
+                    'capability': 'practice',
+                    'reply': f"Back to {payload.get('topic', 'the topic')} — question {int(payload.get('question_index', 0)) + 1} of {payload.get('question_total', 1)}.",
+                    'objects': [previous],
+                }
+            if previous.get('type') == 'practice' and re.search(r'^\s*(another( one)?|one more|next( question)?|harder|easier|make (?:the )?(?:next one|rest) (?:harder|easier))\s*[.!?]*$', query, re.I):
+                payload = previous.get('payload', {})
+                difficulty = 'hard' if re.search(r'hard', query, re.I) else 'easy' if re.search(r'eas', query, re.I) else str((payload.get('questions') or [{}])[-1].get('difficulty', 'medium'))
+                answered = len(payload.get('responses', []))
+                remaining = max(1, int(payload.get('question_total', 1)) - answered)
+                requested = remaining if re.search(r'\brest\b', query, re.I) else 1
+                routed = f'give me {requested} {difficulty} questions on {payload.get("topic", "this topic")}'
+                followup_context = context
+                if payload.get('concept_id'):
+                    followup_context = f'{followup_context}\nCONCEPT {payload["concept_id"]}'
+                result = _practice(user, routed, followup_context)
+                if result.get('objects'):
+                    next_payload = result['objects'][0].get('payload', {})
+                    next_payload['question_offset'] = answered
+                    next_payload['session_question_total'] = answered + int(next_payload.get('question_total', requested))
+                return {'capability': 'practice', **result}
     if ACKNOWLEDGEMENT_RE.match(query):
         return {'capability': 'acknowledgement', 'reply': 'Nice 👀 Want one quick check to make sure it stuck, or should we keep moving?', 'objects': []}
     capability = resolve_capability(query)
@@ -327,7 +363,8 @@ def execute_capability(user, query: str, context: str, session=None) -> dict | N
             routed_query = f'{query} {previous_user.content}'
     result = capability.handler(user, routed_query, context)
     if 'clarification' in result:
-        return {'capability': capability.name, 'reply': result['clarification'], 'objects': [], 'needs_context': True}
+        return {'capability': capability.name, 'reply': result['clarification'], 'objects': [], 'needs_context': True,
+                'pending_intent': {'name': capability.name, 'missing': 'source' if capability.requires_source else 'topic', 'context': context}}
     return {'capability': capability.name, **result}
 
 

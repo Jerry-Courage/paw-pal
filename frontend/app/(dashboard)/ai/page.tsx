@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { aiApi, libraryApi, learningApi, assignmentsApi } from '@/lib/api'
 import {
@@ -468,7 +468,8 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }
           </div>
         ) : (
           /* AI: ChatGPT-style — clean, no bubble, full width */
-          <div className="w-full max-w-[48rem]">
+          <div className="w-full max-w-[44rem]">
+            {isLast && <div className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-flow-violet"><FlowCompanion state={msg.flow_objects?.length ? 'teaching' : 'idle'} className="w-9 shrink-0" label="Flow" /><span>{msg.flow_objects?.length ? 'Flow is guiding this' : 'Flow'}</span></div>}
             {/* Main content — no bubble, just structured text */}
             <div className="text-[16px] leading-relaxed w-full">
               <RichContent content={msg.content} />
@@ -504,12 +505,17 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }
               </div>
             )}
             {!!msg.flow_objects?.length && <div className="mt-4 space-y-4">{msg.flow_objects.map(object => <FlowObjectRenderer key={object.id} object={object} onAction={onAction} sessionId={sessionId} />)}</div>}
+            {isLast && !msg.flow_objects?.length && msg.content.length > 80 && <div className="mt-4 flex flex-wrap gap-2" aria-label="Useful next steps">
+              <button onClick={() => onAction('Show me one clear example of this.')} className="flow-object-button">Show an example</button>
+              <button onClick={() => onAction('Quiz me on this.')} className="flow-object-button">Quiz me</button>
+              <button onClick={() => onAction('Explain this differently and more simply.')} className="flow-object-button">Explain differently</button>
+            </div>}
           </div>
         )}
 
         {/* Actions row — only for AI messages */}
         {!isUser && (
-          <div className="flex items-center gap-3 pl-0 mt-2">
+          <div className="flex items-center gap-2 pl-0 mt-2 opacity-70 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
             <button
               onClick={handleCopy}
               className="group/copy flex items-center gap-1.5 text-on-surface-variant/60 hover:text-primary transition-colors text-[10px] font-black uppercase tracking-widest"
@@ -533,7 +539,13 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }
             <button
               onClick={async () => {
                 window.speechSynthesis.cancel()
-                const text = msg.content.replace(/[*_#`>\[\]!]/g, '').slice(0, 2000)
+                const text = normalizeForRendering(msg.content)
+                  .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '$1 divided by $2')
+                  .replace(/\\(?:begin|end)\{[^}]+\}/g, ' ')
+                  .replace(/\\(?:mathbf|mathrm|text|operatorname)\{([^{}]+)\}/g, '$1')
+                  .replace(/\\[a-zA-Z]+/g, ' ')
+                  .replace(/[$*_#`>\[\]!{}]/g, ' ')
+                  .replace(/\s+/g, ' ').trim().slice(0, 2000)
                 if (!text.trim()) return
                 toast.success('Generating voice...')
                 try {
@@ -551,7 +563,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }
               }}
               className="flex items-center gap-1.5 text-on-surface-variant/60 hover:text-emerald-400 transition-colors text-[10px] font-black uppercase tracking-widest"
             >
-              <Volume2 className="w-3 h-3" /> Read Aloud
+              <Volume2 className="w-3 h-3" /><span className="hidden sm:inline">Read Aloud</span><span className="sr-only sm:hidden">Read aloud</span>
             </button>
             <div className="h-1 w-1 rounded-full bg-surface-container-highest" />
             <button
@@ -561,7 +573,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }
               }}
               className="flex items-center gap-1.5 text-on-surface-variant/60 hover:text-red-400 transition-colors text-[10px] font-black uppercase tracking-widest"
             >
-              <VolumeX className="w-3 h-3" /> Stop
+              <VolumeX className="w-3 h-3" /><span className="hidden sm:inline">Stop</span><span className="sr-only sm:hidden">Stop reading</span>
             </button>
           </div>
         )}
@@ -574,6 +586,7 @@ function MessageBubble({ msg, index, isLast, onRegenerate, onAction, sessionId }
 // â”€â”€â”€ MAIN CHAT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AIChat() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const queryClient = useQueryClient()
   const { data: authSession } = useSession()
   
@@ -596,6 +609,13 @@ function AIChat() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const restoredSessionRef = useRef<string | null>(null)
+
+  const setSessionInUrl = (sessionId?: number | string) => {
+    const next = new URLSearchParams(searchParams.toString())
+    if (sessionId) next.set('session', String(sessionId)); else next.delete('session')
+    router.replace(next.size ? `/ai?${next.toString()}` : '/ai', { scroll: false })
+  }
 
   const { data: sessions = [] } = useQuery({ 
     queryKey: ['ai-sessions'], 
@@ -623,6 +643,8 @@ function AIChat() {
   ].filter(Boolean).join('\n')
   const activeJourney = journeys.find((journey: any) => journey.status === 'active') || journeys[0]
   const firstName = authSession?.user?.name?.split(' ')[0]
+  const conversationContext = selectedResourceData?.title || selectedJourney?.title || selectedAssignment?.title || activeSession?.title
+  const conversationContextKind = selectedResourceData ? 'Source' : selectedJourney ? 'Journey' : selectedAssignment ? 'Assignment' : 'Topic'
 
   useEffect(() => {
     const q = searchParams.get('q')
@@ -665,6 +687,7 @@ function AIChat() {
     setInput('')
     setAttachedFile(null)
     setFilePreview(null)
+    setSessionInUrl()
     toast.info('New chat started')
   }
 
@@ -687,6 +710,7 @@ function AIChat() {
       }))
       setMessages(mappedMessages)
       setActiveSession(fullSession)
+      setSessionInUrl(fullSession.id)
     } catch {
       const mappedMessages = (session.messages || []).map((m: any) => ({
         role: m.role,
@@ -698,6 +722,14 @@ function AIChat() {
       setMessages(mappedMessages)
     }
   }
+
+  useEffect(() => {
+    const requested = searchParams.get('session')
+    if (!requested || restoredSessionRef.current === requested || activeSession?.id === Number(requested)) return
+    restoredSessionRef.current = requested
+    const listed = sessions.find((item: any) => String(item.id) === requested)
+    loadSession(listed || { id: Number(requested), title: 'Conversation' })
+  }, [sessions, searchParams, activeSession?.id])
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: number) => {
     e.stopPropagation() // Prevent loading the session when clicking delete
@@ -876,6 +908,7 @@ function AIChat() {
             if (response.data.session_id) {
               if (!activeSession || activeSession.id !== response.data.session_id) {
                 setActiveSession({ id: response.data.session_id, title: query.slice(0, 60) || 'New Chat' })
+                setSessionInUrl(response.data.session_id)
                 queryClient.invalidateQueries({ queryKey: ['ai-sessions'] })
               }
             }
@@ -925,6 +958,14 @@ function AIChat() {
       setSending(false)
     }
   };
+
+  const runSuggestedAction = (text: string) => {
+    if (sending) return
+    const userMessage: Message = { role: 'user', content: text }
+    const history = [...messages]
+    setMessages(previous => [...previous, userMessage])
+    executeQuery(text, null, history)
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1104,6 +1145,11 @@ function AIChat() {
             </button>
           </div>
         </div>
+        {!isEmpty && conversationContext && <div className="z-10 flex min-h-10 items-center gap-2 border-b border-outline-variant/10 bg-surface-container-low/35 px-4 text-xs">
+          <span className="font-black uppercase tracking-[.14em] text-on-surface-variant/55">{conversationContextKind}</span>
+          <span className="min-w-0 flex-1 truncate font-bold text-on-surface">{conversationContext}</span>
+          {(selectedResourceData || selectedJourney || selectedAssignment) && <button onClick={() => { setSelectedResource(null); setSelectedJourney(null); setSelectedAssignment(null); setContextType('global') }} className="grid h-9 w-9 place-items-center text-on-surface-variant hover:text-on-surface" aria-label="Clear learning context"><X className="h-4 w-4" /></button>}
+        </div>}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-hide relative z-10">
@@ -1145,7 +1191,7 @@ function AIChat() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl px-3 sm:px-4 pt-8 pb-24 sm:pb-28 space-y-12 sm:space-y-20 animate-fade-in">
+            <div className="mx-auto w-full max-w-4xl space-y-8 px-3 pb-24 pt-6 animate-fade-in sm:space-y-12 sm:px-6 sm:pb-28 sm:pt-8">
               {messages.map((msg, i) => (
                 <MessageBubble 
                   key={i} 
@@ -1153,7 +1199,7 @@ function AIChat() {
                   index={i} 
                   isLast={i === messages.length - 1} 
                   onRegenerate={handleRegenerate}
-                  onAction={(text) => { setInput(text); setTimeout(() => textareaRef.current?.focus(), 0) }}
+                  onAction={runSuggestedAction}
                   sessionId={activeSession?.id}
                 />
               ))}

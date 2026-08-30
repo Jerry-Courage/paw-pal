@@ -955,6 +955,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return Response(_session_data(session))
         TeachingTurn.objects.create(session=session, role='learner', content=text, idempotency_key=key)
         lowered = text.lower()
+        practice_requested = bool(re.search(r'\b(quiz me|practice|test me|give me (?:one|two|three|four|five|\d+)?\s*questions?|question on this)\b', lowered))
         activities = _concept_activities(concept, request.user)
         flow_text, kind, payload = '', 'message', {}
 
@@ -991,7 +992,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             session.resume_point = session.current_point
             session.state = {**session.state, 'skipped': True}
             flow_text = "We can pause this topic, but I won’t pretend it’s mastered. Your progress is saved and we can return when you’re ready."
-        elif any(phrase in lowered for phrase in ('are we done', 'can we move on', 'how much is left', 'am i done')):
+        elif any(phrase in lowered for phrase in ('are we done', 'can we move on', 'how much is left', 'am i done', 'is that all', "what's left", 'what is left', 'what else do i need to know', 'what else')):
             evaluation = evaluate_session_completion(session)
             remaining = evaluation['objectives_total'] - evaluation['objectives_satisfied']
             if evaluation['complete']:
@@ -1002,6 +1003,17 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             else:
                 flow_text = f"Not quite. You’ve secured {evaluation['objectives_satisfied']} of {evaluation['objectives_total']} objectives. We’ll focus only on what’s left."
             payload = {'completion_evaluation': evaluation}
+        elif practice_requested:
+            activity = next((item for item in activities if item['purpose'] in {'apply', 'check', 'transfer'} and item['id'] not in session.state.get('shown_activity_ids', [])), None)
+            if not activity:
+                activity = next((item for item in activities if item['purpose'] in {'apply', 'check', 'transfer'}), None)
+            if activity:
+                shown = [*session.state.get('shown_activity_ids', []), activity['id']]
+                session.state = {**session.state, 'shown_activity_ids': shown[-12:], 'last_learning_object': {'type': 'practice', 'activity_id': activity['id'], 'objective_id': activity.get('objective_id', '')}}
+                session.status = 'practicing'
+                flow_text, kind, payload = "Let’s check the current objective—one question at a time.", 'activity', {'activity': _public_activity(activity)}
+            else:
+                flow_text = "I couldn’t build a trustworthy check for this objective yet. I can explain it another way, then try again."
         elif any(phrase in lowered for phrase in ('show me a video', 'find a video', 'need to see this', 'video')):
             from ai_assistant.youtube_search import search_youtube
             query = f'{concept.title} {text} {getattr(concept.source_resource, "subject", "")} explained'
@@ -1051,7 +1063,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             else:
                 unresolved = completion_state['unresolved_objectives']
                 current_result = next((item for item in completion_state['objectives'] if item['id'] == (session.objectives[min(session.current_point, len(session.objectives) - 1)]['id'] if session.objectives else '')), None)
-                if current_result and current_result['taught'] and not current_result['understood']:
+                if current_result and not current_result['satisfied']:
                     flow_text = "Cool. Before we move on, explain that bit back to me in one sentence — just enough to show the idea is yours."
                 else:
                     session.current_point = min(session.current_point + 1, max(0, len(session.objectives) - 1))
@@ -1067,7 +1079,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             flow_text = "Perfect. We’ll build this one distinction at a time—no formula avalanche. **Key distinction:** iterative methods improve a current estimate through repeated sweeps."
             if teaching:
                 kind, payload = 'activity', {'activity': _public_activity(teaching)}
-        elif any(phrase in lowered for phrase in ('practice', 'quiz me', 'question', 'test me', 'example')):
+        elif any(phrase in lowered for phrase in ('example', 'show me an example')):
             activity = next((item for item in activities if item['purpose'] in {'apply', 'check', 'transfer'} and item['id'] not in session.state.get('shown_activity_ids', [])), None)
             if activity:
                 shown = [*session.state.get('shown_activity_ids', []), activity['id']]
@@ -1233,7 +1245,9 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         session.resume_point = session.current_point
         TeachingTurn.objects.create(session=session, role='flow', content=result['feedback'], payload={'feynman_result': result})
         session.save()
-        return Response({'result': result, **_session_data(session)}, status=201)
+        completion_state = evaluate_session_completion(session)
+        response_status = 409 if result['critical_misconceptions'] else 201
+        return Response({'result': result, **completion_state, **_session_data(session)}, status=response_status)
 
     @action(detail=True, methods=['get'])
     def activities(self, request, pk=None):

@@ -167,6 +167,61 @@ class FlowCapabilityRoutingTests(TestCase):
         self.assertTrue(result['needs_context'])
         self.assertEqual(result['objects'], [])
 
+    @patch('ai_assistant.capabilities._free_practice_questions')
+    def test_pending_practice_clarification_resolves_topic_not_image(self, generate):
+        generate.return_value = [{'id': 'free-1', 'type': 'short_answer', 'prompt': 'What does chlorophyll do?', 'options': [], 'difficulty': 'medium', 'evaluation_token': 'signed'}]
+        session = ChatSession.objects.create(user=self.user, title='Photosynthesis', state={'pending_capability': {'name': 'practice', 'missing': 'topic', 'context': ''}})
+        result = execute_capability(self.user, 'photosynthesis', '', session=session)
+        self.assertEqual(result['capability'], 'practice')
+        self.assertEqual(result['objects'][0]['type'], 'practice')
+        self.assertNotIn('image', str(result).lower())
+
+    @patch('ai_assistant.capabilities._free_practice_questions')
+    def test_explicit_practice_quantity_is_bounded_and_sequential(self, generate):
+        generate.return_value = [{'id': f'free-{index}', 'type': 'short_answer', 'prompt': f'Question {index}', 'options': [], 'difficulty': 'hard', 'evaluation_token': 'signed'} for index in range(10)]
+        result = execute_capability(self.user, 'give me 10 hard questions on photosynthesis', '')
+        practice = result['objects'][0]['payload']
+        self.assertEqual(practice['question_total'], 10)
+        self.assertEqual(practice['question_index'], 0)
+
+    def test_harder_followup_after_practice_stays_native(self):
+        path = LearningPath.objects.create(user=self.user, title='Calculus', status='active', goal='Understand it')
+        concept = ConceptNode.objects.create(path=path, title='Derivatives', description='Rates of change.', status='current')
+        TeachingSession.objects.create(user=self.user, concept=concept, status='teaching')
+        session = ChatSession.objects.create(user=self.user, title='Derivative practice')
+        first = execute_capability(self.user, 'quiz me on derivatives', f'CONCEPT {concept.id}', session=session)
+        ChatMessage.objects.create(session=session, role='assistant', content=first['reply'], flow_objects=first['objects'])
+        followup = execute_capability(self.user, 'make the next one harder', '', session=session)
+        self.assertEqual(followup['objects'][0]['type'], 'practice')
+        self.assertEqual(followup['objects'][0]['payload']['mode'], 'journey')
+
+    @patch('ai_assistant.capabilities._free_practice_questions')
+    def test_continue_quiz_moves_same_active_object_forward(self, generate):
+        generate.return_value = [{'id': f'free-{index}', 'type': 'short_answer', 'prompt': f'Question {index}', 'options': [], 'difficulty': 'medium', 'evaluation_token': 'signed'} for index in range(3)]
+        session = ChatSession.objects.create(user=self.user, title='Photosynthesis practice')
+        first = execute_capability(self.user, 'give me 3 questions on photosynthesis', '', session=session)
+        message = ChatMessage.objects.create(session=session, role='assistant', content=first['reply'], flow_objects=first['objects'])
+        resumed = execute_capability(self.user, 'continue the quiz', '', session=session)
+        self.assertEqual(resumed['objects'][0]['id'], first['objects'][0]['id'])
+        message.refresh_from_db()
+        self.assertEqual(message.flow_objects, [])
+
+    @patch('ai_assistant.capabilities._free_practice_questions')
+    def test_make_rest_harder_preserves_remaining_count(self, generate):
+        generate.side_effect = [
+            [{'id': f'first-{index}', 'type': 'short_answer', 'prompt': f'Question {index}', 'options': [], 'difficulty': 'medium', 'evaluation_token': 'signed'} for index in range(5)],
+            [{'id': f'hard-{index}', 'type': 'short_answer', 'prompt': f'Hard question {index}', 'options': [], 'difficulty': 'hard', 'evaluation_token': 'signed'} for index in range(3)],
+        ]
+        session = ChatSession.objects.create(user=self.user, title='Five questions')
+        first = execute_capability(self.user, 'give me 5 questions on photosynthesis', '', session=session)
+        first['objects'][0]['payload']['responses'] = [{}, {}]
+        ChatMessage.objects.create(session=session, role='assistant', content=first['reply'], flow_objects=first['objects'])
+        harder = execute_capability(self.user, 'make the rest harder', '', session=session)
+        payload = harder['objects'][0]['payload']
+        self.assertEqual(payload['question_total'], 3)
+        self.assertEqual(payload['question_offset'], 2)
+        self.assertEqual(payload['session_question_total'], 5)
+
 
 class FlowPracticeRuntimeTests(TestCase):
     def setUp(self):
@@ -201,3 +256,28 @@ class FlowPracticeRuntimeTests(TestCase):
         response = self.client.post(url, {'response': {'choice': 0}, 'idempotency_key': 'intruder'}, content_type='application/json')
         self.assertEqual(response.status_code, 404)
         self.assertFalse(EncounterAttempt.objects.filter(user=other).exists())
+
+
+class PendingCapabilityPersistenceTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='pending-router', password='test-password')
+        self.client = APIClient(); self.client.force_authenticate(self.user)
+
+    @patch('ai_assistant.capabilities._free_practice_questions')
+    def test_quiz_clarification_survives_request_boundary(self, generate):
+        generate.return_value = [{'id': 'photo-1', 'type': 'short_answer', 'prompt': 'What captures light energy?', 'options': [], 'difficulty': 'medium', 'evaluation_token': 'signed'}]
+        first = self.client.post('/api/ai/agent/', {'query': 'quiz me'}, format='json')
+        self.assertTrue(first.data['needs_context'])
+        session = ChatSession.objects.get(id=first.data['session_id'])
+        self.assertEqual(session.state['pending_capability']['name'], 'practice')
+        second = self.client.post('/api/ai/agent/', {'query': 'photosynthesis', 'session_id': session.id}, format='json')
+        self.assertEqual(second.data['objects'][0]['type'], 'practice')
+        session.refresh_from_db()
+        self.assertNotIn('pending_capability', session.state)
+
+    def test_session_detail_restores_completed_native_object(self):
+        session = ChatSession.objects.create(user=self.user, title='Restorable')
+        obj = flow_object('practice', {'status': 'completed', 'responses': [{'evaluation': {'correct': True}}], 'questions': []})
+        ChatMessage.objects.create(session=session, role='assistant', content='Saved practice', flow_objects=[obj])
+        response = self.client.get(f'/api/ai/sessions/{session.id}/')
+        self.assertEqual(response.data['messages'][0]['flow_objects'][0]['payload']['status'], 'completed')

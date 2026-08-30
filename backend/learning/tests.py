@@ -371,6 +371,21 @@ class ConversationalTeachingSessionTests(TestCase):
         response = self.client.post(f'{self.base}/teaching-message/', {'message': 'got it', 'idempotency_key': 'ack'}, format='json')
         self.assertIn('explain that bit back', response.data['turns'][-1]['content'].lower())
 
+    def test_is_that_all_uses_authoritative_completion_state(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        response = self.client.post(f'{self.base}/teaching-message/', {'message': 'Is that all?', 'idempotency_key': 'completeness'}, format='json')
+        turn = response.data['turns'][-1]
+        self.assertIn('completion_evaluation', turn['payload'])
+        self.assertEqual(turn['payload']['completion_evaluation']['objectives_satisfied'], 0)
+        self.assertNotIn('yes — the evidence is there', turn['content'].lower())
+
+    def test_quiz_me_returns_native_activity_turn(self):
+        response = self.client.post(f'{self.base}/teaching-message/', {'message': 'I need a quiz on this', 'idempotency_key': 'native-quiz'}, format='json')
+        turn = response.data['turns'][-1]
+        self.assertEqual(turn['kind'], 'activity')
+        self.assertIn('activity', turn['payload'])
+        self.assertNotIn('A.', turn['content'])
+
     def test_incomplete_objectives_cannot_complete_or_reward(self):
         self.client.get(f'{self.base}/teaching-session/')
         response = self.client.post(f'{self.base}/teaching-completion/', format='json')
