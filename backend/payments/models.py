@@ -6,10 +6,13 @@ from django.utils import timezone
 class PaymentTransaction(models.Model):
     """Records every payment attempt and its outcome."""
     STATUS_CHOICES = [
+        ('initialized', 'Initialized'),
         ('pending',   'Pending'),
         ('success',   'Success'),
         ('failed',    'Failed'),
         ('abandoned', 'Abandoned'),
+        ('reversed', 'Reversed'),
+        ('refunded', 'Refunded'),
     ]
 
     user = models.ForeignKey(
@@ -20,11 +23,22 @@ class PaymentTransaction(models.Model):
     )
     email = models.EmailField()  # snapshot in case user is deleted
     reference = models.CharField(max_length=100, unique=True, db_index=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)  # in USD
-    currency = models.CharField(max_length=10, default='USD')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)  # authoritative major-unit amount
+    currency = models.CharField(max_length=10, default='GHS')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     plan = models.CharField(max_length=50, default='premium_monthly')
-    paystack_data = models.JSONField(default=dict, blank=True)  # raw Paystack response
+    paystack_data = models.JSONField(default=dict, blank=True)  # allow-listed provider metadata only
+    expected_amount_minor = models.PositiveBigIntegerField(default=0)
+    paid_amount_minor = models.PositiveBigIntegerField(null=True, blank=True)
+    provider_transaction_id = models.CharField(max_length=100, blank=True)
+    channel = models.CharField(max_length=40, blank=True)
+    card_brand = models.CharField(max_length=40, blank=True)
+    card_last4 = models.CharField(max_length=4, blank=True)
+    failure_reason = models.CharField(max_length=255, blank=True)
+    initialization_key = models.CharField(max_length=100, blank=True, db_index=True)
+    promo_code = models.CharField(max_length=30, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

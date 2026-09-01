@@ -25,6 +25,12 @@ services:
         value: "3.12.1"
       - key: ALLOWED_HOSTS
         value: "*"
+      - key: PAYSTACK_MODE
+        value: "live"
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
 
   # ─── AI WORKER SERVICE ──────────────────────────────────────────────────────
   - type: worker

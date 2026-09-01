@@ -105,11 +105,12 @@ export interface EncounterActivity {
   objective_index?: number
   purpose: 'diagnose' | 'learn' | 'apply' | 'check' | 'transfer' | 'reflect' | 'remediate'
   stage: string
-  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example' | 'ordering'
+  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example' | 'ordering' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'callout'
+  title?: string
   instructions?: string
   prompt: string
   options?: string[]
-  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; mode?: string; title?: string; lead?: string; steps?: string[]; takeaway?: string }
+  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string }>; progressive?: boolean; knowledge_type?: string }
   explanation?: string
   hints?: string[]
   difficulty: string
@@ -144,7 +145,7 @@ export interface TeachingTurn {
   role: 'flow' | 'learner' | 'system'
   kind: 'message' | 'activity' | 'video' | 'flashcards' | 'voice' | 'completion'
   content: string
-  payload: { activity?: EncounterActivity; videos?: Array<{ video_id: string; title: string; channel: string; duration_str: string; thumbnail: string; url: string; embed_url?: string; why?: string; objective_id?: string }>; cards?: Array<{ question: string; answer: string; difficulty: string }>; correct?: boolean | null; score?: number; quick_replies?: string[] }
+  payload: { activity?: EncounterActivity; learning_objects?: EncounterActivity[]; videos?: Array<{ video_id: string; title: string; channel: string; duration_str: string; thumbnail: string; url: string; embed_url?: string; why?: string; objective_id?: string }>; cards?: Array<{ question: string; answer: string; difficulty: string }>; correct?: boolean | null; score?: number; quick_replies?: string[] }
   created_at: string
 }
 
@@ -162,6 +163,7 @@ export interface TeachingSessionResponse {
   turns: TeachingTurn[]
   last_active_at: string
   completed: boolean
+  teaching_phase: 'INTRODUCE' | 'TEACH' | 'CHECK' | 'REMEDIATE' | 'ADVANCE' | 'READY_TO_ADVANCE' | string
   teaching_preferences: Record<string, string>
   current_objective_id: string
   active_activity_id: string

@@ -376,14 +376,10 @@ class ApplyPromoCodeView(APIView):
 
 
 def _activate_premium(user, days: int = SUBSCRIPTION_DAYS):
-    """Grant premium access. Extends existing subscription if still active."""
-    now = timezone.now()
-    current_expiry = user.subscription_expires_at or now
-    new_expiry = max(current_expiry, now) + timedelta(days=days)
-    user.is_premium = True
-    user.subscription_expires_at = new_expiry
-    user.save(update_fields=['is_premium', 'subscription_expires_at'])
-    logger.info(f"[Payments] Premium activated for {user.email} until {new_expiry}")
+    """Compatibility wrapper for admin/promos; paid fulfillment uses services."""
+    from .services import activate_premium
+    activate_premium(user, days)
+    new_expiry = user.subscription_expires_at
 
     # Send welcome notification
     try:

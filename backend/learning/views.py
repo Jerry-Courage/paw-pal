@@ -16,6 +16,7 @@ from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptNodeSerializer, ConceptNodeDetailSerializer,
                            ConceptReviewSerializer, UnitSerializer)
 from .spaced_repetition import calculate_next_review, get_due_concepts, get_review_stats
+from .presentation import build_teaching_object, grounded_distractors
 
 logger = logging.getLogger(__name__)
 
@@ -266,26 +267,28 @@ def _objective_activities(session, user=None):
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[objective_index] if session.objectives else {'id': 'objective-1', 'text': concept.title}
     objective_id = objective['id']
+    grounding = _grounding(concept)
+    presentation = build_teaching_object(
+        concept, {**objective, 'index': objective_index}, grounding,
+        _activity_id(concept, f'presentation:{objective_id}'),
+        session.state.get('recent_representations', []),
+    )
     base_activities = _concept_activities(concept, user)
     if objective_index == 0:
         scoped = []
         for activity in base_activities:
             if activity.get('purpose') in {'check', 'apply', 'transfer'}:
                 activity = {**activity, 'objective_id': objective_id, 'objective_index': objective_index}
-            scoped.append(activity)
-        return scoped
+                scoped.append(activity)
+        return [presentation, *scoped]
 
-    grounding = _grounding(concept)
     fact = str(objective.get('text') or '').strip().rstrip('.')
     kind = _objective_kind(fact)
     provenance = {key: value for key, value in grounding.items() if value not in ('', None)}
     keywords = _meaningful_keywords(f'{concept.title} {fact}')
     correct = fact
-    distractors = [
-        f'{concept.title} removes the need for a repeatable method once a problem is identified.',
-        f'{concept.title} matters only after a final answer has already been found.',
-        f'{concept.title} guarantees that every difficult problem has a simple exact result.',
-    ]
+    nearby = [item.get('text', '') for item in session.objectives if item.get('id') != objective_id]
+    distractors = grounded_distractors(fact, nearby)
     prompt_by_kind = {
         'definition': f'Which statement best captures this checkpoint about {concept.title}?',
         'process': f'Which statement best describes the process in this checkpoint about {concept.title}?',
@@ -319,15 +322,7 @@ def _objective_activities(session, user=None):
         accepted_keywords=keywords, expected_concept=fact, explanation=fact,
         hints=[f'Start with this checkpoint: {fact}.'], check_level='transfer', difficulty='medium',
     )
-    teaching = objective_base(
-        'objective-example', 'learn', 'worked_example', f'Let’s make checkpoint {objective_index + 1} concrete.',
-        content={'mode': 'example', 'title': 'A concrete example',
-                 'lead': f'This example focuses only on checkpoint {objective_index + 1}.',
-                 'example': (grounding.get('excerpt') or concept.summary or fact)[:420], 'takeaway': fact},
-        explanation=fact,
-    )
-    scoped = [activity for activity in base_activities if activity.get('purpose') not in {'check', 'apply', 'transfer'}]
-    return [*scoped, teaching, *[activity for activity in (recognition, transfer) if _valid_activity(activity)]]
+    return [presentation, *[activity for activity in (recognition, transfer) if _valid_activity(activity)]]
 
 
 def _clear_objective_transient_state(state):
@@ -433,8 +428,12 @@ def _public_activity(activity):
 
 
 def _turn_data(turn):
+    payload = dict(turn.payload or {})
+    activity = payload.get('activity')
+    if activity and activity.get('purpose') in {'learn', 'remediate'}:
+        payload.setdefault('learning_objects', [activity])
     return {'id': str(turn.id), 'role': turn.role, 'kind': turn.kind, 'content': turn.content,
-            'payload': turn.payload, 'created_at': turn.created_at.isoformat()}
+            'payload': payload, 'created_at': turn.created_at.isoformat()}
 
 
 def _session_data(session):
@@ -471,18 +470,21 @@ def _get_teaching_session(concept, user):
         TeachingTurn.objects.create(session=session, role='flow', content=f"Hey {learner_name} 👋 Ready to learn {concept.title}?")
         stable_preferences = (getattr(user, 'onboarding_status', None) or {}).get('teaching_preferences', {})
         session.state = {'learner_type': profile.get('learner_type'), 'difficulty_areas': profile.get('difficulty_areas', []), 'resource_ids': [concept.source_resource_id] if concept.source_resource_id else [], 'teaching_preferences': stable_preferences, 'teaching_phase': 'INTRODUCE'}
-        session.save(update_fields=['state', 'last_active_at'])
         first_objective = session.objectives[0]['id'] if session.objectives else ''
         session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, first_objective]))
         record_objective_evidence(session, first_objective, taught=True)
-        activity = _next_journey_check(session, _objective_activities(session, user))
-        main_idea = (_grounding(concept).get('excerpt') or concept.summary or concept.description or concept.title)[:420]
+        activities = _objective_activities(session, user)
+        teaching = next((item for item in activities if item.get('purpose') == 'learn'), None)
+        check = _next_journey_check(session, activities)
         payload = {'pedagogical_action': 'CHECK'}
-        if activity:
-            payload['activity'] = _public_activity(activity)
+        if teaching:
+            payload['learning_objects'] = [_public_activity(teaching)]
+            session.state = {**session.state, 'recent_representations': [teaching['type']]}
+        if check:
+            payload.update({'activity': _public_activity(check), 'active_activity_id': check['id'], 'reused': False})
         TeachingTurn.objects.create(
-            session=session, role='flow', kind='activity' if activity else 'message',
-            content=f"We’ll build this one distinction at a time. **Key idea:** {main_idea}\n\nHere’s one small check to see what already makes sense.",
+            session=session, role='flow', kind='activity' if check or teaching else 'message',
+            content="Start with this idea. Explore it first—then use the quick check when you’re ready.",
             payload=payload,
         )
         session.save()
@@ -1373,7 +1375,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                                          'objective_id': objective_id}
         elif journey_intent in {'REEXPLAIN', 'REQUEST_SIMPLIFY'}:
             session.state = {**session.state, 'teaching_phase': 'TEACH'}
-            teaching = next((item for item in activities if item.get('purpose') == 'learn' and item['type'] in {'comparison', 'worked_example'}), None)
+            teaching = next((item for item in activities if item.get('purpose') == 'learn'), None)
             flow_text = ("Yep. Let’s strip it back to one idea." if journey_intent == 'REQUEST_SIMPLIFY'
                          else "Absolutely. Let’s rebuild it from a different angle.")
             if teaching:
@@ -1453,16 +1455,14 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             first_objective = session.objectives[0]['id'] if session.objectives else ''
             session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, first_objective]))
             record_objective_evidence(session, first_objective, taught=True)
-            teaching = next((item for item in activities if item['type'] in {'comparison', 'worked_example'}), None)
-            next_activity = _next_journey_check(session, activities)
-            main_idea = (_grounding(concept).get('excerpt') or concept.summary or concept.description or concept.title)[:420]
-            flow_text = f"Perfect. We’ll build this one distinction at a time—no formula avalanche. **Key distinction:** {main_idea}"
-            if next_activity:
-                flow_text += "\n\nNow let’s check that idea with one small move."
-                kind, payload = 'activity', {'activity': _public_activity(next_activity), 'pedagogical_action': 'CHECK'}
-            elif teaching:
+            teaching = next((item for item in activities if item.get('purpose') == 'learn'), None)
+            flow_text = "Perfect. Start with this—then we’ll build on it."
+            if teaching:
                 session.state = {**session.state, 'teaching_phase': 'TEACH'}
-                kind, payload = 'activity', {'activity': _public_activity(teaching), 'pedagogical_action': 'TEACH'}
+                session.state = {**session.state,
+                                 'recent_representations': [*session.state.get('recent_representations', [])[-3:], teaching['type']]}
+                kind, payload = 'activity', {'activity': _public_activity(teaching), 'learning_objects': [_public_activity(teaching)],
+                                             'pedagogical_action': 'TEACH'}
         elif journey_intent == 'REQUEST_EXAMPLE' or any(phrase in lowered for phrase in ('example', 'show me an example')):
             activity = next((item for item in activities if item['purpose'] in {'apply', 'check', 'transfer'} and item['id'] not in session.state.get('shown_activity_ids', [])), None)
             if activity:

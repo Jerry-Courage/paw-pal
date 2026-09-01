@@ -1,7 +1,7 @@
 from django.urls import path
+from .secure_views import InitializePaymentView, VerifyPaymentView, PaystackWebhookView, SubscriptionStatusView
 from .views import (
-    InitializePaymentView, VerifyPaymentView,
-    PaystackWebhookView, SubscriptionStatusView, ApplyPromoCodeView,
+    ApplyPromoCodeView,
     MarketplaceInventoryView, MarketplaceBuyPowerupView, MarketplaceUsePowerupView, MarketplaceBuyXPView, MarketplaceBuyThemeView
 )
 

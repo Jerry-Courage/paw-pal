@@ -46,7 +46,7 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
     user_link.short_description = 'User'
 
     def amount_display(self, obj):
-        return format_html('<strong>${}</strong>', obj.amount)
+        return format_html('<strong>{} {}</strong>', obj.currency, obj.amount)
     amount_display.short_description = 'Amount'
 
     def status_badge(self, obj):
@@ -77,11 +77,11 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
         """Add revenue summary to the top of the transaction list."""
         extra_context = extra_context or {}
         qs = self.get_queryset(request)
-        total_revenue = qs.filter(status='success').aggregate(total=Sum('amount'))['total'] or 0
+        total_revenue = qs.filter(status='success', currency='GHS').aggregate(total=Sum('amount'))['total'] or 0
         total_success = qs.filter(status='success').count()
         total_pending = qs.filter(status='pending').count()
         extra_context['summary'] = {
-            'total_revenue': f'${total_revenue:.2f}',
+            'total_revenue': f'GHS {total_revenue:.2f}',
             'total_success': total_success,
             'total_pending': total_pending,
         }

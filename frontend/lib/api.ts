@@ -487,8 +487,8 @@ export const workspaceApi = {
 // Payments & Marketplace
 export const paymentsApi = {
   getStatus: () => api.get('/payments/status/'),
-  initialize: (callback_url?: string, promo_code?: string, currency?: string, amount?: number) =>
-    api.post('/payments/initialize/', { callback_url, promo_code, currency, amount }),
+  initialize: (plan_id = 'premium_monthly', promo_code?: string, idempotency_key?: string) =>
+    api.post('/payments/initialize/', { plan_id, promo_code, idempotency_key }),
   verify: (reference: string) => api.get(`/payments/verify/?reference=${reference}`),
   applyPromo: (code: string) => api.post('/payments/promo/', { code }),
   getMarketplaceInventory: () => api.get('/payments/marketplace/inventory/'),

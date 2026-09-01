@@ -9,7 +9,6 @@ import {
 import { paymentsApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { usePricing } from '@/hooks/usePricing'
 
 interface PaywallModalProps {
   onClose: () => void
@@ -33,17 +32,10 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
   const [promoOpen, setPromoOpen]   = useState(false)
   const [promoLoading, setPromoLoading] = useState(false)
 
-  const { priceInfo } = usePricing()
-
   const handlePay = async () => {
     setLoading(true)
     try {
-      const res = await paymentsApi.initialize(
-        undefined,
-        promoCode || undefined,
-        priceInfo.paystackCurrency,
-        priceInfo.amount,
-      )
+      const res = await paymentsApi.initialize('premium_monthly', promoCode || undefined, crypto.randomUUID())
 
       // Promo code was applied directly (free days) — no popup needed
       if (res.data.promo_applied) {
@@ -167,13 +159,13 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
               You've used {notesUsed}/{notesLimit} free kits
             </h2>
             <p className="text-sm text-slate-500 leading-relaxed">
-              Unlock unlimited study kits, podcasts, and AI tools for just
+              Unlock more room for your Sources, Assignments, and Premium learning tools.
             </p>
             <div className="mt-3 flex items-baseline justify-center gap-1">
-              <span className="text-4xl font-black text-white">{priceInfo.display}</span>
+              <span className="text-4xl font-black text-white">GHS 10.00</span>
               <span className="text-slate-500 text-sm font-medium">/ month</span>
             </div>
-            <p className="text-xs text-slate-600 mt-2 italic">Come on bro, it's just {priceInfo.displayShort}... that's like a bottle of water 💀</p>
+            <p className="text-xs text-slate-500 mt-2">Secure hosted checkout. International card conversion is handled by your bank.</p>
           </div>
 
           {/* Perks */}
@@ -202,7 +194,7 @@ export default function PaywallModal({ onClose, notesUsed, notesLimit, onSuccess
                   {verifying ? 'Confirming payment…' : 'Opening payment…'}
                 </>
               ) : (
-                <><Sparkles className="w-4 h-4" /> Upgrade to Premium — {priceInfo.displayShort}</>
+                <><Sparkles className="w-4 h-4" /> Upgrade to Premium — GHS 10.00</>
               )}
             </button>
 

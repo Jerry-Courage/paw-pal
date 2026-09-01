@@ -72,6 +72,10 @@ export default function SettingsPage() {
     queryKey: ['profile'],
     queryFn: () => authApi.me().then(r => r.data),
   })
+  const { data: subscriptionData } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => paymentsApi.getStatus().then(r => r.data),
+  })
 
   useEffect(() => {
     if (profileData) {
@@ -516,6 +520,17 @@ export default function SettingsPage() {
       {/* ── Account Tab ───────────────────────────────── */}
       {activeTab === 'Account' && (
         <div className="space-y-stack-md">
+          <section className="rounded-[1.5rem] border border-outline-variant bg-surface-container-low p-stack-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-[15px] font-bold text-on-surface">Plan & billing</p>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                {subscriptionData?.is_premium
+                  ? `Premium active${subscriptionData.subscription_expires_at ? ` until ${new Date(subscriptionData.subscription_expires_at).toLocaleDateString()}` : ''}`
+                  : 'You are on the Free plan.'}
+              </p>
+            </div>
+            <a href="/upgrade" className="rounded-full bg-primary-container px-5 py-2.5 text-sm font-bold text-on-primary-container text-center">View plans & payment history</a>
+          </section>
           {/* Change Password */}
           <button
             onClick={() => setShowChangePassword(true)}

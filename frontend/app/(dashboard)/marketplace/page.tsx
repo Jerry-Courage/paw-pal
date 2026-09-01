@@ -56,41 +56,10 @@ const POWERUPS = [
   },
 ]
 
-const XP_PACKS = [
-  {
-    id: 'pack_500',
-    xp: 500,
-    priceGhs: 10.00,
-    label: 'Starter Pack',
-    badge: 'Basic',
-    color: 'border-primary/30 bg-primary/5',
-    btnColor: 'bg-primary text-on-primary hover:bg-primary/90',
-  },
-  {
-    id: 'pack_1500',
-    xp: 1500,
-    priceGhs: 25.00,
-    label: 'Pro Pack',
-    badge: '🔥 Best Value',
-    popular: true,
-    color: 'border-secondary/50 bg-secondary/10 glow-secondary',
-    btnColor: 'bg-secondary text-on-secondary hover:bg-secondary/90',
-  },
-  {
-    id: 'pack_5000',
-    xp: 5000,
-    priceGhs: 70.00,
-    label: 'Mega Pack',
-    badge: '⚡ Maximum Power',
-    color: 'border-tertiary/30 bg-tertiary/5',
-    btnColor: 'bg-tertiary text-on-tertiary hover:bg-tertiary/90',
-  },
-]
-
 export default function MarketplacePage() {
   const qc = useQueryClient()
   const { applyTheme } = useFlowTheme()
-  const [activeTab, setActiveTab] = useState<'powerups' | 'themes' | 'xp_packs' | 'inventory'>('powerups')
+  const [activeTab, setActiveTab] = useState<'powerups' | 'themes' | 'inventory'>('powerups')
 
   const { data: marketplaceData, isLoading } = useQuery({
     queryKey: ['marketplace-inventory'],
@@ -132,19 +101,6 @@ export default function MarketplacePage() {
     },
   })
 
-  const buyXpPackMutation = useMutation({
-    mutationFn: (packId: string) => paymentsApi.buyXpPack(packId),
-    onSuccess: (res) => {
-      if (res.data.authorization_url) {
-        window.open(res.data.authorization_url, '_blank')
-        toast.info('Opening Paystack checkout window...')
-      }
-    },
-    onError: (e: any) => {
-      toast.error(e.response?.data?.error || 'Failed to initialize XP pack payment.')
-    },
-  })
-
   return (
     <div className="px-margin-mobile md:px-margin-desktop py-stack-md max-w-6xl mx-auto space-y-8 pb-28 md:pb-12">
       {/* Hero Banner */}
@@ -162,7 +118,7 @@ export default function MarketplacePage() {
               XP Shop &amp; Power-Ups
             </h1>
             <p className="text-on-surface-variant text-[14px] md:text-[16px]">
-              Spend your study-earned XP on powerful Quiz Battle clues, or purchase XP bundles with Paystack (GH₵).
+              Spend the XP you earn through learning on Quiz Battle clues and themes.
             </p>
           </div>
 
@@ -192,7 +148,6 @@ export default function MarketplacePage() {
         {[
           { id: 'powerups', label: 'Quiz Battle Power-Ups', icon: 'extension' },
           { id: 'themes', label: 'App Themes Marketplace', icon: 'palette' },
-          { id: 'xp_packs', label: 'Buy XP Bundles (GH₵)', icon: 'add_shopping_cart' },
           { id: 'inventory', label: 'My Inventory', icon: 'backpack' },
         ].map((tab) => (
           <button
@@ -349,71 +304,6 @@ export default function MarketplacePage() {
               </motion.div>
             )
           })}
-        </div>
-      )}
-
-      {/* TAB 3: BUY XP PACKS */}
-      {activeTab === 'xp_packs' && (
-        <div className="space-y-6">
-          <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary text-[24px]">info</span>
-            <p className="text-[13px] text-on-surface-variant">
-              Buy instant XP packs to unlock high-tier power-ups in Quiz Battles. All prices are in <strong>Ghanaian Cedis (GH₵)</strong> via Paystack.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {XP_PACKS.map((pack) => (
-              <motion.div
-                key={pack.id}
-                whileHover={{ y: -6 }}
-                className={cn(
-                  'rounded-[2rem] p-7 border-2 flex flex-col justify-between relative overflow-hidden transition-all shadow-xl',
-                  pack.color
-                )}
-              >
-                {pack.popular && (
-                  <div className="absolute top-0 right-0 bg-secondary text-on-secondary px-4 py-1 rounded-bl-2xl text-[10px] font-black uppercase tracking-widest">
-                    Best Value
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-on-surface-variant/70">
-                    {pack.badge}
-                  </span>
-                  <div>
-                    <h3 className="text-[26px] font-black text-on-surface leading-tight">{pack.label}</h3>
-                    <p className="text-[36px] font-black text-primary mt-2">
-                      +{pack.xp.toLocaleString()} <span className="text-[16px] text-on-surface-variant">XP</span>
-                    </p>
-                  </div>
-                  <p className="text-[13px] text-on-surface-variant leading-relaxed">
-                    Instant credit to your account. Use on 50/50 clues, streak guards, and battle boosts.
-                  </p>
-                </div>
-
-                <div className="pt-6 border-t border-outline-variant/20 mt-6 space-y-4">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-[13px] text-on-surface-variant font-bold">Total Cost:</span>
-                    <span className="text-[24px] font-black text-on-surface">GH₵ {pack.priceGhs.toFixed(2)}</span>
-                  </div>
-
-                  <button
-                    onClick={() => buyXpPackMutation.mutate(pack.id)}
-                    disabled={buyXpPackMutation.isPending}
-                    className={cn(
-                      'w-full py-3.5 rounded-2xl font-black text-[14px] shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98',
-                      pack.btnColor
-                    )}
-                  >
-                    <span className="material-symbols-outlined text-[20px]">bolt</span>
-                    {buyXpPackMutation.isPending ? 'Initializing...' : `Buy for GH₵ ${pack.priceGhs.toFixed(2)}`}
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
         </div>
       )}
 
