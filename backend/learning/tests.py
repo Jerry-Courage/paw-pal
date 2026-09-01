@@ -244,6 +244,9 @@ class ConversationalTeachingSessionTests(TestCase):
             return {'order': order if correct else list(reversed(order))}
         return {'text': ('Jacobi uses previous values during a sweep while Gauss Seidel immediately reuses each fresh update.' if correct else 'I do not know.')}
 
+    def _active_activity(self, response):
+        return next(item['payload']['activity'] for item in reversed(response.data['turns']) if item['payload'].get('activity'))
+
     def test_session_is_created_lazily_and_resumes_without_duplicate_opening(self):
         first = self.client.get(f'{self.base}/teaching-session/')
         second = self.client.get(f'{self.base}/teaching-session/')
@@ -254,6 +257,8 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertIn('Ready to learn', first.data['turns'][0]['content'])
         self.assertEqual(first.data['turns'][-1]['payload']['pedagogical_action'], 'CHECK')
         self.assertEqual(first.data['teaching_phase'], 'CHECK')
+        self.assertEqual(self._active_activity(first)['id'], self._active_activity(second)['id'])
+        self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, role='flow', kind='activity').count(), 1)
         self.assertEqual(len(first.data['objectives']), 6)
 
     def test_interruption_preserves_resume_point_and_continue_restores_it(self):
@@ -268,6 +273,7 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertEqual(resumed.data['teaching_phase'], 'CHECK')
         self.assertEqual(resumed.data['current_point'], 0)
         self.assertEqual(resumed.data['turns'][-1]['payload']['pedagogical_action'], 'CHECK')
+        self.assertTrue(resumed.data['turns'][-1]['payload']['reused'])
 
     def test_message_idempotency_prevents_duplicate_turns(self):
         self.client.get(f'{self.base}/teaching-session/')
@@ -382,9 +388,15 @@ class ConversationalTeachingSessionTests(TestCase):
         self.client.get(f'{self.base}/teaching-session/')
         response = self.client.post(f'{self.base}/teaching-message/', {'message': 'got it', 'idempotency_key': 'ack'}, format='json')
         turn = response.data['turns'][-1]
-        self.assertEqual(turn['kind'], 'activity')
         self.assertEqual(turn['payload']['pedagogical_action'], 'CHECK')
-        self.assertIn('activity', turn['payload'])
+        self.assertTrue(turn['payload']['reused'])
+        self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, role='flow', kind='activity').count(), 1)
+        self.assertEqual(EncounterAttempt.objects.count(), 0)
+        repeated = self.client.post(f'{self.base}/teaching-message/', {'message': 'ok', 'idempotency_key': 'ack-again'}, format='json')
+        repeated_turn = next(item for item in repeated.data['turns'] if item['id'] == repeated.data['new_turn_id'])
+        self.assertTrue(repeated_turn['payload']['reused'])
+        self.assertEqual(repeated_turn['payload']['active_activity_id'], turn['payload']['active_activity_id'])
+        self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, role='flow', kind='activity').count(), 1)
 
     def test_ok_and_whats_next_route_to_native_check(self):
         for message, key in [('ok', 'ok'), ("what's next", 'next')]:
@@ -393,22 +405,30 @@ class ConversationalTeachingSessionTests(TestCase):
                 session.turns.all().delete()
                 session.delete()
             self.client.get(f'{self.base}/teaching-session/')
+            if message == "what's next":
+                session = TeachingSession.objects.get(user=self.user, concept=self.concept)
+                session.state = {**session.state, 'teaching_phase': 'ADVANCE'}
+                session.save(update_fields=['state'])
             response = self.client.post(f'{self.base}/teaching-message/', {'message': message, 'idempotency_key': key}, format='json')
             turn = response.data['turns'][-1]
-            self.assertEqual(turn['kind'], 'activity', message)
             self.assertEqual(turn['payload']['pedagogical_action'], 'CHECK', message)
+            self.assertTrue(turn['payload']['reused'], message)
             self.assertNotIn('numerical analysis is essentially', turn['content'].lower())
+            self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, role='flow', kind='activity').count(), 1)
+            self.assertEqual(EncounterAttempt.objects.count(), 0)
+            self.assertEqual(response.data['current_point'], 0)
+            self.assertEqual(response.data['completion_evaluation']['objectives_satisfied'], 0)
 
     def test_initial_start_proactively_presents_small_check(self):
         response = self.client.post(f'{self.base}/teaching-message/', {'message': "let's go", 'idempotency_key': 'start-check'}, format='json')
         turn = response.data['turns'][-1]
         self.assertEqual(response.data['teaching_phase'], 'CHECK')
-        self.assertEqual(turn['kind'], 'activity')
-        self.assertIn(turn['payload']['activity']['purpose'], {'check', 'apply', 'transfer'})
+        self.assertTrue(turn['payload']['reused'])
+        self.assertIn(self._active_activity(response)['purpose'], {'check', 'apply', 'transfer'})
 
     def test_wrong_evidence_remediates_with_different_representation(self):
         check = self.client.post(f'{self.base}/teaching-message/', {'message': 'ok', 'idempotency_key': 'check'}, format='json')
-        activity = check.data['turns'][-1]['payload']['activity']
+        activity = self._active_activity(check)
         private = next(item for item in _concept_activities(self.concept, self.user) if item['id'] == activity['id'])
         response = self.client.post(f'{self.base}/teaching-response/', {'activity_id': activity['id'], 'response': self._response_for(private, correct=False)}, format='json')
         turn = response.data['turns'][-1]
@@ -419,7 +439,7 @@ class ConversationalTeachingSessionTests(TestCase):
 
     def test_correct_evidence_updates_progress_and_selects_next_objective(self):
         check = self.client.post(f'{self.base}/teaching-message/', {'message': "what's next", 'idempotency_key': 'check'}, format='json')
-        activity = check.data['turns'][-1]['payload']['activity']
+        activity = self._active_activity(check)
         private = next(item for item in _concept_activities(self.concept, self.user) if item['id'] == activity['id'])
         response = self.client.post(f'{self.base}/teaching-response/', {'activity_id': activity['id'], 'response': self._response_for(private)}, format='json')
         evaluation = response.data['completion_evaluation']
@@ -447,8 +467,9 @@ class ConversationalTeachingSessionTests(TestCase):
     def test_quiz_me_returns_native_activity_turn(self):
         response = self.client.post(f'{self.base}/teaching-message/', {'message': 'I need a quiz on this', 'idempotency_key': 'native-quiz'}, format='json')
         turn = next(item for item in response.data['turns'] if item['id'] == response.data['new_turn_id'])
-        self.assertEqual(turn['kind'], 'activity')
-        self.assertIn('activity', turn['payload'])
+        self.assertEqual(turn['payload']['pedagogical_action'], 'CHECK')
+        self.assertTrue(turn['payload']['reused'])
+        self.assertIn('activity', next(item['payload'] for item in response.data['turns'] if item['kind'] == 'activity'))
         self.assertNotIn('A.', turn['content'])
 
     def test_incomplete_objectives_cannot_complete_or_reward(self):

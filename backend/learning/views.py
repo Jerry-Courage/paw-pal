@@ -372,12 +372,30 @@ def _next_journey_check(session, activities):
     candidates = [item for item in activities if item.get('purpose') in {'check', 'apply', 'transfer'}]
     activity = next((item for item in candidates if item['id'] not in shown), None) or next(iter(candidates), None)
     if activity:
+        objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+        objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
         session.state = {
             **session.state,
             'teaching_phase': 'CHECK',
             'shown_activity_ids': [*shown, activity['id']][-12:],
-            'last_learning_object': {'type': 'practice', 'activity_id': activity['id']},
+            'last_learning_object': {'type': 'practice', 'activity_id': activity['id'], 'objective_id': objective_id},
         }
+        session.status = 'practicing'
+    return activity
+
+
+def _unanswered_journey_check(session, activities):
+    active = session.state.get('last_learning_object') or {}
+    objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+    objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
+    if active.get('type') != 'practice' or active.get('objective_id') != objective_id:
+        return None
+    activity_id = str(active.get('activity_id') or '')
+    if not activity_id or EncounterAttempt.objects.filter(user=session.user, concept=session.concept, activity_id=activity_id).exists():
+        return None
+    activity = next((item for item in activities if item['id'] == activity_id), None)
+    if activity:
+        session.state = {**session.state, 'teaching_phase': 'CHECK'}
         session.status = 'practicing'
     return activity
 
@@ -1059,17 +1077,28 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                 session.state = {**session.state, 'teaching_phase': 'REMEDIATE'}
                 flow_text = f"Almost. {remaining} objective{'s' if remaining != 1 else ''} remain, and one misconception still needs clearing. We’ll target only that shaky part."
             else:
-                activity = _next_journey_check(session, activities)
+                existing_activity = _unanswered_journey_check(session, activities)
+                activity = existing_activity or _next_journey_check(session, activities)
                 if activity:
-                    flow_text, kind = "That’s the explanation. One quick check before we move on.", 'activity'
-                    payload = {'activity': _public_activity(activity), 'completion_evaluation': evaluation, 'pedagogical_action': 'CHECK'}
+                    flow_text = ("That check is still waiting for your answer—give it a go and I’ll use that evidence." if existing_activity
+                                 else "That’s the explanation. One quick check before we move on.")
+                    kind = 'message' if existing_activity else 'activity'
+                    payload = {'completion_evaluation': evaluation, 'pedagogical_action': 'CHECK', 'active_activity_id': activity['id'], 'reused': bool(existing_activity)}
+                    if not existing_activity:
+                        payload['activity'] = _public_activity(activity)
                 else:
                     flow_text = f"Not quite. You’ve secured {evaluation['objectives_satisfied']} of {evaluation['objectives_total']} objectives. We’ll focus only on what’s left."
             payload = {**payload, 'completion_evaluation': evaluation}
         elif practice_requested:
-            activity = _next_journey_check(session, activities)
+            existing_activity = _unanswered_journey_check(session, activities)
+            activity = existing_activity or _next_journey_check(session, activities)
             if activity:
-                flow_text, kind, payload = "Let’s check the current objective—one question at a time.", 'activity', {'activity': _public_activity(activity), 'pedagogical_action': 'CHECK'}
+                flow_text = ("The current check is already ready—answer that one and I’ll adapt from the result." if existing_activity
+                             else "Let’s check the current objective—one question at a time.")
+                kind = 'message' if existing_activity else 'activity'
+                payload = {'pedagogical_action': 'CHECK', 'active_activity_id': activity['id'], 'reused': bool(existing_activity)}
+                if not existing_activity:
+                    payload['activity'] = _public_activity(activity)
             else:
                 flow_text = "I couldn’t build a trustworthy check for this objective yet. I can explain it another way, then try again."
         elif any(phrase in lowered for phrase in ('show me a video', 'find a video', 'need to see this', 'video')):
@@ -1107,10 +1136,15 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             flow_text = f"Let’s slow it down. **Key distinction:** {main[:360]}\n\nTry picturing one value being updated, then ask: can the next calculation use it immediately? Tell me when that part feels clearer."
         elif session.status == 'remediation' and any(word in lowered for word in ('okay', 'continue', 'got it', 'makes sense', 'yes')):
             session.current_point = session.resume_point
-            flow_text = "Good. Let’s check the same idea from this new angle."
-            next_activity = _next_journey_check(session, activities)
+            existing_activity = _unanswered_journey_check(session, activities)
+            next_activity = existing_activity or _next_journey_check(session, activities)
+            flow_text = ("Good. Use the check that’s already waiting—we’ll read the answer through this new angle." if existing_activity
+                         else "Good. Let’s check the same idea from this new angle.")
             if next_activity:
-                kind, payload = 'activity', {'activity': _public_activity(next_activity), 'pedagogical_action': 'CHECK'}
+                kind = 'message' if existing_activity else 'activity'
+                payload = {'pedagogical_action': 'CHECK', 'active_activity_id': next_activity['id'], 'reused': bool(existing_activity)}
+                if not existing_activity:
+                    payload['activity'] = _public_activity(next_activity)
         elif session.state.get('last_video') and any(phrase in lowered for phrase in ('cool continue', 'continue', 'that helped', 'finished the video')):
             video = session.state.pop('last_video')
             session.state = {**session.state, 'used_video_ids': [*session.state.get('used_video_ids', [])[-7:], video['video_id']]}
@@ -1128,9 +1162,15 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                 unresolved = completion_state['unresolved_objectives']
                 current_result = next((item for item in completion_state['objectives'] if item['id'] == (session.objectives[min(session.current_point, len(session.objectives) - 1)]['id'] if session.objectives else '')), None)
                 if current_result and not current_result['satisfied']:
-                    activity = _next_journey_check(session, activities)
+                    existing_activity = _unanswered_journey_check(session, activities)
+                    activity = existing_activity or _next_journey_check(session, activities)
                     if activity:
-                        flow_text, kind, payload = "Good. One quick check before we move on.", 'activity', {'activity': _public_activity(activity), 'pedagogical_action': 'CHECK'}
+                        flow_text = ("That check is still the next step—answer it when you’re ready." if existing_activity
+                                     else "Good. One quick check before we move on.")
+                        kind = 'message' if existing_activity else 'activity'
+                        payload = {'pedagogical_action': 'CHECK', 'active_activity_id': activity['id'], 'reused': bool(existing_activity)}
+                        if not existing_activity:
+                            payload['activity'] = _public_activity(activity)
                     else:
                         flow_text = "Before we move on, explain that bit back in one sentence so I can check it landed."
                 else:
