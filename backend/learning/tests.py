@@ -235,14 +235,25 @@ class ConversationalTeachingSessionTests(TestCase):
         self.client.force_authenticate(self.user)
         self.base = f'/api/learning/concepts/{self.concept.id}'
 
+    def _response_for(self, activity, correct=True):
+        if activity['type'] in {'predict', 'mcq', 'scenario'}:
+            choice = activity['correct_choice'] if correct else next(index for index in range(len(activity['options'])) if index != activity['correct_choice'])
+            return {'choice': choice}
+        if activity['type'] == 'ordering':
+            order = activity['correct_order']
+            return {'order': order if correct else list(reversed(order))}
+        return {'text': ('Jacobi uses previous values during a sweep while Gauss Seidel immediately reuses each fresh update.' if correct else 'I do not know.')}
+
     def test_session_is_created_lazily_and_resumes_without_duplicate_opening(self):
         first = self.client.get(f'{self.base}/teaching-session/')
         second = self.client.get(f'{self.base}/teaching-session/')
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.data['id'], second.data['id'])
         self.assertEqual(TeachingSession.objects.count(), 1)
-        self.assertEqual(TeachingTurn.objects.filter(role='flow').count(), 1)
+        self.assertEqual(TeachingTurn.objects.filter(role='flow').count(), 2)
         self.assertIn('Ready to learn', first.data['turns'][0]['content'])
+        self.assertEqual(first.data['turns'][-1]['payload']['pedagogical_action'], 'CHECK')
+        self.assertEqual(first.data['teaching_phase'], 'CHECK')
         self.assertEqual(len(first.data['objectives']), 6)
 
     def test_interruption_preserves_resume_point_and_continue_restores_it(self):
@@ -253,9 +264,10 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertEqual(interrupted.data['status'], 'remediation')
         self.assertEqual(interrupted.data['resume_point'], 0)
         resumed = self.client.post(f'{self.base}/teaching-message/', {'message': 'okay continue', 'idempotency_key': 'resume'}, format='json')
-        self.assertEqual(resumed.data['status'], 'teaching')
+        self.assertEqual(resumed.data['status'], 'practicing')
+        self.assertEqual(resumed.data['teaching_phase'], 'CHECK')
         self.assertEqual(resumed.data['current_point'], 0)
-        self.assertIn('exact point we paused', resumed.data['turns'][-1]['content'])
+        self.assertEqual(resumed.data['turns'][-1]['payload']['pedagogical_action'], 'CHECK')
 
     def test_message_idempotency_prevents_duplicate_turns(self):
         self.client.get(f'{self.base}/teaching-session/')
@@ -369,7 +381,60 @@ class ConversationalTeachingSessionTests(TestCase):
     def test_acknowledgement_moves_to_check_instead_of_repeating_explanation(self):
         self.client.get(f'{self.base}/teaching-session/')
         response = self.client.post(f'{self.base}/teaching-message/', {'message': 'got it', 'idempotency_key': 'ack'}, format='json')
-        self.assertIn('explain that bit back', response.data['turns'][-1]['content'].lower())
+        turn = response.data['turns'][-1]
+        self.assertEqual(turn['kind'], 'activity')
+        self.assertEqual(turn['payload']['pedagogical_action'], 'CHECK')
+        self.assertIn('activity', turn['payload'])
+
+    def test_ok_and_whats_next_route_to_native_check(self):
+        for message, key in [('ok', 'ok'), ("what's next", 'next')]:
+            session = TeachingSession.objects.filter(user=self.user, concept=self.concept).first()
+            if session:
+                session.turns.all().delete()
+                session.delete()
+            self.client.get(f'{self.base}/teaching-session/')
+            response = self.client.post(f'{self.base}/teaching-message/', {'message': message, 'idempotency_key': key}, format='json')
+            turn = response.data['turns'][-1]
+            self.assertEqual(turn['kind'], 'activity', message)
+            self.assertEqual(turn['payload']['pedagogical_action'], 'CHECK', message)
+            self.assertNotIn('numerical analysis is essentially', turn['content'].lower())
+
+    def test_initial_start_proactively_presents_small_check(self):
+        response = self.client.post(f'{self.base}/teaching-message/', {'message': "let's go", 'idempotency_key': 'start-check'}, format='json')
+        turn = response.data['turns'][-1]
+        self.assertEqual(response.data['teaching_phase'], 'CHECK')
+        self.assertEqual(turn['kind'], 'activity')
+        self.assertIn(turn['payload']['activity']['purpose'], {'check', 'apply', 'transfer'})
+
+    def test_wrong_evidence_remediates_with_different_representation(self):
+        check = self.client.post(f'{self.base}/teaching-message/', {'message': 'ok', 'idempotency_key': 'check'}, format='json')
+        activity = check.data['turns'][-1]['payload']['activity']
+        private = next(item for item in _concept_activities(self.concept, self.user) if item['id'] == activity['id'])
+        response = self.client.post(f'{self.base}/teaching-response/', {'activity_id': activity['id'], 'response': self._response_for(private, correct=False)}, format='json')
+        turn = response.data['turns'][-1]
+        self.assertEqual(response.data['teaching_phase'], 'REMEDIATE')
+        self.assertEqual(turn['payload']['pedagogical_action'], 'REMEDIATE')
+        self.assertIn(turn['payload']['activity']['type'], {'worked_example', 'comparison'})
+        self.assertEqual(response.data['completion_evaluation']['objectives_satisfied'], 0)
+
+    def test_correct_evidence_updates_progress_and_selects_next_objective(self):
+        check = self.client.post(f'{self.base}/teaching-message/', {'message': "what's next", 'idempotency_key': 'check'}, format='json')
+        activity = check.data['turns'][-1]['payload']['activity']
+        private = next(item for item in _concept_activities(self.concept, self.user) if item['id'] == activity['id'])
+        response = self.client.post(f'{self.base}/teaching-response/', {'activity_id': activity['id'], 'response': self._response_for(private)}, format='json')
+        evaluation = response.data['completion_evaluation']
+        self.assertEqual(evaluation['objectives_satisfied'], 1)
+        self.assertEqual(response.data['current_point'], 1)
+        self.assertEqual(response.data['teaching_phase'], 'ADVANCE')
+        self.assertEqual(response.data['turns'][-1]['payload']['pedagogical_action'], 'ADVANCE')
+        self.assertIn(response.data['objectives'][1]['text'], response.data['turns'][-1]['content'])
+        self.assertEqual(round(evaluation['objectives_satisfied'] / evaluation['objectives_total'] * 100), 17)
+
+    def test_explicit_explain_again_still_allows_teaching(self):
+        response = self.client.post(f'{self.base}/teaching-message/', {'message': 'explain that again', 'idempotency_key': 'again'}, format='json')
+        turn = response.data['turns'][-1]
+        self.assertEqual(response.data['teaching_phase'], 'TEACH')
+        self.assertEqual(turn['payload']['pedagogical_action'], 'EXPLAIN')
 
     def test_is_that_all_uses_authoritative_completion_state(self):
         self.client.get(f'{self.base}/teaching-session/')
@@ -381,7 +446,7 @@ class ConversationalTeachingSessionTests(TestCase):
 
     def test_quiz_me_returns_native_activity_turn(self):
         response = self.client.post(f'{self.base}/teaching-message/', {'message': 'I need a quiz on this', 'idempotency_key': 'native-quiz'}, format='json')
-        turn = response.data['turns'][-1]
+        turn = next(item for item in response.data['turns'] if item['id'] == response.data['new_turn_id'])
         self.assertEqual(turn['kind'], 'activity')
         self.assertIn('activity', turn['payload'])
         self.assertNotIn('A.', turn['content'])
