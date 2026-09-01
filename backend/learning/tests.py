@@ -8,7 +8,7 @@ from library.models import Resource
 from gamification.models import XPTransaction
 from learning.completion import evaluate_session_completion, record_objective_evidence
 from learning.models import ConceptNode, EncounterAttempt, LearningPath, TeachingSession, TeachingTurn, Unit
-from learning.views import _concept_activities, _valid_activity
+from learning.views import _concept_activities, _objective_activities, _valid_activity
 
 
 class LearningPathRouteTests(SimpleTestCase):
@@ -445,7 +445,7 @@ class ConversationalTeachingSessionTests(TestCase):
         evaluation = response.data['completion_evaluation']
         self.assertEqual(evaluation['objectives_satisfied'], 1)
         self.assertEqual(response.data['current_point'], 1)
-        self.assertEqual(response.data['teaching_phase'], 'ADVANCE')
+        self.assertEqual(response.data['teaching_phase'], 'INTRODUCE')
         self.assertEqual(response.data['turns'][-1]['payload']['pedagogical_action'], 'ADVANCE')
         self.assertIn(response.data['objectives'][1]['text'], response.data['turns'][-1]['content'])
         self.assertEqual(round(evaluation['objectives_satisfied'] / evaluation['objectives_total'] * 100), 17)
@@ -558,3 +558,151 @@ class ConversationalTeachingSessionTests(TestCase):
         }, format='json')
         self.assertEqual(resumed.data['turns'][-1]['kind'], 'activity')
         self.assertEqual(resumed.data['turns'][-1]['payload']['supported_by_video'], 'embed1')
+
+    def _definition_concept(self):
+        resource = Resource.objects.create(
+            owner=self.user, title='Introduction to Numerical Analysis', subject='Mathematics', status='ready',
+            ai_notes_json={'sections': [{'title': 'Definition', 'plain_english':
+                'Numerical analysis uses computational algorithms to obtain useful approximate solutions when exact symbolic solutions are difficult.'}]},
+        )
+        return ConceptNode.objects.create(
+            path=self.path, unit=self.unit, title='Defining Numerical Analysis',
+            summary='Numerical analysis uses computational algorithms to obtain useful approximate solutions when exact symbolic solutions are difficult.',
+            source_resource=resource, source_section='Definition', order_index=9, status='current',
+        )
+
+    def test_definition_check_is_objective_grounded_and_self_contained(self):
+        concept = self._definition_concept()
+        response = self.client.get(f'/api/learning/concepts/{concept.id}/teaching-session/')
+        activity = self._active_activity(response)
+        self.assertEqual(activity['purpose'], 'check')
+        self.assertIn('numerical analysis', activity['prompt'].lower())
+        self.assertNotIn('what quantity or relationship', activity['prompt'].lower())
+        self.assertGreaterEqual(len(activity['options']), 3)
+        self.assertTrue(all(str(option).strip() for option in activity['options']))
+
+    def test_free_response_non_answer_preserves_check_without_evidence(self):
+        concept = self._definition_concept()
+        activities = _concept_activities(concept, self.user)
+        activity = next(item for item in activities if item['type'] == 'short_answer' and item['purpose'] == 'apply')
+        session = self.client.get(f'/api/learning/concepts/{concept.id}/teaching-session/').data
+        teaching_session = TeachingSession.objects.get(id=session['id'])
+        teaching_session.state = {**teaching_session.state, 'last_learning_object': {
+            'type': 'practice', 'activity_id': activity['id'], 'objective_id': teaching_session.objectives[0]['id']}}
+        teaching_session.save(update_fields=['state'])
+        result = self.client.post(f'/api/learning/concepts/{concept.id}/teaching-response/', {
+            'activity_id': activity['id'], 'response': {'text': 'got it'}, 'idempotency_key': 'non-answer',
+        }, format='json')
+        self.assertEqual(result.data['evaluation']['outcome'], 'insufficient')
+        self.assertEqual(EncounterAttempt.objects.filter(concept=concept).count(), 0)
+        self.assertEqual(result.data['teaching_phase'], 'CHECK')
+        self.assertEqual(result.data['unresolved_misconceptions'], [])
+        resumed = self.client.post(f'/api/learning/concepts/{concept.id}/teaching-message/', {
+            'message': 'ok', 'idempotency_key': 'after-non-answer'}, format='json')
+        self.assertEqual(resumed.data['turns'][-1]['payload']['active_activity_id'], activity['id'])
+
+    def test_incorrect_definition_answer_gets_specific_focused_remediation(self):
+        concept = self._definition_concept()
+        response = self.client.get(f'/api/learning/concepts/{concept.id}/teaching-session/')
+        public = self._active_activity(response)
+        private = next(item for item in _concept_activities(concept, self.user) if item['id'] == public['id'])
+        wrong = next(index for index in range(len(private['options'])) if index != private['correct_choice'])
+        result = self.client.post(f'/api/learning/concepts/{concept.id}/teaching-response/', {
+            'activity_id': public['id'], 'response': {'choice': wrong},
+        }, format='json')
+        turn = result.data['turns'][-1]
+        self.assertEqual(result.data['evaluation']['outcome'], 'incorrect')
+        self.assertEqual(turn['payload']['pedagogical_action'], 'REMEDIATE')
+        self.assertEqual(turn['payload']['activity']['purpose'], 'remediate')
+        self.assertIn(turn['payload']['activity']['content']['mode'], {'comparison', 'example', 'steps'})
+        self.assertNotIn('start with the idea', str(turn['payload']['activity']).lower())
+
+    def test_ambiguous_activity_is_rejected_by_quality_guard(self):
+        broken = {'id': 'broken', 'type': 'short_answer', 'purpose': 'apply',
+                  'prompt': 'What matters first in this situation?', 'accepted_keywords': ['method']}
+        self.assertFalse(_valid_activity(broken))
+
+    def test_social_greeting_preserves_active_check_and_authority(self):
+        initial = self.client.get(f'{self.base}/teaching-session/')
+        activity_id = self._active_activity(initial)['id']
+        before = TeachingSession.objects.get(user=self.user, concept=self.concept)
+        mastery = before.mastery
+        response = self.client.post(f'{self.base}/teaching-message/', {
+            'message': 'hello', 'idempotency_key': 'hello'}, format='json')
+        turn = response.data['turns'][-1]
+        self.assertEqual(turn['payload']['conversational_intent'], 'SOCIAL')
+        self.assertEqual(turn['payload']['pedagogical_action'], 'PRESERVE')
+        self.assertEqual(turn['payload']['active_activity_id'], activity_id)
+        self.assertEqual(EncounterAttempt.objects.count(), 0)
+        self.assertEqual(response.data['mastery'], mastery)
+        self.assertEqual(response.data['current_point'], 0)
+
+    def test_social_start_then_acknowledgement_keeps_controller_sequence(self):
+        hello = self.client.post(f'{self.base}/teaching-message/', {'message': 'hey', 'idempotency_key': 'hey'}, format='json')
+        self.assertEqual(hello.data['turns'][-1]['payload']['conversational_intent'], 'SOCIAL')
+        started = self.client.post(f'{self.base}/teaching-message/', {'message': "let's go", 'idempotency_key': 'go'}, format='json')
+        self.assertEqual(started.data['turns'][-1]['payload']['pedagogical_action'], 'CHECK')
+        self.assertTrue(started.data['turns'][-1]['payload']['reused'])
+        self.assertEqual(EncounterAttempt.objects.count(), 0)
+
+    def _advance_definition_objective(self):
+        concept = self._definition_concept()
+        opened = self.client.get(f'/api/learning/concepts/{concept.id}/teaching-session/')
+        public = self._active_activity(opened)
+        session = TeachingSession.objects.get(id=opened.data['id'])
+        private = next(item for item in _objective_activities(session, self.user) if item['id'] == public['id'])
+        result = self.client.post(f'/api/learning/concepts/{concept.id}/teaching-response/', {
+            'activity_id': public['id'], 'response': {'choice': private['correct_choice']},
+        }, format='json')
+        return concept, public, result
+
+    def test_advancement_clears_old_check_and_resets_new_objective_phase(self):
+        concept, old_activity, result = self._advance_definition_objective()
+        self.assertEqual(result.data['current_point'], 1)
+        self.assertEqual(result.data['teaching_phase'], 'INTRODUCE')
+        self.assertEqual(result.data['active_activity_id'], '')
+        session = TeachingSession.objects.get(user=self.user, concept=concept)
+        self.assertNotIn('last_learning_object', session.state)
+        self.assertEqual(result.data['current_objective_id'], session.objectives[1]['id'])
+        historical = next(turn for turn in result.data['turns'] if turn['payload'].get('activity', {}).get('id') == old_activity['id'])
+        self.assertEqual(historical['payload']['activity']['objective_id'], session.objectives[0]['id'])
+
+    def test_refresh_after_advancement_never_restores_old_check(self):
+        concept, old_activity, _result = self._advance_definition_objective()
+        refreshed = self.client.get(f'/api/learning/concepts/{concept.id}/teaching-session/')
+        self.assertEqual(refreshed.data['current_point'], 1)
+        self.assertEqual(refreshed.data['active_activity_id'], '')
+        self.assertNotEqual(refreshed.data['active_activity_id'], old_activity['id'])
+
+    def test_explicit_example_and_test_requests_use_current_objective(self):
+        concept, old_activity, _result = self._advance_definition_objective()
+        base = f'/api/learning/concepts/{concept.id}'
+        example = self.client.post(f'{base}/teaching-message/', {
+            'message': 'Show me an example', 'idempotency_key': 'objective-two-example'}, format='json')
+        example_turn = example.data['turns'][-1]
+        self.assertEqual(example_turn['payload']['pedagogical_action'], 'EXAMPLE')
+        self.assertEqual(example_turn['payload']['activity']['objective_id'], example.data['current_objective_id'])
+        self.assertNotEqual(example_turn['payload']['activity']['id'], old_activity['id'])
+        check = self.client.post(f'{base}/teaching-message/', {
+            'message': 'Test me on this checkpoint', 'idempotency_key': 'objective-two-check'}, format='json')
+        check_turn = check.data['turns'][-1]
+        self.assertEqual(check_turn['payload']['pedagogical_action'], 'CHECK')
+        self.assertEqual(check_turn['payload']['activity']['objective_id'], check.data['current_objective_id'])
+        self.assertEqual(check.data['active_activity_id'], check_turn['payload']['activity']['id'])
+        self.assertNotEqual(check.data['active_activity_id'], old_activity['id'])
+        private = next(item for item in _objective_activities(
+            TeachingSession.objects.get(user=self.user, concept=concept), self.user
+        ) if item['id'] == check.data['active_activity_id'])
+        self.assertTrue(_valid_activity(private))
+
+    def test_current_objective_check_idempotency_remains_intact(self):
+        concept, old_activity, _result = self._advance_definition_objective()
+        base = f'/api/learning/concepts/{concept.id}'
+        first = self.client.post(f'{base}/teaching-message/', {
+            'message': 'Test me', 'idempotency_key': 'objective-two-first'}, format='json')
+        activity_id = first.data['active_activity_id']
+        second = self.client.post(f'{base}/teaching-message/', {
+            'message': 'Test me', 'idempotency_key': 'objective-two-second'}, format='json')
+        self.assertEqual(second.data['active_activity_id'], activity_id)
+        self.assertNotEqual(activity_id, old_activity['id'])
+        self.assertEqual(EncounterAttempt.objects.filter(concept=concept).count(), 1)

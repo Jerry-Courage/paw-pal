@@ -75,6 +75,41 @@ def _grounding(concept):
     return grounding
 
 
+def _objective_kind(text):
+    """Classify what evidence an objective calls for without handing control to the LLM."""
+    value = str(text or '').lower()
+    if any(word in value for word in ('compare', 'contrast', 'distinguish', 'difference')):
+        return 'comparison'
+    if any(word in value for word in ('calculate', 'compute', 'solve', 'derive')):
+        return 'calculation'
+    if any(word in value for word in ('steps', 'sequence', 'procedure', 'process', 'algorithm', 'how ')):
+        return 'process'
+    if any(word in value for word in ('why ', 'reason', 'cause', 'because')):
+        return 'reasoning'
+    if any(word in value for word in ('apply', 'use ', 'situation', 'scenario')):
+        return 'application'
+    return 'definition'
+
+
+def _meaningful_keywords(text):
+    stop = {'about', 'after', 'again', 'because', 'before', 'being', 'could', 'first', 'from',
+            'have', 'into', 'itself', 'might', 'other', 'should', 'their', 'there', 'these',
+            'thing', 'those', 'through', 'using', 'what', 'when', 'where', 'which', 'while',
+            'with', 'would'}
+    return list(dict.fromkeys(word for word in re.findall(r'[a-zA-Z]{4,}', str(text).lower()) if word not in stop))[:16]
+
+
+def _is_non_answer(value):
+    normalized = re.sub(r"[^a-z0-9?' ]+", ' ', str(value or '').lower())
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    non_answers = {
+        '', '?', 'ok', 'okay', 'alright', 'got it', 'i got it', 'yeah', 'yes', 'yep', 'yh',
+        'sure', 'cool', 'continue', 'next', 'go on', 'idk', "i don't know", 'i dont know',
+        'no idea', 'makes sense', 'i understand', 'ready', "let's go", 'lets go',
+    }
+    return normalized in non_answers or (len(normalized) < 3 and not normalized.isdigit())
+
+
 def _concept_activities(concept, user=None):
     """Activity Engine V2: deterministic, grounded, depth-aware learning sequence."""
     subject = _subject_family(concept)
@@ -180,15 +215,19 @@ def _concept_activities(concept, user=None):
                       misconception_feedback=generic_misconceptions)
         lesson = base('concept-model', 'learn', 'worked_example', f'Let’s work through {concept.title} once.',
                       content={'idea': main_idea, 'example': summary[:600]}, explanation='Connect the main idea to the example, one step at a time.')
-        prompts = {'mathematics': 'What quantity or relationship would you determine first, and why?',
-                   'programming': 'Trace one input through the code or process. What output or state change should occur?',
-                   'biology': 'Name the structure or process that acts first, then explain its effect.',
-                   'conceptual': 'Give a concrete example and explain why it fits rather than merely naming it.'}
-        apply = base('concept-apply', 'apply', 'short_answer', prompts[subject], accepted_keywords=list(set(re.findall(r'[A-Za-z]{4,}', f'{concept.title} {main_idea}'.lower())))[:12],
-                     explanation=main_idea, hints=[f'Use the relationship described here: {main_idea[:180]}'])
-        check = choice('concept-check', 'check', f'{check_lead}which statement best explains how {concept.title} works?', main_idea,
+        objective_kind = _objective_kind(main_idea)
+        apply_prompt = (f'In your own words, what does {concept.title} help us understand or do? Use this idea in your answer: {main_idea}'
+                        if objective_kind == 'definition' else
+                        f'Using this idea — {main_idea} — explain the next important step or connection in {concept.title}.')
+        apply = base('concept-apply', 'apply', 'short_answer', apply_prompt,
+                     objective_id='objective-1', check_level='transfer',
+                     accepted_keywords=_meaningful_keywords(f'{concept.title} {main_idea}'),
+                     expected_concept=main_idea,
+                     explanation=main_idea, hints=[f'Use the idea Flow just taught: {main_idea[:180]}'])
+        check = choice('concept-check', 'check', f'{check_lead}which statement best describes {concept.title}?', main_idea,
                        distractors[:2], f'Keep this distinction in mind: {main_idea}', f'Ask what changes first and what follows from it.',
-                       misconception_feedback=generic_misconceptions, difficulty='hard' if depth == 'deep' else 'medium')
+                       misconception_feedback=generic_misconceptions, difficulty='easy',
+                       objective_id='objective-1', check_level='recognition', expected_concept=main_idea)
 
     reflection_prompt = ('In your own words, explain the one difference that separates Jacobi from Gauss–Seidel, then say what SOR adds.' if iterative else f'Explain {concept.title} to Flow in your own words, including one important relationship or example.')
     reflection = base('reflection', 'reflect', 'reflection', reflection_prompt,
@@ -221,11 +260,93 @@ def _concept_activities(concept, user=None):
     return [item for item in sequence if _valid_activity(item)] or [reflection]
 
 
+def _objective_activities(session, user=None):
+    """Single factory for checks belonging to the session's current objective."""
+    concept = session.concept
+    objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+    objective = session.objectives[objective_index] if session.objectives else {'id': 'objective-1', 'text': concept.title}
+    objective_id = objective['id']
+    base_activities = _concept_activities(concept, user)
+    if objective_index == 0:
+        scoped = []
+        for activity in base_activities:
+            if activity.get('purpose') in {'check', 'apply', 'transfer'}:
+                activity = {**activity, 'objective_id': objective_id, 'objective_index': objective_index}
+            scoped.append(activity)
+        return scoped
+
+    grounding = _grounding(concept)
+    fact = str(objective.get('text') or '').strip().rstrip('.')
+    kind = _objective_kind(fact)
+    provenance = {key: value for key, value in grounding.items() if value not in ('', None)}
+    keywords = _meaningful_keywords(f'{concept.title} {fact}')
+    correct = fact
+    distractors = [
+        f'{concept.title} removes the need for a repeatable method once a problem is identified.',
+        f'{concept.title} matters only after a final answer has already been found.',
+        f'{concept.title} guarantees that every difficult problem has a simple exact result.',
+    ]
+    prompt_by_kind = {
+        'definition': f'Which statement best captures this checkpoint about {concept.title}?',
+        'process': f'Which statement best describes the process in this checkpoint about {concept.title}?',
+        'application': f'Which statement best explains when this part of {concept.title} is useful?',
+        'comparison': f'Which statement captures the distinction in this checkpoint about {concept.title}?',
+        'calculation': f'Which statement best describes what must be calculated in this checkpoint?',
+        'reasoning': f'Which statement gives the reason highlighted in this checkpoint about {concept.title}?',
+    }
+
+    def objective_base(key, purpose, activity_type, prompt, **extra):
+        return {'id': _activity_id(concept, f'{key}:{objective_id}'), 'concept_id': str(concept.id),
+                'objective_id': objective_id, 'objective_index': objective_index, 'purpose': purpose,
+                'stage': purpose, 'type': activity_type, 'instructions': extra.pop('instructions', ''),
+                'prompt': prompt, 'difficulty': extra.pop('difficulty', 'easy'),
+                'estimated_seconds': extra.pop('estimated_seconds', 60), 'grounding': provenance,
+                'goal_relevance': concept.path.goal or '', **extra}
+
+    options = [correct, *distractors[:2]]
+    shift = int(hashlib.sha256(f'{concept.id}:{objective_id}:recognition'.encode()).hexdigest()[:2], 16) % len(options)
+    options = options[shift:] + options[:shift]
+    recognition = objective_base(
+        'objective-recognition', 'check', 'mcq', prompt_by_kind[kind], options=options,
+        correct_choice=options.index(correct), feedback_by_choice=[
+            f'Exactly. {fact}.' if option == correct else f'That changes the checkpoint into a different claim. The distinction here is: {fact}.'
+            for option in options], explanation=f'Exactly. {fact}.', hints=[f'Use the current checkpoint: {fact}.'],
+        expected_concept=fact, check_level='recognition',
+    )
+    transfer = objective_base(
+        'objective-transfer', 'apply', 'short_answer',
+        f'In your own words, explain this checkpoint: {fact}. Why does it matter for {concept.title}?',
+        accepted_keywords=keywords, expected_concept=fact, explanation=fact,
+        hints=[f'Start with this checkpoint: {fact}.'], check_level='transfer', difficulty='medium',
+    )
+    teaching = objective_base(
+        'objective-example', 'learn', 'worked_example', f'Let’s make checkpoint {objective_index + 1} concrete.',
+        content={'mode': 'example', 'title': 'A concrete example',
+                 'lead': f'This example focuses only on checkpoint {objective_index + 1}.',
+                 'example': (grounding.get('excerpt') or concept.summary or fact)[:420], 'takeaway': fact},
+        explanation=fact,
+    )
+    scoped = [activity for activity in base_activities if activity.get('purpose') not in {'check', 'apply', 'transfer'}]
+    return [*scoped, teaching, *[activity for activity in (recognition, transfer) if _valid_activity(activity)]]
+
+
+def _clear_objective_transient_state(state):
+    transient = {
+        'last_learning_object', 'pending_remediation', 'retry_state', 'pending_activity_continuation',
+        'current_representation', 'current_question', 'pending_intent', 'quick_action_context',
+    }
+    return {key: value for key, value in state.items() if key not in transient}
+
+
 def _valid_activity(activity):
     prompt = str(activity.get('prompt', '')).strip()
     learner_copy = json.dumps({key: value for key, value in activity.items() if key not in {'correct_choice', 'correct_order', 'accepted_keywords', 'feedback_by_choice'}}, default=str)
     banned = r'\bkey concept\b|\bplaceholder\b|\bundefined\b|mechanism in the source|relationship in the source|expected relationship|source alignment'
     if not prompt or re.search(banned, learner_copy, re.I):
+        return False
+    if re.search(r'\b(this|that|the) (?:situation|scenario|diagram|example)\b', prompt, re.I) and not any(
+        marker in prompt.lower() for marker in ('imagine', 'suppose', 'for example', 'using this idea', 'an engineer', 'a learner')
+    ):
         return False
     if activity.get('type') in {'predict', 'mcq', 'scenario'}:
         options = activity.get('options') or []
@@ -233,6 +354,8 @@ def _valid_activity(activity):
     if activity.get('type') == 'ordering':
         items = (activity.get('content') or {}).get('items') or []
         return len(items) >= 3 and sorted(activity.get('correct_order') or []) == list(range(len(items)))
+    if activity.get('type') in {'short_answer', 'reflection'} and not (activity.get('accepted_keywords') or activity.get('expected_concept')):
+        return False
     return True
 
 
@@ -245,15 +368,17 @@ def _evaluate_activity(concept, activity, response):
         choice_index = int(response.get('choice')) if str(response.get('choice', '')).isdigit() else -1
         feedback_options = activity.get('feedback_by_choice') or []
         feedback = activity.get('explanation', '') if correct else (feedback_options[choice_index] if 0 <= choice_index < len(feedback_options) else activity.get('hints', ['Try the distinction again.'])[0])
-        return correct, 100 if correct else 25, feedback
+        return correct, 100 if correct else 25, feedback, 'correct' if correct else 'incorrect'
 
     if activity['type'] == 'ordering':
         submitted = response.get('order') or []
         correct = submitted == activity.get('correct_order')
         feedback = activity.get('explanation', '') if correct else 'The new value needs to be calculated before it can be reused. Move that reuse step directly after the first calculation.'
-        return correct, 100 if correct else 30, feedback
+        return correct, 100 if correct else 30, feedback, 'correct' if correct else 'incorrect'
 
     answer = str(response.get('text', '')).strip()
+    if _is_non_answer(answer):
+        return False, 0, 'Give me your actual answer 👀. One clear thought is enough.', 'insufficient'
     source = f"{concept.title} {concept.summary} {concept.description}".lower()
     keywords = set(activity.get('accepted_keywords') or []) or {word for word in re.findall(r'[a-zA-Z]{4,}', source) if word not in {'that', 'this', 'with', 'from', 'have', 'into'}}
     answer_words = set(re.findall(r'[a-zA-Z]{4,}', answer.lower()))
@@ -263,8 +388,16 @@ def _evaluate_activity(concept, activity, response):
     if activity['type'] == 'reflection':
         feedback = 'Yes—the main idea comes through clearly.' if score >= 60 else ('Try naming what changes first, then explain what happens because of it.' if overlap == 0 else 'You have part of it. Make the connection between the two ideas more explicit.')
     else:
-        feedback = 'Yes—the main idea comes through clearly.' if correct else 'Start with the most important change, then explain why it matters in this situation.'
-    return correct, score, feedback
+        expected = str(activity.get('expected_concept') or activity.get('explanation') or concept.summary or concept.title).strip()
+        if correct:
+            feedback = f'Exactly. {expected[:220]}'
+        elif overlap:
+            feedback = f"You're close. Your answer mentions part of the idea, but it still needs this distinction: {expected[:220]}"
+        else:
+            quoted = answer[:90]
+            feedback = f'Your answer — “{quoted}” — misses the central distinction. {expected[:220]}'
+    outcome = 'correct' if correct is True else ('partial' if score >= 35 else 'incorrect')
+    return correct, score, feedback, outcome
 
 
 def _evidence_score(user, concept, fallback=0):
@@ -308,6 +441,10 @@ def _session_data(session):
     turns = list(session.turns.order_by('-created_at')[:40])
     turns.sort(key=lambda turn: (turn.created_at, 0 if turn.role == 'learner' else 1))
     evaluation = evaluate_session_completion(session)
+    current_index = min(session.current_point, max(0, len(session.objectives) - 1))
+    current_objective_id = session.objectives[current_index]['id'] if session.objectives else ''
+    active = session.state.get('last_learning_object') or {}
+    active_activity_id = active.get('activity_id', '') if active.get('objective_id') == current_objective_id else ''
     return {
         'id': str(session.id), 'status': session.status, 'current_point': session.current_point,
         'resume_point': session.resume_point, 'objectives': session.objectives,
@@ -316,6 +453,7 @@ def _session_data(session):
         'conversation_summary': session.conversation_summary, 'turns': [_turn_data(turn) for turn in turns],
         'teaching_preferences': session.state.get('teaching_preferences', {}),
         'teaching_phase': session.state.get('teaching_phase', 'INTRODUCE'),
+        'current_objective_id': current_objective_id, 'active_activity_id': active_activity_id,
         'last_active_at': session.last_active_at.isoformat(), 'completed': session.status == 'completed',
         'completion_evaluation': evaluation,
     }
@@ -337,7 +475,7 @@ def _get_teaching_session(concept, user):
         first_objective = session.objectives[0]['id'] if session.objectives else ''
         session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, first_objective]))
         record_objective_evidence(session, first_objective, taught=True)
-        activity = _next_journey_check(session, _concept_activities(concept, user))
+        activity = _next_journey_check(session, _objective_activities(session, user))
         main_idea = (_grounding(concept).get('excerpt') or concept.summary or concept.description or concept.title)[:420]
         payload = {'pedagogical_action': 'CHECK'}
         if activity:
@@ -352,9 +490,21 @@ def _get_teaching_session(concept, user):
 
 
 def _journey_message_intent(text):
-    """Classify only deterministic Journey-control language; open questions remain LLM-led."""
+    """Classify conversational intent while the pedagogical controller remains authoritative."""
     normalized = re.sub(r"[^a-z0-9' ]+", ' ', str(text).lower())
     normalized = re.sub(r'\s+', ' ', normalized).strip()
+    if re.fullmatch(r"(?:hi|hello|hey|yo|good (?:morning|afternoon|evening))(?: flow)?", normalized):
+        return 'SOCIAL'
+    if re.search(r"\b(thanks|thank you|cheers)\b", normalized):
+        return 'SOCIAL_ACKNOWLEDGEMENT'
+    if re.search(r"\b(that(?:'s| is) easy|too easy|make it harder)\b", normalized):
+        return 'EASY'
+    if re.search(r"\b(show|give) me (?:an?|another) example\b|\bmake (?:it|this) concrete\b", normalized):
+        return 'REQUEST_EXAMPLE'
+    if re.search(r"\b(explain|say|make) (?:it|that|this)? ?(?:more )?simply\b|\bsimpler\b", normalized):
+        return 'REQUEST_SIMPLIFY'
+    if re.search(r"\b(ok(?:ay)? )?(?:let'?s|lets) try again\b|\btry again\b", normalized):
+        return 'REQUEST_CONTINUE'
     if re.search(r"\b(explain (?:it|that|this) again|re-?explain|another explanation)\b", normalized):
         return 'REEXPLAIN'
     if re.search(r"\b(i (?:do not|don't) (?:understand|get it)|confused|lost me|that makes no sense)\b", normalized):
@@ -364,16 +514,23 @@ def _journey_message_intent(text):
         "what's next", 'what is next', 'go on', 'go ahead', 'i see', 'makes sense', 'i understand',
         'move on', "let's move on", "let's go", 'yes', 'is that all', 'can we move on',
     }
-    return 'PROCEED' if normalized in advance else 'OPEN'
+    if normalized in advance:
+        return 'ACKNOWLEDGEMENT' if normalized in {'ok', 'okay', 'got it', 'yeah', 'i see', 'makes sense', 'i understand'} else 'PROCEED'
+    if '?' in str(text) or re.search(r'\b(what|why|how|when|where|can you|could you)\b', normalized):
+        return 'QUESTION'
+    return 'OPEN'
 
 
 def _next_journey_check(session, activities):
     shown = session.state.get('shown_activity_ids', [])
     candidates = [item for item in activities if item.get('purpose') in {'check', 'apply', 'transfer'}]
-    activity = next((item for item in candidates if item['id'] not in shown), None) or next(iter(candidates), None)
+    objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+    objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
+    grounded = [item for item in candidates if item.get('objective_id') == objective_id]
+    pool = grounded or candidates
+    pool = sorted(pool, key=lambda item: 0 if item.get('check_level') == 'recognition' else 1)
+    activity = next((item for item in pool if item['id'] not in shown), None) or next(iter(pool), None)
     if activity:
-        objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
-        objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
         session.state = {
             **session.state,
             'teaching_phase': 'CHECK',
@@ -382,6 +539,56 @@ def _next_journey_check(session, activities):
         }
         session.status = 'practicing'
     return activity
+
+
+def _remediation_activity(concept, objective, attempted_activity, learner_response, feedback, used_modes=None):
+    """Build a focused alternate representation from the learner's actual miss."""
+    grounding = _grounding(concept)
+    source_idea = (grounding.get('excerpt') or concept.summary or concept.description or objective.get('text') or concept.title).strip()
+    expected = str(attempted_activity.get('expected_concept') or attempted_activity.get('explanation') or source_idea).strip()
+    kind = _objective_kind(objective.get('text'))
+    response_words = set(_meaningful_keywords(learner_response))
+    used_modes = set(used_modes or [])
+    exact_approx = bool(response_words & {'exact', 'approximate', 'approximation'}) or any(
+        word in expected.lower() for word in ('exact', 'approximate', 'approximation')
+    )
+    if exact_approx or kind == 'comparison':
+        content = {
+            'mode': 'comparison',
+            'title': 'Put the two ideas side by side',
+            'lead': 'The distinction is easier to see as a choice, not another definition.',
+            'columns': ['Exact or symbolic route', 'Numerical route'],
+            'rows': [
+                ['Aims for a closed-form result when one is practical.', 'Uses repeatable computation to reach a controlled, useful result.'],
+                ['May be difficult or unavailable for a real problem.', expected[:320]],
+            ],
+            'takeaway': expected[:360],
+        }
+        activity_type = 'comparison'
+    elif kind in {'process', 'calculation'} or 'example' in used_modes:
+        content = {
+            'mode': 'steps', 'title': 'Walk it through one move at a time',
+            'lead': 'Focus on the order of the reasoning.',
+            'steps': ['Start with the information you have.', expected[:260], 'Check whether the result fits the goal.'],
+            'takeaway': expected[:360],
+        }
+        activity_type = 'worked_example'
+    else:
+        content = {
+            'mode': 'example', 'title': 'Make it concrete',
+            'lead': f'Forget the formal wording for a moment. Imagine a real problem where {concept.title.lower()} is needed.',
+            'example': source_idea[:420], 'takeaway': expected[:360],
+        }
+        activity_type = 'worked_example'
+    key = f"remediate:{objective.get('id')}:{attempted_activity.get('id')}:{content['mode']}"
+    return {
+        'id': _activity_id(concept, key), 'concept_id': str(concept.id), 'purpose': 'remediate',
+        'stage': 'remediate', 'type': activity_type, 'prompt': content['title'], 'instructions': '',
+        'content': content, 'difficulty': 'easy', 'estimated_seconds': 60,
+        'grounding': {key: value for key, value in grounding.items() if value not in ('', None)},
+        'goal_relevance': concept.path.goal or '', 'objective_id': objective.get('id', ''),
+        'feedback_context': feedback[:260],
+    }
 
 
 def _unanswered_journey_check(session, activities):
@@ -409,13 +616,25 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         existing = TeachingTurn.objects.filter(session=session, role='learner', kind='activity', idempotency_key=key).first()
         if existing:
             return session, existing.payload.get('evaluation', {}), False
-    activity = next((item for item in _concept_activities(concept, user) if item['id'] == str(activity_id)), None)
+    activity = next((item for item in _objective_activities(session, user) if item['id'] == str(activity_id)), None)
     if not activity or activity['type'] in {'comparison', 'worked_example'}:
         raise ValueError('This response cannot be evaluated')
-    correct, score, feedback = _evaluate_activity(concept, activity, response_data)
-    attempt = EncounterAttempt.objects.create(user=user, concept=concept, activity_id=activity['id'], activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
+    correct, score, feedback, outcome = _evaluate_activity(concept, activity, response_data)
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
-    objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
+    objective = session.objectives[objective_index] if session.objectives else {'id': '', 'text': concept.title}
+    objective_id = objective['id']
+    if outcome == 'insufficient':
+        result = {'correct': False, 'score': 0, 'feedback': feedback, 'attempt_id': '',
+                  'objective_id': objective_id, 'outcome': outcome}
+        session.state = {**session.state, 'teaching_phase': 'CHECK'}
+        session.status = 'practicing'
+        TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key,
+                                    payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
+        TeachingTurn.objects.create(session=session, role='flow', content=feedback,
+                                    payload={**result, 'pedagogical_action': 'CHECK', 'active_activity_id': activity['id'], 'reused': True})
+        session.save()
+        return session, result, True
+    attempt = EncounterAttempt.objects.create(user=user, concept=concept, activity_id=activity['id'], activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
     session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
     record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score, source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
     if correct is not False:
@@ -423,8 +642,10 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         session.current_point = min(len(session.objectives), session.current_point + 1)
         session.status = 'mastery_check' if session.current_point >= len(session.objectives) - 1 else 'teaching'
         next_objective = session.objectives[session.current_point] if session.current_point < len(session.objectives) else None
-        session.state = {**session.state, 'teaching_phase': 'ADVANCE' if next_objective else 'READY_TO_ADVANCE'}
-        content = (f"✓ Checkpoint cleared. {feedback}\n\nNext up: {next_objective['text']}" if next_objective
+        session.state = {**_clear_objective_transient_state(session.state),
+                         'teaching_phase': 'INTRODUCE' if next_objective else 'READY_TO_ADVANCE'}
+        next_label = str(next_objective['text']).rstrip('.')[:110] if next_objective else ''
+        content = (f"Nice. That checkpoint is clear. ✓\n\nNext: {next_label}." if next_objective
                    else f"✓ Checkpoint cleared. {feedback}")
         flow_payload = {'pedagogical_action': 'ADVANCE'}
     else:
@@ -432,14 +653,14 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         session.resume_point = session.current_point
         session.unresolved_misconceptions = [*session.unresolved_misconceptions[-7:], feedback]
         session.state = {**session.state, 'teaching_phase': 'REMEDIATE'}
-        remedial_activities = _concept_activities(concept, user)
-        remedial = next((item for item in remedial_activities if item.get('purpose') == 'remediate'), None)
-        if not remedial:
-            remedial = next((item for item in remedial_activities if item['type'] in {'worked_example', 'comparison'}), None)
-        content = f"Not quite. {feedback}\n\nLet’s switch the representation before we check again."
+        remedial = _remediation_activity(concept, objective, activity, response_data.get('text', ''), feedback,
+                                         session.state.get('recent_remediation_modes', []))
+        remediation_mode = (remedial.get('content') or {}).get('mode')
+        session.state = {**session.state, 'recent_remediation_modes': [*session.state.get('recent_remediation_modes', [])[-3:], remediation_mode]}
+        content = f"Close, but that answer mixes up the main distinction. {feedback}\n\nLet’s look at it another way."
         flow_payload = {'pedagogical_action': 'REMEDIATE', **({'activity': _public_activity(remedial)} if remedial else {})}
     session.mastery = _evidence_score(user, concept, score)
-    result = {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id), 'objective_id': objective_id}
+    result = {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id), 'objective_id': objective_id, 'outcome': outcome}
     TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key, payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
     TeachingTurn.objects.create(session=session, role='flow', content=content, payload={**result, **flow_payload})
     evaluation = evaluate_session_completion(session)
@@ -1031,7 +1252,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         lowered = text.lower()
         journey_intent = _journey_message_intent(text)
         practice_requested = bool(re.search(r'\b(quiz(?: me| on this)?|practice|test me|give me (?:one|two|three|four|five|\d+)?\s*questions?|question on this)\b', lowered))
-        activities = _concept_activities(concept, request.user)
+        activities = _objective_activities(session, request.user)
         flow_text, kind, payload = '', 'message', {}
 
         preference_updates = {}
@@ -1067,6 +1288,22 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             session.resume_point = session.current_point
             session.state = {**session.state, 'skipped': True}
             flow_text = "We can pause this topic, but I won’t pretend it’s mastered. Your progress is saved and we can return when you’re ready."
+        elif journey_intent in {'SOCIAL', 'SOCIAL_ACKNOWLEDGEMENT'}:
+            objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+            objective = session.objectives[objective_index] if session.objectives else {'text': concept.title}
+            active = _unanswered_journey_check(session, activities)
+            returning = bool(session.conversation_summary or session.turns.filter(role='learner').exclude(content=text).exists())
+            if active:
+                flow_text = (f"Hey 👋 Good to have you back. We’re still on {objective['text'].rstrip('.').lower()}. "
+                             "The check above is waiting whenever you’re ready.")
+                payload = {'conversational_intent': journey_intent, 'pedagogical_action': 'PRESERVE',
+                           'active_activity_id': active['id'], 'reused': True,
+                           'quick_replies': ['Answer the check', 'Quick recap']}
+            else:
+                intro = "You’re back" if returning else "I’m Flow"
+                flow_text = f"Hey 👋 {intro}. We’re working on {objective['text'].rstrip('.').lower()}. Ready to pick it up?"
+                payload = {'conversational_intent': journey_intent, 'pedagogical_action': 'PRESERVE',
+                           'quick_replies': ["Let's go", 'Quick recap']}
         elif any(phrase in lowered for phrase in ('are we done', 'can we move on', 'how much is left', 'am i done', 'is that all', "what's left", 'what is left', 'what else do i need to know', 'what else')):
             evaluation = evaluate_session_completion(session)
             remaining = evaluation['objectives_total'] - evaluation['objectives_satisfied']
@@ -1117,10 +1354,28 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             cards = [{'question': objective['text'], 'answer': (grounding.get('excerpt') or concept.summary or concept.description)[:420], 'difficulty': concept.difficulty} for objective in session.objectives[:3]]
             kind, payload = 'flashcards', {'cards': cards, 'saved': False}
             flow_text = 'Here are three grounded cards from what we’re learning. Save them if they feel useful for revision.'
-        elif journey_intent == 'REEXPLAIN':
+        elif journey_intent == 'REQUEST_EXAMPLE':
+            objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+            objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
+            example = next((item for item in activities if item.get('purpose') == 'learn'
+                            and item.get('objective_id') == objective_id
+                            and (item.get('content') or {}).get('mode') == 'example'), None)
+            if not example:
+                attempted = next((item for item in activities if item.get('objective_id') == objective_id
+                                  and item.get('purpose') in {'check', 'apply'}), {})
+                objective = session.objectives[objective_index] if session.objectives else {'id': objective_id, 'text': concept.title}
+                example = _remediation_activity(concept, objective, attempted, text, '', ['comparison', 'steps'])
+                example = {**example, 'purpose': 'learn', 'stage': 'learn'}
+            session.status = 'teaching'
+            session.state = {**session.state, 'teaching_phase': 'TEACH', 'current_representation': 'example'}
+            flow_text = "Yep. Let’s make this checkpoint concrete."
+            kind, payload = 'activity', {'activity': _public_activity(example), 'pedagogical_action': 'EXAMPLE',
+                                         'objective_id': objective_id}
+        elif journey_intent in {'REEXPLAIN', 'REQUEST_SIMPLIFY'}:
             session.state = {**session.state, 'teaching_phase': 'TEACH'}
             teaching = next((item for item in activities if item.get('purpose') == 'learn' and item['type'] in {'comparison', 'worked_example'}), None)
-            flow_text = "Absolutely. I’ll rebuild it once from a different angle, then give you a tiny check."
+            flow_text = ("Yep. Let’s strip it back to one idea." if journey_intent == 'REQUEST_SIMPLIFY'
+                         else "Absolutely. Let’s rebuild it from a different angle.")
             if teaching:
                 kind, payload = 'activity', {'activity': _public_activity(teaching), 'pedagogical_action': 'EXPLAIN'}
         elif journey_intent == 'REMEDIATE' or any(phrase in lowered for phrase in ('wait', 'why?', 'slow down')):
@@ -1132,14 +1387,22 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             if misconception not in issues:
                 issues.append(misconception)
             session.unresolved_misconceptions = issues[-8:]
-            main = (_grounding(concept).get('excerpt') or concept.summary or concept.description or concept.title)
-            flow_text = f"Let’s slow it down. **Key distinction:** {main[:360]}\n\nTry picturing one value being updated, then ask: can the next calculation use it immediately? Tell me when that part feels clearer."
-        elif session.status == 'remediation' and any(word in lowered for word in ('okay', 'continue', 'got it', 'makes sense', 'yes')):
+            objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
+            objective = session.objectives[objective_index] if session.objectives else {'id': '', 'text': concept.title}
+            active_id = (session.state.get('last_learning_object') or {}).get('activity_id')
+            attempted = next((item for item in activities if item['id'] == active_id), None) or next((item for item in activities if item.get('purpose') in {'check', 'apply'}), {})
+            remedial = _remediation_activity(concept, objective, attempted, text, '', session.state.get('recent_remediation_modes', []))
+            remediation_mode = (remedial.get('content') or {}).get('mode')
+            session.state = {**session.state, 'recent_remediation_modes': [*session.state.get('recent_remediation_modes', [])[-3:], remediation_mode]}
+            flow_text = ("Got you. The definition isn’t helping, so let’s use an actual situation."
+                         if journey_intent == 'REMEDIATE' else "Yeah, I jumped too fast there. Here’s the missing piece.")
+            kind, payload = 'activity', {'activity': _public_activity(remedial), 'pedagogical_action': 'REMEDIATE'}
+        elif session.status == 'remediation' and (journey_intent == 'REQUEST_CONTINUE' or any(word in lowered for word in ('okay', 'continue', 'got it', 'makes sense', 'yes'))):
             session.current_point = session.resume_point
             existing_activity = _unanswered_journey_check(session, activities)
             next_activity = existing_activity or _next_journey_check(session, activities)
-            flow_text = ("Good. Use the check that’s already waiting—we’ll read the answer through this new angle." if existing_activity
-                         else "Good. Let’s check the same idea from this new angle.")
+            flow_text = ("Yep. Let’s run it back. Use the check that’s already waiting—we’ll read your answer through the new angle." if existing_activity
+                         else "Yep. Let’s run it back with one small check.")
             if next_activity:
                 kind = 'message' if existing_activity else 'activity'
                 payload = {'pedagogical_action': 'CHECK', 'active_activity_id': next_activity['id'], 'reused': bool(existing_activity)}
@@ -1152,7 +1415,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             next_activity = next((item for item in activities if item['purpose'] in {'check', 'apply'}), None)
             if next_activity:
                 kind, payload = 'activity', {'activity': _public_activity(next_activity), 'supported_by_video': video['video_id']}
-        elif journey_intent == 'PROCEED':
+        elif journey_intent in {'PROCEED', 'ACKNOWLEDGEMENT', 'REQUEST_CONTINUE', 'EASY'}:
             completion_state = evaluate_session_completion(session)
             if completion_state['normal_requirements_met']:
                 session.status = 'mastery_check'
@@ -1165,8 +1428,15 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                     existing_activity = _unanswered_journey_check(session, activities)
                     activity = existing_activity or _next_journey_check(session, activities)
                     if activity:
-                        flow_text = ("That check is still the next step—answer it when you’re ready." if existing_activity
-                                     else "Good. One quick check before we move on.")
+                        if journey_intent == 'EASY':
+                            flow_text = ("😂 Fair. The current check still needs your answer; then I’ll raise the difficulty." if existing_activity
+                                         else "Fair. Let’s make the check a little sharper.")
+                        elif journey_intent == 'ACKNOWLEDGEMENT':
+                            flow_text = ("Nice. Let’s make sure it sticks—the check above is still yours." if existing_activity
+                                         else "Nice. Let’s make sure it sticks with one small check.")
+                        else:
+                            flow_text = ("That check is still the next step—answer it when you’re ready." if existing_activity
+                                         else "Good. One quick check before we move on.")
                         kind = 'message' if existing_activity else 'activity'
                         payload = {'pedagogical_action': 'CHECK', 'active_activity_id': activity['id'], 'reused': bool(existing_activity)}
                         if not existing_activity:
@@ -1193,7 +1463,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             elif teaching:
                 session.state = {**session.state, 'teaching_phase': 'TEACH'}
                 kind, payload = 'activity', {'activity': _public_activity(teaching), 'pedagogical_action': 'TEACH'}
-        elif any(phrase in lowered for phrase in ('example', 'show me an example')):
+        elif journey_intent == 'REQUEST_EXAMPLE' or any(phrase in lowered for phrase in ('example', 'show me an example')):
             activity = next((item for item in activities if item['purpose'] in {'apply', 'check', 'transfer'} and item['id'] not in session.state.get('shown_activity_ids', [])), None)
             if activity:
                 shown = [*session.state.get('shown_activity_ids', []), activity['id']]
@@ -1386,7 +1656,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         if activity['type'] in {'comparison', 'worked_example'}:
             return Response({'error': 'This learning activity does not accept an answer'}, status=400)
         response_data = request.data.get('response') or {}
-        correct, score, feedback = _evaluate_activity(concept, activity, response_data)
+        correct, score, feedback, _outcome = _evaluate_activity(concept, activity, response_data)
         attempt = EncounterAttempt.objects.create(
             user=request.user, concept=concept, activity_id=activity_id,
             activity_type=activity['type'], stage=activity['stage'],
