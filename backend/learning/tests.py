@@ -7,7 +7,8 @@ from unittest.mock import patch
 from library.models import Resource
 from gamification.models import XPTransaction
 from learning.completion import evaluate_session_completion, record_objective_evidence
-from learning.models import ConceptNode, EncounterAttempt, LearningPath, TeachingSession, TeachingTurn, Unit
+from learning.models import ConceptNode, EncounterAttempt, JourneyMasteryAttempt, LearningArtifact, LearningPath, TeachingSession, TeachingTurn, Unit
+from learning.player import decide_learning_sequence
 from learning.views import _concept_activities, _objective_activities, _valid_activity
 
 
@@ -261,6 +262,39 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertEqual(TeachingTurn.objects.filter(session__concept=self.concept, role='flow', kind='activity').count(), 1)
         self.assertEqual(len(first.data['objectives']), 6)
 
+    def test_player_restores_the_same_current_stage_on_refresh(self):
+        first = self.client.get(f'{self.base}/teaching-session/')
+        stage_id = first.data['player']['current_stage_id']
+        refreshed = self.client.get(f'{self.base}/teaching-session/')
+        self.assertEqual(refreshed.data['player']['current_stage_id'], stage_id)
+        self.assertEqual(refreshed.data['player']['active_stage']['status'], 'active')
+
+    def test_continue_advances_presentation_but_never_practice_or_mastery(self):
+        response = self.client.get(f'{self.base}/teaching-session/')
+        while response.data['player']['active_stage']['type'] not in {'PRACTICE', 'ORDER'}:
+            stage_id = response.data['player']['current_stage_id']
+            response = self.client.post(f'{self.base}/teaching-stage/continue/', {'stage_id': stage_id}, format='json')
+            self.assertEqual(response.status_code, 200)
+        gated_id = response.data['player']['current_stage_id']
+        blocked = self.client.post(f'{self.base}/teaching-stage/continue/', {'stage_id': gated_id}, format='json')
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(blocked.data['player']['current_stage_id'], gated_id)
+        self.assertEqual(blocked.data['completion_evaluation']['objectives_satisfied'], 0)
+        self.assertEqual(EncounterAttempt.objects.count(), 0)
+
+    def test_player_sequence_is_scoped_to_current_objective_and_resets_after_advancement(self):
+        first = self.client.get(f'{self.base}/teaching-session/')
+        old_objective = first.data['player']['objective_id']
+        session = TeachingSession.objects.get(id=first.data['id'])
+        sequence = decide_learning_sequence(session, _concept_activities(self.concept, self.user), session.turns.all())
+        self.assertTrue(all(stage['id'].startswith(f'{old_objective}:') for stage in sequence['stages']))
+        activity = self._active_activity(first)
+        private = next(item for item in _concept_activities(self.concept, self.user) if item['id'] == activity['id'])
+        advanced = self.client.post(f'{self.base}/teaching-response/', {'activity_id': activity['id'], 'response': self._response_for(private)}, format='json')
+        self.assertNotEqual(advanced.data['player']['objective_id'], old_objective)
+        self.assertTrue(advanced.data['player']['current_stage_id'].endswith(':intro'))
+        self.assertFalse(any(stage['id'].startswith(f'{old_objective}:') for stage in advanced.data['player']['stages']))
+
     def test_interruption_preserves_resume_point_and_continue_restores_it(self):
         self.client.get(f'{self.base}/teaching-session/')
         started = self.client.post(f'{self.base}/teaching-message/', {'message': "let's go", 'idempotency_key': 'start'}, format='json')
@@ -306,6 +340,73 @@ class ConversationalTeachingSessionTests(TestCase):
         self.assertEqual(saved.status_code, 201)
         self.assertEqual(saved.data['saved'], 1)
         self.assertEqual(self.resource.flashcards.filter(owner=self.user).count(), 1)
+        artifact = LearningArtifact.objects.get(user=self.user, artifact_type='flashcard')
+        self.assertEqual(artifact.path, self.path)
+        self.assertEqual(artifact.concept, self.concept)
+        self.assertEqual(artifact.resource, self.resource)
+        self.assertIn('objective_id', artifact.provenance)
+        self.assertEqual(artifact.content['front'], cards[0]['question'])
+        repeated = self.client.post(f'{self.base}/teaching-flashcards/save/', {'cards': cards}, format='json')
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.data['created'], 0)
+        self.assertEqual(self.resource.flashcards.filter(owner=self.user).count(), 1)
+        self.assertEqual(LearningArtifact.objects.filter(user=self.user, artifact_type='flashcard').count(), 1)
+
+    def test_saved_artifacts_are_owner_isolated_and_survive_completion_state(self):
+        saved = self.client.post(f'{self.base}/save-artifact/', {'type': 'note', 'title': 'Jacobi insight', 'content': {'text': 'Jacobi keeps the old sweep values.'}}, format='json')
+        self.assertEqual(saved.status_code, 201)
+        self.concept.status = 'completed'; self.concept.save(update_fields=['status'])
+        listed = self.client.get(f'/api/learning/paths/{self.path.id}/saved-artifacts/')
+        self.assertEqual(len(listed.data['results']), 1)
+        other = get_user_model().objects.create_user(email='artifact-other@example.com', username='artifact-other', password='test-pass-123')
+        self.client.force_authenticate(other)
+        self.assertEqual(self.client.get(f'/api/learning/paths/{self.path.id}/saved-artifacts/').status_code, 404)
+
+    def test_global_saved_artifacts_support_owner_scoped_filtering(self):
+        self.client.post(f'{self.base}/save-artifact/', {'type': 'note', 'title': 'Note', 'content': {'text': 'Old sweep'}}, format='json')
+        self.client.post(f'{self.base}/save-artifact/', {'type': 'saved_diagram', 'title': 'Diagram', 'content': {'nodes': []}}, format='json')
+        filtered = self.client.get('/api/learning/paths/saved-artifacts/?type=note')
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual([item['type'] for item in filtered.data['results']], ['note'])
+        self.assertEqual(filtered.data['results'][0]['journey_title'], self.path.title)
+        other = get_user_model().objects.create_user(email='saved-other@example.com', username='saved-other', password='test-pass-123')
+        self.client.force_authenticate(other)
+        self.assertEqual(self.client.get('/api/learning/paths/saved-artifacts/').data['results'], [])
+
+    def test_mastery_combines_objectives_and_submission_is_idempotent(self):
+        self.client.get(f'{self.base}/teaching-session/')
+        self.concept.status = 'completed'; self.concept.save(update_fields=['status'])
+        self.path.recalculate_progress()
+        challenge = self.client.get(f'/api/learning/paths/{self.path.id}/mastery-challenge/')
+        self.assertEqual(challenge.status_code, 200)
+        objective_ids = {item['objective_id'] for item in challenge.data['challenges']}
+        self.assertGreater(len(objective_ids), 1)
+        self.assertTrue(all(not item['id'].startswith('encounter:') for item in challenge.data['challenges']))
+        responses = [{'challenge_id': item['id'], 'answer': 'This answer explains the objective with meaningful connected reasoning.'} for item in challenge.data['challenges']]
+        payload = {'idempotency_key': 'mastery-once', 'responses': responses}
+        first = self.client.post(f'/api/learning/paths/{self.path.id}/mastery-challenge/', payload, format='json')
+        second = self.client.post(f'/api/learning/paths/{self.path.id}/mastery-challenge/', payload, format='json')
+        self.assertEqual(first.status_code, 201); self.assertEqual(second.status_code, 200)
+        self.assertEqual(JourneyMasteryAttempt.objects.filter(user=self.user, path=self.path).count(), 1)
+        self.assertEqual(LearningArtifact.objects.filter(user=self.user, path=self.path, artifact_type='mastery_result').count(), 1)
+
+    def test_mastery_is_unavailable_until_journey_learning_is_complete(self):
+        response = self.client.get(f'/api/learning/paths/{self.path.id}/mastery-challenge/')
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(response.data['eligible'])
+        self.assertFalse(JourneyMasteryAttempt.objects.exists())
+
+    def test_native_podcast_requires_real_audio_and_remains_optional(self):
+        session_data = self.client.get(f'{self.base}/teaching-session/').data
+        session = TeachingSession.objects.get(id=session_data['id'])
+        objective_id = session.objectives[0]['id']
+        TeachingTurn.objects.create(session=session, role='flow', kind='message', content='Listen if useful.', payload={
+            'podcast': {'audio_url': 'https://cdn.example.test/audio.mp3', 'title': 'Quick breakdown', 'objective_id': objective_id}
+        })
+        sequence = decide_learning_sequence(session, _objective_activities(session, self.user), session.turns.all())
+        podcast = next(stage for stage in sequence['stages'] if stage['type'] == 'PODCAST')
+        self.assertTrue(podcast['optional'])
+        self.assertFalse(podcast.get('activity_id'))
 
     def test_voice_evidence_requires_a_valid_demonstration(self):
         session = self.client.get(f'{self.base}/teaching-session/').data

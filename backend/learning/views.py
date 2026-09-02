@@ -10,15 +10,31 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, Avg, Max
 
-from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit, TeachingSession, TeachingTurn
+from .models import EncounterAttempt, LearningPath, ConceptNode, ConceptReview, Unit, TeachingSession, TeachingTurn, LearningArtifact, JourneyMasteryAttempt
 from .completion import evaluate_feynman_explanation, evaluate_session_completion, finalize_teaching_session, record_objective_evidence
 from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptNodeSerializer, ConceptNodeDetailSerializer,
                            ConceptReviewSerializer, UnitSerializer)
 from .spaced_repetition import calculate_next_review, get_due_concepts, get_review_stats
-from .presentation import build_teaching_object, grounded_distractors
+from .presentation import build_teaching_object, classify_presentation, grounded_distractors
+from .player import continue_player_stage, sync_player_state
 
 logger = logging.getLogger(__name__)
+
+
+def _artifact_data(item):
+    return {'id': str(item.id), 'type': item.artifact_type, 'title': item.title,
+            'content': item.content, 'provenance': item.provenance,
+            'journey_id': str(item.path_id), 'journey_title': item.path.title,
+            'objective_id': str(item.concept_id or ''), 'objective_title': item.concept.title if item.concept else '',
+            'source_id': item.resource_id, 'source_title': item.resource.title if item.resource else '',
+            'created_at': item.created_at.isoformat()}
+
+
+def _current_objective(session):
+    if not session.objectives:
+        return {}
+    return session.objectives[min(session.current_point, len(session.objectives) - 1)]
 
 # ── Depth limits ──
 DEPTH_LIMITS = {
@@ -444,6 +460,8 @@ def _session_data(session):
     current_objective_id = session.objectives[current_index]['id'] if session.objectives else ''
     active = session.state.get('last_learning_object') or {}
     active_activity_id = active.get('activity_id', '') if active.get('objective_id') == current_objective_id else ''
+    player_activities = [_public_activity(activity) for activity in _objective_activities(session, session.user)]
+    player = sync_player_state(session, player_activities, turns)
     return {
         'id': str(session.id), 'status': session.status, 'current_point': session.current_point,
         'resume_point': session.resume_point, 'objectives': session.objectives,
@@ -453,6 +471,7 @@ def _session_data(session):
         'teaching_preferences': session.state.get('teaching_preferences', {}),
         'teaching_phase': session.state.get('teaching_phase', 'INTRODUCE'),
         'current_objective_id': current_objective_id, 'active_activity_id': active_activity_id,
+        'player': player,
         'last_active_at': session.last_active_at.isoformat(), 'completed': session.status == 'completed',
         'completion_evaluation': evaluation,
     }
@@ -1198,6 +1217,87 @@ class LearningPathViewSet(viewsets.ModelViewSet):
 
         return Response({'due': data, 'count': reviews.count()})
 
+    @action(detail=True, methods=['get'], url_path='saved-artifacts')
+    def saved_artifacts(self, request, pk=None):
+        path = self.get_object()
+        items = path.artifacts.filter(user=request.user).select_related('concept', 'resource')
+        kind = str(request.query_params.get('type', '')).strip()
+        if kind:
+            items = items.filter(artifact_type=kind)
+        return Response({'results': [_artifact_data(item) for item in items[:200]]})
+
+    @action(detail=False, methods=['get'], url_path='saved-artifacts')
+    def all_saved_artifacts(self, request):
+        items = LearningArtifact.objects.filter(user=request.user).select_related('path', 'concept', 'resource')
+        kind = str(request.query_params.get('type', '')).strip()
+        if kind:
+            items = items.filter(artifact_type=kind)
+        return Response({'results': [_artifact_data(item) for item in items[:300]]})
+
+    @action(detail=True, methods=['get', 'post'], url_path='mastery-challenge')
+    @transaction.atomic
+    def mastery_challenge(self, request, pk=None):
+        path = self.get_object()
+        eligible = bool(path.total_concepts and path.concepts_completed == path.total_concepts)
+        if not eligible:
+            return Response({'journey_id': str(path.id), 'eligible': False, 'challenges': [],
+                             'error': 'Complete every required Journey objective before Mastery.'}, status=409)
+        concepts = list(path.concepts.order_by('order_index').prefetch_related('teaching_sessions'))
+        challenges = []
+        for concept in concepts:
+            session = concept.teaching_sessions.filter(user=request.user).first()
+            objectives = (session.objectives if session else []) or [{'id': f'concept-{concept.id}', 'text': concept.title}]
+            evidence = (session.state.get('objective_evidence', {}) if session else {})
+            weak_first = sorted(objectives, key=lambda objective: int((evidence.get(objective['id']) or {}).get('best_score', 0)))
+            for objective in weak_first[:2]:
+                kind = classify_presentation(objective.get('text', ''))
+                challenge_type = {'SEQUENCE': 'ordering', 'PROCESS': 'ordering', 'COMPARISON': 'short_answer', 'FORMULA': 'short_answer'}.get(kind, 'short_answer')
+                challenges.append({'id': f"mastery:{objective['id']}", 'objective_id': objective['id'], 'concept_id': str(concept.id),
+                                   'type': challenge_type, 'prompt': f"Apply this idea in your own words: {objective.get('text')}",
+                                   'objective_type': kind, 'source_title': concept.source_resource.title if concept.source_resource else '',
+                                   'expected_keywords': _meaningful_keywords(objective.get('text', ''))[:8]})
+        # A Journey challenge combines objectives and never replays persisted activity ids.
+        challenges = challenges[:max(4, min(8, len(challenges)))]
+        if request.method == 'GET':
+            prior = path.mastery_attempts.filter(user=request.user).first()
+            public_challenges = [{key: value for key, value in item.items() if key != 'expected_keywords'} for item in challenges]
+            return Response({'journey_id': str(path.id), 'eligible': True, 'challenge_count': len(challenges), 'estimated_minutes': max(3, len(challenges)),
+                             'predicted_mastery': int(path.concepts.aggregate(avg=Avg('mastery'))['avg'] or 0), 'challenges': public_challenges,
+                             'latest_result': {'score': prior.score, 'passed': prior.passed, 'review_objective_ids': prior.review_objective_ids} if prior else None})
+        key = str(request.data.get('idempotency_key', '')).strip()[:80]
+        if not key:
+            return Response({'error': 'idempotency_key is required'}, status=400)
+        existing = path.mastery_attempts.filter(user=request.user, idempotency_key=key).first()
+        if existing:
+            review_concept_ids = list(dict.fromkeys(item.get('concept_id') for item in existing.challenges
+                                                    if item.get('objective_id') in existing.review_objective_ids and item.get('concept_id')))
+            return Response({'id': str(existing.id), 'score': existing.score, 'passed': existing.passed,
+                             'review_objective_ids': existing.review_objective_ids,
+                             'review_concept_ids': review_concept_ids,
+                             'objective_results': existing.objective_results, 'created': False})
+        submitted = {str(item.get('challenge_id')): str(item.get('answer', '')).strip() for item in request.data.get('responses', [])}
+        objective_results = []
+        for challenge in challenges:
+            answer = submitted.get(challenge['id'], '')
+            expected = set(challenge.get('expected_keywords') or [])
+            observed = set(_meaningful_keywords(answer))
+            coverage = len(expected & observed) / max(1, min(4, len(expected)))
+            score = min(100, round(coverage * 100)) if len(answer.split()) >= 4 and not _is_non_answer(answer) else 0
+            objective_results.append({'objective_id': challenge['objective_id'], 'satisfied': score >= 70, 'score': score})
+        score = int(sum(item['score'] for item in objective_results) / max(1, len(objective_results)))
+        review_ids = list(dict.fromkeys(item['objective_id'] for item in objective_results if not item['satisfied']))
+        review_concept_ids = list(dict.fromkeys(challenge['concept_id'] for challenge in challenges if challenge['objective_id'] in review_ids))
+        attempt = JourneyMasteryAttempt.objects.create(user=request.user, path=path, idempotency_key=key, challenges=challenges,
+                                                       responses=request.data.get('responses', []), objective_results=objective_results,
+                                                       score=score, passed=score >= 75 and not review_ids, review_objective_ids=review_ids)
+        LearningArtifact.objects.create(user=request.user, path=path, artifact_type='mastery_result', title=f'{path.title} Mastery result',
+                                        content={'score': score, 'passed': attempt.passed, 'review_objective_ids': review_ids,
+                                                 'review_concept_ids': review_concept_ids, 'objective_results': objective_results},
+                                        provenance={'mastery_attempt_id': str(attempt.id)}, external_object_type='journey_mastery', external_object_id=str(attempt.id))
+        return Response({'id': str(attempt.id), 'score': score, 'passed': attempt.passed, 'review_objective_ids': review_ids,
+                         'review_concept_ids': review_concept_ids, 'objective_results': objective_results,
+                         'recommended_next_action': 'finish' if attempt.passed else 'review_weak_areas', 'created': True}, status=201)
+
     @action(detail=True, methods=['get'])
     def analytics(self, request, pk=None):
         """Get analytics for a learning path."""
@@ -1486,7 +1586,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                       f"Grounding: {_grounding(concept)}\nRecent turns: {recent}\nLearner: {text}")
             try:
                 from ai_assistant.services import AIService
-                flow_text = AIService().ask_about_resource(concept.source_resource, prompt) if concept.source_resource else AIService().chat_sync([{'role': 'user', 'content': prompt}])
+                flow_text = AIService().ask_about_resource(concept.source_resource, prompt, task='REMEDIATION' if action == 'REMEDIATE' else 'CONVERSATION') if concept.source_resource else AIService().chat_sync([{'role': 'user', 'content': prompt}], task='REMEDIATION' if action == 'REMEDIATE' else 'CONVERSATION')
             except Exception:
                 logger.exception('Teaching conversation failed for %s', concept.id)
                 flow_text = "I lost the thread for a second, but your progress is safe. Try that question once more and I’ll pick it up from here."
@@ -1518,8 +1618,48 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'A source resource is required to save these cards'}, status=400)
         from library.models import Flashcard
         cards = request.data.get('cards') or []
-        saved = [Flashcard.objects.create(resource=concept.source_resource, owner=request.user, question=str(card.get('question', ''))[:1000], answer=str(card.get('answer', ''))[:3000], subject=getattr(concept.source_resource, 'subject', '') or concept.path.title, difficulty=card.get('difficulty', 'medium')) for card in cards[:10] if card.get('question') and card.get('answer')]
-        return Response({'saved': len(saved), 'ids': [card.id for card in saved]}, status=201)
+        saved = []
+        created_count = 0
+        for card in cards[:10]:
+            question, answer = str(card.get('question', ''))[:1000].strip(), str(card.get('answer', ''))[:3000].strip()
+            if not question or not answer:
+                continue
+            flashcard, created = Flashcard.objects.get_or_create(
+                resource=concept.source_resource, owner=request.user, question=question, answer=answer,
+                defaults={'subject': getattr(concept.source_resource, 'subject', '') or concept.path.title,
+                          'difficulty': card.get('difficulty', 'medium')},
+            )
+            saved.append(flashcard)
+            created_count += int(created)
+        for card in saved:
+            LearningArtifact.objects.get_or_create(user=request.user, path=concept.path, external_object_type='flashcard', external_object_id=str(card.id), defaults={
+                'concept': concept, 'resource': concept.source_resource, 'artifact_type': 'flashcard', 'title': card.question[:300],
+                'content': {'front': card.question, 'back': card.answer, 'difficulty': card.difficulty},
+                'provenance': {'journey_title': concept.path.title, 'objective_id': _current_objective(_get_teaching_session(concept, request.user)).get('id', ''), 'concept_title': concept.title},
+            })
+        return Response({'saved': len(saved), 'created': created_count, 'ids': [card.id for card in saved]}, status=201 if created_count else 200)
+
+    @action(detail=True, methods=['post'], url_path='save-artifact')
+    def save_artifact(self, request, pk=None):
+        concept = self.get_object()
+        artifact_type = str(request.data.get('type', '')).strip()
+        allowed = {'note', 'podcast', 'video_reference', 'saved_example', 'saved_diagram'}
+        if artifact_type not in allowed:
+            return Response({'error': 'Unsupported saved artifact type'}, status=400)
+        content = request.data.get('content') if isinstance(request.data.get('content'), dict) else {'text': str(request.data.get('content', ''))}
+        external_id = str(request.data.get('external_object_id', '')).strip()[:80]
+        defaults = {'concept': concept, 'resource': concept.source_resource, 'artifact_type': artifact_type,
+                    'title': str(request.data.get('title') or concept.title)[:300], 'content': content,
+                    'provenance': {'journey_title': concept.path.title, 'concept_title': concept.title,
+                                   'objective_id': _current_objective(_get_teaching_session(concept, request.user)).get('id', '')},
+                    'external_object_type': artifact_type}
+        if external_id:
+            artifact, created = LearningArtifact.objects.get_or_create(user=request.user, path=concept.path,
+                                                                       external_object_type=artifact_type, external_object_id=external_id,
+                                                                       defaults=defaults)
+        else:
+            artifact, created = LearningArtifact.objects.create(user=request.user, path=concept.path, **defaults), True
+        return Response({**_artifact_data(artifact), 'created': created}, status=201 if created else 200)
 
     @action(detail=True, methods=['get'], url_path='teaching-voice-context')
     def teaching_voice_context(self, request, pk=None):
@@ -1589,6 +1729,24 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         session.save()
         return Response(_session_data(session))
 
+    @action(detail=True, methods=['post'], url_path='teaching-stage/continue')
+    @transaction.atomic
+    def teaching_stage_continue(self, request, pk=None):
+        """Advance presentation only. This endpoint never writes evidence or mastery."""
+        concept = self.get_object()
+        session = _get_teaching_session(concept, request.user)
+        # Sync first so an old objective/stage can never be reactivated.
+        _session_data(session)
+        player = session.state.get('player') or {}
+        current_id = str(request.data.get('stage_id') or '')
+        if not current_id or current_id != player.get('current_stage_id'):
+            return Response({'error': 'This learning stage is no longer active.'}, status=409)
+        active_activity_id = player.get('active_activity_id', '')
+        if active_activity_id:
+            return Response({'error': 'Complete the active Practice before continuing.', **_session_data(session)}, status=409)
+        continue_player_stage(session)
+        return Response(_session_data(session))
+
     @action(detail=True, methods=['get', 'post'], url_path='teaching-completion')
     def teaching_completion(self, request, pk=None):
         concept = self.get_object()
@@ -1629,6 +1787,12 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         session.resume_point = session.current_point
         TeachingTurn.objects.create(session=session, role='flow', content=result['feedback'], payload={'feynman_result': result})
         session.save()
+        LearningArtifact.objects.update_or_create(user=request.user, path=concept.path, external_object_type='feynman_turn', external_object_id=str(attempt.id), defaults={
+            'concept': concept, 'resource': concept.source_resource, 'artifact_type': 'feynman_result', 'title': f'{concept.title} teach-back',
+            'content': {'score': result['score'], 'passed': result['passed'], 'feedback': result['feedback'],
+                        'critical_misconceptions': result.get('critical_misconceptions', []), 'source': source},
+            'provenance': {'journey_title': concept.path.title, 'objective_id': _current_objective(session).get('id', ''), 'date': timezone.now().isoformat()},
+        })
         completion_state = evaluate_session_completion(session)
         response_status = 409 if result['critical_misconceptions'] else 201
         return Response({'result': result, **completion_state, **_session_data(session)}, status=response_status)
@@ -1697,9 +1861,9 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         )
         try:
             if concept.source_resource:
-                answer = AIService().ask_about_resource(concept.source_resource, context)
+                answer = AIService().ask_about_resource(concept.source_resource, context, task='SOURCE_REASONING')
             else:
-                answer = AIService().chat_sync([{'role': 'user', 'content': context}])
+                answer = AIService().chat_sync([{'role': 'user', 'content': context}], task='CONVERSATION')
         except Exception:
             logger.exception('Contextual Flow failed for concept %s', concept.id)
             return Response({'error': 'Flow could not answer right now'}, status=503)

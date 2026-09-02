@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { ArrowRight, CalendarDays, Clock3, RotateCcw, Sparkles } from 'lucide-react'
-import { assignmentsApi, learningApi } from '@/lib/api'
+import { assignmentsApi, learningApi, libraryApi } from '@/lib/api'
 import FlowCompanion from '@/components/onboarding/FlowCompanion'
 import FlowLoader from '@/components/ui/FlowLoader'
 import { normalizeReadableMath } from '@/lib/mathFormatting'
@@ -15,7 +15,7 @@ export default function HomePage() {
   const name = auth?.user?.name?.split(' ')[0] || 'there'
   const pathsQuery = useQuery({ queryKey: ['learning-paths'], queryFn: () => learningApi.getPaths().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []) })
   const paths = useMemo(() => pathsQuery.data || [], [pathsQuery.data])
-  const active = useMemo(() => paths.find((path: any) => path.status === 'active') || paths.find((path: any) => path.status !== 'completed'), [paths])
+  const active = useMemo(() => paths.find((path: any) => path.mastery_state?.eligible && !path.mastery_state?.passed) || paths.find((path: any) => path.status === 'active') || paths.find((path: any) => path.status !== 'completed'), [paths])
   const otherSpaces = paths.filter((path: any) => path.id !== active?.id && path.status !== 'completed').slice(0, 3)
   const pathQuery = useQuery({ queryKey: ['learning-path', active?.id], queryFn: () => learningApi.getPath(active.id).then(r => r.data), enabled: Boolean(active?.id) })
   const concepts = pathQuery.data?.concepts || []
@@ -23,13 +23,16 @@ export default function HomePage() {
   const lastCompleted = [...concepts].filter((concept: any) => concept.status === 'completed').sort((a: any, b: any) => b.order_index - a.order_index)[0]
   const teachingQuery = useQuery({ queryKey: ['teaching-session', current?.id], queryFn: () => learningApi.getTeachingSession(current.id).then(r => r.data), enabled: Boolean(current?.id), retry: false })
   const assignmentsQuery = useQuery({ queryKey: ['assignments'], queryFn: () => assignmentsApi.getAll().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []), retry: false })
+  const flashcardsQuery = useQuery({ queryKey: ['due-flashcards'], queryFn: () => libraryApi.getDueFlashcards().then(r => r.data), retry: false })
+  const dueCards = Number(flashcardsQuery.data?.count || flashcardsQuery.data?.flashcards?.length || 0)
   const due = paths.reduce((total: number, path: any) => total + Number(path.due_reviews || 0), 0)
   const upcoming = [...(assignmentsQuery.data || [])].filter((item: any) => {
     const value = item.due_date || item.deadline_date || item.deadline
     return value && +new Date(value) >= Date.now() - 86_400_000
   }).sort((a: any, b: any) => +new Date(a.due_date || a.deadline_date || a.deadline) - +new Date(b.due_date || b.deadline_date || b.deadline))[0]
   const openSession = teachingQuery.data && !['completed', 'not_started'].includes(teachingQuery.data.status)
-  const primaryHref = current ? `/learn/${active?.id}?concept=${current.id}` : `/learn/${active?.id}`
+  const masteryDue = Boolean(active?.mastery_state?.eligible && !active?.mastery_state?.passed)
+  const primaryHref = masteryDue ? `/learn/${active?.id}/mastery` : current ? `/learn/${active?.id}?concept=${current.id}` : `/learn/${active?.id}`
   const conceptTitle = normalizeReadableMath(current?.title || active?.title || 'Continue your Journey')
   const conceptDescription = cleanSummary(current?.summary || current?.description || active?.description || active?.goal)
 
@@ -48,7 +51,7 @@ export default function HomePage() {
         {conceptDescription && <p className="mt-3 max-w-2xl text-sm leading-relaxed text-flow-muted sm:text-base">{conceptDescription}</p>}
         <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-bold text-flow-muted">{current && <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-flow-orange" />{current.estimated_minutes || 15} min</span>}{current && <span>25 XP</span>}{openSession && <span className="text-flow-success">{teachingQuery.data.completion_evaluation?.objectives_satisfied || 0}/{teachingQuery.data.completion_evaluation?.objectives_total || teachingQuery.data.objectives?.length || 0} objectives understood</span>}</div>
         <div className="mt-6 h-1.5 max-w-2xl overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-flow-success to-flow-orange transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${active.mastery_percent || 0}%` }} /></div>
-        <Link href={primaryHref} className="flow-primary-button mt-7 w-full rounded-xl sm:w-auto">Continue with Flow <ArrowRight className="h-5 w-5" /></Link>
+        <Link href={primaryHref} className="flow-primary-button mt-7 w-full rounded-xl sm:w-auto">{masteryDue ? (active.mastery_state?.started ? 'Continue Mastery' : 'Start Mastery') : 'Continue with Flow'} <ArrowRight className="h-5 w-5" /></Link>
       </div></section>
 
       <aside className="flex items-center gap-4 rounded-3xl border border-flow-violet/20 bg-flow-violet/[.07] p-4 sm:p-5 lg:block"><FlowCompanion state={openSession ? 'teaching' : due ? 'encouraging' : 'idle'} className="w-20 shrink-0 sm:w-24 lg:mx-auto lg:w-32" /><div className="min-w-0 lg:mt-4 lg:text-center"><p className="text-xs font-black uppercase tracking-[.18em] text-flow-violet">Flow</p><p className="mt-2 text-sm font-bold leading-relaxed text-flow-ink">{flowContext({ openSession, lastCompleted, current, due })}</p></div></aside>
@@ -58,7 +61,7 @@ export default function HomePage() {
 
     <section className="mt-10 sm:mt-12"><div className="flex items-end justify-between gap-4"><div><p className="flow-eyebrow">Your learning spaces</p><h2 className="mt-2 text-2xl font-black tracking-[-.03em] sm:text-3xl">Jump back in.</h2></div><Link href="/learn" className="shrink-0 text-sm font-black text-flow-violet focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flow-violet">All Journeys →</Link></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[active, ...otherSpaces].map((space: any) => <LearningSpace key={space.id} space={space} active={space.id === active.id} nextConcept={space.id === active.id ? current : undefined} />)}</div></section>
 
-    {(upcoming || due > 0) && <section className="mt-10 border-t border-white/[.08] pt-7"><p className="flow-eyebrow">Today</p><div className="mt-4 grid gap-3 md:grid-cols-2">{due > 0 && <TodayItem icon={<RotateCcw className="h-5 w-5" />} label="Review opportunity" title={`${due} ${due === 1 ? 'concept is' : 'concepts are'} ready to revisit`} href={`/learn/${active.id}`} />}{upcoming && <TodayItem icon={<CalendarDays className="h-5 w-5" />} label={formatDeadline(upcoming.due_date || upcoming.deadline_date || upcoming.deadline)} title={upcoming.title || upcoming.name || 'Upcoming assignment'} href="/assignments" />}</div></section>}
+    {(upcoming || due > 0 || dueCards > 0) && <section className="mt-10 border-t border-white/[.08] pt-7"><p className="flow-eyebrow">Today</p><div className="mt-4 grid gap-3 md:grid-cols-2">{dueCards > 0 && <TodayItem icon={<RotateCcw className="h-5 w-5" />} label="Memory review" title={`${dueCards} flashcard${dueCards === 1 ? '' : 's'} due`} href="/library/flashcards?mode=due" />}{due > 0 && <TodayItem icon={<RotateCcw className="h-5 w-5" />} label="Review opportunity" title={`${due} ${due === 1 ? 'concept is' : 'concepts are'} ready to revisit`} href={`/learn/${active.id}`} />}{upcoming && <TodayItem icon={<CalendarDays className="h-5 w-5" />} label={formatDeadline(upcoming.due_date || upcoming.deadline_date || upcoming.deadline)} title={upcoming.title || upcoming.name || 'Upcoming assignment'} href="/assignments" />}</div></section>}
   </div></main>
 }
 

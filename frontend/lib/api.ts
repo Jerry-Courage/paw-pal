@@ -153,6 +153,7 @@ export const libraryApi = {
   generatePracticeQuestions: (id: number, difficulty = 'medium', count = 5, format = 'mcq') =>
     api.post(`/library/resources/${id}/practice/generate/`, { difficulty, count, format }),
   getFlashcards: () => api.get('/library/flashcards/'),
+  getDueFlashcards: () => api.get('/library/flashcards/due/'),
   getResourceFlashcards: (resourceId: number) =>
     api.get('/library/flashcards/', { params: { resource: resourceId } }),
   getResourceQuizzes: (resourceId: number) =>
@@ -407,6 +408,12 @@ export const learningApi = {
   getConceptActivities: (id: string) => api.get(`/learning/concepts/${id}/activities/`),
   getTeachingSession: (id: string) => api.get(`/learning/concepts/${id}/teaching-session/`),
   sendTeachingMessage: (id: string, data: { message: string; idempotency_key: string }) => api.post(`/learning/concepts/${id}/teaching-message/`, data),
+  continueTeachingStage: (id: string, stage_id: string) => api.post(`/learning/concepts/${id}/teaching-stage/continue/`, { stage_id }),
+  saveTeachingArtifact: (id: string, data: { type: string; title?: string; content: Record<string, unknown>; external_object_id?: string }) => api.post(`/learning/concepts/${id}/save-artifact/`, data),
+  getSavedArtifacts: (pathId: string, type?: string) => api.get(`/learning/paths/${pathId}/saved-artifacts/`, { params: type ? { type } : {} }),
+  getAllSavedArtifacts: (type?: string) => api.get('/learning/paths/saved-artifacts/', { params: type ? { type } : {} }),
+  getMasteryChallenge: (pathId: string) => api.get(`/learning/paths/${pathId}/mastery-challenge/`),
+  submitMasteryChallenge: (pathId: string, data: { idempotency_key: string; responses: Array<{ challenge_id: string; answer: string }> }) => api.post(`/learning/paths/${pathId}/mastery-challenge/`, data),
   submitTeachingResponse: (id: string, data: { activity_id: string; response: unknown }) => api.post(`/learning/concepts/${id}/teaching-response/`, data),
   saveTeachingFlashcards: (id: string, cards: Array<{ question: string; answer: string; difficulty: string }>) => api.post(`/learning/concepts/${id}/teaching-flashcards/save/`, { cards }),
   getTeachingVoiceContext: (id: string) => api.get(`/learning/concepts/${id}/teaching-voice-context/`),

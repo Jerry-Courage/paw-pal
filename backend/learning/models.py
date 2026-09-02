@@ -194,3 +194,49 @@ class TeachingTurn(models.Model):
     class Meta:
         ordering = ['created_at']
         constraints = [models.UniqueConstraint(fields=['session', 'idempotency_key'], condition=~models.Q(idempotency_key=''), name='unique_teaching_turn_idempotency')]
+
+
+class LearningArtifact(models.Model):
+    """Explicitly saved, durable output from a Journey. Transient player stages never land here."""
+    TYPE_CHOICES = [
+        ('flashcard', 'Flashcard'), ('note', 'Note'), ('podcast', 'Podcast'),
+        ('video_reference', 'Video reference'), ('saved_example', 'Saved example'),
+        ('saved_diagram', 'Saved diagram'), ('feynman_result', 'Feynman result'),
+        ('mastery_result', 'Mastery result'),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='learning_artifacts')
+    path = models.ForeignKey(LearningPath, on_delete=models.CASCADE, related_name='artifacts')
+    concept = models.ForeignKey(ConceptNode, on_delete=models.SET_NULL, null=True, blank=True, related_name='artifacts')
+    resource = models.ForeignKey('library.Resource', on_delete=models.SET_NULL, null=True, blank=True, related_name='journey_artifacts')
+    artifact_type = models.CharField(max_length=32, choices=TYPE_CHOICES)
+    title = models.CharField(max_length=300)
+    content = models.JSONField(default=dict)
+    provenance = models.JSONField(default=dict)
+    external_object_type = models.CharField(max_length=40, blank=True)
+    external_object_id = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'artifact_type', 'created_at'], name='learning_art_user_ty_idx')]
+        constraints = [models.UniqueConstraint(fields=['user', 'external_object_type', 'external_object_id'], condition=~models.Q(external_object_id=''), name='unique_saved_external_artifact')]
+
+
+class JourneyMasteryAttempt(models.Model):
+    """Idempotent Journey-level mastery result. Existing concept completion remains reward authority."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='journey_mastery_attempts')
+    path = models.ForeignKey(LearningPath, on_delete=models.CASCADE, related_name='mastery_attempts')
+    idempotency_key = models.CharField(max_length=80)
+    challenges = models.JSONField(default=list)
+    responses = models.JSONField(default=list)
+    objective_results = models.JSONField(default=list)
+    score = models.PositiveSmallIntegerField(default=0)
+    passed = models.BooleanField(default=False)
+    review_objective_ids = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [models.UniqueConstraint(fields=['user', 'path', 'idempotency_key'], name='unique_journey_mastery_submission')]

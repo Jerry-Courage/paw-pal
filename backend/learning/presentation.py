@@ -4,7 +4,7 @@ import re
 
 PRESENTATION_TYPES = {
     'concept', 'key_idea', 'process', 'sequence', 'comparison', 'example',
-    'worked_example', 'formula', 'cause_effect', 'callout', 'diagram',
+    'worked_example', 'formula', 'cause_effect', 'callout', 'diagram', 'relationship',
 }
 
 
@@ -14,9 +14,11 @@ def classify_presentation(text):
     if re.search(r'\b(formula|equation|theorem|x[_ₙn]|f\s*\(|=)\b', value): return 'FORMULA'
     if re.search(r'\b(calculate|compute|solve|approximate|derive|evaluate)\b', value): return 'CALCULATION'
     if re.search(r'\b(cause|effect|because|therefore|results? in|leads? to|why)\b', value): return 'CAUSE_EFFECT'
-    if re.search(r'\b(sequence|stages?|steps?|first|next|then|finally|travels?|moves?|from .+ to)\b', value): return 'SEQUENCE'
+    if re.search(r'\b(two|both|one .+ (?:while|whereas) (?:the )?other|sends? .+ while|connects? .+ (?:to|with))\b', value): return 'RELATIONSHIP'
+    if re.search(r'\b(part|structure|system|organ|anatom|located|entry point|chamber|layer)\b', value): return 'STRUCTURE'
+    if re.search(r'\btravels?\s+from\b', value): return 'SEQUENCE'
+    if re.search(r'\b(sequence|stages?|steps?|first|next|then|finally|after that|followed by)\b', value): return 'SEQUENCE'
     if re.search(r'\b(process|procedure|algorithm|method|how)\b', value): return 'PROCESS'
-    if re.search(r'\b(part|structure|system|organ|anatom|located|entry point)\b', value): return 'STRUCTURE'
     if re.search(r'\b(apply|use|scenario|situation|example)\b', value): return 'APPLICATION'
     if re.search(r'\b(is|means|defined|refers to|describes)\b', value): return 'DEFINITION'
     return 'CONCEPT'
@@ -33,14 +35,14 @@ def decide_teaching_representation(objective, source_context, pedagogical_phase=
     mapping = {
         'COMPARISON': 'comparison', 'FORMULA': 'formula', 'CALCULATION': 'worked_example',
         'CAUSE_EFFECT': 'cause_effect', 'SEQUENCE': 'sequence', 'PROCESS': 'process',
-        'STRUCTURE': 'diagram', 'APPLICATION': 'example', 'DEFINITION': 'concept', 'CONCEPT': 'key_idea',
+        'RELATIONSHIP': 'relationship', 'STRUCTURE': 'diagram', 'APPLICATION': 'example', 'DEFINITION': 'concept', 'CONCEPT': 'key_idea',
     }
     primary = mapping[knowledge]
     recent = list(recent_representations or [])[-3:]
     if primary in recent:
         alternatives = {'concept': 'example', 'key_idea': 'example', 'process': 'sequence', 'sequence': 'diagram',
                         'diagram': 'concept', 'cause_effect': 'process', 'formula': 'worked_example',
-                        'worked_example': 'formula', 'comparison': 'example', 'example': 'concept'}
+                        'worked_example': 'formula', 'comparison': 'example', 'relationship': 'diagram', 'example': 'concept'}
         primary = alternatives.get(primary, primary)
     return {'primary': primary, 'supporting': [], 'knowledge_type': knowledge,
             'reason': f'{knowledge.lower()} objectives are clearest as {primary.replace("_", " ")}.'}
@@ -54,12 +56,14 @@ def build_teaching_object(concept, objective, source_context, object_id, recent_
     material = excerpt or fact
     sentences = _sentences(material)[:5] or [fact]
     content = {'knowledge_type': decision['knowledge_type'], 'takeaway': fact}
-    title = fact if len(fact) <= 72 else concept.title
+    title = concept.title if fact.lower() == str(concept.title).lower() or len(fact) > 72 else fact
 
-    if kind in {'process', 'sequence', 'cause_effect', 'diagram'}:
+    if kind in {'process', 'sequence', 'cause_effect', 'diagram', 'relationship'}:
         steps = sentences if len(sentences) >= 2 else [fact, f'Connect this step to what happens next in {concept.title}.']
         content.update({'steps': steps[:5], 'nodes': [{'id': f'n{i}', 'label': step} for i, step in enumerate(steps[:5])],
                         'edges': [{'from': f'n{i}', 'to': f'n{i+1}'} for i in range(len(steps[:5]) - 1)]})
+        if steps and title.strip().lower() == steps[0].strip().lower():
+            content['steps'] = steps[1:] or [fact]
     elif kind == 'comparison':
         parts = re.split(r'\s+(?:vs\.?|versus|compared with|and)\s+', fact, maxsplit=1, flags=re.I)
         left, right = (parts + ['The contrasting idea'])[:2]

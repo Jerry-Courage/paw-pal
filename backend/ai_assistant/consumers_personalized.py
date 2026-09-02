@@ -21,6 +21,7 @@ from library.models import Resource
 logger = logging.getLogger('nitemind')
 
 GEMINI_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025'
+AI_TASK = 'LIVE_VOICE'  # instrumentation label; provider/model routing is unchanged
 GEMINI_LIVE_WS_URL = (
     'wss://generativelanguage.googleapis.com/ws/'
     'google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'

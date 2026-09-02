@@ -86,6 +86,7 @@ export interface JourneyPathDetail {
   concepts_completed: number
   total_concepts: number
   mastery_percent: number
+  mastery_state?: { eligible: boolean; started: boolean; passed: boolean; score: number | null; review_objective_ids: string[] }
 }
 
 export interface JourneyConceptDetail extends JourneyRoadmapNode {
@@ -105,7 +106,7 @@ export interface EncounterActivity {
   objective_index?: number
   purpose: 'diagnose' | 'learn' | 'apply' | 'check' | 'transfer' | 'reflect' | 'remediate'
   stage: string
-  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example' | 'ordering' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'callout'
+  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example' | 'ordering' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'relationship' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'callout'
   title?: string
   instructions?: string
   prompt: string
@@ -167,6 +168,7 @@ export interface TeachingSessionResponse {
   teaching_preferences: Record<string, string>
   current_objective_id: string
   active_activity_id: string
+  player: JourneyPlayerState
   completion_evaluation: {
     complete: boolean
     mastery: number
@@ -188,6 +190,33 @@ export interface TeachingSessionResponse {
     }
   }
   evaluation?: { correct: boolean | null; score: number; feedback: string; attempt_id: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' }
+}
+
+export interface JourneyStage {
+  id: string
+  type: 'FLOW_INTRO' | 'CONCEPT' | 'DEFINITION' | 'PROCESS' | 'SEQUENCE' | 'RELATIONSHIP' | 'COMPARISON' | 'CAUSE_EFFECT' | 'FORMULA' | 'WORKED_EXAMPLE' | 'EXAMPLE' | 'DIAGRAM' | 'VIDEO' | 'FLASHCARD' | 'MATCH' | 'ORDER' | 'PRACTICE' | 'FEYNMAN' | string
+  status: 'ready' | 'active' | 'completed'
+  optional: boolean
+  title: string
+  learning_object_id?: string
+  activity_id?: string
+  payload: { text?: string; activity?: EncounterActivity; video?: NonNullable<TeachingTurn['payload']['videos']>[number]; cards?: NonNullable<TeachingTurn['payload']['cards']>; podcast?: { audio_url: string; title?: string; duration?: number; objective_id?: string; provenance?: string } }
+}
+
+export interface JourneyPlayerState {
+  journey_id: string
+  objective_id: string
+  objective_index: number
+  current_stage_id: string
+  current_stage_type: string
+  stage_sequence: string[]
+  stage_status: string
+  completed_stage_ids: string[]
+  active_learning_object_id: string
+  active_activity_id: string
+  active_stage: JourneyStage | null
+  stages: JourneyStage[]
+  capabilities: string[]
 }
 
 export interface ProgressionSummary {

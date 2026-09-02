@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { libraryApi } from '@/lib/api'
+import { learningApi, libraryApi } from '@/lib/api'
 import {
   ArrowLeft, Brain, FileText, Map, HelpCircle, Play,
   BookOpen, Sparkles, ChevronDown, ExternalLink, Search
@@ -28,6 +28,11 @@ export default function SavesPage() {
   const [cat, setCat] = useState<CatKey>('flashcards')
   const [expanded, setExpanded] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const [artifactFilter, setArtifactFilter] = useState('all')
+  const { data: artifactData } = useQuery({ queryKey: ['journey-artifacts'], queryFn: () => learningApi.getAllSavedArtifacts().then(r => r.data) })
+  const artifacts: any[] = artifactData?.results || []
+  const groupedTypes: Record<string, string[]> = { notes: ['note'], audio: ['podcast'], visuals: ['video_reference', 'saved_example', 'saved_diagram'], results: ['feynman_result', 'mastery_result'] }
+  const visibleArtifacts = artifacts.filter(item => artifactFilter === 'all' || groupedTypes[artifactFilter]?.includes(item.type)).filter(item => !search || `${item.title} ${item.journey_title} ${item.source_title}`.toLowerCase().includes(search.toLowerCase()))
 
   const { data: resData, isLoading } = useQuery({
     queryKey: ['resources-all'],
@@ -84,6 +89,12 @@ export default function SavesPage() {
           />
         </div>
       </div>
+
+      <section className="flow-v2 mb-8 border-y border-white/10 py-6 text-flow-ink">
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="flow-eyebrow">From your Journeys</p><h2 className="mt-2 text-2xl font-black">Saved learning artifacts</h2></div><p className="text-sm text-flow-muted">Flashcards stay in the dedicated review deck.</p></div>
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-2">{[['all','All'],['notes','Notes'],['audio','Audio'],['visuals','Visuals'],['results','Results']].map(([key,label]) => <button key={key} onClick={() => setArtifactFilter(key)} className={cn('min-h-11 shrink-0 rounded-xl px-4 text-sm font-black', artifactFilter === key ? 'bg-flow-orange text-flow-void' : 'bg-white/5 text-flow-muted')}>{label}</button>)}</div>
+        {visibleArtifacts.length ? <div className="mt-4 divide-y divide-white/10 border-y border-white/10">{visibleArtifacts.map(item => <article key={item.id} className="grid gap-3 py-5 sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-flow-violet">{item.type.replaceAll('_',' ')}</p><h3 className="mt-1 text-lg font-black">{item.title}</h3><p className="mt-2 text-xs text-flow-muted">{[item.journey_title, item.objective_title, item.source_title, new Date(item.created_at).toLocaleDateString()].filter(Boolean).join(' · ')}</p></div><div className="flex gap-3">{item.source_id && <Link href={`/library/${item.source_id}`} className="min-h-11 py-3 text-sm font-black text-flow-violet">Open Source</Link>}<Link href={`/learn/${item.journey_id}${item.objective_id ? `?concept=${item.objective_id}` : ''}`} className="min-h-11 py-3 text-sm font-black text-flow-orange">Open Journey →</Link></div></article>)}</div> : <p className="mt-5 rounded-2xl bg-white/[.04] p-5 text-sm text-flow-muted">No Journey artifacts in this filter yet.</p>}
+      </section>
 
       {/* Category pills — horizontal scroll on mobile */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-5">

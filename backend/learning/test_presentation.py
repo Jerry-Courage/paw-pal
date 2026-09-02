@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from .presentation import build_teaching_object, classify_presentation, decide_teaching_representation, grounded_distractors
+from learning.presentation import build_teaching_object, classify_presentation, decide_teaching_representation, grounded_distractors
 
 
 class JourneyPresentationTests(SimpleTestCase):
@@ -13,6 +13,10 @@ class JourneyPresentationTests(SimpleTestCase):
     def test_classifies_formula(self): self.assertEqual(classify_presentation('Use the formula x = y + 1'), 'FORMULA')
     def test_classifies_sequence(self): self.assertEqual(classify_presentation('Food travels from mouth to stomach'), 'SEQUENCE')
     def test_classifies_cause_effect(self): self.assertEqual(classify_presentation('Why chewing leads to more surface area'), 'CAUSE_EFFECT')
+    def test_classifies_relationship_before_structure(self):
+        self.assertEqual(classify_presentation('The heart has two sides: one sends blood to the lungs while the other sends it to the body'), 'RELATIONSHIP')
+    def test_classifies_algorithm_as_process(self): self.assertEqual(classify_presentation('Use the bisection algorithm to refine the interval'), 'PROCESS')
+    def test_classifies_definition(self): self.assertEqual(classify_presentation('Convergence means the iterates approach a limit'), 'DEFINITION')
     def test_process_decision(self): self.assertEqual(decide_teaching_representation({'text': 'Follow the steps in this process'}, {})['primary'], 'sequence')
 
     def test_object_is_grounded_and_scoped(self):
@@ -23,6 +27,10 @@ class JourneyPresentationTests(SimpleTestCase):
     def test_process_object_has_steps(self):
         obj = build_teaching_object(self.concept(), {'id': 'o1', 'text': 'First food enters. Then teeth break it down. Finally it is swallowed.'}, {'excerpt': 'First food enters. Then teeth break it down. Finally it is swallowed.'}, 'p1')
         self.assertIn(obj['type'], {'sequence', 'process'}); self.assertGreaterEqual(len(obj['content']['steps']), 2)
+
+    def test_title_is_not_duplicated_as_first_step(self):
+        obj = build_teaching_object(self.concept('Digestion'), {'id': 'o1', 'text': 'First food enters. Then teeth break it down.'}, {'excerpt': 'First food enters. Then teeth break it down.'}, 'p1')
+        self.assertNotEqual(obj['title'].strip().lower(), obj['content']['steps'][0].strip().lower())
 
     def test_comparison_object_has_columns(self):
         obj = build_teaching_object(self.concept(), {'id': 'o1', 'text': 'Compare mechanical versus chemical digestion'}, {'excerpt': 'Mechanical digestion changes size. Chemical digestion changes molecules.'}, 'p1')

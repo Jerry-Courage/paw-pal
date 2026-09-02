@@ -28,12 +28,13 @@ export default function JourneyHubPage() {
   }, [params, requestedCreate, requestedSource, router])
   const pathsQuery = useQuery({ queryKey: ['learning-paths'], queryFn: () => learningApi.getPaths().then(r => Array.isArray(r.data) ? r.data : r.data?.results || []) })
   const paths = useMemo(() => pathsQuery.data || [], [pathsQuery.data])
-  const active = useMemo(() => paths.find((path: any) => path.status === 'active') || paths.find((path: any) => path.status !== 'completed'), [paths])
+  const active = useMemo(() => paths.find((path: any) => path.mastery_state?.eligible && !path.mastery_state?.passed) || paths.find((path: any) => path.status === 'active') || paths.find((path: any) => path.status !== 'completed'), [paths])
   const others = paths.filter((path: any) => path.id !== active?.id && path.status !== 'completed'); const completed = paths.filter((path: any) => path.status === 'completed')
   const pathQuery = useQuery({ queryKey: ['learning-path', active?.id], queryFn: () => learningApi.getPath(active.id).then(r => r.data), enabled: Boolean(active?.id) })
   const current = pathQuery.data?.concepts?.find((concept: any) => concept.status === 'current')
   const sessionQuery = useQuery({ queryKey: ['teaching-session', current?.id], queryFn: () => learningApi.getTeachingSession(current.id).then(r => r.data), enabled: Boolean(current?.id), retry: false })
   const open = sessionQuery.data && !['completed', 'not_started'].includes(sessionQuery.data.status)
+  const masteryDue = Boolean(active?.mastery_state?.eligible && !active?.mastery_state?.passed)
   const activate = useMutation({ mutationFn: (id: string) => learningApi.setActivePath(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['learning-paths'] }) })
   const openBuilder = () => { setBuilderSource(undefined); setFlowState('idle'); setCreating(true) }
   const closeBuilder = () => { setCreating(false); setBuilderSource(undefined); setFlowState('idle') }
@@ -55,6 +56,7 @@ export default function JourneyHubPage() {
 
   return <main className="flow-atmosphere min-h-[calc(100dvh-4rem)] overflow-x-hidden px-4 py-6 min-[390px]:px-5 sm:py-9 md:px-10 lg:px-14">
     <div className="mx-auto max-w-[96rem]">
+      <nav aria-label="Learn destinations" className="mb-7 flex gap-1 overflow-x-auto border-b border-white/10 pb-3 text-sm font-black"><Link href="/learn" aria-current="page" className="min-h-11 shrink-0 rounded-xl bg-flow-orange/10 px-4 py-3 text-flow-orange">Journeys</Link><Link href="/library" className="min-h-11 shrink-0 rounded-xl px-4 py-3 text-flow-muted hover:text-flow-ink">Sources</Link><Link href="/library/flashcards" className="min-h-11 shrink-0 rounded-xl px-4 py-3 text-flow-muted hover:text-flow-ink">Flashcards</Link><Link href="/library/saves" className="min-h-11 shrink-0 rounded-xl px-4 py-3 text-flow-muted hover:text-flow-ink">Saved</Link></nav>
       <header className="grid gap-5 sm:flex sm:items-end sm:justify-between">
         <div><p className="flow-eyebrow">Journey</p><h1 className="flow-hero mt-2 max-w-4xl">Where you’re<br className="sm:hidden" /> going.</h1></div>
         <button onClick={openBuilder} className="flow-primary-button w-full sm:w-auto"><Plus className="h-5 w-5" />New Journey</button>
@@ -65,7 +67,7 @@ export default function JourneyHubPage() {
         <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
           <div><p className="flow-eyebrow">Current Journey</p><h2 className="mt-2 text-[clamp(2rem,6vw,3rem)] font-black leading-[1.02] tracking-[-.045em]">{active.title}</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-flow-muted sm:text-base">{active.goal || active.description}</p>
             <div className="mt-5 h-2 w-full max-w-2xl overflow-hidden rounded-full bg-white/10" aria-label={`${active.mastery_percent}% complete`}><div className="h-full rounded-full bg-gradient-to-r from-flow-success to-flow-orange" style={{ width: `${Math.max(2, active.mastery_percent || 0)}%` }} /></div>
-            <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center"><Link href={`/learn/${active.id}${open ? `?concept=${current.id}` : ''}`} className="flow-primary-button w-full sm:w-auto">{open ? 'Continue with Flow' : 'Continue Journey'} <ArrowRight /></Link><span className="text-sm font-bold text-flow-muted">{open ? `${sessionQuery.data.completion_evaluation?.objectives_satisfied || 0}/${sessionQuery.data.completion_evaluation?.objectives_total || 0} objectives understood` : `${active.concepts_completed}/${active.total_concepts} concepts · ${active.due_reviews || 0} due`}</span></div>
+            <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center"><Link href={masteryDue ? `/learn/${active.id}/mastery` : `/learn/${active.id}${open ? `?concept=${current.id}` : ''}`} className="flow-primary-button w-full sm:w-auto">{masteryDue ? (active.mastery_state?.started ? 'Continue Mastery' : 'Start Mastery') : open ? 'Continue with Flow' : 'Continue Journey'} <ArrowRight /></Link><span className="text-sm font-bold text-flow-muted">{masteryDue ? 'Learning complete · Mastery still waiting' : open ? `${sessionQuery.data.completion_evaluation?.objectives_satisfied || 0}/${sessionQuery.data.completion_evaluation?.objectives_total || 0} objectives understood` : `${active.concepts_completed}/${active.total_concepts} concepts · ${active.due_reviews || 0} due`}</span></div>
           </div>
           <div className="flex items-center gap-4 lg:block"><FlowCompanion state={open ? 'teaching' : 'idle'} className="w-20 shrink-0 sm:w-24 lg:mx-auto lg:w-36" /><p className="text-sm font-bold text-flow-muted lg:text-center">{current ? `Next: ${normalizeReadableMath(current.title)}` : 'Your route is complete.'}</p></div>
         </div>

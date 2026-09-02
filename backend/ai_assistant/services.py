@@ -117,6 +117,15 @@ FALLBACK_MODELS = [
     'openrouter/auto',
 ]
 
+# Stable pedagogical task labels. They are observability/routing metadata only;
+# provider and model selection intentionally remain unchanged in E.4D.3B.
+AI_TASKS = {
+    'CONVERSATION', 'TEACHING_GENERATION', 'EXAMPLE_GENERATION',
+    'QUESTION_GENERATION', 'DISTRACTOR_GENERATION', 'REMEDIATION',
+    'FEYNMAN_EVALUATION', 'MASTERY_GENERATION', 'MASTERY_EVALUATION',
+    'SOURCE_REASONING', 'LIVE_VOICE',
+}
+
 # ─── PROVIDER ENDPOINTS ────────────────────────────────────────────────────────
 CEREBRAS_API_URL  = "https://api.cerebras.ai/v1/chat/completions"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -388,7 +397,7 @@ class AIService:
                 contents.append({'role': role, 'parts': parts})
         return contents, system_instruction.strip()
 
-    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 8192, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False) -> str:
+    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 8192, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False, task: str = 'CONVERSATION') -> str:
         """
         Hyper-Resilient Chat — optimised for SPEED (conversational use).
         Chain: Groq (1000 t/s) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
@@ -396,6 +405,8 @@ class AIService:
         TUTOR MODE OPTIMIZATION: When is_tutor_mode=True, uses ultra-fast models with aggressive timeouts
         """
         if not self.api_key: return "API Key missing."
+        task = task if task in AI_TASKS else 'CONVERSATION'
+        logger.info('[AI Task] %s', task)
         
         messages = self._sanitize_messages(messages)
         target_model = forced_model or target_model or self.model
@@ -1361,7 +1372,7 @@ class AIService:
             return f"This is a YouTube video titled '{resource.title}' about {resource.subject or 'the topic'}. No transcript is available, but answer based on general knowledge of this subject."
         return ''
 
-    def ask_about_resource(self, resource, question: str, history: list = None) -> str:
+    def ask_about_resource(self, resource, question: str, history: list = None, task: str = 'SOURCE_REASONING') -> str:
         context = self._get_resource_context(resource)
         has_notes = bool(resource.ai_notes_json)
         system = (
@@ -1377,7 +1388,7 @@ class AIService:
         if history:
             messages.extend(history[-10:])
         messages.append({'role': 'user', 'content': question})
-        return self.chat_sync(messages)
+        return self.chat_sync(messages, task=task)
 
     def summarize_resource(self, resource) -> str:
         context = self._get_resource_context(resource)

@@ -43,6 +43,11 @@
   --nav-height: 56px;
 }
 
+/* Journey Player keeps conversation contextual instead of permanently occupying the stage. */
+.flow-v2 footer button[aria-expanded='false'] + div {
+  display: none;
+}
+
 .flow-context-chip {
   display: inline-flex;
   min-height: 2rem;
