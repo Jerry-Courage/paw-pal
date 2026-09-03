@@ -17,7 +17,7 @@ from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptReviewSerializer, UnitSerializer)
 from .spaced_repetition import calculate_next_review, get_due_concepts, get_review_stats
 from .presentation import classify_presentation, grounded_distractors
-from .teaching_plan import get_or_create_teaching_plan, teaching_activity_from_plan
+from .teaching_plan import get_or_create_teaching_plan, teaching_activities_from_plan
 from .player import continue_player_stage, sync_player_state
 
 logger = logging.getLogger(__name__)
@@ -286,9 +286,9 @@ def _objective_activities(session, user=None):
     objective_id = objective['id']
     grounding = _grounding(concept)
     plan = get_or_create_teaching_plan(session, grounding)
-    presentation = teaching_activity_from_plan(
+    presentations = teaching_activities_from_plan(
         concept, {**objective, 'index': objective_index}, plan,
-        _activity_id(concept, f'presentation:{objective_id}'),
+        lambda suffix: _activity_id(concept, f'presentation:{suffix}'),
     )
     base_activities = _concept_activities(concept, user)
     if objective_index == 0:
@@ -297,7 +297,7 @@ def _objective_activities(session, user=None):
             if activity.get('purpose') in {'check', 'apply', 'transfer'}:
                 activity = {**activity, 'objective_id': objective_id, 'objective_index': objective_index}
                 scoped.append(activity)
-        return [presentation, *scoped]
+        return [*presentations, *scoped]
 
     fact = str(objective.get('text') or '').strip().rstrip('.')
     kind = _objective_kind(fact)
@@ -307,12 +307,12 @@ def _objective_activities(session, user=None):
     nearby = [item.get('text', '') for item in session.objectives if item.get('id') != objective_id]
     distractors = grounded_distractors(fact, nearby)
     prompt_by_kind = {
-        'definition': f'Which statement best captures this checkpoint about {concept.title}?',
-        'process': f'Which statement best describes the process in this checkpoint about {concept.title}?',
-        'application': f'Which statement best explains when this part of {concept.title} is useful?',
-        'comparison': f'Which statement captures the distinction in this checkpoint about {concept.title}?',
-        'calculation': f'Which statement best describes what must be calculated in this checkpoint?',
-        'reasoning': f'Which statement gives the reason highlighted in this checkpoint about {concept.title}?',
+        'definition': f'Which statement best describes {concept.title}?',
+        'process': f'What best explains how {concept.title} works?',
+        'application': f'When would this part of {concept.title} be useful?',
+        'comparison': f'Which statement gets the distinction right?',
+        'calculation': 'What needs to be calculated here?',
+        'reasoning': f'Why does this matter for {concept.title}?',
     }
 
     def objective_base(key, purpose, activity_type, prompt, **extra):
@@ -335,11 +335,11 @@ def _objective_activities(session, user=None):
     )
     transfer = objective_base(
         'objective-transfer', 'apply', 'short_answer',
-        f'In your own words, explain this checkpoint: {fact}. Why does it matter for {concept.title}?',
+        f'Put this idea in your own words: why does it matter for {concept.title}?',
         accepted_keywords=keywords, expected_concept=fact, explanation=fact,
         hints=[f'Start with this checkpoint: {fact}.'], check_level='transfer', difficulty='medium',
     )
-    return [presentation, *[activity for activity in (recognition, transfer) if _valid_activity(activity)]]
+    return [*presentations, *[activity for activity in (recognition, transfer) if _valid_activity(activity)]]
 
 
 def _clear_objective_transient_state(state):

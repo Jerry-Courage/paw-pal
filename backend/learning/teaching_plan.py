@@ -25,10 +25,51 @@ MOMENT_TYPES = {
 }
 INTERACTIONS = {'NONE', 'MCQ', 'MATCHING', 'ORDERING', 'SORTING', 'TAP_TARGET', 'REVEAL', 'SHORT_ANSWER', 'STEP_SOLVER', 'EVIDENCE_HIGHLIGHT'}
 MAX_MOMENTS = 8
+INTERNAL_LANGUAGE = re.compile(
+    r'\b(?:checkpoint\s*\d*|apply .+ in (?:a )?concrete situation|source alignment|'
+    r'expected relationship|mechanism in the source|relationship in the source|key concept)\b', re.I,
+)
 
 
 class TeachingPlanValidationError(ValueError):
     pass
+
+
+def learner_facing_title(value, representation='GROUNDED_EXPLANATION'):
+    """Turn controller/objective scaffolding into a short spoken-stage title."""
+    text = _text(value, 180).strip(' .:;-')
+    text = re.sub(r'^(?:the learner (?:will|should|can)|learners? (?:will|should|can)|you (?:will|should|can))\s+', '', text, flags=re.I)
+    text = re.sub(r'^(?:understand|explain|identify|describe|define|apply|compare)\s+(?:how|why|what|the role of|that)?\s*', '', text, flags=re.I)
+    text = re.sub(r'\s+in (?:a )?concrete situation$', '', text, flags=re.I)
+    if INTERNAL_LANGUAGE.search(text):
+        text = re.sub(r'^checkpoint\s*\d*\s*', '', text, flags=re.I)
+    words = text.split()
+    if len(words) > 8:
+        text = ' '.join(words[:8]).rstrip(',') + '…'
+    if not text:
+        return {
+            'PROCESS_FLOW': 'Watch it unfold', 'COMPARISON': 'Spot the difference',
+            'WORKED_EXAMPLE': 'Let\'s work it through', 'ARCHITECTURE': 'See how it connects',
+            'CYCLE': 'Follow the route', 'EVIDENCE_HIGHLIGHT': 'Read the evidence',
+        }.get(representation, 'Here\'s the idea')
+    return text[0].upper() + text[1:]
+
+
+def _sentences(value, limit=5):
+    return [_text(item, 180) for item in re.split(r'(?<=[.!?])\s+|\s*(?:→|->|\n)\s*', str(value or '')) if _text(item, 180)][:limit]
+
+
+def _validate_mcq_quality(prompt, options, correct_index):
+    if len(prompt.split()) > 34 or INTERNAL_LANGUAGE.search(prompt):
+        raise TeachingPlanValidationError('MCQ prompt is verbose or exposes internal language')
+    if len(options) < 3 or len({item.casefold() for item in options}) != len(options):
+        raise TeachingPlanValidationError('MCQ requires distinct plausible alternatives')
+    if any(INTERNAL_LANGUAGE.search(item) or len(item.split()) > 28 for item in options):
+        raise TeachingPlanValidationError('MCQ option exposes scaffolding or is too verbose')
+    correct = options[correct_index]
+    signatures = {bool(re.match(r'^(?:a |an |the |to |using |by |it )', item, re.I)) for item in options}
+    if len(signatures) > 1 or not correct.strip():
+        raise TeachingPlanValidationError('MCQ options are not grammatically parallel')
 
 
 def _text(value, limit=500, required=False):
@@ -110,6 +151,7 @@ def validate_teaching_plan(raw, expected_objective_id=None):
                 options, correct_index = safe_content['options'], safe_content['correct_index']
                 if len(options) < 2 or not isinstance(correct_index, int) or correct_index not in range(len(options)):
                     raise TeachingPlanValidationError('MCQ moments require options and a valid correct_index')
+                _validate_mcq_quality(safe_content['prompt'], options, correct_index)
             elif interaction == 'MATCHING' and len(safe_content['pairs']) < 2:
                 raise TeachingPlanValidationError('matching moments require at least two grounded pairs')
             elif interaction == 'ORDERING':
@@ -195,7 +237,8 @@ def safe_fallback_plan(concept, objective, grounding):
     subject = classify_subject(concept, goal)
     representation = select_representation(subject, goal, grounding)
     interaction = select_interaction(subject, goal, representation)
-    content = {'title': _text(concept.title, 160), 'body': goal, 'lead': '', 'takeaway': goal}
+    learner_title = learner_facing_title(goal, representation)
+    content = {'title': learner_title, 'body': '', 'lead': '', 'takeaway': goal}
     if representation == 'COMPARISON':
         belief = 'What is claimed or believed'
         behaviour = 'What the evidence actually shows'
@@ -207,10 +250,20 @@ def safe_fallback_plan(concept, objective, grounding):
             content.update({'nodes': ['Heart', 'Lungs', 'Heart', 'Body'], 'edges': [['Heart','Lungs','toward the lungs'],['Lungs','Heart','oxygenated return'],['Heart','Body','systemic route'],['Body','Heart','return']], 'body': ''})
         elif subject == 'computer_science' and re.search(r'react|spring|postgres|frontend|backend|database', f'{goal} {excerpt}', re.I):
             content.update({'nodes': ['React Native', 'Spring Boot', 'PostgreSQL'], 'edges': [['React Native','Spring Boot','HTTP / API'],['Spring Boot','PostgreSQL','database query']], 'body': ''})
+        if not content.get('nodes'):
+            pieces = _sentences(excerpt, 4) or [learner_title, 'Connected idea', 'Result']
+            content.update({'nodes': pieces, 'edges': [[pieces[index], pieces[(index + 1) % len(pieces)], ''] for index in range(len(pieces))], 'body': ''})
+    elif representation in {'PROCESS_FLOW', 'TIMELINE', 'CAUSE_EFFECT'}:
+        pieces = _sentences(excerpt, 5)
+        if len(pieces) < 3:
+            pieces = ['What goes in', 'What happens inside', 'What comes out']
+        content.update({'steps': pieces, 'body': '', 'progressive': True})
     elif representation == 'WORKED_EXAMPLE':
-        content.update({'steps': [goal, 'Substitute the known information.', 'Work one transformation at a time.', 'Check the result against the goal.'], 'body': ''})
+        content.update({'steps': [learner_title, 'Substitute the known information.', 'Work one transformation at a time.', 'Check the result against the goal.'], 'body': '', 'progressive': True})
     elif representation == 'EVIDENCE_HIGHLIGHT':
-        content.update({'evidence': [excerpt[:480]], 'body': goal})
+        content.update({'evidence': _sentences(excerpt, 4) or [excerpt[:480]], 'body': ''})
+    else:
+        content['body'] = excerpt[:520]
     plan = {
         'objective_id': objective_id, 'learning_goal': goal, 'key_insight': goal,
         'prerequisite_assumptions': [], 'likely_misconceptions': [],
@@ -241,6 +294,7 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None):
     fallback = safe_fallback_plan(concept, objective, grounding)
     enabled = getattr(settings, 'JOURNEY_TEACHING_AI_ENABLED', False) if allow_ai is None else allow_ai
     if not enabled:
+        logger.info('[Journey TeachingPlan] attempted=false accepted=false fallback=true objective=%s reason=kill-switch', objective.get('id'))
         return fallback
     prompt = {
         'objective_id': objective.get('id'), 'objective': objective.get('text'), 'concept': concept.title,
@@ -255,9 +309,10 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None):
         raw = AIService().chat_sync(messages, task='TEACHING_GENERATION', max_tokens=1800)
         plan = validate_teaching_plan(_extract_json(raw), str(objective.get('id')))
         plan['origin'] = 'ai'
+        logger.info('[Journey TeachingPlan] attempted=true accepted=true fallback=false objective=%s representation=%s moments=%s', objective.get('id'), plan['recommended_representation'], len(plan['teaching_moments']))
         return plan
     except Exception as exc:
-        logger.warning('[Journey TeachingPlan] validated generation failed; using safe fallback: %s', exc)
+        logger.warning('[Journey TeachingPlan] attempted=true accepted=false fallback=true objective=%s reason=%s', objective.get('id'), exc)
         return fallback
 
 
@@ -274,7 +329,10 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
     plans = dict(session.state.get('teaching_plans') or {})
     cached = plans.get(objective_id)
     if isinstance(cached, dict) and cached.get('fingerprint') == fingerprint:
-        try: return validate_teaching_plan(cached.get('plan'), objective_id)
+        try:
+            plan = validate_teaching_plan(cached.get('plan'), objective_id)
+            logger.info('[Journey TeachingPlan] cache=true objective=%s origin=%s representation=%s', objective_id, plan.get('origin'), plan.get('recommended_representation'))
+            return plan
         except TeachingPlanValidationError: pass
     plan = generate_teaching_plan(session.concept, objective, grounding, allow_ai=allow_ai)
     plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan}
@@ -283,15 +341,31 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
     return plan
 
 
-def teaching_activity_from_plan(concept, objective, plan, activity_id):
-    moment = next((item for item in plan['teaching_moments'] if item['type'] in {'EXPLAIN','VISUALIZE','DEMONSTRATE','EXAMPLE','REMEDIATE'}), plan['teaching_moments'][0])
+def teaching_activity_from_plan(concept, objective, plan, activity_id, moment=None):
+    moment = moment or next((item for item in plan['teaching_moments'] if item['type'] in {'EXPLAIN','VISUALIZE','DEMONSTRATE','EXAMPLE','REMEDIATE'}), plan['teaching_moments'][0])
     mapping = {'CONCEPT_MAP':'diagram','RELATIONSHIP_MAP':'relationship','COMPARISON':'comparison','PROCESS_FLOW':'process','CYCLE':'diagram','TIMELINE':'sequence','HIERARCHY':'diagram','CAUSE_EFFECT':'cause_effect','FORMULA':'formula','WORKED_EXAMPLE':'worked_example','EVIDENCE_HIGHLIGHT':'evidence_highlight','ARCHITECTURE':'architecture','SIMPLE_GRAPH':'simple_graph','LABELED_DIAGRAM':'labeled_diagram','GROUNDED_EXPLANATION':'concept'}
     content = dict(moment['content'])
     if content.get('nodes'): content['nodes'] = [{'id': f'n{index}', 'label': label} for index, label in enumerate(content['nodes'])]
     if content.get('edges'): content['edges'] = [{'from': edge[0], 'to': edge[1], 'label': edge[2]} for edge in content['edges']]
+    representation = moment.get('representation') or plan['recommended_representation']
+    display_title = learner_facing_title(content.get('title') or plan['learning_goal'], representation)
     return {'id': activity_id, 'concept_id': str(concept.id), 'objective_id': objective['id'], 'objective_index': objective.get('index', 0),
-            'purpose': 'learn', 'stage': 'learn', 'type': mapping[plan['recommended_representation']],
-            'prompt': content.get('title') or plan['learning_goal'], 'title': content.get('title') or plan['learning_goal'],
-            'content': {**content, 'knowledge_type': plan['recommended_representation'], 'subject_family': plan['subject_family']},
+            'purpose': 'remediate' if moment['type'] == 'REMEDIATE' else 'learn', 'stage': 'learn', 'type': mapping[representation],
+            'prompt': display_title, 'title': display_title,
+            'content': {**content, 'title': display_title, 'knowledge_type': representation, 'subject_family': plan['subject_family'],
+                        'progressive': content.get('progressive', True)},
             'difficulty': plan['difficulty'], 'estimated_seconds': 75, 'grounding': plan['source_grounding'],
             'goal_relevance': concept.path.goal or '', 'presentation_reason': plan['teaching_strategy']}
+
+
+def teaching_activities_from_plan(concept, objective, plan, activity_id_factory):
+    """Preserve the validated moment sequence instead of collapsing it to one block."""
+    moments = [item for item in plan['teaching_moments'] if item['type'] in {'EXPLAIN','VISUALIZE','DEMONSTRATE','EXAMPLE','REMEDIATE'}]
+    moments = moments or [plan['teaching_moments'][0]]
+    activities = []
+    for index, moment in enumerate(moments):
+        activities.append(teaching_activity_from_plan(
+            concept, objective, plan, activity_id_factory(f'{objective["id"]}:{moment["id"]}:{index}'), moment=moment,
+        ))
+    logger.info('[Journey TeachingPlan] objective=%s origin=%s requested=%s moments=%s', objective['id'], plan.get('origin'), plan.get('recommended_representation'), len(activities))
+    return activities

@@ -91,7 +91,8 @@ def build_teaching_object(concept, objective, source_context, object_id, recent_
 def grounded_distractors(fact, nearby_facts=None):
     """Create domain-neutral alternatives only by transforming grounded claims."""
     fact = str(fact).strip().rstrip('.')
-    candidates = [str(value).strip().rstrip('.') for value in (nearby_facts or []) if str(value).strip() and str(value).strip().lower() != fact.lower()]
+    internal = re.compile(r'^(?:apply|understand|explain|identify|checkpoint)\b|\bin (?:a )?concrete situation\b', re.I)
+    candidates = [str(value).strip().rstrip('.') for value in (nearby_facts or []) if str(value).strip() and str(value).strip().lower() != fact.lower() and not internal.search(str(value).strip())]
     transformations = [
         (r'\bfirst\b', 'last'), (r'\bbegins?\b', 'ends'), (r'\bstarts?\b', 'finishes'),
         (r'\bincreases?\b', 'decreases'), (r'\bmore\b', 'less'), (r'\bbefore\b', 'after'),
@@ -100,5 +101,9 @@ def grounded_distractors(fact, nearby_facts=None):
     for pattern, replacement in transformations:
         changed, count = re.subn(pattern, replacement, fact, count=1, flags=re.I)
         if count and changed.lower() != fact.lower(): candidates.append(changed)
-    candidates.append(f'This stage does not perform the function described here: {fact}')
-    return list(dict.fromkeys(candidates))[:2]
+    if len(candidates) < 2:
+        candidates.extend([
+            f'It records the result without defining how the work is performed',
+            f'It describes only the input and output, not the internal rules',
+        ])
+    return list(dict.fromkeys(candidate for candidate in candidates if candidate.lower() != fact.lower()))[:2]

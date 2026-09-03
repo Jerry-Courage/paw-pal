@@ -6,8 +6,8 @@ from django.test import SimpleTestCase, override_settings
 
 from .teaching_plan import (
     TeachingPlanValidationError, generate_teaching_plan, get_or_create_teaching_plan,
-    safe_fallback_plan, select_interaction, select_representation,
-    teaching_activity_from_plan, validate_teaching_plan,
+    learner_facing_title, safe_fallback_plan, select_interaction, select_representation,
+    teaching_activities_from_plan, teaching_activity_from_plan, validate_teaching_plan,
 )
 from .teaching_plan_eval import AUDITED_MODEL_CANDIDATES, compare_candidate_outputs
 from core.settings import _environment_flag
@@ -19,6 +19,20 @@ def concept(title, summary='', subject='', goal='Understand it'):
 
 
 class TeachingPlanSchemaTests(SimpleTestCase):
+    def test_learner_facing_title_removes_controller_scaffolding(self):
+        title = learner_facing_title('Apply Process Specifications in a concrete situation', 'PROCESS_FLOW')
+        self.assertNotIn('Apply', title)
+        self.assertNotIn('concrete situation', title)
+
+    def test_verbose_or_internal_mcq_is_rejected(self):
+        raw = safe_fallback_plan(concept('A definition'), {'id': 'one', 'text': 'Define the idea'}, {})
+        raw['teaching_moments'].append({
+            'id': 'check', 'type': 'CHECK', 'representation': 'COMPARISON', 'interaction': 'MCQ',
+            'content': {'body': 'Choose.', 'prompt': 'Checkpoint 2: which is right?',
+                        'options': ['A grounded statement', 'Apply this in a concrete situation', 'Another grounded statement'], 'correct_index': 0},
+        })
+        with self.assertRaises(TeachingPlanValidationError):
+            validate_teaching_plan(raw, 'one')
     def test_malformed_plan_is_rejected(self):
         with self.assertRaises(TeachingPlanValidationError): validate_teaching_plan({'objective_id': 'one'})
 
@@ -88,6 +102,26 @@ class JourneyTeachingFeatureFlagTests(SimpleTestCase):
 
 
 class SubjectPlanTests(SimpleTestCase):
+    def test_process_specification_fallback_is_visual_and_progressive(self):
+        item = concept('Introduction to Process Specifications', 'A diagram shows inputs and outputs. A process specification defines validation, calculation, storage, and the returned result.', 'Computer Science')
+        plan = safe_fallback_plan(item, {'id': 'inside', 'text': 'Explain how a process specification defines what happens inside a process.'}, {'excerpt': item.summary})
+        self.assertEqual(plan['recommended_representation'], 'PROCESS_FLOW')
+        activity = teaching_activity_from_plan(item, {'id': 'inside', 'index': 0}, plan, 'process-visual')
+        self.assertEqual(activity['type'], 'process')
+        self.assertGreaterEqual(len(activity['content']['steps']), 3)
+        self.assertTrue(activity['content']['progressive'])
+        self.assertNotIn('concrete situation', activity['title'].lower())
+
+    def test_all_visual_teaching_moments_reach_the_player(self):
+        item = concept('A process', 'Input. Transform. Output.', 'Computer Science')
+        plan = safe_fallback_plan(item, {'id': 'flow', 'text': 'Explain the process steps.'}, {'excerpt': item.summary})
+        second = dict(plan['teaching_moments'][0])
+        second['id'] = 'second-look'
+        second['representation'] = 'COMPARISON'
+        second['content'] = {**second['content'], 'columns': ['Outside', 'Inside'], 'rows': [['Input/output', 'Rules']]}
+        plan['teaching_moments'].append(second)
+        activities = teaching_activities_from_plan(item, {'id': 'flow', 'index': 0}, plan, lambda suffix: suffix)
+        self.assertEqual([activity['type'] for activity in activities], ['process', 'comparison'])
     def test_invisible_servants_is_comparison_not_fragmented_sequence(self):
         item = concept('The Invisible Servants (And Invisible Bias)', "Mr. Green claims to understand Africans but ignores the African stewards.", 'Literature')
         plan = safe_fallback_plan(item, {'id': 'bias', 'text': "Compare Green's beliefs with his behaviour toward African stewards."}, {'excerpt': item.summary})
