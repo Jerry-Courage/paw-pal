@@ -6,6 +6,7 @@ from .models import EncounterAttempt
 
 NON_EVIDENCE_TYPES = {'FLOW_INTRO', 'CONCEPT', 'DEFINITION', 'PROCESS', 'SEQUENCE', 'RELATIONSHIP',
                       'COMPARISON', 'CAUSE_EFFECT', 'FORMULA', 'WORKED_EXAMPLE', 'EXAMPLE', 'DIAGRAM',
+                      'EVIDENCE_HIGHLIGHT', 'ARCHITECTURE', 'SIMPLE_GRAPH', 'LABELED_DIAGRAM',
                       'VIDEO', 'FLASHCARD', 'PODCAST', 'SIMULATION', 'VR'}
 
 PLAYER_CAPABILITIES = ['VIDEO', 'FLASHCARD', 'FEYNMAN', 'LIVE_VOICE', 'MASTERY']
@@ -16,6 +17,8 @@ def _stage_type(activity):
         'concept': 'CONCEPT', 'key_idea': 'DEFINITION', 'process': 'PROCESS', 'sequence': 'SEQUENCE',
         'relationship': 'RELATIONSHIP', 'comparison': 'COMPARISON', 'cause_effect': 'CAUSE_EFFECT',
         'formula': 'FORMULA', 'worked_example': 'WORKED_EXAMPLE', 'example': 'EXAMPLE', 'diagram': 'DIAGRAM',
+        'evidence_highlight': 'EVIDENCE_HIGHLIGHT', 'architecture': 'ARCHITECTURE',
+        'simple_graph': 'SIMPLE_GRAPH', 'labeled_diagram': 'LABELED_DIAGRAM',
         'ordering': 'ORDER', 'mcq': 'PRACTICE', 'scenario': 'PRACTICE', 'short_answer': 'PRACTICE',
         'predict': 'PRACTICE', 'reflection': 'PRACTICE',
     }

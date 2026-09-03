@@ -106,12 +106,12 @@ export interface EncounterActivity {
   objective_index?: number
   purpose: 'diagnose' | 'learn' | 'apply' | 'check' | 'transfer' | 'reflect' | 'remediate'
   stage: string
-  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'comparison' | 'worked_example' | 'ordering' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'relationship' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'callout'
+  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'step_solver' | 'comparison' | 'worked_example' | 'ordering' | 'matching' | 'sorting' | 'tap_target' | 'reveal' | 'flashcard' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'relationship' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'evidence_highlight' | 'architecture' | 'simple_graph' | 'labeled_diagram' | 'callout'
   title?: string
   instructions?: string
   prompt: string
   options?: string[]
-  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string }>; progressive?: boolean; knowledge_type?: string }
+  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; pairs?: Array<{ left: string; right: string }>; groups?: Array<{ id: string; label: string }>; evidence?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string; label?: string }>; progressive?: boolean; knowledge_type?: string; subject_family?: string }
   explanation?: string
   hints?: string[]
   difficulty: string
@@ -119,6 +119,11 @@ export interface EncounterActivity {
   grounding?: { resource_id?: number; resource_title?: string; section?: string; page?: number; excerpt?: string }
   goal_relevance: string
 }
+
+export interface DragLabelInteractionData { labels: Array<{ id: string; label: string }>; targets: Array<{ id: string; label: string }> }
+export interface DiagramInteractionData { nodes: Array<{ id: string; label: string; x?: number; y?: number }>; edges?: Array<{ from: string; to: string }> }
+export interface SliderInteractionData { min: number; max: number; step: number; target?: number; unit?: string }
+export interface SimulationInteractionData { controls: Array<{ id: string; label: string; min: number; max: number; step: number }>; outputLabel: string }
 
 export interface EncounterActivitiesResponse {
   activities: EncounterActivity[]
@@ -166,6 +171,7 @@ export interface TeachingSessionResponse {
   completed: boolean
   teaching_phase: 'INTRODUCE' | 'TEACH' | 'CHECK' | 'REMEDIATE' | 'ADVANCE' | 'READY_TO_ADVANCE' | string
   teaching_preferences: Record<string, string>
+  teaching_plan?: TeachingPlan | null
   current_objective_id: string
   active_activity_id: string
   player: JourneyPlayerState
@@ -190,6 +196,32 @@ export interface TeachingSessionResponse {
     }
   }
   evaluation?: { correct: boolean | null; score: number; feedback: string; attempt_id: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' }
+}
+
+export interface TeachingMoment {
+  id: string
+  type: 'EXPLAIN' | 'VISUALIZE' | 'DEMONSTRATE' | 'EXAMPLE' | 'INTERACT' | 'CHECK' | 'REMEDIATE' | 'REFLECT' | 'FEYNMAN' | 'FLASHCARD' | 'OPTIONAL_MEDIA' | 'OBJECTIVE_COMPLETE'
+  representation: string
+  interaction: string
+  optional: boolean
+  content: Record<string, unknown>
+}
+
+export interface TeachingPlan {
+  version: number
+  objective_id: string
+  learning_goal: string
+  key_insight: string
+  teaching_strategy: string
+  recommended_representation: string
+  teaching_moments: TeachingMoment[]
+  interaction_strategy: string
+  check_strategy: string
+  remediation_strategy: string
+  source_grounding: Record<string, unknown>
+  difficulty: string
+  subject_family: string
+  origin: 'ai' | 'fallback' | string
 }
 
 export interface JourneyStage {

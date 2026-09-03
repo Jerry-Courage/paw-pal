@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
-export type FlowSoundEvent = 'node_unlocked' | 'correct' | 'incorrect' | 'flowcoin' | 'xp' | 'level_up' | 'journey_complete' | 'battle_countdown' | 'battle_win' | 'battle_loss' | 'flashcard_flip' | 'flashcard_save' | 'flow_reaction'
+export type FlowSoundEvent = 'node_unlocked' | 'correct' | 'incorrect' | 'match' | 'drop' | 'objective_complete' | 'mastery_complete' | 'flowcoin' | 'xp' | 'level_up' | 'journey_complete' | 'battle_countdown' | 'battle_win' | 'battle_loss' | 'flashcard_flip' | 'flashcard_save' | 'flow_reaction'
 
 type FlowSoundContextValue = {
   muted: boolean
@@ -20,7 +20,8 @@ const tones: Record<FlowSoundEvent, [number, number, number]> = {
   flowcoin: [660, 880, .1], xp: [523, 784, .11], level_up: [392, 784, .2],
   journey_complete: [440, 880, .24], battle_countdown: [330, 330, .08],
   battle_win: [523, 988, .2], battle_loss: [247, 196, .14], flashcard_flip: [520, 620, .055],
-  flashcard_save: [587, 784, .09], flow_reaction: [420, 560, .07],
+  flashcard_save: [587, 784, .09], flow_reaction: [420, 560, .07], match: [494, 740, .1],
+  drop: [370, 555, .08], objective_complete: [523, 880, .18], mastery_complete: [440, 988, .24],
 }
 
 export function FlowSoundProvider({ children }: { children: React.ReactNode }) {

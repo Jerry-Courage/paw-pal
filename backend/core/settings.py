@@ -321,6 +321,16 @@ API_URL = os.getenv('API_URL', os.getenv('RENDER_EXTERNAL_URL', 'http://localhos
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3.5-sonnet')
+def _environment_flag(name, default=True):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {'0', 'false', 'no', 'off', 'disabled'}
+
+
+# Enabled by default; operations can disable generation immediately through the
+# backend-only environment variable without requiring a deployment.
+JOURNEY_TEACHING_AI_ENABLED = _environment_flag('JOURNEY_TEACHING_AI_ENABLED', default=True)
 GOOGLE_STUDIO_API_KEY = os.getenv('GOOGLE_STUDIO_API_KEY', '')
 VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', 'BG8EkGI7soGE5KMcQs4lKSSGAW6qfwdjhre9WCJpPtidRi403ZfoNSfhh9aCVGH21PDLrXiuMtr8yXMjYNxSnxY')
 VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'Q7Q-gTlSqqIqcuOCfJFXPHBCCpAEGs-XshG1TIcjlC4')

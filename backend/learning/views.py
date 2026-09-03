@@ -16,7 +16,8 @@ from .serializers import (LearningPathSerializer, LearningPathListSerializer,
                            ConceptNodeSerializer, ConceptNodeDetailSerializer,
                            ConceptReviewSerializer, UnitSerializer)
 from .spaced_repetition import calculate_next_review, get_due_concepts, get_review_stats
-from .presentation import build_teaching_object, classify_presentation, grounded_distractors
+from .presentation import classify_presentation, grounded_distractors
+from .teaching_plan import get_or_create_teaching_plan, teaching_activity_from_plan
 from .player import continue_player_stage, sync_player_state
 
 logger = logging.getLogger(__name__)
@@ -284,10 +285,10 @@ def _objective_activities(session, user=None):
     objective = session.objectives[objective_index] if session.objectives else {'id': 'objective-1', 'text': concept.title}
     objective_id = objective['id']
     grounding = _grounding(concept)
-    presentation = build_teaching_object(
-        concept, {**objective, 'index': objective_index}, grounding,
+    plan = get_or_create_teaching_plan(session, grounding)
+    presentation = teaching_activity_from_plan(
+        concept, {**objective, 'index': objective_index}, plan,
         _activity_id(concept, f'presentation:{objective_id}'),
-        session.state.get('recent_representations', []),
     )
     base_activities = _concept_activities(concept, user)
     if objective_index == 0:
@@ -469,6 +470,7 @@ def _session_data(session):
         'unresolved_misconceptions': session.unresolved_misconceptions, 'mastery': session.mastery,
         'conversation_summary': session.conversation_summary, 'turns': [_turn_data(turn) for turn in turns],
         'teaching_preferences': session.state.get('teaching_preferences', {}),
+        'teaching_plan': (session.state.get('teaching_plans') or {}).get(current_objective_id, {}).get('plan'),
         'teaching_phase': session.state.get('teaching_phase', 'INTRODUCE'),
         'current_objective_id': current_objective_id, 'active_activity_id': active_activity_id,
         'player': player,
