@@ -120,6 +120,7 @@ FALLBACK_MODELS = [
 # Stable pedagogical task labels. They are observability/routing metadata only;
 # provider and model selection intentionally remain unchanged in E.4D.3B.
 AI_TASKS = {
+    'SOURCE_UNDERSTANDING', 'OBJECTIVE_GENERATION',
     'CONVERSATION', 'TEACHING_GENERATION', 'EXAMPLE_GENERATION',
     'QUESTION_GENERATION', 'DISTRACTOR_GENERATION', 'REMEDIATION',
     'FEYNMAN_EVALUATION', 'MASTERY_GENERATION', 'MASTERY_EVALUATION',
@@ -397,13 +398,16 @@ class AIService:
                 contents.append({'role': role, 'parts': parts})
         return contents, system_instruction.strip()
 
-    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 8192, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False, task: str = 'CONVERSATION') -> str:
+    async def chat(self, messages: list, target_model: str = None, max_tokens: int = 8192, max_fallbacks: int = 3, forced_model: str = None, timeout: int = 30, is_tutor_mode: bool = False, task: str = None) -> str:
         """
         Hyper-Resilient Chat — optimised for SPEED (conversational use).
         Chain: Groq (1000 t/s) → Cerebras (14.4K RPD) → Google Gemma 4 → OpenRouter
         
         TUTOR MODE OPTIMIZATION: When is_tutor_mode=True, uses ultra-fast models with aggressive timeouts
         """
+        from .task_routing import POLICIES, run_task
+        if task in POLICIES and not is_tutor_mode and not forced_model and not target_model and not any(isinstance(message.get('content'), list) for message in messages):
+            return await asyncio.to_thread(run_task, self, messages, task, max_tokens=max_tokens)
         if not self.api_key: return "API Key missing."
         task = task if task in AI_TASKS else 'CONVERSATION'
         logger.info('[AI Task] %s', task)
@@ -793,6 +797,10 @@ class AIService:
         Synchronous wrapper for chat. CRITICAL for background tasks.
         Uses asyncio.run() to avoid event loop conflicts in ASGI/daphne threads.
         """
+        from .task_routing import POLICIES, run_task
+        task = kwargs.get('task')
+        if task in POLICIES and not kwargs.get('is_tutor_mode') and not any(isinstance(message.get('content'), list) for message in messages):
+            return run_task(self, messages, task, max_tokens=kwargs.get('max_tokens'))
         import asyncio
         try:
             return asyncio.run(self.chat(messages, **kwargs))

@@ -17,11 +17,13 @@ REPRESENTATIONS = {
     'TIMELINE', 'HIERARCHY', 'CAUSE_EFFECT', 'FORMULA', 'WORKED_EXAMPLE',
     'EVIDENCE_HIGHLIGHT', 'ARCHITECTURE', 'SIMPLE_GRAPH', 'LABELED_DIAGRAM',
     'GROUNDED_EXPLANATION',
+    'DATA_TABLE', 'CODE_TRACE',
 }
 MOMENT_TYPES = {
     'EXPLAIN', 'VISUALIZE', 'DEMONSTRATE', 'EXAMPLE', 'INTERACT', 'CHECK',
     'REMEDIATE', 'REFLECT', 'FEYNMAN', 'FLASHCARD', 'OPTIONAL_MEDIA',
     'OBJECTIVE_COMPLETE',
+    'SHOW', 'CONNECT', 'COMPARE', 'REINFORCE', 'OPTIONAL_DEPTH',
 }
 INTERACTIONS = {'NONE', 'MCQ', 'MATCHING', 'ORDERING', 'SORTING', 'TAP_TARGET', 'REVEAL', 'SHORT_ANSWER', 'STEP_SOLVER', 'EVIDENCE_HIGHLIGHT'}
 MAX_MOMENTS = 8
@@ -91,7 +93,7 @@ def validate_teaching_plan(raw, expected_objective_id=None):
     if not isinstance(raw, dict):
         raise TeachingPlanValidationError('plan must be an object')
     serialized = json.dumps(raw, default=str)
-    if re.search(r'<\/?(?:script|svg|div|iframe)|\b(?:html|jsx|javascript|animation_code)\b', serialized, re.I):
+    if re.search(r'<\/?(?:script|svg|div|iframe)|\b(?:jsx|animation_code)\b', serialized, re.I):
         raise TeachingPlanValidationError('plans may contain semantic data only')
     objective_id = _text(raw.get('objective_id'), 120, required=True)
     if expected_objective_id and objective_id != expected_objective_id:
@@ -103,6 +105,8 @@ def validate_teaching_plan(raw, expected_objective_id=None):
     if not isinstance(moments, list) or not 1 <= len(moments) <= MAX_MOMENTS:
         raise TeachingPlanValidationError('teaching_moments must contain 1-8 moments')
     validated_moments = []
+    taught = []
+    from .material_grounding import FILLER
     for index, moment in enumerate(moments):
         if not isinstance(moment, dict):
             raise TeachingPlanValidationError('moment must be an object')
@@ -118,7 +122,7 @@ def validate_teaching_plan(raw, expected_objective_id=None):
         content = moment.get('content') or {}
         if not isinstance(content, dict):
             raise TeachingPlanValidationError('moment content must be an object')
-        if re.search(r'<\/?(?:script|svg|style|iframe)|\b(?:jsx|javascript|onclick)\b', json.dumps(content, default=str), re.I):
+        if re.search(r'<\/?(?:script|svg|style|iframe)|\b(?:jsx|onclick)\b', json.dumps(content, default=str), re.I):
             raise TeachingPlanValidationError('teaching content may not contain UI code')
         safe_content = {
             'title': _text(content.get('title'), 160), 'body': _text(content.get('body'), 900),
@@ -142,8 +146,27 @@ def validate_teaching_plan(raw, expected_objective_id=None):
             'target': _text(content.get('target'), 120),
             'correct_evidence': _list(content.get('correct_evidence'), 'correct_evidence'),
         }
-        if not any((safe_content['body'], safe_content['nodes'], safe_content['rows'], safe_content['steps'], safe_content['formula'], safe_content['evidence'])):
+        if not any((safe_content['body'], safe_content['nodes'], safe_content['rows'], safe_content['steps'], safe_content['formula'], safe_content['evidence'], safe_content['prompt'], content.get('code'))):
             raise TeachingPlanValidationError(f'moment {index + 1} has no renderable content')
+        if any(FILLER.fullmatch(step) for step in [safe_content['body'], *safe_content['steps']]):
+            raise TeachingPlanValidationError('Generic teaching steps are not instructional content')
+        if len(str(content.get('formula') or '')) > 300:
+            raise TeachingPlanValidationError('Formula exceeds display limit; cannot safely truncate mathematical content')
+        if moment_representation == 'WORKED_EXAMPLE' and (len(safe_content['steps']) < 3 or not safe_content['formula']):
+            raise TeachingPlanValidationError('Worked example needs an operation and concrete progression')
+        if moment_representation in {'PROCESS_FLOW', 'TIMELINE'} and len(safe_content['steps']) < 2:
+            raise TeachingPlanValidationError('Process needs meaningful ordered stages')
+        if moment_representation == 'COMPARISON' and (len(safe_content['columns']) < 2 or not safe_content['rows']):
+            raise TeachingPlanValidationError('Comparison needs entities and dimensions')
+        if moment_representation in {'ARCHITECTURE', 'RELATIONSHIP_MAP'} and (len(safe_content['nodes']) < 2 or not safe_content['edges']):
+            raise TeachingPlanValidationError('Relationships need components and connections')
+        if kind in {'INTERACT', 'CHECK'} and interaction != 'NONE':
+            established = ' '.join(taught + [str(item) for item in raw.get('prerequisite_assumptions', [])]).casefold()
+            tested = safe_content['evidence_concepts'] or [safe_content['expected_answer']]
+            if raw.get('version') != 3 and (not taught or not all(item and item.casefold() in established for item in tested)):
+                raise TeachingPlanValidationError('Check assesses knowledge that has not been established')
+        else:
+            taught.append(' '.join([safe_content['body'], safe_content['formula'], *safe_content['steps'], *safe_content['evidence'], *safe_content['nodes']]))
         if kind in {'INTERACT', 'CHECK'} and interaction != 'NONE':
             if not safe_content['prompt']:
                 raise TeachingPlanValidationError('interactive moments require a self-contained prompt')
@@ -175,7 +198,8 @@ def validate_teaching_plan(raw, expected_objective_id=None):
     if not isinstance(grounding, dict):
         raise TeachingPlanValidationError('source_grounding must be an object')
     return {
-        'version': 1, 'objective_id': objective_id,
+        'version': 3 if raw.get('version') == 3 else 2, 'objective_id': objective_id,
+        'fallback_reason': _text(raw.get('fallback_reason'), 240),
         'learning_goal': _text(raw.get('learning_goal'), 360, required=True),
         'key_insight': _text(raw.get('key_insight'), 500, required=True),
         'prerequisite_assumptions': [_text(item, 220) for item in _list(raw.get('prerequisite_assumptions'), 'prerequisite_assumptions')[:5] if _text(item, 220)],
@@ -186,7 +210,7 @@ def validate_teaching_plan(raw, expected_objective_id=None):
         'interaction_strategy': _text(raw.get('interaction_strategy'), 240),
         'check_strategy': _text(raw.get('check_strategy'), 240, required=True),
         'remediation_strategy': _text(raw.get('remediation_strategy'), 240, required=True),
-        'source_grounding': {key: value for key, value in grounding.items() if key in {'resource_id', 'resource_title', 'section', 'page', 'excerpt', 'asset_id'} and value not in ('', None)},
+        'source_grounding': {key: value for key, value in grounding.items() if key in {'resource_id', 'resource_title', 'section', 'page', 'excerpt', 'asset_id', 'source_refs'} and value not in ('', None)},
         'difficulty': _text(raw.get('difficulty') or 'medium', 20),
         'optional_depth': [_text(item, 240) for item in _list(raw.get('optional_depth'), 'optional_depth')[:4] if _text(item, 240)],
         'subject_family': _text(raw.get('subject_family') or 'general', 40),
@@ -198,7 +222,7 @@ def classify_subject(concept, objective_text=''):
     value = ' '.join([str(getattr(concept.path, 'subject', '') or ''), str(concept.title or ''), str(objective_text or '')]).lower()
     if re.search(r'novel|poem|character|theme|author|achebe|literature|bias|irony|steward', value): return 'literature'
     if re.search(r'biology|heart|blood|cell|organ|circulation|photosynth|anatom', value): return 'biology'
-    if re.search(r'equation|formula|calculate|numerical|newton|algebra|calculus|matrix|derivative', value): return 'mathematics'
+    if re.search(r'equation|formula|calculate|numerical|newton|algebra|calculus|matrix|derivative|finite differenc', value): return 'mathematics'
     if re.search(r'code|program|api|database|frontend|backend|react|spring|postgres|algorithm', value): return 'computer_science'
     if re.search(r'history|war|empire|century|revolution|event|colonial', value): return 'history'
     return 'general'
@@ -210,7 +234,7 @@ def select_representation(subject, objective_text, grounding=None):
     if subject == 'literature': return 'EVIDENCE_HIGHLIGHT'
     if subject == 'biology' and re.search(r'cycle|circul|route|path|heart|blood', value): return 'CYCLE'
     if subject == 'biology': return 'LABELED_DIAGRAM'
-    if subject == 'mathematics' and re.search(r'=|formula|equation|newton|calculate|solve', value): return 'WORKED_EXAMPLE'
+    if subject == 'mathematics' and re.search(r'calculate|solve|estimate|work through', objective_text, re.I): return 'WORKED_EXAMPLE'
     if subject == 'computer_science' and re.search(r'frontend|backend|database|api|layer|architecture', value): return 'ARCHITECTURE'
     if subject == 'history' and re.search(r'before|after|timeline|century|event', value): return 'TIMELINE'
     if re.search(r'compare|contrast|versus|difference|whereas', value): return 'COMPARISON'
@@ -239,31 +263,13 @@ def safe_fallback_plan(concept, objective, grounding):
     interaction = select_interaction(subject, goal, representation)
     learner_title = learner_facing_title(goal, representation)
     content = {'title': learner_title, 'body': '', 'lead': '', 'takeaway': goal}
-    if representation == 'COMPARISON':
-        belief = 'What is claimed or believed'
-        behaviour = 'What the evidence actually shows'
-        if subject == 'literature' and re.search(r'green|steward|bias|prejudice', f'{goal} {excerpt}', re.I):
-            belief, behaviour = "Green's belief about Africans", "Green's behaviour toward African stewards"
-        content.update({'columns': [belief, behaviour], 'rows': [[goal, excerpt[:360]]], 'body': ''})
-    elif representation in {'CYCLE', 'ARCHITECTURE'}:
-        if subject == 'biology' and re.search(r'heart|circul|blood', f'{goal} {excerpt}', re.I):
-            content.update({'nodes': ['Heart', 'Lungs', 'Heart', 'Body'], 'edges': [['Heart','Lungs','toward the lungs'],['Lungs','Heart','oxygenated return'],['Heart','Body','systemic route'],['Body','Heart','return']], 'body': ''})
-        elif subject == 'computer_science' and re.search(r'react|spring|postgres|frontend|backend|database', f'{goal} {excerpt}', re.I):
-            content.update({'nodes': ['React Native', 'Spring Boot', 'PostgreSQL'], 'edges': [['React Native','Spring Boot','HTTP / API'],['Spring Boot','PostgreSQL','database query']], 'body': ''})
-        if not content.get('nodes'):
-            pieces = _sentences(excerpt, 4) or [learner_title, 'Connected idea', 'Result']
-            content.update({'nodes': pieces, 'edges': [[pieces[index], pieces[(index + 1) % len(pieces)], ''] for index in range(len(pieces))], 'body': ''})
-    elif representation in {'PROCESS_FLOW', 'TIMELINE', 'CAUSE_EFFECT'}:
-        pieces = _sentences(excerpt, 5)
-        if len(pieces) < 3:
-            pieces = ['What goes in', 'What happens inside', 'What comes out']
-        content.update({'steps': pieces, 'body': '', 'progressive': True})
-    elif representation == 'WORKED_EXAMPLE':
-        content.update({'steps': [learner_title, 'Substitute the known information.', 'Work one transformation at a time.', 'Check the result against the goal.'], 'body': '', 'progressive': True})
-    elif representation == 'EVIDENCE_HIGHLIGHT':
-        content.update({'evidence': _sentences(excerpt, 4) or [excerpt[:480]], 'body': ''})
-    else:
-        content['body'] = excerpt[:520]
+    from .material_grounding import bundle_from_excerpt, semantic_content
+    semantic_grounding = bundle_from_excerpt(grounding or {'excerpt': excerpt})
+    representation, payload, reason = semantic_content(semantic_grounding, representation)
+    content.update(payload)
+    if not any(content.get(key) for key in ('body', 'steps', 'nodes', 'formula', 'evidence', 'rows')):
+        content['body'] = excerpt or 'This material does not yet contain enough extracted content to teach this objective.'
+    interaction = select_interaction(subject, goal, representation)
     plan = {
         'objective_id': objective_id, 'learning_goal': goal, 'key_insight': goal,
         'prerequisite_assumptions': [], 'likely_misconceptions': [],
@@ -276,7 +282,26 @@ def safe_fallback_plan(concept, objective, grounding):
         'source_grounding': grounding or {}, 'difficulty': concept.difficulty, 'optional_depth': [],
         'subject_family': subject, 'origin': 'fallback',
     }
-    return validate_teaching_plan(plan, objective_id)
+    result = validate_teaching_plan(plan, objective_id)
+    if representation == 'GROUNDED_EXPLANATION' and (grounding or {}).get('pages'):
+        # Keep neighboring formula/example pages visible instead of truncating the first summary.
+        segments = []
+        for page in grounding['pages']:
+            remaining = page['text'].strip()
+            while remaining:
+                end = len(remaining) if len(remaining) <= 850 else max(remaining.rfind('\n', 0, 850), remaining.rfind(' ', 0, 850))
+                end = end if end > 0 else 850
+                segments.append(remaining[:end])
+                remaining = remaining[end:].strip()
+        if segments:
+            result['teaching_moments'] = [{**result['teaching_moments'][0], 'id': f'teach-{index + 1}',
+                                          'content': {**result['teaching_moments'][0]['content'], 'body': text}}
+                                         for index, text in enumerate(segments[:MAX_MOMENTS])]
+            result = validate_teaching_plan(result, objective_id)
+            if len(segments) > MAX_MOMENTS:
+                reason = (reason + '; ' if reason else '') + 'Teaching window capped at eight moments; checks limited to visible material'
+    result['fallback_reason'] = reason
+    return result
 
 
 def _extract_json(value):
@@ -289,18 +314,28 @@ def _extract_json(value):
     return json.loads(text)
 
 
-def generate_teaching_plan(concept, objective, grounding, allow_ai=None):
+def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequisites=None):
     """Generate once, validate strictly, then use a non-fragmenting fallback."""
     fallback = safe_fallback_plan(concept, objective, grounding)
     enabled = getattr(settings, 'JOURNEY_TEACHING_AI_ENABLED', False) if allow_ai is None else allow_ai
     if not enabled:
         logger.info('[Journey TeachingPlan] attempted=false accepted=false fallback=true objective=%s reason=kill-switch', objective.get('id'))
         return fallback
+    if grounding.get('pages'):
+        try:
+            from .tutor_engine import generate
+            plan = generate(concept, objective, grounding, prerequisites)
+            plan['origin'] = 'ai'
+            return plan
+        except Exception as exc:
+            logger.warning('[Tutor plan] fallback=true error=%s', type(exc).__name__)
+            return fallback
     prompt = {
         'objective_id': objective.get('id'), 'objective': objective.get('text'), 'concept': concept.title,
         'goal': concept.path.goal, 'difficulty': concept.difficulty, 'source_grounding': grounding,
         'allowed_representations': sorted(REPRESENTATIONS), 'allowed_moment_types': sorted(MOMENT_TYPES),
-        'allowed_interactions': sorted(INTERACTIONS),
+        'allowed_interactions': sorted(INTERACTIONS), 'schema_example': fallback,
+        'requirements': 'Teach before checking. Checks evidence_concepts must occur in earlier teaching content. No filler. Use only source-supported semantic payloads.',
     }
     messages = [{'role': 'system', 'content': 'Return one JSON TeachingPlan only. Never output HTML, JSX, SVG, URLs, or animation code. Use only grounded facts and concise learner-facing content.'},
                 {'role': 'user', 'content': json.dumps(prompt, default=str)}]
@@ -308,6 +343,18 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None):
         from ai_assistant.services import AIService
         raw = AIService().chat_sync(messages, task='TEACHING_GENERATION', max_tokens=1800)
         plan = validate_teaching_plan(_extract_json(raw), str(objective.get('id')))
+        from .material_grounding import bundle_from_excerpt, semantic_content
+        semantic = bundle_from_excerpt(grounding)
+        for moment in plan['teaching_moments']:
+            _, _, reason = semantic_content(semantic, moment['representation'])
+            if reason:
+                raise TeachingPlanValidationError(reason)
+            if moment['representation'] == 'WORKED_EXAMPLE':
+                available = ' '.join(item['text'] for item in semantic.get('knowledge', {}).get('worked_examples', []) if item.get('support') == 'source')
+                normalized = re.sub(r'\s+', ' ', available).casefold()
+                if any(re.sub(r'\s+', ' ', step).casefold() not in normalized for step in moment['content']['steps']):
+                    raise TeachingPlanValidationError('Worked example contains unsupported transformations')
+        plan['source_grounding'] = fallback['source_grounding']
         plan['origin'] = 'ai'
         logger.info('[Journey TeachingPlan] attempted=true accepted=true fallback=false objective=%s representation=%s moments=%s', objective.get('id'), plan['recommended_representation'], len(plan['teaching_moments']))
         return plan
@@ -317,7 +364,7 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None):
 
 
 def teaching_plan_fingerprint(concept, objective, grounding):
-    payload = json.dumps({'concept': str(concept.id), 'objective': objective, 'grounding': grounding, 'version': 1}, sort_keys=True, default=str)
+    payload = json.dumps({'concept': str(concept.id), 'objective': objective, 'grounding': grounding, 'version': 3}, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
@@ -330,12 +377,17 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
     cached = plans.get(objective_id)
     if isinstance(cached, dict) and cached.get('fingerprint') == fingerprint:
         try:
-            plan = validate_teaching_plan(cached.get('plan'), objective_id)
+            if cached.get('plan', {}).get('version') == 3:
+                from .tutor_contract import validate_tutor_plan
+                plan = validate_tutor_plan(cached['plan'], objective, grounding, cached['plan'].get('prerequisite_state'))
+            else:
+                plan = validate_teaching_plan(cached.get('plan'), objective_id)
             logger.info('[Journey TeachingPlan] cache=true objective=%s origin=%s representation=%s', objective_id, plan.get('origin'), plan.get('recommended_representation'))
             return plan
         except TeachingPlanValidationError: pass
-    plan = generate_teaching_plan(session.concept, objective, grounding, allow_ai=allow_ai)
-    plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan}
+    from .tutor_contract import prerequisite_state
+    plan = generate_teaching_plan(session.concept, objective, grounding, allow_ai=allow_ai, prerequisites=prerequisite_state(session, grounding))
+    plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan, 'grounding_input': grounding, 'objective_input': objective}
     session.state = {**session.state, 'teaching_plans': plans}
     session.save(update_fields=['state', 'last_active_at'])
     return plan
@@ -343,24 +395,45 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
 
 def teaching_activity_from_plan(concept, objective, plan, activity_id, moment=None):
     moment = moment or next((item for item in plan['teaching_moments'] if item['type'] in {'EXPLAIN','VISUALIZE','DEMONSTRATE','EXAMPLE','REMEDIATE'}), plan['teaching_moments'][0])
-    mapping = {'CONCEPT_MAP':'diagram','RELATIONSHIP_MAP':'relationship','COMPARISON':'comparison','PROCESS_FLOW':'process','CYCLE':'diagram','TIMELINE':'sequence','HIERARCHY':'diagram','CAUSE_EFFECT':'cause_effect','FORMULA':'formula','WORKED_EXAMPLE':'worked_example','EVIDENCE_HIGHLIGHT':'evidence_highlight','ARCHITECTURE':'architecture','SIMPLE_GRAPH':'simple_graph','LABELED_DIAGRAM':'labeled_diagram','GROUNDED_EXPLANATION':'concept'}
+    mapping = {'CONCEPT_MAP':'diagram','RELATIONSHIP_MAP':'relationship','COMPARISON':'comparison','PROCESS_FLOW':'process','CYCLE':'diagram','TIMELINE':'sequence','HIERARCHY':'diagram','CAUSE_EFFECT':'cause_effect','FORMULA':'formula','WORKED_EXAMPLE':'worked_example','EVIDENCE_HIGHLIGHT':'evidence_highlight','ARCHITECTURE':'architecture','SIMPLE_GRAPH':'simple_graph','LABELED_DIAGRAM':'labeled_diagram','GROUNDED_EXPLANATION':'concept','DATA_TABLE':'data_table','CODE_TRACE':'code_trace'}
     content = dict(moment['content'])
     if content.get('nodes'): content['nodes'] = [{'id': f'n{index}', 'label': label} for index, label in enumerate(content['nodes'])]
     if content.get('edges'): content['edges'] = [{'from': edge[0], 'to': edge[1], 'label': edge[2]} for edge in content['edges']]
     representation = moment.get('representation') or plan['recommended_representation']
     display_title = learner_facing_title(content.get('title') or plan['learning_goal'], representation)
-    return {'id': activity_id, 'concept_id': str(concept.id), 'objective_id': objective['id'], 'objective_index': objective.get('index', 0),
+    activity = {'id': activity_id, 'concept_id': str(concept.id), 'objective_id': objective['id'], 'objective_index': objective.get('index', 0),
             'purpose': 'remediate' if moment['type'] == 'REMEDIATE' else 'learn', 'stage': 'learn', 'type': mapping[representation],
             'prompt': display_title, 'title': display_title,
             'content': {**content, 'title': display_title, 'knowledge_type': representation, 'subject_family': plan['subject_family'],
                         'progressive': content.get('progressive', True)},
             'difficulty': plan['difficulty'], 'estimated_seconds': 75, 'grounding': plan['source_grounding'],
             'goal_relevance': concept.path.goal or '', 'presentation_reason': plan['teaching_strategy']}
+    if plan.get('version') == 3:
+        activity.update({'dialogue': moment.get('dialogue', ''), 'mascot_position': moment.get('mascot_position', 'beside'),
+                         'tutor': {'level': moment['level'], 'minimum_level': plan['advancement_rule']['minimum_level'],
+                                   'moment_id': moment['id'], 'tests': moment['tests'], 'teaches': moment['teaches']}})
+        if moment['interaction'] != 'NONE':
+            activity.update({'type': moment['interaction'].lower(), 'purpose': 'check', 'stage': 'check',
+                             'prompt': content['prompt'], 'requires_teaching': True,
+                             'rubric': {'source_quote': moment['source_quote'], 'expected': content['expected_answer']}})
+            if moment['interaction'] == 'MCQ': activity['options'] = content['options']
+            if moment['interaction'] == 'MATCHING':
+                # Do not serialize the answer as aligned left/right pairs. The client
+                # can render both columns while only the server knows the mapping.
+                original_pairs = content['pairs']
+                shift = (int(hashlib.sha256(activity_id.encode()).hexdigest()[:4], 16) % (len(original_pairs) - 1)) + 1
+                rights = [pair[1] for pair in original_pairs]
+                rights = rights[shift:] + rights[:shift]
+                content['pairs'] = [{'left': pair[0], 'right': rights[index]} for index, pair in enumerate(original_pairs)]
+                content['correct_matching'] = {str(index): rights.index(pair[1]) for index, pair in enumerate(original_pairs)}
+            activity['content'] = {**activity['content'], **content}
+    return activity
+
 
 
 def teaching_activities_from_plan(concept, objective, plan, activity_id_factory):
     """Preserve the validated moment sequence instead of collapsing it to one block."""
-    moments = [item for item in plan['teaching_moments'] if item['type'] in {'EXPLAIN','VISUALIZE','DEMONSTRATE','EXAMPLE','REMEDIATE'}]
+    moments = plan['teaching_moments'] if plan.get('version') == 3 else [item for item in plan['teaching_moments'] if item['type'] in {'EXPLAIN','VISUALIZE','DEMONSTRATE','EXAMPLE','REMEDIATE'}]
     moments = moments or [plan['teaching_moments'][0]]
     activities = []
     for index, moment in enumerate(moments):

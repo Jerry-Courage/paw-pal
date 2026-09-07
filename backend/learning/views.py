@@ -72,7 +72,11 @@ def _goal_mode(concept):
     return 'mastery'
 
 
-def _grounding(concept):
+def _grounding(concept, objective=None):
+    from .material_grounding import objective_grounding
+    semantic = objective_grounding(concept, objective)
+    if 'knowledge' in semantic:
+        return semantic
     grounding = {'resource_id': concept.source_resource_id, 'resource_title': '',
                  'section': concept.source_section or '', 'page': concept.source_page, 'excerpt': ''}
     resource = concept.source_resource
@@ -284,12 +288,33 @@ def _objective_activities(session, user=None):
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[objective_index] if session.objectives else {'id': 'objective-1', 'text': concept.title}
     objective_id = objective['id']
-    grounding = _grounding(concept)
+    grounding = _grounding(concept, objective)
     plan = get_or_create_teaching_plan(session, grounding)
     presentations = teaching_activities_from_plan(
         concept, {**objective, 'index': objective_index}, plan,
         lambda suffix: _activity_id(concept, f'presentation:{suffix}'),
     )
+    if plan.get('version') == 3:
+        return presentations
+    if 'knowledge' in grounding:
+        # Assessment answer is a statement actually visible in teaching, never the objective title.
+        visible = [moment['content']['body'] for moment in plan['teaching_moments']
+                   if moment['representation'] in {'GROUNDED_EXPLANATION', 'EVIDENCE_HIGHLIGHT'} and moment['content'].get('body')]
+        visible += [step for moment in plan['teaching_moments'] for step in reversed(moment['content'].get('steps', []))]
+        visible += [' → '.join(moment['content']['steps']) for moment in plan['teaching_moments'] if moment['content'].get('steps')]
+        visible += ['; '.join(f'{edge[0]} → {edge[1]} ({edge[2]})' for edge in moment['content']['edges'])
+                    for moment in plan['teaching_moments'] if moment['representation'] == 'RELATIONSHIP_MAP' and moment['content'].get('edges')]
+        fact = next((text for text in visible if len(text.split()) >= 5), '')
+        if not fact or grounding.get('status') == 'insufficient':
+            return presentations
+        fact = fact[:900]
+        check = {'id': _activity_id(concept, f'material-check:{objective_id}'), 'concept_id': str(concept.id),
+                 'objective_id': objective_id, 'objective_index': objective_index, 'purpose': 'check', 'stage': 'check',
+                 'type': 'short_answer', 'prompt': 'Explain the relationship in the material Flow just showed you.',
+                 'expected_concept': fact, 'accepted_keywords': _meaningful_keywords(fact),
+                 'explanation': fact, 'hints': [fact], 'difficulty': concept.difficulty,
+                 'grounding': plan['source_grounding'], 'requires_teaching': True}
+        return [*presentations, check]
     base_activities = _concept_activities(concept, user)
     if objective_index == 0:
         scoped = []
@@ -372,6 +397,9 @@ def _valid_activity(activity):
 
 
 def _evaluate_activity(concept, activity, response):
+    if activity.get('tutor'):
+        from .tutor_engine import evaluate
+        return evaluate(activity, response)
     if activity['type'] in {'predict', 'mcq', 'scenario'}:
         try:
             correct = int(response.get('choice')) == activity['correct_choice']
@@ -422,6 +450,10 @@ def _evidence_score(user, concept, fallback=0):
 
 
 def _teaching_objectives(concept):
+    from .material_grounding import grounded_objectives
+    semantic = grounded_objectives(concept)
+    if semantic:
+        return semantic
     title = concept.title.lower()
     if any(term in title for term in ('jacobi', 'gauss-seidel', 'gauss seidel', 'sor')):
         return [
@@ -441,11 +473,20 @@ def _teaching_objectives(concept):
 
 def _public_activity(activity):
     hidden = {'correct_choice', 'correct_order', 'accepted_keywords', 'feedback_by_choice', 'explanation', 'hints'}
-    return {key: value for key, value in activity.items() if key not in hidden}
+    result = {key: value for key, value in activity.items() if key not in hidden}
+    if 'grounding' in result:
+        result['grounding'] = {key: value for key, value in result['grounding'].items()
+                               if key in {'resource_id', 'resource_title', 'section', 'page', 'excerpt', 'source_refs'}}
+    from .tutor_engine import public
+    result = public(result)
+    if activity.get('tutor') and activity.get('type') == 'sorting':
+        result['content']['groups'] = [{'id': f'g{i}', 'label': label} for i, label in enumerate(activity['content']['groups'])]
+    return result
 
 
 def _turn_data(turn):
-    payload = dict(turn.payload or {})
+    from .tutor_engine import public
+    payload = public(dict(turn.payload or {}))
     activity = payload.get('activity')
     if activity and activity.get('purpose') in {'learn', 'remediate'}:
         payload.setdefault('learning_objects', [activity])
@@ -454,7 +495,8 @@ def _turn_data(turn):
 
 
 def _session_data(session):
-    turns = list(session.turns.order_by('-created_at')[:40])
+    from .tutor_engine import public
+    turns = list(session.turns.exclude(pk__in=session.turns.filter(payload__channel='ask_flow').values('pk')).order_by('-created_at')[:40])
     turns.sort(key=lambda turn: (turn.created_at, 0 if turn.role == 'learner' else 1))
     evaluation = evaluate_session_completion(session)
     current_index = min(session.current_point, max(0, len(session.objectives) - 1))
@@ -462,6 +504,9 @@ def _session_data(session):
     active = session.state.get('last_learning_object') or {}
     active_activity_id = active.get('activity_id', '') if active.get('objective_id') == current_objective_id else ''
     player_activities = [_public_activity(activity) for activity in _objective_activities(session, session.user)]
+    for activity in player_activities:
+        if activity.get('type') == 'worked_example':
+            activity.setdefault('content', {})['revealed_steps'] = session.state.get('revealed_steps', {}).get(activity['id'], 1)
     player = sync_player_state(session, player_activities, turns)
     return {
         'id': str(session.id), 'status': session.status, 'current_point': session.current_point,
@@ -470,7 +515,7 @@ def _session_data(session):
         'unresolved_misconceptions': session.unresolved_misconceptions, 'mastery': session.mastery,
         'conversation_summary': session.conversation_summary, 'turns': [_turn_data(turn) for turn in turns],
         'teaching_preferences': session.state.get('teaching_preferences', {}),
-        'teaching_plan': (session.state.get('teaching_plans') or {}).get(current_objective_id, {}).get('plan'),
+        'teaching_plan': public((session.state.get('teaching_plans') or {}).get(current_objective_id, {}).get('plan') or {}),
         'teaching_phase': session.state.get('teaching_phase', 'INTRODUCE'),
         'current_objective_id': current_objective_id, 'active_activity_id': active_activity_id,
         'player': player,
@@ -545,8 +590,9 @@ def _journey_message_intent(text):
 
 
 def _next_journey_check(session, activities):
+    from .material_grounding import assessment_ready
     shown = session.state.get('shown_activity_ids', [])
-    candidates = [item for item in activities if item.get('purpose') in {'check', 'apply', 'transfer'}]
+    candidates = [item for item in activities if item.get('purpose') in {'check', 'apply', 'transfer'} and assessment_ready(session, item, activities)]
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective_id = session.objectives[objective_index]['id'] if session.objectives else ''
     grounded = [item for item in candidates if item.get('objective_id') == objective_id]
@@ -634,6 +680,7 @@ def _unanswered_journey_check(session, activities):
 def submit_teaching_activity(concept, user, activity_id, response_data, idempotency_key=''):
     """Evaluate one Activity Engine V2 response and record authoritative Journey evidence once."""
     session = _get_teaching_session(concept, user)
+    session = TeachingSession.objects.select_for_update().get(pk=session.pk)
     key = f'activity:{str(idempotency_key).strip()}'[:80] if idempotency_key else ''
     if key:
         existing = TeachingTurn.objects.filter(session=session, role='learner', kind='activity', idempotency_key=key).first()
@@ -642,6 +689,12 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
     activity = next((item for item in _objective_activities(session, user) if item['id'] == str(activity_id)), None)
     if not activity or activity['type'] in {'comparison', 'worked_example'}:
         raise ValueError('This response cannot be evaluated')
+    if activity.get('requires_teaching'):
+        from .material_grounding import assessment_ready
+        if not assessment_ready(session, activity, _objective_activities(session, user)):
+            raise ValueError('Complete the teaching moments before answering this check')
+    if activity.get('tutor') and session.state.get('player', {}).get('active_activity_id') != activity['id']:
+        raise ValueError('Only the current check can accept an answer')
     correct, score, feedback, outcome = _evaluate_activity(concept, activity, response_data)
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[objective_index] if session.objectives else {'id': '', 'text': concept.title}
@@ -659,8 +712,18 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         return session, result, True
     attempt = EncounterAttempt.objects.create(user=user, concept=concept, activity_id=activity['id'], activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
     session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
-    record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score, source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
-    if correct is not False:
+    meets_level = not activity.get('tutor') or activity['tutor']['level'] >= activity['tutor']['minimum_level']
+    record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score if meets_level else min(score, 69), source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
+    if activity.get('tutor'):
+        tested = set(activity['tutor'].get('tests', []))
+        known = set(session.state.get('mastered_knowledge_ids', []))
+        missing = set(session.state.get('missing_prerequisite_ids', []))
+        if correct and meets_level:
+            known.update(tested); missing.difference_update(tested)
+        elif correct is False:
+            known.difference_update(tested); missing.update(tested)
+        session.state = {**session.state, 'mastered_knowledge_ids': sorted(known), 'missing_prerequisite_ids': sorted(missing)}
+    if correct is not False and meets_level:
         session.objectives_understood = list(dict.fromkeys([*session.objectives_understood, objective_id]))
         session.current_point = min(len(session.objectives), session.current_point + 1)
         session.status = 'mastery_check' if session.current_point >= len(session.objectives) - 1 else 'teaching'
@@ -671,6 +734,10 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         content = (f"Nice. That checkpoint is clear. ✓\n\nNext: {next_label}." if next_objective
                    else f"✓ Checkpoint cleared. {feedback}")
         flow_payload = {'pedagogical_action': 'ADVANCE'}
+    elif correct:
+        content = feedback
+        flow_payload = {'pedagogical_action': 'CHECK'}
+        session.status = 'practicing'
     else:
         session.status = 'remediation'
         session.resume_point = session.current_point
@@ -682,6 +749,22 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         session.state = {**session.state, 'recent_remediation_modes': [*session.state.get('recent_remediation_modes', [])[-3:], remediation_mode]}
         content = f"Close, but that answer mixes up the main distinction. {feedback}\n\nLet’s look at it another way."
         flow_payload = {'pedagogical_action': 'REMEDIATE', **({'activity': _public_activity(remedial)} if remedial else {})}
+        if activity.get('tutor'):
+            from .tutor_engine import remediation
+            replacement = remediation(session, objective, activity, response_data, feedback)
+            if replacement:
+                revision = str(attempt.id)[:8]
+                for moment in replacement['teaching_moments']:
+                    moment['id'] = f"{revision}:{moment['id']}"
+                cached = session.state['teaching_plans'][objective_id]
+                cached['plan'] = replacement
+                session.state = {**session.state, 'player': {}, 'teaching_plans': {**session.state['teaching_plans'], objective_id: cached}}
+            else:
+                # Honest replay of the grounded lesson; no fabricated transformation.
+                session.state = {**session.state, 'player': {}}
+            flow_payload = {'pedagogical_action': 'REMEDIATE'}
+            content = feedback
+
     session.mastery = _evidence_score(user, concept, score)
     result = {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id), 'objective_id': objective_id, 'outcome': outcome}
     TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key, payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
@@ -739,6 +822,14 @@ def _dedup_concepts(raw_concepts: list) -> list:
 
 def _extract_resource_concepts(resource) -> list:
     """Extract real concepts from a single resource. Returns list of concept dicts."""
+    from .material_grounding import resource_knowledge
+    model = resource_knowledge(resource)
+    if model:
+        return [{'title': page.get('title') or next((line.strip('# ') for line in page['text'].splitlines() if line.strip()), resource.title)[:180],
+                 'description': page['text'], 'summary': page['text'], 'source_resource': resource,
+                 'source_page': page.get('number'), 'source_section': page.get('title', ''),
+                 'difficulty': 'medium', 'key_definitions': []}
+                for page in model['pages'] if page['text'].strip()]
     raw_concepts = resource.ai_concepts or []
     # Filter: only keep actual concept objects with a title
     real_concepts = [
@@ -1352,6 +1443,11 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Message is required'}, status=400)
         if key and TeachingTurn.objects.filter(session=session, idempotency_key=key).exists():
             return Response(_session_data(session))
+        is_tutor = any(item.get('plan', {}).get('version') == 3 for item in session.state.get('teaching_plans', {}).values())
+        if is_tutor and not any(phrase in text.lower() for phrase in ('make flashcards', 'create flashcards', 'show me a video')):
+            from .ask_flow import answer_question
+            reply = answer_question(session, text, key[:64])
+            return Response({**_session_data(session), 'ask_flow': reply})
         TeachingTurn.objects.create(session=session, role='learner', content=text, idempotency_key=key)
         lowered = text.lower()
         journey_intent = _journey_message_intent(text)
@@ -1454,8 +1550,9 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                 session.state = {**session.state, 'last_video': {'video_id': safe_videos[0]['video_id'], 'objective_id': objective.get('id', ''), 'why': safe_videos[0]['why']}}
             flow_text = ('I found a focused visual explanation. Watch for the exact distinction we were discussing, then we’ll check whether it clicked.' if videos else "I couldn't find a video I'd trust enough to recommend. No detour—we can keep working through it here.")
         elif any(phrase in lowered for phrase in ('make flashcards', 'create flashcards', 'revise later', 'flash cards')):
-            grounding = _grounding(concept)
-            cards = [{'question': objective['text'], 'answer': (grounding.get('excerpt') or concept.summary or concept.description)[:420], 'difficulty': concept.difficulty} for objective in session.objectives[:3]]
+            from .tutor_engine import taught_material
+            material = taught_material(session)
+            cards = [{'question': item['title'], 'answer': item['content'].get('body') or item['content'].get('interpretation') or '; '.join(item['content'].get('steps', [])), 'difficulty': concept.difficulty} for item in material[-3:]]
             kind, payload = 'flashcards', {'cards': cards, 'saved': False}
             flow_text = 'Here are three grounded cards from what we’re learning. Save them if they feel useful for revision.'
         elif journey_intent == 'REQUEST_EXAMPLE':
@@ -1685,6 +1782,8 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         valid_objective_ids = {item['id'] for item in session.objectives}
         if objective_id and objective_id not in valid_objective_ids:
             return Response({'error': 'Unknown teaching objective'}, status=400)
+        if event == 'point_understood' and any(item.get('plan', {}).get('version') == 3 for item in session.state.get('teaching_plans', {}).values()):
+            return Response({'error': 'Complete the current check or teach-back to record understanding.'}, status=409)
         if event == 'point_covered' and objective_id:
             session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
             record_objective_evidence(session, objective_id, taught=True, interaction=True, source='voice')
@@ -1746,8 +1845,30 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
         active_activity_id = player.get('active_activity_id', '')
         if active_activity_id:
             return Response({'error': 'Complete the active Practice before continuing.', **_session_data(session)}, status=409)
+        activities = _objective_activities(session, request.user)
+        active = next((item for item in activities if f"{item['objective_id']}:{item['id']}" == current_id), {})
+        if active.get('tutor') and active.get('type') == 'worked_example':
+            shown = session.state.get('revealed_steps', {}).get(active['id'], 1)
+            if shown < len(active.get('content', {}).get('steps', [])):
+                return Response({'error': 'Work through the remaining steps first'}, status=409)
         continue_player_stage(session)
         return Response(_session_data(session))
+
+    @action(detail=True, methods=['post'], url_path='teaching-stage/reveal')
+    @transaction.atomic
+    def teaching_stage_reveal(self, request, pk=None):
+        session = TeachingSession.objects.select_for_update().get(user=request.user, concept=self.get_object())
+        activity_id = str(request.data.get('activity_id') or '')
+        active = next((item for item in _objective_activities(session, request.user) if item['id'] == activity_id), None)
+        if not active or active.get('type') != 'worked_example' or session.state.get('player', {}).get('current_stage_id') != f"{active['objective_id']}:{activity_id}":
+            return Response({'error': 'This example is no longer active'}, status=409)
+        count = request.data.get('count')
+        previous = session.state.get('revealed_steps', {}).get(activity_id, 1)
+        if type(count) is not int or count < previous or count > min(previous + 1, len(active['content']['steps'])):
+            return Response({'error': 'Reveal one step at a time'}, status=400)
+        session.state = {**session.state, 'revealed_steps': {**session.state.get('revealed_steps', {}), activity_id: count}}
+        session.save(update_fields=['state', 'last_active_at'])
+        return Response({'shown': count})
 
     @action(detail=True, methods=['get', 'post'], url_path='teaching-completion')
     def teaching_completion(self, request, pk=None):
@@ -1838,38 +1959,24 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                          'evidence_score': evidence_score, 'attempt_number': activity_attempts,
                          'recommend_flow': correct is False and activity_attempts >= 2}, status=201)
 
-    @action(detail=True, methods=['post'], url_path='ask-flow')
+    @action(detail=True, methods=['get', 'post'], url_path='ask-flow')
     def ask_flow(self, request, pk=None):
         concept = self.get_object()
+        if request.method == 'GET':
+            turns = TeachingTurn.objects.filter(session__user=request.user, session__concept=concept, payload__channel='ask_flow').order_by('-created_at')[:20]
+            return Response({'exchanges': [{'question': turn.content, 'reply': turn.payload['reply']} for turn in reversed(list(turns))]})
         question = str(request.data.get('question') or request.data.get('action') or '').strip()
         if not question:
             return Response({'error': 'Question is required'}, status=400)
-        from ai_assistant.services import AIService
-        activity_id = str(request.data.get('activity_id', ''))
-        activity = next((item for item in _concept_activities(concept, request.user) if item['id'] == activity_id), None)
-        recent = list(EncounterAttempt.objects.filter(user=request.user, concept=concept).order_by('-created_at')[:5]
-                      .values('activity_id', 'stage', 'response', 'correct', 'feedback'))
-        learner_response = request.data.get('learner_response')
-        context = (
-            "Respond like a patient human tutor in at most 80 words unless the learner explicitly asks for depth. "
-            "Begin with '**Key distinction:**' followed by one crisp sentence. Use clean Markdown. "
-            "For a hint, guide the next thought without revealing the answer. Never mention rubrics, evaluation, source alignment, generation, or internal activity terminology.\n"
-            f"Journey: {concept.path.title}\nGoal: {concept.path.goal}\nUnit: {concept.unit.title if concept.unit else ''}\n"
-            f"Depth: {concept.path.depth}\nConcept: {concept.title}\nStage: {request.data.get('stage', '')}\n"
-            f"Activity: {activity.get('prompt') if activity else ''}\nActivity type: {activity.get('type') if activity else ''}\n"
-            f"Learner response: {learner_response}\nCorrectness: {request.data.get('correct')}\nRecent attempts: {recent}\n"
-            f"Mastery: {concept.mastery}\nSource: {_grounding(concept)}\nSummary: {concept.summary}\n"
-            f"Learner request: {question}"
-        )
+        from .ask_flow import answer_question
+        session = TeachingSession.objects.filter(user=request.user, concept=concept).first()
+        if not session:
+            return Response({'error': 'Open this lesson first'}, status=409)
         try:
-            if concept.source_resource:
-                answer = AIService().ask_about_resource(concept.source_resource, context, task='SOURCE_REASONING')
-            else:
-                answer = AIService().chat_sync([{'role': 'user', 'content': context}], task='CONVERSATION')
-        except Exception:
-            logger.exception('Contextual Flow failed for concept %s', concept.id)
-            return Response({'error': 'Flow could not answer right now'}, status=503)
-        return Response({'answer': answer})
+            return Response(answer_question(session, question, str(request.data.get('idempotency_key') or '')))
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):

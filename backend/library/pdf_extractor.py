@@ -31,7 +31,7 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
         'page_count': int
     }
     """
-    content = {'text': '', 'images': [], 'page_images': [], 'toc': [], 'page_count': 0}
+    content = {'text': '', 'images': [], 'page_images': [], 'toc': [], 'pages': [], 'page_count': 0}
     text_parts = []
 
     try:
@@ -73,6 +73,20 @@ def extract_pdf_content(file_path: str = None, file_bytes: bytes = None, max_pag
 
             # 2. Extract text with high-fidelity markers
             page_text = page.get_text()
+            blocks = [{'id': f'b-{j + 1}', 'kind': 'text', 'text': block[4], 'bbox': list(block[:4])}
+                      for j, block in enumerate(page.get_text('blocks')) if block[6] == 0]
+            try:
+                for j, table in enumerate(page.find_tables().tables):
+                    rows = table.extract()
+                    if rows:
+                        blocks.append({'id': f'table-{j + 1}', 'kind': 'table', 'text': '',
+                                       'headers': rows[0], 'rows': rows[1:], 'bbox': list(table.bbox)})
+            except (AttributeError, ValueError):
+                pass
+            if page.get_images() or page.get_drawings():
+                blocks.append({'id': 'visual-reference', 'kind': 'diagram', 'text': '',
+                               'interpretation': 'unavailable'})
+            content['pages'].append({'number': i + 1, 'kind': 'page', 'text': page_text, 'blocks': blocks})
             if page_text.strip():
                 text_parts.append(f'\n[PAGE_{i + 1}_START]\n{page_text}\n[PAGE_{i + 1}_END]')
             

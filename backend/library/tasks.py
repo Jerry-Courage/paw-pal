@@ -1,5 +1,6 @@
 import logging
 from django.conf import settings
+from .source_understanding import persist_understanding
 from django.core.files.base import ContentFile
 
 logger = logging.getLogger('nitemind')
@@ -57,7 +58,10 @@ def create_vector_embeddings(resource, text: str):
         chunk_overlap=200,
         length_function=len
     )
-    chunks = text_splitter.split_text(text)
+    from .source_understanding import document_structure
+    pages = (resource.source_understanding or {}).get('pages') or document_structure(text)['pages']
+    records = [(chunk, page.get('number')) for page in pages for chunk in text_splitter.split_text(page['text'])]
+    chunks = [chunk for chunk, _ in records]
 
     logger.info(f'[RAG] Generating {len(chunks)} vectors via Cloud Engine...')
     BATCH_SIZE = 50
@@ -80,15 +84,20 @@ def create_vector_embeddings(resource, text: str):
         return
 
     doc_chunks = []
-    for chunk_text, vec in zip(chunks, all_vectors):
+    for (chunk_text, page_number), vec in zip(records, all_vectors):
         if vec is not None:
             doc_chunks.append(DocumentChunk(
                 resource=resource,
                 text_content=chunk_text,
-                embedding=vec
+                embedding=vec,
+                page_number=page_number,
             ))
 
-    DocumentChunk.objects.bulk_create(doc_chunks)
+    from django.db import transaction
+    with transaction.atomic():
+        type(resource).objects.select_for_update().get(pk=resource.pk)
+        DocumentChunk.objects.filter(resource=resource).delete()
+        DocumentChunk.objects.bulk_create(doc_chunks)
     logger.info(f'[RAG] Successfully saved {len(doc_chunks)} cloud vectors to Database.')
 
 
@@ -175,6 +184,10 @@ def process_resource_task(res_id):
                 
                 if extraction['status'] == 'success':
                     text = extraction['text']
+                    structure = extraction.get('pdf_data') or {}
+                    persist_understanding(res, text, pages=extraction.get('pages') or structure.get('pages'),
+                                          toc=structure.get('toc'),
+                                          allow_ai=getattr(settings, 'SOURCE_UNDERSTANDING_AI_ENABLED', False))
                     
                     # Special handling for PDF images/metadata
                     if ext == '.pdf' and 'pdf_data' in extraction:
@@ -501,6 +514,8 @@ def process_resource_task(res_id):
             return obj
         
         if text:
+            if not _has_file_backend:
+                persist_understanding(res, text, allow_ai=getattr(settings, 'SOURCE_UNDERSTANDING_AI_ENABLED', False))
             existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
             res.ai_concepts = _sanitize_for_json(existing_concepts + [{'extracted_text': text[:300000]}])
             res.status_text = "Vectorizing content for RAG..."

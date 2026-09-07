@@ -106,12 +106,15 @@ export interface EncounterActivity {
   objective_index?: number
   purpose: 'diagnose' | 'learn' | 'apply' | 'check' | 'transfer' | 'reflect' | 'remediate'
   stage: string
-  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'step_solver' | 'comparison' | 'worked_example' | 'ordering' | 'matching' | 'sorting' | 'tap_target' | 'reveal' | 'flashcard' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'relationship' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'evidence_highlight' | 'architecture' | 'simple_graph' | 'labeled_diagram' | 'callout'
+  type: 'predict' | 'mcq' | 'scenario' | 'short_answer' | 'reflection' | 'step_solver' | 'comparison' | 'worked_example' | 'ordering' | 'matching' | 'sorting' | 'tap_target' | 'reveal' | 'flashcard' | 'concept' | 'key_idea' | 'process' | 'sequence' | 'relationship' | 'cause_effect' | 'formula' | 'example' | 'diagram' | 'evidence_highlight' | 'architecture' | 'simple_graph' | 'labeled_diagram' | 'callout' | 'data_table' | 'code_trace'
   title?: string
   instructions?: string
   prompt: string
   options?: string[]
-  content?: { columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; pairs?: Array<{ left: string; right: string }>; groups?: Array<{ id: string; label: string }>; evidence?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string; label?: string }>; progressive?: boolean; knowledge_type?: string; subject_family?: string }
+  dialogue?: string
+  mascot_position?: 'upper' | 'beside' | 'edge' | 'center' | 'hidden'
+  tutor?: { level: number; minimum_level: number; moment_id: string }
+  content?: { problem?: string; known?: string[]; result?: string; interpretation?: string; code?: string; language?: string; formula_format?: string; revealed_steps?: number; columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; pairs?: Array<{ left: string; right: string }>; groups?: Array<{ id: string; label: string }>; evidence?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string; label?: string }>; progressive?: boolean; knowledge_type?: string; subject_family?: string }
   explanation?: string
   hints?: string[]
   difficulty: string
@@ -200,7 +203,7 @@ export interface TeachingSessionResponse {
 
 export interface TeachingMoment {
   id: string
-  type: 'EXPLAIN' | 'VISUALIZE' | 'DEMONSTRATE' | 'EXAMPLE' | 'INTERACT' | 'CHECK' | 'REMEDIATE' | 'REFLECT' | 'FEYNMAN' | 'FLASHCARD' | 'OPTIONAL_MEDIA' | 'OBJECTIVE_COMPLETE'
+  type: 'EXPLAIN' | 'VISUALIZE' | 'DEMONSTRATE' | 'EXAMPLE' | 'INTERACT' | 'CHECK' | 'REMEDIATE' | 'REFLECT' | 'FEYNMAN' | 'FLASHCARD' | 'OPTIONAL_MEDIA' | 'OBJECTIVE_COMPLETE' | 'SHOW' | 'CONNECT' | 'COMPARE' | 'REINFORCE' | 'OPTIONAL_DEPTH'
   representation: string
   interaction: string
   optional: boolean

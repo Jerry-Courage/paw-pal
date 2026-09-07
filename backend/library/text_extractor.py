@@ -41,10 +41,22 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
         elif ext in ['.docx', '.doc']:
             import docx
             doc = docx.Document(io.BytesIO(file_bytes))
-            full_text = []
-            for para in doc.paragraphs:
-                full_text.append(para.text)
-            content['text'] = '\n'.join(full_text)
+            from docx.text.paragraph import Paragraph
+            blocks = []
+            for i, element in enumerate(doc.iter_inner_content()):
+                if isinstance(element, Paragraph):
+                    blocks.append({'id': f'p-{i + 1}', 'kind': 'text', 'text': element.text,
+                                   'style': element.style.name,
+                                   'runs': [{'text': run.text, 'superscript': bool(run.font.superscript),
+                                             'subscript': bool(run.font.subscript)} for run in element.runs]})
+                else:
+                    rows = [[cell.text for cell in row.cells] for row in element.rows]
+                    if rows:
+                        blocks.append({'id': f'table-{i + 1}', 'kind': 'table',
+                                       'text': '\n'.join(' | '.join(row) for row in rows),
+                                       'headers': rows[0], 'rows': rows[1:]})
+            content['text'] = '\n\n'.join(block['text'] for block in blocks)
+            content['pages'] = [{'number': None, 'kind': 'document', 'text': content['text'], 'blocks': blocks}]
             
         elif ext in ['.txt', '.md', '.py', '.js', '.ts', '.css', '.html']:
             content['text'] = file_bytes.decode('utf-8', errors='ignore')
@@ -66,6 +78,8 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
                     # Override ext so tasks.py treats it as PDF
                     content['converted_from_pptx'] = True
                     content['page_count'] = pdf_data.get('page_count', 0)
+                    for page in pdf_data.get('pages', []):
+                        page['kind'] = 'slide'
 
                     # Also extract text + speaker notes from PPTX for extra context
                     prs = Presentation(_io.BytesIO(file_bytes))
@@ -75,6 +89,9 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
                             notes = slide.notes_slide.notes_text_frame.text.strip()
                             if notes:
                                 extra_notes.append(f"[Slide {i+1} Speaker Notes: {notes}]")
+                                if i < len(pdf_data.get('pages', [])):
+                                    pdf_data['pages'][i]['text'] += '\nSpeaker notes: ' + notes
+                                    pdf_data['pages'][i]['blocks'].append({'id': 'speaker-notes', 'kind': 'text', 'text': notes})
                         except Exception:
                             pass
                     if extra_notes:
@@ -87,9 +104,11 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
                 prs = Presentation(_io.BytesIO(file_bytes))
                 slides_text = []
                 extracted_images = []
+                content['pages'] = []
 
                 for i, slide in enumerate(prs.slides):
                     slide_parts = [f"--- Slide {i+1} ---"]
+                    blocks = []
 
                     # Extract ALL text from every shape type
                     for shape in slide.shapes:
@@ -106,6 +125,10 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
                         if shape.shape_type == 19:  # TABLE
                             try:
                                 table = shape.table
+                                cells = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+                                if cells:
+                                    blocks.append({'id': f'table-{len(blocks)}', 'kind': 'table', 'text': '',
+                                                   'headers': cells[0], 'rows': cells[1:]})
                                 for row in table.rows:
                                     row_text = ' | '.join(
                                         cell.text.strip() for cell in row.cells
@@ -127,6 +150,7 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
 
                         # Embedded pictures
                         if shape.shape_type == 13:  # PICTURE
+                            blocks.append({'id': f'visual-{len(blocks)}', 'kind': 'diagram', 'text': '', 'interpretation': 'unavailable'})
                             try:
                                 img_blob = shape.image.blob
                                 img_ext = shape.image.ext
@@ -149,6 +173,9 @@ def extract_text_from_bytes(file_bytes: bytes, extension: str) -> Dict[str, Any]
 
                     if len(slide_parts) > 1:
                         slides_text.append('\n'.join(slide_parts))
+                    blocks.extend({'id': f'text-{j}', 'kind': 'text', 'text': part} for j, part in enumerate(slide_parts[1:]))
+                    content['pages'].append({'number': i + 1, 'kind': 'slide', 'text': '\n'.join(slide_parts[1:]),
+                                             'blocks': blocks, 'title': slide.shapes.title.text if slide.shapes.title else ''})
 
                 content['text'] = '\n\n'.join(slides_text)
                 content['page_count'] = len(prs.slides)

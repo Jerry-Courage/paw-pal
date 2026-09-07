@@ -328,9 +328,12 @@ def _environment_flag(name, default=True):
     return value.strip().lower() not in {'0', 'false', 'no', 'off', 'disabled'}
 
 
-# Enabled by default; operations can disable generation immediately through the
-# backend-only environment variable without requiring a deployment.
+# E.5.2 intelligence is enabled when its variable is absent. Either backend-only
+# environment variable remains an emergency rollback switch without code changes.
 JOURNEY_TEACHING_AI_ENABLED = _environment_flag('JOURNEY_TEACHING_AI_ENABLED', default=True)
+SOURCE_UNDERSTANDING_AI_ENABLED = _environment_flag('SOURCE_UNDERSTANDING_AI_ENABLED', default=True)
+import json as _task_json
+AI_TASK_ROUTES = _task_json.loads(os.getenv('AI_TASK_ROUTES', '{}'))
 GOOGLE_STUDIO_API_KEY = os.getenv('GOOGLE_STUDIO_API_KEY', '')
 VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', 'BG8EkGI7soGE5KMcQs4lKSSGAW6qfwdjhre9WCJpPtidRi403ZfoNSfhh9aCVGH21PDLrXiuMtr8yXMjYNxSnxY')
 VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', 'Q7Q-gTlSqqIqcuOCfJFXPHBCCpAEGs-XshG1TIcjlC4')

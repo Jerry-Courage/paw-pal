@@ -62,6 +62,7 @@ class TeachingPlanSchemaTests(SimpleTestCase):
 
     def test_valid_interactive_moment_preserves_expected_evidence(self):
         raw = safe_fallback_plan(concept('A definition'), {'id': 'one', 'text': 'Define the idea'}, {})
+        raw['teaching_moments'][0]['content']['body'] = 'A grounded explanation of the idea.'
         raw['teaching_moments'].append({
             'id': 'check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
             'interaction': 'SHORT_ANSWER',
@@ -82,28 +83,32 @@ class TeachingPlanSchemaTests(SimpleTestCase):
             validate_teaching_plan(raw, 'one')
 
 
-class JourneyTeachingFeatureFlagTests(SimpleTestCase):
-    @patch.dict(os.environ, {}, clear=False)
-    def test_absent_environment_variable_enables_teaching_generation(self):
-        os.environ.pop('JOURNEY_TEACHING_AI_ENABLED', None)
-        self.assertTrue(_environment_flag('JOURNEY_TEACHING_AI_ENABLED', default=True))
+class JourneyIntelligenceFeatureFlagTests(SimpleTestCase):
+    FLAGS = ('JOURNEY_TEACHING_AI_ENABLED', 'SOURCE_UNDERSTANDING_AI_ENABLED')
 
-    @patch.dict(os.environ, {'JOURNEY_TEACHING_AI_ENABLED': 'true'}, clear=False)
-    def test_true_environment_variable_enables_teaching_generation(self):
-        self.assertTrue(_environment_flag('JOURNEY_TEACHING_AI_ENABLED', default=True))
+    def test_missing_environment_enables_e52_intelligence(self):
+        with patch.dict(os.environ, {}, clear=False):
+            for name in self.FLAGS:
+                os.environ.pop(name, None)
+                with self.subTest(name=name):
+                    self.assertTrue(_environment_flag(name, default=True))
 
-    @patch.dict(os.environ, {'JOURNEY_TEACHING_AI_ENABLED': 'false'}, clear=False)
-    def test_false_environment_variable_disables_teaching_generation(self):
-        self.assertFalse(_environment_flag('JOURNEY_TEACHING_AI_ENABLED', default=True))
+    def test_true_environment_enables_e52_intelligence(self):
+        for name in self.FLAGS:
+            for value in ('true', 'TRUE', '1', 'yes', 'on', 'enabled'):
+                with self.subTest(name=name, value=value), patch.dict(os.environ, {name: value}, clear=False):
+                    self.assertTrue(_environment_flag(name, default=True))
 
-    @patch.dict(os.environ, {'JOURNEY_TEACHING_AI_ENABLED': 'off'}, clear=False)
-    def test_common_false_values_preserve_the_kill_switch(self):
-        self.assertFalse(_environment_flag('JOURNEY_TEACHING_AI_ENABLED', default=True))
+    def test_explicit_false_values_disable_e52_intelligence(self):
+        for name in self.FLAGS:
+            for value in ('false', '0', 'no', 'off', 'disabled', ' FALSE '):
+                with self.subTest(name=name, value=value), patch.dict(os.environ, {name: value}, clear=False):
+                    self.assertFalse(_environment_flag(name, default=True))
 
 
 class SubjectPlanTests(SimpleTestCase):
     def test_process_specification_fallback_is_visual_and_progressive(self):
-        item = concept('Introduction to Process Specifications', 'A diagram shows inputs and outputs. A process specification defines validation, calculation, storage, and the returned result.', 'Computer Science')
+        item = concept('Introduction to Process Specifications', 'Validate the input → Calculate the result → Store the result → Return the result', 'Computer Science')
         plan = safe_fallback_plan(item, {'id': 'inside', 'text': 'Explain how a process specification defines what happens inside a process.'}, {'excerpt': item.summary})
         self.assertEqual(plan['recommended_representation'], 'PROCESS_FLOW')
         activity = teaching_activity_from_plan(item, {'id': 'inside', 'index': 0}, plan, 'process-visual')
@@ -113,7 +118,7 @@ class SubjectPlanTests(SimpleTestCase):
         self.assertNotIn('concrete situation', activity['title'].lower())
 
     def test_all_visual_teaching_moments_reach_the_player(self):
-        item = concept('A process', 'Input. Transform. Output.', 'Computer Science')
+        item = concept('A process', 'Input → Transform → Output', 'Computer Science')
         plan = safe_fallback_plan(item, {'id': 'flow', 'text': 'Explain the process steps.'}, {'excerpt': item.summary})
         second = dict(plan['teaching_moments'][0])
         second['id'] = 'second-look'
@@ -125,29 +130,29 @@ class SubjectPlanTests(SimpleTestCase):
     def test_invisible_servants_is_comparison_not_fragmented_sequence(self):
         item = concept('The Invisible Servants (And Invisible Bias)', "Mr. Green claims to understand Africans but ignores the African stewards.", 'Literature')
         plan = safe_fallback_plan(item, {'id': 'bias', 'text': "Compare Green's beliefs with his behaviour toward African stewards."}, {'excerpt': item.summary})
-        self.assertEqual(plan['recommended_representation'], 'COMPARISON')
+        self.assertEqual(plan['recommended_representation'], 'GROUNDED_EXPLANATION')
         activity = teaching_activity_from_plan(item, {'id': 'bias', 'index': 0}, plan, 'activity-1')
-        self.assertEqual(activity['type'], 'comparison')
+        self.assertEqual(activity['type'], 'concept')
         self.assertFalse(activity['content']['steps'])
         self.assertFalse(any(row == ['Mr.'] for row in activity['content']['rows']))
 
     def test_biology_route_uses_cycle(self):
         item = concept('Pulmonary and systemic circulation', 'Blood travels from heart to lungs and body.', 'Biology')
         plan = safe_fallback_plan(item, {'id': 'routes', 'text': 'Explain the two circulation routes through the heart.'}, {'excerpt': item.summary})
-        self.assertEqual(plan['recommended_representation'], 'CYCLE')
-        self.assertEqual(plan['interaction_strategy'], 'TAP_TARGET')
+        self.assertEqual(plan['recommended_representation'], 'GROUNDED_EXPLANATION')
+        self.assertIn('insufficient', plan['fallback_reason'])
 
     def test_newton_raphson_uses_worked_example(self):
         item = concept('Newton-Raphson', 'Use x next = x - f(x) / f prime(x).', 'Mathematics')
         plan = safe_fallback_plan(item, {'id': 'formula', 'text': 'Use the Newton-Raphson formula to calculate the next estimate.'}, {'excerpt': item.summary})
-        self.assertEqual(plan['recommended_representation'], 'WORKED_EXAMPLE')
-        self.assertEqual(plan['interaction_strategy'], 'STEP_SOLVER')
+        self.assertEqual(plan['recommended_representation'], 'GROUNDED_EXPLANATION')
+        self.assertFalse(plan['teaching_moments'][0]['content']['steps'])
 
     def test_cs_layers_use_architecture(self):
         item = concept('Application architecture', 'React Native calls Spring Boot which queries PostgreSQL.', 'Computer Science')
         plan = safe_fallback_plan(item, {'id': 'layers', 'text': 'Explain frontend, backend, API and database layers.'}, {'excerpt': item.summary})
-        self.assertEqual(plan['recommended_representation'], 'ARCHITECTURE')
-        self.assertEqual(plan['interaction_strategy'], 'MATCHING')
+        self.assertEqual(plan['recommended_representation'], 'GROUNDED_EXPLANATION')
+        self.assertFalse(plan['teaching_moments'][0]['content']['edges'])
 
     def test_semantic_interaction_selection(self):
         self.assertEqual(select_interaction('history', 'Order the events', 'TIMELINE'), 'ORDERING')

@@ -414,16 +414,18 @@ export const learningApi = {
   getAllSavedArtifacts: (type?: string) => api.get('/learning/paths/saved-artifacts/', { params: type ? { type } : {} }),
   getMasteryChallenge: (pathId: string) => api.get(`/learning/paths/${pathId}/mastery-challenge/`),
   submitMasteryChallenge: (pathId: string, data: { idempotency_key: string; responses: Array<{ challenge_id: string; answer: string }> }) => api.post(`/learning/paths/${pathId}/mastery-challenge/`, data),
-  submitTeachingResponse: (id: string, data: { activity_id: string; response: unknown }) => api.post(`/learning/concepts/${id}/teaching-response/`, data),
+  submitTeachingResponse: (id: string, data: { activity_id: string; response: unknown; idempotency_key?: string }) => api.post(`/learning/concepts/${id}/teaching-response/`, data),
   saveTeachingFlashcards: (id: string, cards: Array<{ question: string; answer: string; difficulty: string }>) => api.post(`/learning/concepts/${id}/teaching-flashcards/save/`, { cards }),
   getTeachingVoiceContext: (id: string) => api.get(`/learning/concepts/${id}/teaching-voice-context/`),
   sendTeachingVoiceEvent: (id: string, data: { event: string; objective_id?: string; misconception?: string; summary?: string; evidence_type?: 'explanation' | 'application' | 'calculation' | 'prediction'; evidence_score?: number; evidence_id?: string }) => api.post(`/learning/concepts/${id}/teaching-voice-event/`, data),
   getTeachingCompletion: (id: string) => api.get(`/learning/concepts/${id}/teaching-completion/`),
   finalizeTeachingSession: (id: string) => api.post(`/learning/concepts/${id}/teaching-completion/`),
   evaluateFeynman: (id: string, data: { explanation: string; source: 'text' | 'voice'; idempotency_key: string }) => api.post(`/learning/concepts/${id}/feynman-evaluation/`, data),
-  submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown }) =>
+  submitConceptAttempt: (id: string, data: { activity_id: string; response: unknown; idempotency_key?: string }) =>
     api.post(`/learning/concepts/${id}/attempt/`, data),
-  askFlowInConcept: (id: string, data: { question?: string; action?: string; stage: string; activity_id?: string; learner_response?: unknown; correct?: boolean | null }) =>
+  getAskFlowHistory: (id: string) => api.get(`/learning/concepts/${id}/ask-flow/`),
+  revealTeachingStep: (id: string, activity_id: string, count: number) => api.post(`/learning/concepts/${id}/teaching-stage/reveal/`, { activity_id, count }),
+  askFlowInConcept: (id: string, data: { question?: string; action?: string; idempotency_key?: string; stage?: string; activity_id?: string; learner_response?: unknown; correct?: boolean | null }) =>
     api.post(`/learning/concepts/${id}/ask-flow/`, data),
   completeConcept: (id: string, score: number) =>
     api.post<{ message: string; xp_earned: number; unlocked: string[]; reward: RewardResponse }>(`/learning/concepts/${id}/complete/`, { score }),

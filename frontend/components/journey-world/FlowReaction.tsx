@@ -12,10 +12,11 @@ const mood: Record<FlowReactionState, FlowCompanionState> = {
   SURPRISED: 'confused', REMEDIATING: 'encouraging', MASTERY: 'battle-ready',
 }
 
-type FlowPosition = 'upper' | 'beside' | 'edge' | 'center'
+type FlowPosition = 'upper' | 'beside' | 'edge' | 'center' | 'hidden'
 
 export default function FlowReaction({ state, line, position = 'upper', className }: { state: FlowReactionState; line?: string; position?: FlowPosition; className?: string }) {
   const reduced = useReducedMotion()
+  if (position === 'hidden') return null
   return <motion.div className={cn('relative flex items-center gap-2', position === 'center' && 'justify-center', position === 'edge' && 'justify-end', position === 'beside' && 'sm:-ml-4', className)} initial={reduced ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
     <motion.div className={cn('relative w-14 shrink-0 sm:w-16', position === 'center' && 'w-24 sm:w-28')} animate={reduced ? undefined : state === 'CORRECT' || state === 'CELEBRATING' ? { y: [0, -10, 0], rotate: [0, -3, 3, 0] } : state === 'SURPRISED' ? { rotate: [0, -4, 4, 0] } : undefined} transition={{ duration: .55 }}>
       <FlowCompanion state={mood[state]} label="Flow" />

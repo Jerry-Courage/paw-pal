@@ -30,6 +30,7 @@ class Resource(models.Model):
     status_text = models.CharField(max_length=255, blank=True)
     file_size = models.BigIntegerField(default=0)
     ai_summary = models.TextField(blank=True)
+    source_understanding = models.JSONField(default=dict, blank=True)
     ai_notes_json = models.JSONField(default=dict, blank=True)
     selected_features = models.JSONField(default=list, blank=True)  # features to auto-generate on upload
     ai_concepts = models.JSONField(default=list)

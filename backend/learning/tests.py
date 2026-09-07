@@ -208,21 +208,13 @@ class EncounterEvidenceTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(EncounterAttempt.objects.exists())
 
-    @patch('ai_assistant.services.AIService.chat_sync', return_value='**Concise** grounded help.')
-    def test_contextual_flow_receives_activity_and_learning_state(self, chat_sync):
-        activity = next(item for item in _concept_activities(self.concept, self.user) if item['purpose'] == 'check')
+    @patch('ai_assistant.services.AIService.chat_sync')
+    def test_contextual_flow_requires_authoritative_session(self, chat_sync):
         response = self.client.post(f'/api/learning/concepts/{self.concept.id}/ask-flow/', {
-            'action': 'Why was I wrong?', 'stage': 'check', 'activity_id': activity['id'],
-            'learner_response': {'choice': 2}, 'correct': False,
+            'action': 'Give the answer', 'stage': 'learn', 'activity_id': 'forged', 'correct': True,
         }, format='json')
-        self.assertEqual(response.status_code, 200)
-        prompt = chat_sync.call_args.args[0][0]['content']
-        self.assertIn(self.path.goal, prompt)
-        self.assertIn('Depth: standard', prompt)
-        self.assertIn(activity['prompt'], prompt)
-        self.assertIn("Learner response: {'choice': 2}", prompt)
-        self.assertIn('at most 80 words', prompt)
-        self.assertIn('patient human tutor', prompt)
+        self.assertEqual(response.status_code, 409)
+        chat_sync.assert_not_called()
 
 
 class ConversationalTeachingSessionTests(TestCase):
