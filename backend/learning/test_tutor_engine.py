@@ -57,6 +57,34 @@ def fixture(subject='finite_difference'):
 
 
 class TutorContractTests(SimpleTestCase):
+    def test_arc_metadata_is_validated_but_internal_labels_stay_private(self):
+        raw, objective, grounding = fixture()
+        raw['teaching_moments'][0].update(arc_phase='HOOK', understanding_change='Recognize why sampled data needs approximation.', transition='Start from the missing exact function.', attention_cue='Notice what information is absent.', next_actions=['ADVANCE', 'ASK_PREDICTION'])
+        plan = validate_tutor_plan(raw, objective, grounding)
+        self.assertEqual(plan['teaching_moments'][0]['arc_phase'], 'HOOK')
+        rendered = public(plan)
+        self.assertNotIn('source_quote', json.dumps(rendered))
+
+    def test_raw_source_dump_and_generic_check_are_rejected(self):
+        raw, objective, grounding = fixture()
+        page = grounding['pages'][0]
+        page['text'] = 'A' * 650
+        raw['teaching_moments'][0]['source_quote'] = 'A' * 10
+        raw['teaching_moments'][0]['content']['body'] = 'A' * 650
+        with self.assertRaisesMessage(ValueError, 'Raw source dumps'):
+            validate_tutor_plan(raw, objective, grounding)
+        raw, objective, grounding = fixture()
+        raw['teaching_moments'][-1]['content']['prompt'] = 'What relationship did Flow just show?'
+        with self.assertRaisesMessage(ValueError, 'specific content'):
+            validate_tutor_plan(raw, objective, grounding)
+
+    def test_subject_inappropriate_representation_is_rejected(self):
+        raw, objective, grounding = fixture('biology')
+        raw['teaching_moments'][0]['representation'] = 'ARCHITECTURE'
+        raw['teaching_moments'][0]['content'].update(nodes=['Heart', 'Lungs'], edges=[['Heart', 'Lungs', 'blood flow']])
+        with self.assertRaisesMessage(ValueError, 'fit the subject'):
+            validate_tutor_plan(raw, objective, grounding)
+
     def test_cross_subject_plans_and_sequence(self):
         for subject in SOURCES:
             raw, objective, grounding = fixture(subject)

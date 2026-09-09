@@ -766,6 +766,15 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
             content = feedback
 
     session.mastery = _evidence_score(user, concept, score)
+    from .tutor_engine import decide_action
+    attempt_count = EncounterAttempt.objects.filter(user=user, concept=concept, activity_id=activity['id']).count()
+    controller_action = decide_action(correct=(correct if meets_level else None), attempts=attempt_count,
+        current_representation=(activity.get('content') or {}).get('knowledge_type', ''),
+        previous_representations=session.state.get('recent_remediation_modes', []),
+        difficulty=concept.difficulty, objective_progress=session.mastery)
+    session.state = {**session.state, 'last_tutor_decision': {'action': controller_action,
+        'objective_id': objective_id, 'activity_id': activity['id'], 'attempts': attempt_count}}
+    flow_payload = {**flow_payload, 'controller_action': controller_action}
     result = {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id), 'objective_id': objective_id, 'outcome': outcome}
     TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key, payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
     TeachingTurn.objects.create(session=session, role='flow', content=content, payload={**result, **flow_payload})
@@ -825,11 +834,13 @@ def _extract_resource_concepts(resource) -> list:
     from .material_grounding import resource_knowledge
     model = resource_knowledge(resource)
     if model:
-        return [{'title': page.get('title') or next((line.strip('# ') for line in page['text'].splitlines() if line.strip()), resource.title)[:180],
-                 'description': page['text'], 'summary': page['text'], 'source_resource': resource,
-                 'source_page': page.get('number'), 'source_section': page.get('title', ''),
+        quality = model.get('quality', {})
+        if quality.get('status') != 'ready':
+            raise MaterialUnderstandingUncertain(resource, quality)
+        return [{'title': topic['title'][:180], 'description': topic['summary'], 'summary': topic['summary'], 'source_resource': resource,
+                 'source_page': topic.get('page_number'), 'source_section': ' > '.join(topic.get('section_path') or []),
                  'difficulty': 'medium', 'key_definitions': []}
-                for page in model['pages'] if page['text'].strip()]
+                for topic in model.get('topics', []) if topic.get('teachability_score', 0) >= .52]
     raw_concepts = resource.ai_concepts or []
     # Filter: only keep actual concept objects with a title
     real_concepts = [
@@ -878,6 +889,19 @@ def _extract_resource_concepts(resource) -> list:
         })
 
     return normalized
+
+
+class MaterialUnderstandingUncertain(ValueError):
+    def __init__(self, resource, quality):
+        self.resource, self.quality = resource, quality
+        super().__init__('Material understanding is uncertain')
+
+
+def _material_uncertain_response(exc):
+    return Response({'error': 'material_understanding_uncertain',
+        'message': exc.quality.get('message') or 'Material understanding is uncertain. Please reprocess or use a clearer source.',
+        'recoverable': True, 'resource_id': exc.resource.id,
+        'material_understanding': exc.quality, 'units': [], 'total_concepts': 0}, status=422)
 
 
 def _generate_preview_structure(goal: str, all_concepts: list, depth: str) -> dict:
@@ -1011,8 +1035,11 @@ class LearningPathViewSet(viewsets.ModelViewSet):
 
         # Extract concepts from selected resources only
         all_concepts = []
-        for res in resource_objs:
-            all_concepts.extend(_extract_resource_concepts(res))
+        try:
+            for res in resource_objs:
+                all_concepts.extend(_extract_resource_concepts(res))
+        except MaterialUnderstandingUncertain as exc:
+            return _material_uncertain_response(exc)
 
         if not all_concepts:
             return Response({
@@ -1045,6 +1072,13 @@ class LearningPathViewSet(viewsets.ModelViewSet):
             ],
             'total_concepts': preview['total_concepts'],
             'estimated_minutes': preview['estimated_minutes'],
+            'material_understanding': [{'resource_id': res.id,
+                'major_topics': [topic['title'] for topic in (res.source_understanding or {}).get('topics', [])[:8]],
+                'topic_count': (res.source_understanding or {}).get('quality', {}).get('topic_count', 0),
+                'hierarchy': (res.source_understanding or {}).get('topic_hierarchy', []),
+                'confidence': (res.source_understanding or {}).get('quality', {}).get('confidence', 0),
+                'quality_warnings': (res.source_understanding or {}).get('quality', {}).get('warnings', [])}
+                for res in resource_objs],
         })
 
     @action(detail=False, methods=['post'])
@@ -1075,8 +1109,11 @@ class LearningPathViewSet(viewsets.ModelViewSet):
 
         # Extract and structure
         all_concepts = []
-        for res in resource_objs:
-            all_concepts.extend(_extract_resource_concepts(res))
+        try:
+            for res in resource_objs:
+                all_concepts.extend(_extract_resource_concepts(res))
+        except MaterialUnderstandingUncertain as exc:
+            return _material_uncertain_response(exc)
 
         if not all_concepts:
             return Response({'error': 'No concepts found in selected resources'}, status=400)
@@ -1187,8 +1224,11 @@ class LearningPathViewSet(viewsets.ModelViewSet):
 
         # Extract fresh concepts
         all_concepts = []
-        for res in resource_objs:
-            all_concepts.extend(_extract_resource_concepts(res))
+        try:
+            for res in resource_objs:
+                all_concepts.extend(_extract_resource_concepts(res))
+        except MaterialUnderstandingUncertain as exc:
+            return _material_uncertain_response(exc)
 
         if not all_concepts:
             return Response({'error': 'No concepts extractable from source materials'}, status=400)
@@ -1540,15 +1580,17 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                 flow_text = "I couldn’t build a trustworthy check for this objective yet. I can explain it another way, then try again."
         elif any(phrase in lowered for phrase in ('show me a video', 'find a video', 'need to see this', 'video')):
             from ai_assistant.youtube_search import search_youtube
+            from ai_assistant.youtube_search import video_is_relevant
             query = f'{concept.title} {text} {getattr(concept.source_resource, "subject", "")} explained'
             videos = search_youtube(query, max_results=3, duration_limit=1200)
             objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
             objective = session.objectives[objective_index] if session.objectives else {}
-            safe_videos = [{**video, 'embed_url': f"https://www.youtube-nocookie.com/embed/{video.get('video_id')}?rel=0", 'why': f"A visual explanation for {objective.get('text', concept.title).rstrip('.').lower()}.", 'objective_id': objective.get('id', '')} for video in videos[:2] if video.get('video_id')]
+            relevant_videos = [video for video in videos if video_is_relevant(video, objective.get('text', concept.title), getattr(concept.source_resource, 'subject', ''))]
+            safe_videos = [{**video, 'embed_url': f"https://www.youtube-nocookie.com/embed/{video.get('video_id')}?rel=0", 'why': f"A visual explanation for {objective.get('text', concept.title).rstrip('.').lower()}.", 'objective_id': objective.get('id', '')} for video in relevant_videos[:2] if video.get('video_id')]
             kind, payload = 'video', {'videos': safe_videos}
             if safe_videos:
                 session.state = {**session.state, 'last_video': {'video_id': safe_videos[0]['video_id'], 'objective_id': objective.get('id', ''), 'why': safe_videos[0]['why']}}
-            flow_text = ('I found a focused visual explanation. Watch for the exact distinction we were discussing, then we’ll check whether it clicked.' if videos else "I couldn't find a video I'd trust enough to recommend. No detour—we can keep working through it here.")
+            flow_text = ('I found a focused visual explanation. Watch for the exact distinction we were discussing, then we’ll check whether it clicked.' if safe_videos else "I couldn't find a video I'd trust enough to recommend. We can keep working through it here.")
         elif any(phrase in lowered for phrase in ('make flashcards', 'create flashcards', 'revise later', 'flash cards')):
             from .tutor_engine import taught_material
             material = taught_material(session)

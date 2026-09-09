@@ -125,19 +125,19 @@ export default function CurriculumSubjectPage() {
       // Poll for completion
       const pollInterval = setInterval(async () => {
         try {
-          const checkRes = await fetch(`/api/library/resources/${resource.id}/`)
+          const checkRes = await fetch(`/api/library/resources/${resource.id}/status/`)
           if (checkRes.ok) {
             const updated = await checkRes.json()
-            if (updated.status === 'ready' || updated.has_study_kit) {
+            if (updated.ready === true) {
               clearInterval(pollInterval)
               setExistingKits(prev => ({
                 ...prev,
                 [key]: {
                   id: updated.id,
-                  title: updated.title,
+                  title: resource.title,
                   curriculum_topic_id: topicId,
                   status: updated.status,
-                  has_study_kit: updated.has_study_kit,
+                  has_study_kit: updated.ready,
                 }
               }))
             }

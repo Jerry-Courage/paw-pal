@@ -11,6 +11,35 @@ logger = logging.getLogger(__name__)
 # Simple in-memory cache to avoid repeated searches
 _search_cache: dict = {}
 
+_DOMAIN_TERMS = {
+    'biology': {'brain','cerebellum','neuron','cell','blood','heart','lung','respiration','breathing','oxygen','biology','anatomy'},
+    'networking': {'router','routing','network','ethernet','packet','switch','wifi','tcp','internet'},
+    'mathematics': {'calculus','derivative','matrix','equation','algebra','finite','difference','numerical'},
+    'computing': {'api','database','code','programming','react','spring','postgres','algorithm'},
+}
+
+
+def video_relevance(video, topic, subject=''):
+    """Return the gate decision and a stable diagnostic category."""
+    words = lambda value: set(re.findall(r'[a-z0-9]+', str(value or '').casefold()))
+    requested = words(f'{topic} {subject}')
+    candidate = words(f'{video.get("title", "")} {video.get("channel", "")}')
+    request_domains = {name for name, terms in _DOMAIN_TERMS.items() if requested & terms}
+    candidate_domains = {name for name, terms in _DOMAIN_TERMS.items() if candidate & terms}
+    if request_domains and candidate_domains and request_domains.isdisjoint(candidate_domains):
+        return False, 'subject_domain_mismatch'
+    meaningful = requested - {'the','and','for','with','from','this','that','explained','introduction','overview','material'}
+    if meaningful & candidate:
+        return True, 'topic_term_match'
+    if not candidate_domains:
+        return True, 'no_conflicting_domain_signal'
+    return False, 'topic_semantic_mismatch'
+
+
+def video_is_relevant(video, topic, subject=''):
+    """Reject clear subject drift before a result reaches a learner."""
+    return video_relevance(video, topic, subject)[0]
+
 
 def _cache_key(query: str) -> str:
     return hashlib.md5(query.lower().strip().encode()).hexdigest()
@@ -150,4 +179,5 @@ def search_section_video(section_title: str, resource_title: str = '', subject: 
     results = search_youtube(query, max_results=3, duration_limit=900)
     
     _search_cache[key] = results
-    return results[0] if results else None
+    relevant = [video for video in results if video_is_relevant(video, section_title, subject)]
+    return relevant[0] if relevant else None

@@ -1,13 +1,17 @@
 """Objective-scoped source selection and teachability contracts."""
 import re
-from library.source_understanding import build_understanding, grounding_bundle, persist_understanding
+from library.source_understanding import VERSION, build_understanding, grounding_bundle, persist_understanding
 
 FILLER = re.compile(r'^(?:step\s*\d+\s*:\s*)?(?:substitute the known information|apply the (?:concept|idea)|think about the idea|use the information above|consider the following|read the concept|work one transformation at a time|check the result against the goal)[.! ]*$', re.I)
 
 
 def resource_knowledge(resource):
-    if resource.source_understanding:
+    if resource.source_understanding and resource.source_understanding.get('version') == VERSION:
         return resource.source_understanding
+    if isinstance(resource.source_understanding, dict) and resource.source_understanding.get('pages'):
+        old_text = '\n\n'.join(page.get('text', '') for page in resource.source_understanding['pages'])
+        if old_text.strip():
+            return persist_understanding(resource, old_text)
     text = '\n\n'.join(item['extracted_text'] for item in resource.ai_concepts or []
                        if isinstance(item, dict) and isinstance(item.get('extracted_text'), str))
     if text:
@@ -85,7 +89,13 @@ def grounded_objectives(concept):
     items = [item for kind in ('definitions', 'worked_examples', 'concepts', 'processes', 'relationships', 'formulas', 'quotations')
              for item in knowledge.get(kind, []) if item.get('support') == 'source']
     unique = list({item['text']: item for item in items}.values())[:4]
-    return [{'id': f'material-{index + 1}', 'text': item.get('problem') or f'Explain this relationship: {item["text"].rstrip(".")}',
+    def prompt(item):
+        text = item.get('problem') or item['text'].rstrip('.')
+        if item.get('steps'): return f'Explain how the stages in “{text[:160]}” connect and why the order matters.'
+        if item.get('source') and item.get('target'): return f'Explain how {item["source"]} leads to {item["target"]} in this material.'
+        if item in knowledge.get('formulas', []): return f'Interpret each part of this source formula and state what it calculates: {text[:160]}.'
+        return f'Explain the meaning and significance of this source statement: {text[:180]}.'
+    return [{'id': f'material-{index + 1}', 'text': prompt(item),
              'source_refs': item['source_refs'], 'knowledge_ids': [item['id']], 'source_statement': item['text']}
             for index, item in enumerate(unique)]
 

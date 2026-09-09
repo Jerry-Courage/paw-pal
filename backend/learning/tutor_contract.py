@@ -5,6 +5,9 @@ from .teaching_plan import validate_teaching_plan, TeachingPlanValidationError, 
 TEACHING = {'EXPLAIN', 'VISUALIZE', 'SHOW', 'DEMONSTRATE', 'CONNECT', 'COMPARE', 'EXAMPLE', 'REMEDIATE', 'REINFORCE', 'OPTIONAL_DEPTH'}
 ASSESSMENT = {'MCQ', 'MATCHING', 'ORDERING', 'SORTING', 'TAP_TARGET', 'SHORT_ANSWER', 'STEP_SOLVER', 'EVIDENCE_HIGHLIGHT'}
 POSITIONS = {'upper', 'beside', 'edge', 'center', 'hidden'}
+ACTIONS = {'ADVANCE', 'REVEAL_MORE', 'ASK_PREDICTION', 'ASK_CHECK', 'RETEACH',
+           'CHANGE_REPRESENTATION', 'SHOW_EXAMPLE', 'BRIDGE_PREREQUISITE', 'OFFER_DEPTH'}
+ARC = ('HOOK', 'CONTEXT', 'IDEA', 'SHOW', 'CONNECT', 'TRY', 'FEEDBACK_ADAPT', 'VERIFY', 'ADVANCE')
 
 
 def knowledge_ids(grounding):
@@ -35,14 +38,26 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
     plan['remediation_strategies'] = [_text(item, 240) for item in _list(raw.get('remediation_strategies'), 'remediation_strategies')[:3]]
     bridge_count = 0
     moment_ids = set()
+    seen_bodies = []
     has_assessment = False
     available_levels = []
-    for original, moment in zip(raw['teaching_moments'], plan['teaching_moments']):
+    for moment_index, (original, moment) in enumerate(zip(raw['teaching_moments'], plan['teaching_moments'])):
         if moment['id'] in moment_ids:
             raise TeachingPlanValidationError('Duplicate moment id')
         moment_ids.add(moment['id'])
         moment['purpose'] = _text(original.get('purpose'), 80, required=True)
         moment['dialogue'] = _text(original.get('dialogue'), 500)
+        default_arc = 'VERIFY' if moment['interaction'] in ASSESSMENT else ('HOOK' if moment_index == 0 else 'SHOW')
+        moment['arc_phase'] = _text(original.get('arc_phase') or default_arc, 32).upper()
+        if moment['arc_phase'] not in ARC:
+            raise TeachingPlanValidationError('Invalid teaching arc phase')
+        moment['understanding_change'] = _text(original.get('understanding_change') or moment['purpose'], 240, required=True)
+        moment['transition'] = _text(original.get('transition') or 'Build on the previous idea.', 240, required=True)
+        moment['attention_cue'] = _text(original.get('attention_cue') or 'Focus on the relationship shown here.', 180, required=True)
+        proposed = original.get('next_actions') or (['ADVANCE'] if moment['interaction'] in ASSESSMENT else ['ADVANCE', 'REVEAL_MORE'])
+        if not isinstance(proposed, list) or not proposed or any(action not in ACTIONS for action in proposed):
+            raise TeachingPlanValidationError('Moment proposes an unsupported tutor action')
+        moment['next_actions'] = proposed
         if re.search(r'\b(?:teaching moment|pedagogical state|checkpoint\s*\d*|objective\s+\d+)\b', moment['dialogue'], re.I):
             raise TeachingPlanValidationError('Dialogue contains internal labels')
         moment['mascot_position'] = original.get('mascot_position', 'beside')
@@ -78,7 +93,22 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         if not isinstance(content['correct_groups'], dict) or any(not isinstance(key, str) or not isinstance(value, str) for key, value in content['correct_groups'].items()):
             raise TeachingPlanValidationError('Invalid sorting answer')
         rep = moment['representation']
+        subject = str(plan.get('subject_family', '')).casefold()
+        unsuitable = ((subject == 'biology' and rep in {'CODE_TRACE', 'ARCHITECTURE'}) or
+                      (subject == 'mathematics' and rep == 'CYCLE') or
+                      (subject == 'literature' and rep in {'FORMULA', 'CODE_TRACE'}))
+        if unsuitable:
+            raise TeachingPlanValidationError('Representation does not fit the subject relationship')
         cited_text = ' '.join(pages[ref] for ref in refs)
+        body = (content.get('body') or '').strip()
+        if len(body) > 650:
+            raise TeachingPlanValidationError('Teaching moment exceeds the pacing limit')
+        normalized_body = re.sub(r'\W+', ' ', body.casefold()).strip()
+        if normalized_body and normalized_body in seen_bodies:
+            raise TeachingPlanValidationError('Teaching moments must create distinct understanding')
+        if normalized_body: seen_bodies.append(normalized_body)
+        if len(body) > 500 and any(body == pages[ref].strip() or (len(body) / max(1, len(pages[ref].strip())) > .8 and body in pages[ref]) for ref in refs):
+            raise TeachingPlanValidationError('Raw source dumps are not teachable moments')
         # Literal tables, quotations and code are source evidence, not generated facts.
         if rep == 'DATA_TABLE':
             if any(cell not in cited_text for row in content['rows'] for cell in row):
@@ -115,6 +145,8 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
                 raise TeachingPlanValidationError('Sorting requires a complete answer mapping')
             if not content['correct_feedback'] or not content['incorrect_feedback']:
                 raise TeachingPlanValidationError('Assessment needs explanatory feedback')
+            if re.search(r'^(?:what relationship did flow (?:just )?show|what happens next\??|explain the idea above\.?|what did flow (?:just )?show)', content.get('prompt', ''), re.I):
+                raise TeachingPlanValidationError('Assessment prompt must name the specific content being tested')
         elif moment['type'] in TEACHING:
             if not moment['teaches']:
                 raise TeachingPlanValidationError('Teaching must establish identified knowledge')
@@ -123,4 +155,5 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         raise TeachingPlanValidationError('Plan cannot supply its required evidence')
     plan['source_grounding'] = {key: grounding[key] for key in ('resource_id', 'resource_title', 'source_refs') if key in grounding}
     plan['source_fingerprint'] = grounding.get('source_fingerprint')
+    plan['controller_actions'] = sorted(ACTIONS)
     return plan

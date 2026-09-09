@@ -125,6 +125,7 @@ export const libraryApi = {
   getCuratedResources: (type?: string) =>
     api.get('/library/resources/curated/', { params: type ? { type } : {} }),
   getResource: (id: number) => api.get(`/library/resources/${id}/`),
+  getResourceStatus: (id: number) => api.get(`/library/resources/${id}/status/`),
   getReadingContent: (id: number) => api.get(`/library/resources/${id}/reading/`),
   getVRLayout: (id: number, refresh = false) => api.get(`/library/resources/${id}/vr-layout/${refresh ? '?refresh=1' : ''}`),
   getScene: (id: number) => api.get(`/library/resources/${id}/scene/`),

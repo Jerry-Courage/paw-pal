@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.utils.text import slugify
 from library.models import Resource, Quiz, Flashcard
 
 User = get_user_model()
@@ -462,59 +463,51 @@ class Command(BaseCommand):
             }
         ]
 
-        self.stdout.write(self.style.WARNING('Purging existing curated materials...'))
-        try:
-            Resource.objects.filter(is_public=True).delete()
-        except Exception as e:
-            if 'does not exist' in str(e) or 'UndefinedTable' in str(e):
-                self.stdout.write(self.style.WARNING(f'Skipping cascade delete (learning tables not yet created): {e}'))
-                from django.db import connection
-                with connection.cursor() as cursor:
-                    cursor.execute("DELETE FROM library_resource WHERE is_public = true")
-            else:
-                raise
-
         for item in curated_data:
-            resource, created = Resource.objects.update_or_create(
-                title=item['title'],
-                defaults={
-                    'owner': admin,
-                    'subject': item['subject'],
-                    'resource_type': item['resource_type'],
-                    'url': item.get('url'),
-                    'author_name': item['author_name'],
-                    'ai_summary': item['ai_summary'],
-                    'ai_notes_json': item['ai_notes_json'],
-                    'is_public': True,
-                    'status': 'ready',
-                    'has_study_kit': True
-                }
-            )
+            seed_key = f"seed-discovery-{slugify(item['title'])}"[:100]
+            resource = Resource.objects.filter(curriculum_topic_id=seed_key).first()
+            if resource is None:
+                # Adopt only the command's legacy admin-owned record. A user-created
+                # public resource with the same title remains independent.
+                resource = Resource.objects.filter(owner=admin, title=item['title'], is_public=True).first()
+            values = {
+                'owner': admin, 'title': item['title'], 'subject': item['subject'],
+                'resource_type': item['resource_type'], 'url': item.get('url'),
+                'author_name': item['author_name'], 'ai_summary': item['ai_summary'],
+                'ai_notes_json': item['ai_notes_json'], 'is_public': True,
+                'status': 'ready', 'has_study_kit': True,
+                'curriculum_topic_id': seed_key,
+            }
+            if resource is None:
+                resource = Resource.objects.create(**values)
+            else:
+                for field, value in values.items():
+                    setattr(resource, field, value)
+                resource.save(update_fields=list(values))
             
             # 1. Inject Masterclass Quiz
             kit = item.get('study_kit', {})
             if kit.get('quizzes'):
-                Quiz.objects.create(
-                    resource=resource,
-                    owner=admin,
-                    title=f"{resource.title} - Masterclass Assessment",
-                    format='mcq',
-                    questions=kit['quizzes'],
-                    academic_level='undergrad',
-                    is_public=True
-                )
+                quiz_title = f"{resource.title} - Masterclass Assessment"
+                quizzes = Quiz.objects.filter(resource=resource, owner=admin, title=quiz_title).order_by('id')
+                quiz = quizzes.first()
+                if quiz is None:
+                    quiz = Quiz(resource=resource, owner=admin, title=quiz_title)
+                quiz.format, quiz.questions = 'mcq', kit['quizzes']
+                quiz.academic_level, quiz.is_public = 'undergrad', True
+                quiz.save()
+                quizzes.exclude(pk=quiz.pk).delete()
 
             # 2. Inject Masterclass Flashcards
             if kit.get('flashcards'):
                 for fc in kit['flashcards']:
-                    Flashcard.objects.create(
-                        resource=resource,
-                        owner=admin,
-                        question=fc['question'],
-                        answer=fc['answer'],
-                        subject=fc['subject'],
-                        is_public=True
-                    )
+                    cards = Flashcard.objects.filter(resource=resource, owner=admin, question=fc['question']).order_by('id')
+                    card = cards.first()
+                    if card is None:
+                        card = Flashcard(resource=resource, owner=admin, question=fc['question'])
+                    card.answer, card.subject, card.is_public = fc['answer'], fc['subject'], True
+                    card.save()
+                    cards.exclude(pk=card.pk).delete()
 
             self.stdout.write(self.style.SUCCESS(f'Textbook Depth Restored: {item["title"]}'))
 

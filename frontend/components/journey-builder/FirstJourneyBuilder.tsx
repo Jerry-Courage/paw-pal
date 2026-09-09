@@ -81,8 +81,13 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
   }, [onFlowState])
 
   const pollResource = useCallback(async (id: number) => {
-    try { applyResource((await libraryApi.getResource(id)).data) } catch { /* next poll retries */ }
-  }, [applyResource])
+    try {
+      const row = (await libraryApi.getResourceStatus(id)).data
+      applyResource({ ...resourceRef.current, id: row.id, title: resourceRef.current?.title || material?.title || 'Material',
+        resource_type: resourceRef.current?.resource_type || 'other', status: row.status,
+        processing_progress: row.progress, status_text: row.message, has_study_kit: row.ready } as ResourceState)
+    } catch { /* next poll retries */ }
+  }, [applyResource, material?.title])
 
   useEffect(() => {
     if (!initialResourceIds[0] || resource) return
@@ -106,7 +111,7 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
         try {
           const rows = JSON.parse(event.data) as Array<any>
           const match = rows.find(row => row.id === resourceId)
-          if (match) applyResource({ ...resourceRef.current, id: match.id, title: match.title, resource_type: resourceRef.current?.resource_type || 'other', status: match.status, processing_progress: match.progress, status_text: match.text, has_study_kit: match.has_study_kit } as ResourceState)
+          if (match) applyResource({ ...resourceRef.current, id: match.id, title: resourceRef.current?.title || material?.title || 'Material', resource_type: resourceRef.current?.resource_type || 'other', status: match.status, processing_progress: match.progress, status_text: match.message, has_study_kit: match.ready } as ResourceState)
         } catch { /* malformed event falls through to the next update */ }
       }
       source.addEventListener('snapshot', read as EventListener)

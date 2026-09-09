@@ -24,6 +24,15 @@ from .sketchfab_service import get_model_uid, get_embed_url
 logger = logging.getLogger('nitemind')
 
 
+class ResourceStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from .processing_status import status_payload
+        resource = get_object_or_404(Resource, pk=pk, owner=request.user)
+        return Response(status_payload(resource))
+
+
 class SourceBookmarkListCreateView(generics.ListCreateAPIView):
     serializer_class = SourceBookmarkSerializer
     permission_classes = [permissions.IsAuthenticated]

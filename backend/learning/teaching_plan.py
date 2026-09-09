@@ -283,24 +283,104 @@ def safe_fallback_plan(concept, objective, grounding):
         'subject_family': subject, 'origin': 'fallback',
     }
     result = validate_teaching_plan(plan, objective_id)
-    if representation == 'GROUNDED_EXPLANATION' and (grounding or {}).get('pages'):
-        # Keep neighboring formula/example pages visible instead of truncating the first summary.
-        segments = []
-        for page in grounding['pages']:
-            remaining = page['text'].strip()
-            while remaining:
-                end = len(remaining) if len(remaining) <= 850 else max(remaining.rfind('\n', 0, 850), remaining.rfind(' ', 0, 850))
-                end = end if end > 0 else 850
-                segments.append(remaining[:end])
-                remaining = remaining[end:].strip()
-        if segments:
-            result['teaching_moments'] = [{**result['teaching_moments'][0], 'id': f'teach-{index + 1}',
-                                          'content': {**result['teaching_moments'][0]['content'], 'body': text}}
-                                         for index, text in enumerate(segments[:MAX_MOMENTS])]
-            result = validate_teaching_plan(result, objective_id)
-            if len(segments) > MAX_MOMENTS:
-                reason = (reason + '; ' if reason else '') + 'Teaching window capped at eight moments; checks limited to visible material'
     result['fallback_reason'] = reason
+    return result
+
+
+def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
+    """Build a compact evidence-bearing arc when every configured provider fails."""
+    pages = grounding.get('pages') or []
+    knowledge = grounding.get('knowledge') or {}
+    page_text = {page['id']: page.get('text', '') for page in pages}
+    requested_ids = set(objective.get('knowledge_ids') or [])
+    items = [item for values in knowledge.values() for item in values
+             if isinstance(item, dict) and item.get('support') == 'source' and item.get('id')]
+    target = next((item for item in items if item['id'] in requested_ids), None)
+    if target is None:
+        statement = str(objective.get('source_statement') or '')
+        target = next((item for item in items if item.get('text') == statement), None)
+    if target is None or not pages:
+        return safe_fallback_plan(concept, objective, grounding)
+
+    target_quote = str(target.get('text') or target.get('problem') or '').strip()
+    target_refs = [ref.get('page_id') or ref.get('id') for ref in target.get('source_refs', [])
+                   if isinstance(ref, dict) and (ref.get('page_id') or ref.get('id')) in page_text]
+    if not target_quote or not target_refs or not any(target_quote in page_text[ref] for ref in target_refs):
+        return safe_fallback_plan(concept, objective, grounding)
+
+    def source_lines(page):
+        return [line.strip() for line in page.get('text', '').splitlines()
+                if line.strip() and not re.match(r'^(?:#{1,6}\s+|page\s+\d+\b)', line.strip(), re.I)]
+
+    candidates = [(page['id'], line) for page in pages for line in source_lines(page)
+                  if 25 <= len(line) <= 360]
+    context_ref, context_quote = next(((ref, line) for ref, line in candidates if line != target_quote),
+                                      (target_refs[0], target_quote))
+    related = next(((ref, line) for ref, line in reversed(candidates)
+                    if line not in {context_quote, target_quote}), None)
+    subject = classify_subject(concept, objective.get('text', ''))
+    title = learner_facing_title(objective.get('text') or concept.title)
+
+    def moment(identifier, phase, purpose, body, teaches, refs, quote, transition):
+        return {
+            'id': identifier, 'type': 'EXPLAIN' if phase != 'CONNECT' else 'CONNECT',
+            'representation': 'GROUNDED_EXPLANATION', 'interaction': 'NONE',
+            'purpose': purpose, 'arc_phase': phase, 'understanding_change': purpose,
+            'transition': transition, 'attention_cue': f'Focus on {title.lower()}.',
+            'next_actions': ['ADVANCE', 'REVEAL_MORE'], 'dialogue': body,
+            'mascot_position': 'beside', 'level': 2, 'teaches': teaches, 'tests': [],
+            'source_refs': refs, 'source_quote': quote,
+            'content': {'title': title, 'body': body, 'takeaway': target_quote},
+        }
+
+    moments = [moment('context', 'HOOK', 'Frame the source problem.', context_quote,
+                      [f'page:{context_ref}'], [context_ref], context_quote,
+                      'Use that context to isolate the central idea.')]
+    moments.append(moment('idea', 'IDEA', 'Explain the source-supported idea.', target_quote,
+                          [target['id']], target_refs, target_quote,
+                          'Connect the definition to another statement in the material.'))
+    if related:
+        related_ref, related_quote = related
+        moments.append(moment('connection', 'CONNECT', 'Connect the idea to its source context.', related_quote,
+                              [f'page:{related_ref}'], [related_ref], related_quote,
+                              'Now explain the central idea without copying it.'))
+
+    definition = re.match(r'^(.{2,100}?)\s+(?:means|refers to|is defined as)\s+(.+)$', target_quote, re.I)
+    if definition:
+        tested_name, expected = definition.group(1).strip(), definition.group(2).strip()
+        prompt = f'According to this material, what does {tested_name} mean?'
+    else:
+        tested_name, expected = learner_facing_title(target_quote), target_quote
+        prompt = f'Explain this source-supported idea in your own words: {tested_name}'
+    moments.append({
+        'id': 'check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
+        'interaction': 'SHORT_ANSWER', 'purpose': 'Check whether the learner can explain the named idea.',
+        'arc_phase': 'VERIFY', 'understanding_change': 'Demonstrate an explanation of the central idea.',
+        'transition': 'Use the response to advance or reteach.', 'attention_cue': f'Explain {tested_name}, not just its name.',
+        'next_actions': ['ADVANCE', 'RETEACH', 'CHANGE_REPRESENTATION'], 'dialogue': prompt,
+        'mascot_position': 'beside', 'level': 2, 'teaches': [], 'tests': [target['id']],
+        'source_refs': target_refs, 'source_quote': target_quote,
+        'content': {'title': f'Explain {tested_name}', 'prompt': prompt, 'expected_answer': expected,
+                    'evidence_concepts': [target['id']],
+                    'correct_feedback': f'Your answer explains what {tested_name} means in this material.',
+                    'incorrect_feedback': f'You may have named {tested_name}, but the answer still needs the relationship or meaning stated in the material.',
+                    'hints': [f'Look for the sentence that defines or explains {tested_name}.']},
+    })
+    raw = {
+        'version': 3, 'objective_id': str(objective.get('id') or 'objective-1'),
+        'learning_goal': _text(objective.get('text') or concept.title, 360, required=True),
+        'key_insight': target_quote, 'prerequisite_assumptions': [], 'likely_misconceptions': [],
+        'teaching_strategy': 'Frame the source context, explain one supported idea, connect it, then ask for an explanation.',
+        'recommended_representation': 'GROUNDED_EXPLANATION', 'subject_family': subject,
+        'difficulty': concept.difficulty, 'evidence_strategy': 'Require a specific explanation of the taught source idea.',
+        'advancement_rule': {'minimum_level': 2},
+        'remediation_strategies': [f'Return to the defining sentence for {tested_name} and distinguish naming it from explaining it.'],
+        'teaching_moments': moments, 'source_grounding': grounding,
+    }
+    from .tutor_contract import validate_tutor_plan
+    result = validate_tutor_plan(raw, objective, grounding, prerequisites)
+    result['origin'] = 'fallback'
+    result['fallback_reason'] = 'Provider unavailable; used deterministic grounded teaching arc'
     return result
 
 
@@ -316,7 +396,7 @@ def _extract_json(value):
 
 def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequisites=None):
     """Generate once, validate strictly, then use a non-fragmenting fallback."""
-    fallback = safe_fallback_plan(concept, objective, grounding)
+    fallback = grounded_fallback_plan(concept, objective, grounding, prerequisites)
     enabled = getattr(settings, 'JOURNEY_TEACHING_AI_ENABLED', False) if allow_ai is None else allow_ai
     if not enabled:
         logger.info('[Journey TeachingPlan] attempted=false accepted=false fallback=true objective=%s reason=kill-switch', objective.get('id'))

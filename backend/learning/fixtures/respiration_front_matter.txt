@@ -1,0 +1,40 @@
+[PAGE_1_START]
+RESPIRATION AND GAS EXCHANGE
+Author: Dr Ada Mensah
+Department of Biological Sciences
+Example Coast University
+Published by UNESCO-EOLSS
+Copyright 2024. All rights reserved.
+Keywords: breathing, animals, oxygen, carbon dioxide
+[PAGE_1_END]
+[PAGE_2_START]
+TABLE OF CONTENTS
+1. Cellular Respiration ........ 3
+2. Gas Exchange ........ 4
+3. Respiratory Structures ........ 5
+4. Ventilation and Transport ........ 6
+[PAGE_2_END]
+[PAGE_3_START]
+# Cellular Respiration
+Cellular respiration releases usable energy from nutrients through linked biochemical reactions.
+Aerobic respiration uses oxygen and produces carbon dioxide while transferring energy into ATP.
+[PAGE_3_END]
+[PAGE_4_START]
+# Gas Exchange
+Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.
+A large surface area and a short diffusion distance increase the rate of gas exchange.
+[PAGE_4_END]
+[PAGE_5_START]
+# Respiratory Structures
+Some small animals exchange gases across a moist body surface.
+Fish use gills in water, insects use branching tracheal systems, and mammals use lungs for air.
+[PAGE_5_END]
+[PAGE_6_START]
+# Ventilation and Transport
+Ventilation refreshes air at the exchange surface and maintains concentration gradients.
+Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.
+[PAGE_6_END]
+[PAGE_7_START]
+BIBLIOGRAPHY
+Mensah, A. Foundations of Animal Biology. Example Press, 2021.
+[PAGE_7_END]

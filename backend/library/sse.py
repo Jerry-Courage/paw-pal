@@ -6,10 +6,18 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
+from rest_framework.renderers import BaseRenderer
 from .models import Resource
+from .processing_status import status_payload
 from asgiref.sync import sync_to_async
 
 logger = logging.getLogger('nitemind')
+
+class EventStreamRenderer(BaseRenderer):
+    media_type = 'text/event-stream'
+    format = 'event-stream'
+    charset = None
+    render_style = 'binary'
 
 class QueryParameterJWTAuthentication(JWTAuthentication):
     """
@@ -30,6 +38,7 @@ class QueryParameterJWTAuthentication(JWTAuthentication):
 class ResourceStatusSSEView(APIView):
     authentication_classes = [JWTAuthentication, QueryParameterJWTAuthentication]
     permission_classes = [IsAuthenticated]
+    renderer_classes = [EventStreamRenderer]
 
     def get(self, request):
         user = request.user
@@ -44,21 +53,11 @@ class ResourceStatusSSEView(APIView):
             try:
                 resources = await sync_to_async(list)(
                     Resource.objects.filter(owner=user)
-                    .values('id', 'status', 'title', 'processing_progress', 'status_text', 'has_study_kit')
+                    .values('id', 'status', 'processing_progress', 'status_text', 'has_study_kit')
                 )
-                initial_data = [
-                    {
-                        'id': r['id'],
-                        'status': r['status'],
-                        'title': r['title'],
-                        'progress': r['processing_progress'],
-                        'text': r['status_text'],
-                        'has_study_kit': r['has_study_kit'],
-                    }
-                    for r in resources
-                ]
+                initial_data = [status_payload(r) for r in resources]
                 last_states = {
-                    r['id']: (r['status'], r['progress'], r['text'], r['has_study_kit'])
+                    r['id']: (r['status'], r['progress'], r['message'], r['ready'])
                     for r in initial_data
                 }
                 yield f"event: snapshot\ndata: {json.dumps(initial_data)}\n\n"
@@ -74,7 +73,7 @@ class ResourceStatusSSEView(APIView):
                 try:
                     resources = await sync_to_async(list)(
                         Resource.objects.filter(owner=user)
-                        .values('id', 'status', 'title', 'processing_progress', 'status_text', 'has_study_kit')
+                        .values('id', 'status', 'processing_progress', 'status_text', 'has_study_kit')
                     )
                     changed = []
                     current_states = {}
@@ -84,14 +83,7 @@ class ResourceStatusSSEView(APIView):
                         current_states[r['id']] = state_tuple
 
                         if last_states.get(r['id']) != state_tuple:
-                            changed.append({
-                                'id': r['id'],
-                                'status': r['status'],
-                                'title': r['title'],
-                                'progress': r['processing_progress'],
-                                'text': r['status_text'],
-                                'has_study_kit': r['has_study_kit'],
-                            })
+                            changed.append(status_payload(r))
 
                     last_states = current_states
 

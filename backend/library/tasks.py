@@ -185,6 +185,9 @@ def process_resource_task(res_id):
                 if extraction['status'] == 'success':
                     text = extraction['text']
                     structure = extraction.get('pdf_data') or {}
+                    res.processing_progress = 30
+                    res.status_text = 'Understanding source structure and topics...'
+                    res.save(update_fields=['processing_progress', 'status_text'])
                     persist_understanding(res, text, pages=extraction.get('pages') or structure.get('pages'),
                                           toc=structure.get('toc'),
                                           allow_ai=getattr(settings, 'SOURCE_UNDERSTANDING_AI_ENABLED', False))
@@ -515,11 +518,22 @@ def process_resource_task(res_id):
         
         if text:
             if not _has_file_backend:
+                res.processing_progress = 30
+                res.status_text = 'Understanding source structure and topics...'
+                res.save(update_fields=['processing_progress', 'status_text'])
                 persist_understanding(res, text, allow_ai=getattr(settings, 'SOURCE_UNDERSTANDING_AI_ENABLED', False))
+            quality = (res.source_understanding or {}).get('quality', {})
+            if quality.get('status') == 'uncertain':
+                res.status = 'error'
+                res.processing_progress = min(max(res.processing_progress, 35), 44)
+                res.status_text = quality.get('message', 'Material understanding is uncertain.')[:255]
+                res.save(update_fields=['status', 'processing_progress', 'status_text'])
+                logger.warning('[Source Understanding] resource=%s journey_ready=false warnings=%s', res.id, quality.get('warnings', []))
+                return res
             existing_concepts = [c for c in (res.ai_concepts or []) if 'extracted_text' not in c]
             res.ai_concepts = _sanitize_for_json(existing_concepts + [{'extracted_text': text[:300000]}])
             res.status_text = "Vectorizing content for RAG..."
-            res.processing_progress = 30
+            res.processing_progress = 45
             res.save()
 
             # Trigger Vectorization for RAG (non-blocking — embedding failures don't stop kit generation)
@@ -531,26 +545,29 @@ def process_resource_task(res_id):
                 logger.warning(f"[RAG] Embedding failed for {res.id}, skipping: {embed_err}")
             
             # Save after vectorization
-            res.processing_progress = 40
-            res.status_text = "🧠 Content vectorized. Starting AI synthesis..."
+            res.processing_progress = 60
+            res.status_text = "Content and visuals analyzed. Starting study kit..."
             res.save()
         else:
             # Skip vectorization but still mark progress for topic/vision-based generation
-            res.processing_progress = 40
-            res.status_text = "🧠 Topic & Visual analysis complete. Starting AI synthesis..."
+            res.processing_progress = 60
+            res.status_text = "Topic and visual analysis complete. Starting study kit..."
             res.save()
 
         # Generate Study Kit
         res.status = 'generating'
-        res.save()
+        res.processing_progress = 70
+        res.status_text = 'Building the study kit...'
+        res.save(update_fields=['status', 'processing_progress', 'status_text'])
         
         # ── CACHE CHECK: skip if valid kit already exists ────────────────────
         if res.has_study_kit and res.ai_notes_json and isinstance(res.ai_notes_json, dict):
             existing_sections = res.ai_notes_json.get('sections', [])
             if existing_sections and len(existing_sections) >= 3:
                 logger.info(f'[Task Queue] Cache hit — {len(existing_sections)} sections already exist for {res.id}')
+                res.status = 'ready'
                 res.processing_progress = 100
-                res.status_text = "Study kit ready (cached)"
+                res.status_text = "Journey ready (cached)"
                 res.save(update_fields=['processing_progress', 'status_text', 'status'])
                 return res
         
@@ -576,8 +593,8 @@ def process_resource_task(res_id):
 
             res.ai_notes_json = _sanitize_for_json(kit)
             res.has_study_kit = True
-            res.processing_progress = 100
-            res.status_text = "Polishing complete!"
+            res.processing_progress = 78
+            res.status_text = "Study kit assembled. Preparing enrichment..."
             if not res.ai_summary:
                 res.ai_summary = kit.get('overview', {}).get('summary', '')[:1000]
         except Exception as e:
@@ -611,28 +628,20 @@ def process_resource_task(res_id):
                 pass
             res.ai_notes_json = _sanitize_for_json(kit)
             res.has_study_kit = True
-            res.processing_progress = 100
-            res.status_text = "Study kit ready (Fallback Synthesis Mode)"
+            res.processing_progress = 78
+            res.status_text = "Study kit assembled (fallback mode). Preparing enrichment..."
             if not res.ai_summary:
                 res.ai_summary = f"Comprehensive study material for {res.title}."
 
-        res.status = 'ready'
+        res.status = 'generating'
         res.save()
-        logger.info(f'[Task Queue] Resource {res.id} marked as ready.')
-
-        # 📳 Trigger Notification
-        try:
-            from users.notifications import notify_resource_ready
-            notify_resource_ready(res.owner, res.title, res.id)
-        except Exception as ne:
-            logger.error(f"Failed to send resource ready notification: {ne}")
 
         # ─── AUTO-GENERATE SELECTED FEATURES ───
         features = [f for f in (res.selected_features or []) if f != 'notes']
         if features:
             # Keep status as generating so SSE stays open during feature generation
             res.status = 'generating'
-            res.processing_progress = 80
+            res.processing_progress = 85
             res.status_text = f"⚡ Generating {', '.join(features)}..."
             res.save()
             logger.info(f'[Task Queue] Auto-generating features {features} for Resource {res.id}')
@@ -641,7 +650,20 @@ def process_resource_task(res_id):
             res.refresh_from_db()
             res.status = 'ready'
             res.processing_progress = 100
-            res.save()
+            res.status_text = 'Journey ready'
+            res.save(update_fields=['status', 'processing_progress', 'status_text'])
+        else:
+            res.status = 'ready'
+            res.processing_progress = 100
+            res.status_text = 'Journey ready'
+            res.save(update_fields=['status', 'processing_progress', 'status_text'])
+
+        logger.info(f'[Task Queue] Resource {res.id} marked as journey ready.')
+        try:
+            from users.notifications import notify_resource_ready
+            notify_resource_ready(res.owner, res.title, res.id)
+        except Exception as ne:
+            logger.error(f"Failed to send resource ready notification: {ne}")
 
     except Exception as e:
         error_msg = str(e)
@@ -663,13 +685,9 @@ def process_resource_task(res_id):
         try:
             r_final = Resource.objects.get(id=res_id)
             if r_final.status in ('processing', 'vectorizing', 'generating'):
-                if r_final.has_study_kit or r_final.ai_notes_json:
-                    r_final.status = 'ready'
-                    r_final.status_text = 'Study Kit Ready'
-                else:
-                    r_final.status = 'failed'
-                    r_final.status_text = '❌ Processing Incomplete'
-                r_final.processing_progress = 100
+                r_final.status = 'failed'
+                r_final.status_text = '❌ Processing Incomplete'
+                r_final.processing_progress = min(r_final.processing_progress, 99)
                 r_final.save(update_fields=['status', 'status_text', 'processing_progress'])
         except Exception:
             pass

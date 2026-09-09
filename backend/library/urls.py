@@ -9,7 +9,7 @@ from .views import (
     CloneResourceView, ResourceFileView, CuratedLibraryView,
     ReprocessResourceView, DBStatusView, DebugResourceView,
     ResourceVRLayoutView, SketchfabModelView, ResourceReadingView,
-    SectionQuizView, ResourceSceneView, SourceBookmarkListCreateView, SourceBookmarkDetailView
+    SectionQuizView, ResourceSceneView, SourceBookmarkListCreateView, SourceBookmarkDetailView, ResourceStatusView
 )
 from .spaced_repetition import DueFlashcardsView, ReviewFlashcardView
 from .sse import ResourceStatusSSEView
@@ -24,6 +24,7 @@ urlpatterns = [
     path('resources/curated/', CuratedLibraryView.as_view(), name='resource-curated'),
     path('resources/', ResourceListCreateView.as_view(), name='resource-list'),
     path('resources/<int:pk>/', ResourceDetailView.as_view(), name='resource-detail'),
+    path('resources/<int:pk>/status/', ResourceStatusView.as_view(), name='resource-status'),
     path('resources/<int:resource_id>/reading/', ResourceReadingView.as_view(), name='resource-reading'),
     path('resources/<int:pk>/vr-layout/', ResourceVRLayoutView.as_view(), name='resource-vr-layout'),
     path('resources/<int:pk>/scene/', ResourceSceneView.as_view(), name='resource-scene'),

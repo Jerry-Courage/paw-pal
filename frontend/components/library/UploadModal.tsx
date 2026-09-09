@@ -73,36 +73,44 @@ export default function UploadModal({ onClose, initialMode = 'file' }: UploadMod
   useEffect(() => {
     if (stage !== 'building' || !resourceId) return
     let eventSource: EventSource | null = null
+    let pollTimer: ReturnType<typeof setInterval> | null = null
+    const applyStatus = (myResource: any) => {
+      setProcessingStatus({ progress: myResource.progress || 0, text: myResource.message || 'Building your study kit...' })
+      if (myResource.status === 'ready' && myResource.ready === true) {
+        setStage('complete')
+        setProcessingStatus({ progress: 100, text: 'All features ready!' })
+        qc.invalidateQueries({ queryKey: ['resources'] })
+        toast.success('Your study kit is ready!')
+        setTimeout(onClose, 1500)
+      } else if (myResource.error === true) {
+        setStage('idle')
+        setProcessingStatus({ progress: 0, text: '' })
+        toast.error(myResource.message || 'Generation failed. Please try again.')
+        eventSource?.close()
+      }
+    }
+    const startPolling = () => {
+      if (pollTimer) return
+      const poll = () => libraryApi.getResourceStatus(resourceId).then(response => applyStatus(response.data)).catch(() => undefined)
+      poll()
+      pollTimer = setInterval(poll, 4000)
+    }
     const connectSSE = async () => {
       const token = await getAuthToken()
+      if (!token) return startPolling()
       const sseUrl = `${API_BASE}/library/resources/status-stream/?token=${token}`
       eventSource = new EventSource(sseUrl)
-      eventSource.addEventListener('status', (e: any) => {
+      const read = (e: any) => {
         const data = JSON.parse(e.data)
         const myResource = data.find((r: any) => r.id === resourceId)
-        if (myResource) {
-          setProcessingStatus({ progress: myResource.progress || 0, text: myResource.text || 'Building your study kit...' })
-          // Only mark complete when status=ready AND has_study_kit=true
-          // has_study_kit is set AFTER the AI kit is fully written — prevents
-          // the "says ready but still building" race condition
-          if (myResource.status === 'ready' && myResource.has_study_kit === true) {
-            setStage('complete')
-            setProcessingStatus({ progress: 100, text: 'All features ready!' })
-            qc.invalidateQueries({ queryKey: ['resources'] })
-            toast.success('Your study kit is ready!')
-            setTimeout(onClose, 1500)
-          } else if (myResource.status === 'error') {
-            setStage('idle')
-            setProcessingStatus({ progress: 0, text: '' })
-            toast.error(myResource.text || 'Generation failed. Please try again.')
-            eventSource?.close()
-          }
-        }
-      })
-      eventSource.onerror = () => eventSource?.close()
+        if (myResource) applyStatus(myResource)
+      }
+      eventSource.addEventListener('snapshot', read)
+      eventSource.addEventListener('status', read)
+      eventSource.onerror = () => { eventSource?.close(); startPolling() }
     }
     connectSSE()
-    return () => eventSource?.close()
+    return () => { eventSource?.close(); if (pollTimer) clearInterval(pollTimer) }
   }, [stage, resourceId, qc, onClose])
 
   const mutation = useMutation({

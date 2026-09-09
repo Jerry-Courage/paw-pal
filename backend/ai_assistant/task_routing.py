@@ -61,15 +61,16 @@ def routes_for(task):
     return routes
 
 
-def _provider_call(service, route, messages, tokens):
+def _provider_call(service, route, messages, tokens, *, task=''):
     provider, model = route['provider'], route['model']
+    connect_timeout, read_timeout = ((5, 18) if task == 'SOURCE_UNDERSTANDING' else (8, 45))
     if provider == 'google':
         clients = service._google_clients()
         if not clients:
             raise TaskInferenceError('Provider unavailable')
         contents, system = service._to_gemini_format(messages)
         response = clients[0].models.generate_content(model=model, contents=contents,
-                    config={'system_instruction': system, 'max_output_tokens': tokens, 'http_options': {'timeout': 45000}})
+                    config={'system_instruction': system, 'max_output_tokens': tokens, 'http_options': {'timeout': read_timeout * 1000}})
         if any(str(getattr(candidate, 'finish_reason', '')).endswith('MAX_TOKENS') for candidate in response.candidates or []):
             raise TaskInferenceError('Output exceeded model budget')
         content = response.text or ''
@@ -82,7 +83,7 @@ def _provider_call(service, route, messages, tokens):
     url = 'https://api.groq.com/openai/v1/chat/completions' if provider == 'groq' else f'{service.base_url}/chat/completions'
     # Never use the legacy message compression or reasoning-field extraction.
     response = requests.post(url, headers={'Authorization': f'Bearer {keys[0]}', 'Content-Type': 'application/json'},
-                             json={'model': model, 'messages': messages, 'max_tokens': tokens}, timeout=(8, 45))
+                             json={'model': model, 'messages': messages, 'max_tokens': tokens}, timeout=(connect_timeout, read_timeout))
     response.raise_for_status()
     choice = response.json()['choices'][0]
     if choice.get('finish_reason') == 'length':
@@ -106,7 +107,7 @@ def run_task(service, messages, task, *, max_tokens=None, validator=None, ground
         valid = False
         error = None
         try:
-            raw = _provider_call(service, route, messages, tokens)
+            raw = _provider_call(service, route, messages, tokens, task=task)
             result = validator(raw) if validator else raw
             valid = True
             return result
