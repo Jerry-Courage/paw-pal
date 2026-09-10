@@ -56,7 +56,7 @@ class MaterialQualityTests(SimpleTestCase):
     def test_observed_media_drift_cases_have_diagnostic_rejections(self):
         cases = [
             ({'title': 'TP-Link WiFi Router Review', 'channel': 'Home Networking'}, 'Internal vs External Respiration', 'subject_domain_mismatch'),
-            ({'title': 'The Cerebellum and Motor Control', 'channel': 'Neuroscience'}, 'Body Surface Respiration', 'topic_semantic_mismatch'),
+            ({'title': 'The Cerebellum and Motor Control', 'channel': 'Neuroscience'}, 'Body Surface Respiration', 'subject_domain_mismatch'),
             ({'title': 'Spectrum Router Troubleshooting', 'channel': 'Internet Help'}, 'Breathing regulation', 'subject_domain_mismatch'),
         ]
         for video, topic, reason in cases:

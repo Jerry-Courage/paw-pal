@@ -90,7 +90,8 @@ class MaterialIntelligenceTests(SimpleTestCase):
                     'source_refs': [{'page_id': 'page-2', 'untrusted_extra': 'discard me'}], 'support': 'source'}]}))
         result = understand_with_ai(self.model(), chat)
         self.assertEqual(result['origin'], 'ai_assisted')
-        self.assertEqual(result['knowledge']['variables'][0]['source_refs'], [{'page_id': 'page-2', 'number': 2}])
+        classified = next(item for item in result['knowledge']['variables'] if item['confidence'] == 'ai_classified')
+        self.assertEqual(classified['source_refs'], [{'page_id': 'page-2', 'number': 2}])
         self.assertEqual(chat.call_args.kwargs['task'], 'SOURCE_UNDERSTANDING')
 
     @patch('library.text_extractor._convert_pptx_to_pdf', return_value=None)

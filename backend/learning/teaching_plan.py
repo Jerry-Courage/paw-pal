@@ -219,24 +219,30 @@ def validate_teaching_plan(raw, expected_objective_id=None):
 
 
 def classify_subject(concept, objective_text=''):
-    value = ' '.join([str(getattr(concept.path, 'subject', '') or ''), str(concept.title or ''), str(objective_text or '')]).lower()
-    if re.search(r'novel|poem|character|theme|author|achebe|literature|bias|irony|steward', value): return 'literature'
-    if re.search(r'biology|heart|blood|cell|organ|circulation|photosynth|anatom', value): return 'biology'
-    if re.search(r'equation|formula|calculate|numerical|newton|algebra|calculus|matrix|derivative|finite differenc', value): return 'mathematics'
-    if re.search(r'code|program|api|database|frontend|backend|react|spring|postgres|algorithm', value): return 'computer_science'
-    if re.search(r'history|war|empire|century|revolution|event|colonial', value): return 'history'
-    return 'general'
+    """Preserve declared context without inferring a domain from fixture vocabulary."""
+    declared = str(getattr(getattr(concept, 'path', None), 'subject', '') or '').strip()
+    normalized = re.sub(r'[^a-z0-9]+', '_', declared.casefold()).strip('_')
+    return normalized[:40] or 'general'
 
 
 def select_representation(subject, objective_text, grounding=None):
+    """Choose from grounded semantic shape; subject is retained for API compatibility only."""
+    knowledge = (grounding or {}).get('knowledge') or {}
+    semantic_types = {item.get('semantic_type') for item in knowledge.get('semantic_units', [])
+                      if item.get('support') != 'enrichment'}
+    relationship_types = {item.get('relationship_type') for item in knowledge.get('knowledge_relationships', [])
+                          if item.get('support') != 'enrichment'}
     value = f"{objective_text} {(grounding or {}).get('excerpt', '')}".lower()
-    if subject == 'literature' and re.search(r'belief|behavio|irony|contrast|versus|bias|prejudice', value): return 'COMPARISON'
-    if subject == 'literature': return 'EVIDENCE_HIGHLIGHT'
-    if subject == 'biology' and re.search(r'cycle|circul|route|path|heart|blood', value): return 'CYCLE'
-    if subject == 'biology': return 'LABELED_DIAGRAM'
-    if subject == 'mathematics' and re.search(r'calculate|solve|estimate|work through', objective_text, re.I): return 'WORKED_EXAMPLE'
-    if subject == 'computer_science' and re.search(r'frontend|backend|database|api|layer|architecture', value): return 'ARCHITECTURE'
-    if subject == 'history' and re.search(r'before|after|timeline|century|event', value): return 'TIMELINE'
+    if 'WORKED_EXAMPLE' in semantic_types or (knowledge.get('worked_examples') and re.search(r'calculate|solve|estimate|work through', objective_text, re.I)): return 'WORKED_EXAMPLE'
+    if 'ARCHITECTURE' in semantic_types: return 'ARCHITECTURE'
+    if {'CLAIM', 'EVIDENCE'} <= semantic_types or 'QUOTATION' in semantic_types: return 'EVIDENCE_HIGHLIGHT'
+    if 'TIMELINE_EVENT' in semantic_types or 'PRECEDES' in relationship_types: return 'TIMELINE'
+    if 'CAUSE_EFFECT' in semantic_types or 'CAUSES' in relationship_types: return 'CAUSE_EFFECT'
+    if 'PROCESS' in semantic_types: return 'PROCESS_FLOW'
+    if 'DATA_TABLE' in semantic_types: return 'DATA_TABLE'
+    if 'CODE' in semantic_types: return 'CODE_TRACE'
+    if 'FORMULA' in semantic_types: return 'FORMULA'
+    if relationship_types & {'PART_OF', 'USED_BY', 'LEADS_TO', 'DEPENDS_ON', 'APPLIES_TO'}: return 'RELATIONSHIP_MAP'
     if re.search(r'compare|contrast|versus|difference|whereas', value): return 'COMPARISON'
     if re.search(r'cause|effect|because|leads? to|results? in', value): return 'CAUSE_EFFECT'
     if re.search(r'steps?|process|algorithm|first|then|finally', value): return 'PROCESS_FLOW'
@@ -248,8 +254,8 @@ def select_interaction(subject, objective_text, representation):
     if representation in {'PROCESS_FLOW', 'TIMELINE'} and re.search(r'order|sequence|steps?|process|first|then', value): return 'ORDERING'
     if representation in {'RELATIONSHIP_MAP', 'ARCHITECTURE'}: return 'MATCHING'
     if representation in {'LABELED_DIAGRAM', 'CYCLE'}: return 'TAP_TARGET'
-    if representation == 'EVIDENCE_HIGHLIGHT' or subject == 'literature': return 'EVIDENCE_HIGHLIGHT'
-    if subject == 'mathematics' and representation in {'FORMULA', 'WORKED_EXAMPLE'}: return 'STEP_SOLVER'
+    if representation == 'EVIDENCE_HIGHLIGHT': return 'EVIDENCE_HIGHLIGHT'
+    if representation in {'FORMULA', 'WORKED_EXAMPLE'}: return 'STEP_SOLVER'
     if representation == 'COMPARISON': return 'MCQ'
     return 'SHORT_ANSWER'
 
@@ -259,12 +265,12 @@ def safe_fallback_plan(concept, objective, grounding):
     goal = _text(objective.get('text') or concept.title, 360, required=True)
     excerpt = _text((grounding or {}).get('excerpt') or concept.summary or concept.description or goal, 900)
     subject = classify_subject(concept, goal)
-    representation = select_representation(subject, goal, grounding)
+    from .material_grounding import bundle_from_excerpt, semantic_content
+    semantic_grounding = bundle_from_excerpt(grounding or {'excerpt': excerpt})
+    representation = select_representation(subject, goal, semantic_grounding)
     interaction = select_interaction(subject, goal, representation)
     learner_title = learner_facing_title(goal, representation)
     content = {'title': learner_title, 'body': '', 'lead': '', 'takeaway': goal}
-    from .material_grounding import bundle_from_excerpt, semantic_content
-    semantic_grounding = bundle_from_excerpt(grounding or {'excerpt': excerpt})
     representation, payload, reason = semantic_content(semantic_grounding, representation)
     content.update(payload)
     if not any(content.get(key) for key in ('body', 'steps', 'nodes', 'formula', 'evidence', 'rows')):
@@ -320,10 +326,32 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
                     if line not in {context_quote, target_quote}), None)
     subject = classify_subject(concept, objective.get('text', ''))
     title = learner_facing_title(objective.get('text') or concept.title)
+    recommended = select_representation(subject, objective.get('text', ''), grounding)
+    arc_shapes = {
+        'WORKED_EXAMPLE': ('CONTEXT', 'IDEA', 'SHOW', 'VERIFY'),
+        'FORMULA': ('CONTEXT', 'IDEA', 'SHOW', 'VERIFY'),
+        'ARCHITECTURE': ('CONTEXT', 'SHOW', 'CONNECT', 'VERIFY'),
+        'EVIDENCE_HIGHLIGHT': ('CONTEXT', 'SHOW', 'CONNECT', 'VERIFY'),
+        'TIMELINE': ('CONTEXT', 'SHOW', 'CONNECT', 'VERIFY'),
+        'CAUSE_EFFECT': ('CONTEXT', 'IDEA', 'CONNECT', 'VERIFY'),
+        'DATA_TABLE': ('CONTEXT', 'SHOW', 'TRY', 'VERIFY'),
+        'CODE_TRACE': ('CONTEXT', 'SHOW', 'TRY', 'VERIFY'),
+    }
+    arc = arc_shapes.get(recommended, ('HOOK', 'IDEA', 'CONNECT', 'VERIFY'))
 
     def moment(identifier, phase, purpose, body, teaches, refs, quote, transition):
+        if phase == 'CONNECT':
+            moment_type = 'CONNECT'
+        elif recommended in {'WORKED_EXAMPLE', 'FORMULA', 'DATA_TABLE', 'CODE_TRACE'}:
+            moment_type = 'DEMONSTRATE'
+        elif recommended in {'ARCHITECTURE', 'TIMELINE', 'CAUSE_EFFECT', 'PROCESS_FLOW'}:
+            moment_type = 'VISUALIZE'
+        elif recommended == 'EVIDENCE_HIGHLIGHT':
+            moment_type = 'SHOW'
+        else:
+            moment_type = 'EXPLAIN'
         return {
-            'id': identifier, 'type': 'EXPLAIN' if phase != 'CONNECT' else 'CONNECT',
+            'id': identifier, 'type': moment_type,
             'representation': 'GROUNDED_EXPLANATION', 'interaction': 'NONE',
             'purpose': purpose, 'arc_phase': phase, 'understanding_change': purpose,
             'transition': transition, 'attention_cue': f'Focus on {title.lower()}.',
@@ -333,15 +361,17 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
             'content': {'title': title, 'body': body, 'takeaway': target_quote},
         }
 
-    moments = [moment('context', 'HOOK', 'Frame the source problem.', context_quote,
-                      [f'page:{context_ref}'], [context_ref], context_quote,
-                      'Use that context to isolate the central idea.')]
-    moments.append(moment('idea', 'IDEA', 'Explain the source-supported idea.', target_quote,
+    moments = []
+    if context_quote != target_quote:
+        moments.append(moment('context', arc[0], 'Frame the source problem.', context_quote,
+                              [f'page:{context_ref}'], [context_ref], context_quote,
+                              'Use that context to isolate the central idea.'))
+    moments.append(moment('idea', arc[1], 'Explain the source-supported idea.', target_quote,
                           [target['id']], target_refs, target_quote,
                           'Connect the definition to another statement in the material.'))
     if related:
         related_ref, related_quote = related
-        moments.append(moment('connection', 'CONNECT', 'Connect the idea to its source context.', related_quote,
+        moments.append(moment('connection', arc[2], 'Connect the idea to its source context.', related_quote,
                               [f'page:{related_ref}'], [related_ref], related_quote,
                               'Now explain the central idea without copying it.'))
 
@@ -352,26 +382,48 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
     else:
         tested_name, expected = learner_facing_title(target_quote), target_quote
         prompt = f'Explain this source-supported idea in your own words: {tested_name}'
+    check_interaction = select_interaction(subject, objective.get('text', ''), recommended)
+    check_content = {'title': f'Explain {tested_name}', 'prompt': prompt, 'expected_answer': expected,
+                     'evidence_concepts': [target['id']],
+                     'correct_feedback': f'Your answer explains what {tested_name} means in this material.',
+                     'incorrect_feedback': f'You may have named {tested_name}, but the answer still needs the relationship or meaning stated in the material.',
+                     'hints': [f'Look for the sentence that defines or explains {tested_name}.']}
+    if check_interaction == 'ORDERING':
+        ordered = next((item.get('steps') for item in knowledge.get('processes', []) + knowledge.get('sequences', [])
+                        if isinstance(item.get('steps'), list) and len(item['steps']) >= 3), None)
+        if ordered:
+            check_content.update(items=ordered[:7], correct_order=list(range(min(7, len(ordered)))))
+        else:
+            check_interaction = 'SHORT_ANSWER'
+    elif check_interaction == 'MATCHING':
+        edges = [(item.get('source'), item.get('target')) for item in knowledge.get('relationships', [])
+                 if item.get('source') and item.get('target')]
+        if len(edges) >= 2:
+            check_content['pairs'] = [list(edge) for edge in edges[:8]]
+        else:
+            check_interaction = 'SHORT_ANSWER'
+    elif check_interaction == 'EVIDENCE_HIGHLIGHT':
+        evidence = [item.get('text') for item in knowledge.get('quotations', []) if item.get('text')]
+        if len(evidence) >= 2:
+            check_content.update(evidence=evidence[:5], correct_evidence=list(range(min(2, len(evidence)))))
+        else:
+            check_interaction = 'SHORT_ANSWER'
     moments.append({
         'id': 'check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
-        'interaction': 'SHORT_ANSWER', 'purpose': 'Check whether the learner can explain the named idea.',
-        'arc_phase': 'VERIFY', 'understanding_change': 'Demonstrate an explanation of the central idea.',
+        'interaction': check_interaction, 'purpose': 'Check whether the learner can use the named idea.',
+        'arc_phase': arc[3], 'understanding_change': 'Demonstrate use of the central idea.',
         'transition': 'Use the response to advance or reteach.', 'attention_cue': f'Explain {tested_name}, not just its name.',
         'next_actions': ['ADVANCE', 'RETEACH', 'CHANGE_REPRESENTATION'], 'dialogue': prompt,
         'mascot_position': 'beside', 'level': 2, 'teaches': [], 'tests': [target['id']],
         'source_refs': target_refs, 'source_quote': target_quote,
-        'content': {'title': f'Explain {tested_name}', 'prompt': prompt, 'expected_answer': expected,
-                    'evidence_concepts': [target['id']],
-                    'correct_feedback': f'Your answer explains what {tested_name} means in this material.',
-                    'incorrect_feedback': f'You may have named {tested_name}, but the answer still needs the relationship or meaning stated in the material.',
-                    'hints': [f'Look for the sentence that defines or explains {tested_name}.']},
+        'content': check_content,
     })
     raw = {
         'version': 3, 'objective_id': str(objective.get('id') or 'objective-1'),
         'learning_goal': _text(objective.get('text') or concept.title, 360, required=True),
         'key_insight': target_quote, 'prerequisite_assumptions': [], 'likely_misconceptions': [],
-        'teaching_strategy': 'Frame the source context, explain one supported idea, connect it, then ask for an explanation.',
-        'recommended_representation': 'GROUNDED_EXPLANATION', 'subject_family': subject,
+        'teaching_strategy': f'Follow the source semantics with {recommended.lower().replace("_", " ")} and collect matching evidence.',
+        'recommended_representation': recommended, 'subject_family': subject,
         'difficulty': concept.difficulty, 'evidence_strategy': 'Require a specific explanation of the taught source idea.',
         'advancement_rule': {'minimum_level': 2},
         'remediation_strategies': [f'Return to the defining sentence for {tested_name} and distinguish naming it from explaining it.'],

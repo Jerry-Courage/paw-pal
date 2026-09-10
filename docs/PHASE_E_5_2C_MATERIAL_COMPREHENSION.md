@@ -4,6 +4,8 @@
 
 Source Understanding schema version 2 classifies source regions before semantic extraction. The supported categories are `INSTRUCTIONAL_CONTENT`, `TITLE`, `SECTION_HEADING`, `AUTHOR_METADATA`, `PUBLISHER_METADATA`, `COPYRIGHT`, `TABLE_OF_CONTENTS`, `REFERENCES`, `BIBLIOGRAPHY`, `NAVIGATION`, `CAPTION`, `ASSESSMENT`, `GLOSSARY`, `SIDEBAR`, and `UNKNOWN`. Hard metadata is excluded from semantic extraction, grounding excerpts, topic candidates, objectives, and teaching content.
 
+Domain-generalization acceptance adds domain-neutral semantic units and typed knowledge relationships. Representation and deterministic fallback arc selection consume the grounded knowledge shape rather than subject names. The six-domain evidence and anti-overfitting checks are recorded in `PHASE_E_5_2C_DOMAIN_GENERALIZATION_ACCEPTANCE.md`.
+
 Candidate topics carry deterministic scores for relevance, support, coverage, distinctness, usefulness, metadata likelihood, redundancy, section significance, and dependency fit. Valid AI semantic classifications can increase support and relevance, but cannot introduce evidence from a non-instructional region. Topics retain page, block, and section provenance and form a heading-aware parent/child hierarchy.
 
 Material quality checks instructional volume, topic count, metadata dominance, hierarchy, and confidence. One bounded retry broadens safe content anchors and reconstructs the hierarchy. If quality remains weak, Journey preview/build returns HTTP 422 with `material_understanding_uncertain`, a learner-safe message, warnings, and `recoverable: true`. A successful preview includes major topics, topic count, hierarchy, confidence, and warnings.

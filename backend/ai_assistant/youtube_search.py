@@ -11,28 +11,21 @@ logger = logging.getLogger(__name__)
 # Simple in-memory cache to avoid repeated searches
 _search_cache: dict = {}
 
-_DOMAIN_TERMS = {
-    'biology': {'brain','cerebellum','neuron','cell','blood','heart','lung','respiration','breathing','oxygen','biology','anatomy'},
-    'networking': {'router','routing','network','ethernet','packet','switch','wifi','tcp','internet'},
-    'mathematics': {'calculus','derivative','matrix','equation','algebra','finite','difference','numerical'},
-    'computing': {'api','database','code','programming','react','spring','postgres','algorithm'},
-}
-
-
 def video_relevance(video, topic, subject=''):
     """Return the gate decision and a stable diagnostic category."""
     words = lambda value: set(re.findall(r'[a-z0-9]+', str(value or '').casefold()))
-    requested = words(f'{topic} {subject}')
+    topic_words, subject_words = words(topic), words(subject)
+    requested = topic_words | subject_words
     candidate = words(f'{video.get("title", "")} {video.get("channel", "")}')
-    request_domains = {name for name, terms in _DOMAIN_TERMS.items() if requested & terms}
-    candidate_domains = {name for name, terms in _DOMAIN_TERMS.items() if candidate & terms}
-    if request_domains and candidate_domains and request_domains.isdisjoint(candidate_domains):
-        return False, 'subject_domain_mismatch'
-    meaningful = requested - {'the','and','for','with','from','this','that','explained','introduction','overview','material'}
-    if meaningful & candidate:
+    stop = {'the','and','for','with','from','this','that','explained','introduction','overview','material','how'}
+    meaningful_topic = topic_words - stop
+    if meaningful_topic & candidate:
         return True, 'topic_term_match'
-    if not candidate_domains:
+    meaningful_candidate = candidate - stop - {'a', 'visual', 'explanation', 'tutor', 'video', 'lesson'}
+    if not meaningful_candidate:
         return True, 'no_conflicting_domain_signal'
+    if subject_words and not (subject_words & candidate):
+        return False, 'subject_domain_mismatch'
     return False, 'topic_semantic_mismatch'
 
 

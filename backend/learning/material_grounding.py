@@ -6,7 +6,9 @@ FILLER = re.compile(r'^(?:step\s*\d+\s*:\s*)?(?:substitute the known information
 
 
 def resource_knowledge(resource):
-    if resource.source_understanding and resource.source_understanding.get('version') == VERSION:
+    knowledge = (resource.source_understanding or {}).get('knowledge', {})
+    if (resource.source_understanding and resource.source_understanding.get('version') == VERSION
+            and 'semantic_units' in knowledge and 'knowledge_relationships' in knowledge):
         return resource.source_understanding
     if isinstance(resource.source_understanding, dict) and resource.source_understanding.get('pages'):
         old_text = '\n\n'.join(page.get('text', '') for page in resource.source_understanding['pages'])
@@ -58,9 +60,8 @@ def semantic_content(grounding, requested):
         edges = [[item.get('source'), item.get('target'), item.get('label', '')]
                  for item in supported('relationships') if item.get('source') and item.get('target')]
         if edges:
-            # The current map canvas displays nodes but drops edge labels/direction.
-            # Preserve the explanation until that renderer can show the relationships.
-            return 'GROUNDED_EXPLANATION', content, 'Current map renderer does not display relationship edges'
+            nodes = list(dict.fromkeys(node for edge in edges for node in edge[:2]))[:8]
+            return requested, {'nodes': nodes, 'edges': edges[:10], 'body': grounding.get('excerpt', '')}, ''
     elif requested == 'COMPARISON':
         for item in supported('comparisons'):
             if len(item.get('entities', [])) >= 2 and item.get('dimensions'):
@@ -69,6 +70,15 @@ def semantic_content(grounding, requested):
         quotes = supported('quotations')
         if quotes:
             return requested, {'body': grounding.get('excerpt', ''), 'evidence': [item['text'] for item in quotes]}, ''
+    elif requested == 'DATA_TABLE':
+        for table in supported('tables'):
+            if table.get('headers') and table.get('rows'):
+                return requested, {'columns': table['headers'], 'rows': table['rows'], 'body': table.get('caption', '')}, ''
+    elif requested == 'CODE_TRACE':
+        for code in supported('code_snippets'):
+            if code.get('text'):
+                return requested, {'body': 'Trace the source code in execution order.', 'code': code['text'],
+                                   'language': code.get('language', '')}, ''
     elif requested == 'GROUNDED_EXPLANATION':
         return requested, content, ''
     return 'GROUNDED_EXPLANATION', content, f'{requested}: insufficient source-supported semantic payload'

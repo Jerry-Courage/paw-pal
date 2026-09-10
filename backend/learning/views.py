@@ -1585,7 +1585,8 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             videos = search_youtube(query, max_results=3, duration_limit=1200)
             objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
             objective = session.objectives[objective_index] if session.objectives else {}
-            relevant_videos = [video for video in videos if video_is_relevant(video, objective.get('text', concept.title), getattr(concept.source_resource, 'subject', ''))]
+            relevance_topic = f"{concept.title} {objective.get('text', '')}".strip()
+            relevant_videos = [video for video in videos if video_is_relevant(video, relevance_topic, getattr(concept.source_resource, 'subject', ''))]
             safe_videos = [{**video, 'embed_url': f"https://www.youtube-nocookie.com/embed/{video.get('video_id')}?rel=0", 'why': f"A visual explanation for {objective.get('text', concept.title).rstrip('.').lower()}.", 'objective_id': objective.get('id', '')} for video in relevant_videos[:2] if video.get('video_id')]
             kind, payload = 'video', {'videos': safe_videos}
             if safe_videos:

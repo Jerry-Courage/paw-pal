@@ -93,12 +93,6 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         if not isinstance(content['correct_groups'], dict) or any(not isinstance(key, str) or not isinstance(value, str) for key, value in content['correct_groups'].items()):
             raise TeachingPlanValidationError('Invalid sorting answer')
         rep = moment['representation']
-        subject = str(plan.get('subject_family', '')).casefold()
-        unsuitable = ((subject == 'biology' and rep in {'CODE_TRACE', 'ARCHITECTURE'}) or
-                      (subject == 'mathematics' and rep == 'CYCLE') or
-                      (subject == 'literature' and rep in {'FORMULA', 'CODE_TRACE'}))
-        if unsuitable:
-            raise TeachingPlanValidationError('Representation does not fit the subject relationship')
         cited_text = ' '.join(pages[ref] for ref in refs)
         body = (content.get('body') or '').strip()
         if len(body) > 650:

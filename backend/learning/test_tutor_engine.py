@@ -78,12 +78,12 @@ class TutorContractTests(SimpleTestCase):
         with self.assertRaisesMessage(ValueError, 'specific content'):
             validate_tutor_plan(raw, objective, grounding)
 
-    def test_subject_inappropriate_representation_is_rejected(self):
+    def test_semantically_supported_representation_is_not_blocked_by_subject_label(self):
         raw, objective, grounding = fixture('biology')
         raw['teaching_moments'][0]['representation'] = 'ARCHITECTURE'
         raw['teaching_moments'][0]['content'].update(nodes=['Heart', 'Lungs'], edges=[['Heart', 'Lungs', 'blood flow']])
-        with self.assertRaisesMessage(ValueError, 'fit the subject'):
-            validate_tutor_plan(raw, objective, grounding)
+        plan = validate_tutor_plan(raw, objective, grounding)
+        self.assertEqual(plan['teaching_moments'][0]['representation'], 'ARCHITECTURE')
 
     def test_cross_subject_plans_and_sequence(self):
         for subject in SOURCES:
