@@ -7,6 +7,7 @@ their evidence and cannot replace the deterministic document record.
 import hashlib
 import json
 import re
+from .pedagogical_knowledge import REVISION, NON_PRIMARY, attach_pedagogy, classify_proposition
 
 VERSION = 2
 SEMANTIC_TYPES = ('DEFINITION', 'CONCEPT', 'FACT', 'RELATIONSHIP', 'PROCESS',
@@ -70,8 +71,13 @@ def _build_topic_hierarchy(model):
     candidates, seen = [], set()
     instructional_pages = sum(len(page.get('instructional_text', '').split()) >= 5 for page in model['pages'])
     for page in model['pages']:
-        for block in page.get('blocks', []):
+        candidates_in_page = []
+        for source_block in page.get('blocks', []):
+            parts = re.split(r'(?<=[.!?])\s+(?=[A-Z"“])', source_block.get('text', '')) if source_block.get('category') == 'INSTRUCTIONAL_CONTENT' else [source_block.get('text', '')]
+            candidates_in_page.extend({**source_block, 'text': part} for part in parts if part.strip())
+        for block in candidates_in_page:
             if block.get('category') not in {'SECTION_HEADING', 'INSTRUCTIONAL_CONTENT', 'ASSESSMENT', 'GLOSSARY', 'CAPTION'}: continue
+            if block.get('category') != 'SECTION_HEADING' and classify_proposition(block.get('text', ''), category=block.get('category', '')) in NON_PRIMARY: continue
             title = _topic_title(block.get('text', ''))
             norm = re.sub(r'\W+', ' ', title.casefold()).strip()
             if len(norm) < 3 or norm in seen or len(title.split()) > 12: continue
@@ -315,7 +321,7 @@ def build_understanding(title, text, pages=None, toc=None):
             add('code_snippets', page, code)
             semantic(page, code, 'CODE')
     model['fingerprint'] = hashlib.sha256(json.dumps({'version': VERSION, 'title': title, **structure}, sort_keys=True).encode()).hexdigest()
-    return model
+    return attach_pedagogy(model)
 
 
 def validate_semantics(raw, model):
@@ -419,7 +425,7 @@ def understand_with_ai(model, chat):
                 topic['scores']['significance'], topic['scores']['dependency_fit'],
                 1-topic['scores']['metadata_likelihood'], 1-topic['scores']['redundancy']))/9, 3)
             topic['scoring_origin'] = 'ai_assisted'
-    return result
+    return attach_pedagogy(result)
 
 
 def persist_understanding(resource, text, pages=None, toc=None, allow_ai=False):
@@ -433,7 +439,7 @@ def persist_understanding(resource, text, pages=None, toc=None, allow_ai=False):
         cached_knowledge = cached.get('knowledge', {})
         has_domain_general_semantics = ('semantic_units' in cached_knowledge and
                                         'knowledge_relationships' in cached_knowledge)
-        if cached.get('fingerprint') == model['fingerprint'] and has_domain_general_semantics:
+        if cached.get('fingerprint') == model['fingerprint'] and has_domain_general_semantics and cached.get('pedagogy_revision') == REVISION:
             resource.source_understanding = cached
             return cached
         if allow_ai:
@@ -457,7 +463,7 @@ def grounding_bundle(model, objective, page_number=None, section=''):
     knowledge = {kind: [item for item in items if item.get('support') != 'enrichment' and
                         any(ref['page_id'] in ids for ref in item['source_refs'])]
                  for kind, items in model.get('knowledge', {}).items()}
-    return {'objective': objective, 'source_fingerprint': model.get('fingerprint'), 'source_refs':
+    return {'objective': objective, 'pedagogy_revision': model.get('pedagogy_revision'), 'source_fingerprint': model.get('fingerprint'), 'source_refs':
             [{'page_id': page['id'], 'number': page.get('number'), 'kind': page['kind']} for page in chosen],
             'pages': chosen, 'knowledge': knowledge, 'excerpt': '\n\n'.join(page.get('instructional_text', '') for page in chosen if page.get('instructional_text')),
             'section': section, 'status': 'grounded' if chosen else 'insufficient'}

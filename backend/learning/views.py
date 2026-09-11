@@ -290,6 +290,8 @@ def _objective_activities(session, user=None):
     objective_id = objective['id']
     grounding = _grounding(concept, objective)
     plan = get_or_create_teaching_plan(session, grounding)
+    objective = session.objectives[objective_index] if session.objectives else objective
+    objective_id = objective['id']
     presentations = teaching_activities_from_plan(
         concept, {**objective, 'index': objective_index}, plan,
         lambda suffix: _activity_id(concept, f'presentation:{suffix}'),
@@ -689,16 +691,35 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
     activity = next((item for item in _objective_activities(session, user) if item['id'] == str(activity_id)), None)
     if not activity or activity['type'] in {'comparison', 'worked_example'}:
         raise ValueError('This response cannot be evaluated')
-    if activity.get('requires_teaching'):
+    from .tutor_engine import learning_signal, evaluate as evaluate_tutor
+    signal = learning_signal(response_data)
+    if activity.get('requires_teaching') and not signal:
         from .material_grounding import assessment_ready
         if not assessment_ready(session, activity, _objective_activities(session, user)):
             raise ValueError('Complete the teaching moments before answering this check')
     if activity.get('tutor') and session.state.get('player', {}).get('active_activity_id') != activity['id']:
         raise ValueError('Only the current check can accept an answer')
-    correct, score, feedback, outcome = _evaluate_activity(concept, activity, response_data)
+    correct, score, feedback, outcome = (evaluate_tutor(activity, response_data) if signal
+                                       else _evaluate_activity(concept, activity, response_data))
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[objective_index] if session.objectives else {'id': '', 'text': concept.title}
     objective_id = objective['id']
+    if outcome == 'learning_signal':
+        from .tutor_engine import learning_signal
+        signal = learning_signal(response_data)
+        action = 'BRIDGE_MISSING_KNOWLEDGE' if signal == 'missing_teaching' else 'RETEACH'
+        session.state = {**session.state, 'player': {}, 'teaching_phase': 'INTRODUCE',
+                         'last_tutor_decision': {'action': action, 'objective_id': objective_id},
+                         'last_learning_signal': signal}
+        session.status = 'teaching'
+        result = {'correct': None, 'score': None, 'feedback': feedback, 'attempt_id': '',
+                  'objective_id': objective_id, 'outcome': outcome, 'controller_action': action}
+        TeachingTurn.objects.create(session=session, role='learner', kind='activity', idempotency_key=key,
+            payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
+        TeachingTurn.objects.create(session=session, role='flow', content=feedback,
+            payload={**result, 'pedagogical_action': action})
+        session.save()
+        return session, result, True
     if outcome == 'insufficient':
         result = {'correct': False, 'score': 0, 'feedback': feedback, 'attempt_id': '',
                   'objective_id': objective_id, 'outcome': outcome}

@@ -1,0 +1,745 @@
+{
+  "fixture_status": "Exact reported failure sentence with synthetic adjacent teaching prose. Original PDF unavailable; this is not a production-PDF trace.",
+  "source": {
+    "editorial": "There is an extensive literature covering the scientific work on respiration, and the few references included only serve as a path to more reading.",
+    "instructional": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface. A large surface area and a short diffusion distance increase the rate of gas exchange. Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+    "caption": "Figure 2. Gas exchange through skin and primitive lungs."
+  },
+  "selected_knowledge": [
+    {
+      "id": "knowledge-6ecbfefb271f4f96",
+      "text": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+      "proposition": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+      "concept": "Gas exchange",
+      "semantic_type": "DEFINITION",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-3"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [
+        "knowledge-75f9d20fffd8456c",
+        "knowledge-7770a3afbaa740b1"
+      ],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [
+        "explain_relationship"
+      ],
+      "scores": {
+        "conceptual_importance": 0.8,
+        "explanatory_value": 0.8,
+        "learner_usefulness": 0.8,
+        "source_support": 1.0,
+        "relationship_density": 0.6666666666666666,
+        "dependency_significance": 0.0,
+        "applicability": 0.4,
+        "assessment_suitability": 0.8,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 0.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": true,
+      "selection_reason": "Source-supported explanatory knowledge",
+      "importance": 0.783
+    },
+    {
+      "id": "knowledge-75f9d20fffd8456c",
+      "text": "A large surface area and a short diffusion distance increase the rate of gas exchange.",
+      "proposition": "A large surface area and a short diffusion distance increase the rate of gas exchange.",
+      "concept": "A large surface area and a short diffusion distance",
+      "semantic_type": "MECHANISM",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-3"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [
+        "knowledge-6ecbfefb271f4f96"
+      ],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [
+        "explain_relationship"
+      ],
+      "scores": {
+        "conceptual_importance": 0.8,
+        "explanatory_value": 0.8,
+        "learner_usefulness": 0.8,
+        "source_support": 1.0,
+        "relationship_density": 0.3333333333333333,
+        "dependency_significance": 0.0,
+        "applicability": 0.4,
+        "assessment_suitability": 0.8,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 0.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": true,
+      "selection_reason": "Source-supported explanatory knowledge",
+      "importance": 0.742
+    },
+    {
+      "id": "knowledge-7770a3afbaa740b1",
+      "text": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+      "proposition": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+      "concept": "Blood",
+      "semantic_type": "MECHANISM",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-3"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [
+        "knowledge-6ecbfefb271f4f96"
+      ],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [
+        "explain_relationship"
+      ],
+      "scores": {
+        "conceptual_importance": 0.8,
+        "explanatory_value": 0.8,
+        "learner_usefulness": 0.8,
+        "source_support": 1.0,
+        "relationship_density": 0.3333333333333333,
+        "dependency_significance": 0.0,
+        "applicability": 0.4,
+        "assessment_suitability": 0.8,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 0.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": true,
+      "selection_reason": "Source-supported explanatory knowledge",
+      "importance": 0.742
+    }
+  ],
+  "rejected_propositions": [
+    {
+      "id": "knowledge-046fde2d5b2d7de9",
+      "text": "There is an extensive literature covering the scientific work on respiration, and the few references included only serve as a path to more reading.",
+      "proposition": "There is an extensive literature covering the scientific work on respiration, and the few references included only serve as a path to more reading.",
+      "concept": "There",
+      "semantic_type": "FURTHER_READING",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-1"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [],
+      "scores": {
+        "conceptual_importance": 0.0,
+        "explanatory_value": 0,
+        "learner_usefulness": 0,
+        "source_support": 1.0,
+        "relationship_density": 0.0,
+        "dependency_significance": 0.0,
+        "applicability": 0,
+        "assessment_suitability": 0,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 1.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 1.0
+      },
+      "accepted": false,
+      "selection_reason": "FURTHER_READING: context does not establish learner knowledge"
+    },
+    {
+      "id": "knowledge-9e038007e36f2287",
+      "text": "Figure 2.",
+      "proposition": "Figure 2.",
+      "concept": "Figure 2",
+      "semantic_type": "CAPTION_ONLY",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-2"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [],
+      "scores": {
+        "conceptual_importance": 0.0,
+        "explanatory_value": 0,
+        "learner_usefulness": 0,
+        "source_support": 1.0,
+        "relationship_density": 0.0,
+        "dependency_significance": 0.0,
+        "applicability": 0,
+        "assessment_suitability": 0,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 1.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": false,
+      "selection_reason": "CAPTION_ONLY: context does not establish learner knowledge"
+    },
+    {
+      "id": "knowledge-06b007219df8585a",
+      "text": "Gas exchange through skin and primitive lungs.",
+      "proposition": "Gas exchange through skin and primitive lungs.",
+      "concept": "Gas exchange through skin and primitive lungs",
+      "semantic_type": "CAPTION_ONLY",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-2"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [],
+      "scores": {
+        "conceptual_importance": 0.0,
+        "explanatory_value": 0,
+        "learner_usefulness": 0,
+        "source_support": 1.0,
+        "relationship_density": 0.0,
+        "dependency_significance": 0.0,
+        "applicability": 0,
+        "assessment_suitability": 0,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 1.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": false,
+      "selection_reason": "CAPTION_ONLY: context does not establish learner knowledge"
+    }
+  ],
+  "caption_support": [
+    {
+      "caption": "Figure 2.",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-2"
+        }
+      ],
+      "knowledge_ids": [],
+      "visual_status": "unverified",
+      "teaches": []
+    },
+    {
+      "caption": "Gas exchange through skin and primitive lungs.",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-2"
+        }
+      ],
+      "knowledge_ids": [
+        "knowledge-6ecbfefb271f4f96",
+        "knowledge-75f9d20fffd8456c"
+      ],
+      "visual_status": "unverified",
+      "teaches": []
+    }
+  ],
+  "objective": {
+    "id": "material-knowledge-6ecbfefb271f4f96",
+    "text": "Explain Gas exchange and connect it to A large surface area and a short diffusion distance.",
+    "knowledge_ids": [
+      "knowledge-6ecbfefb271f4f96",
+      "knowledge-75f9d20fffd8456c",
+      "knowledge-7770a3afbaa740b1"
+    ],
+    "source_statement": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+    "source_refs": [
+      {
+        "page_id": "page-1",
+        "number": null,
+        "block_id": "b-3"
+      },
+      {
+        "page_id": "page-1",
+        "number": null,
+        "block_id": "b-3"
+      },
+      {
+        "page_id": "page-1",
+        "number": null,
+        "block_id": "b-3"
+      }
+    ]
+  },
+  "teaching_arc": [
+    {
+      "id": "idea",
+      "type": "VISUALIZE",
+      "representation": "GROUNDED_EXPLANATION",
+      "interaction": "NONE",
+      "content": {
+        "title": "Gas exchange and connect it to A large…",
+        "body": "We are learning about Gas exchange. Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+        "lead": "",
+        "takeaway": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+        "prompt": "",
+        "formula": "",
+        "nodes": [],
+        "edges": [],
+        "columns": [],
+        "rows": [],
+        "steps": [],
+        "evidence": [],
+        "evidence_concepts": [],
+        "expected_answer": "",
+        "options": [],
+        "correct_index": null,
+        "items": [],
+        "correct_order": [],
+        "pairs": [],
+        "groups": [],
+        "target": "",
+        "correct_evidence": [],
+        "problem": "",
+        "result": "",
+        "interpretation": "",
+        "code": "",
+        "language": "",
+        "known": [],
+        "parts": [],
+        "formula_format": "plain",
+        "hints": [],
+        "correct_feedback": "",
+        "incorrect_feedback": "",
+        "correct_groups": {}
+      },
+      "optional": false,
+      "purpose": "Establish the central knowledge.",
+      "dialogue": "We are learning about Gas exchange. Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+      "arc_phase": "HOOK",
+      "understanding_change": "Establish the central knowledge.",
+      "transition": "Connect the definition to another statement in the material.",
+      "attention_cue": "Notice what Gas exchange names and the relationship in its definition.",
+      "next_actions": [
+        "ADVANCE",
+        "REVEAL_MORE"
+      ],
+      "mascot_position": "beside",
+      "level": 2,
+      "teaches": [
+        "knowledge-6ecbfefb271f4f96"
+      ],
+      "tests": [],
+      "source_refs": [
+        "page-1"
+      ],
+      "source_quote": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface."
+    },
+    {
+      "id": "context",
+      "type": "VISUALIZE",
+      "representation": "GROUNDED_EXPLANATION",
+      "interaction": "NONE",
+      "content": {
+        "title": "Gas exchange and connect it to A large…",
+        "body": "A large surface area and a short diffusion distance increase the rate of gas exchange. The two explanations connect through diffusion, exchange, gas.",
+        "lead": "",
+        "takeaway": "A large surface area and a short diffusion distance increase the rate of gas exchange.",
+        "prompt": "",
+        "formula": "",
+        "nodes": [],
+        "edges": [],
+        "columns": [],
+        "rows": [],
+        "steps": [],
+        "evidence": [],
+        "evidence_concepts": [],
+        "expected_answer": "",
+        "options": [],
+        "correct_index": null,
+        "items": [],
+        "correct_order": [],
+        "pairs": [],
+        "groups": [],
+        "target": "",
+        "correct_evidence": [],
+        "problem": "",
+        "result": "",
+        "interpretation": "",
+        "code": "",
+        "language": "",
+        "known": [],
+        "parts": [],
+        "formula_format": "plain",
+        "hints": [],
+        "correct_feedback": "",
+        "incorrect_feedback": "",
+        "correct_groups": {}
+      },
+      "optional": false,
+      "purpose": "Explain the connected relationship.",
+      "dialogue": "A large surface area and a short diffusion distance increase the rate of gas exchange. The two explanations connect through diffusion, exchange, gas.",
+      "arc_phase": "IDEA",
+      "understanding_change": "Explain the connected relationship.",
+      "transition": "Use both ideas together to explain the relationship.",
+      "attention_cue": "Notice what Gas exchange names and the relationship in its definition.",
+      "next_actions": [
+        "ADVANCE",
+        "REVEAL_MORE"
+      ],
+      "mascot_position": "beside",
+      "level": 2,
+      "teaches": [
+        "knowledge-75f9d20fffd8456c"
+      ],
+      "tests": [],
+      "source_refs": [
+        "page-1"
+      ],
+      "source_quote": "A large surface area and a short diffusion distance increase the rate of gas exchange."
+    },
+    {
+      "id": "connection",
+      "type": "CONNECT",
+      "representation": "GROUNDED_EXPLANATION",
+      "interaction": "NONE",
+      "content": {
+        "title": "Gas exchange and connect it to A large…",
+        "body": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs. Use this alongside the earlier explanation of Gas exchange.",
+        "lead": "",
+        "takeaway": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+        "prompt": "",
+        "formula": "",
+        "nodes": [],
+        "edges": [],
+        "columns": [],
+        "rows": [],
+        "steps": [],
+        "evidence": [],
+        "evidence_concepts": [],
+        "expected_answer": "",
+        "options": [],
+        "correct_index": null,
+        "items": [],
+        "correct_order": [],
+        "pairs": [],
+        "groups": [],
+        "target": "",
+        "correct_evidence": [],
+        "problem": "",
+        "result": "",
+        "interpretation": "",
+        "code": "",
+        "language": "",
+        "known": [],
+        "parts": [],
+        "formula_format": "plain",
+        "hints": [],
+        "correct_feedback": "",
+        "incorrect_feedback": "",
+        "correct_groups": {}
+      },
+      "optional": false,
+      "purpose": "Connect the idea to its source context.",
+      "dialogue": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs. Use this alongside the earlier explanation of Gas exchange.",
+      "arc_phase": "CONNECT",
+      "understanding_change": "Connect the idea to its source context.",
+      "transition": "Now explain the central idea without copying it.",
+      "attention_cue": "Notice what Gas exchange names and the relationship in its definition.",
+      "next_actions": [
+        "ADVANCE",
+        "REVEAL_MORE"
+      ],
+      "mascot_position": "beside",
+      "level": 2,
+      "teaches": [
+        "knowledge-7770a3afbaa740b1"
+      ],
+      "tests": [],
+      "source_refs": [
+        "page-1"
+      ],
+      "source_quote": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs."
+    },
+    {
+      "id": "check",
+      "type": "CHECK",
+      "representation": "GROUNDED_EXPLANATION",
+      "interaction": "SHORT_ANSWER",
+      "content": {
+        "title": "Explain Gas exchange",
+        "body": "",
+        "lead": "",
+        "takeaway": "",
+        "prompt": "Explain Gas exchange and connect it to the other ideas you learned. What relationships matter?",
+        "formula": "",
+        "nodes": [],
+        "edges": [],
+        "columns": [],
+        "rows": [],
+        "steps": [],
+        "evidence": [],
+        "evidence_concepts": [
+          "knowledge-6ecbfefb271f4f96",
+          "knowledge-75f9d20fffd8456c",
+          "knowledge-7770a3afbaa740b1"
+        ],
+        "expected_answer": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface. A large surface area and a short diffusion distance increase the rate of gas exchange. Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+        "options": [],
+        "correct_index": null,
+        "items": [],
+        "correct_order": [],
+        "pairs": [],
+        "groups": [],
+        "target": "",
+        "correct_evidence": [],
+        "problem": "",
+        "result": "",
+        "interpretation": "",
+        "code": "",
+        "language": "",
+        "known": [],
+        "parts": [],
+        "formula_format": "plain",
+        "hints": [
+          "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface."
+        ],
+        "correct_feedback": "Your answer explains what Gas exchange means in this material.",
+        "incorrect_feedback": "Let’s revisit the explanation of Gas exchange before trying again.",
+        "correct_groups": {}
+      },
+      "optional": false,
+      "purpose": "Check whether the learner can use the named idea.",
+      "dialogue": "Explain Gas exchange and connect it to the other ideas you learned. What relationships matter?",
+      "arc_phase": "VERIFY",
+      "understanding_change": "Demonstrate use of the central idea.",
+      "transition": "Use the response to advance or reteach.",
+      "attention_cue": "Explain Gas exchange, not just its name.",
+      "next_actions": [
+        "ADVANCE",
+        "RETEACH",
+        "CHANGE_REPRESENTATION"
+      ],
+      "mascot_position": "beside",
+      "level": 2,
+      "teaches": [],
+      "tests": [
+        "knowledge-6ecbfefb271f4f96",
+        "knowledge-75f9d20fffd8456c",
+        "knowledge-7770a3afbaa740b1"
+      ],
+      "source_refs": [
+        "page-1"
+      ],
+      "source_quote": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+      "tested_knowledge_ids": [
+        "knowledge-6ecbfefb271f4f96",
+        "knowledge-75f9d20fffd8456c",
+        "knowledge-7770a3afbaa740b1"
+      ]
+    }
+  ],
+  "learner_response": "I dont really know wasnt taught",
+  "evaluation": {
+    "correct": null,
+    "score": null,
+    "feedback": "Thanks for telling me. Let’s build the explanation before trying another question.",
+    "outcome": "learning_signal"
+  },
+  "remediation": {
+    "action": "BRIDGE_MISSING_KNOWLEDGE",
+    "attempt_created": false,
+    "mastery_awarded": false,
+    "next_step": "Clear completed player stages and replay the validated teaching arc before the check. Invalid objectives are regenerated before lesson planning."
+  },
+  "all_accepted_knowledge": [
+    {
+      "id": "knowledge-6ecbfefb271f4f96",
+      "text": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+      "proposition": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface.",
+      "concept": "Gas exchange",
+      "semantic_type": "DEFINITION",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-3"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [
+        "knowledge-75f9d20fffd8456c",
+        "knowledge-7770a3afbaa740b1"
+      ],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [
+        "explain_relationship"
+      ],
+      "scores": {
+        "conceptual_importance": 0.8,
+        "explanatory_value": 0.8,
+        "learner_usefulness": 0.8,
+        "source_support": 1.0,
+        "relationship_density": 0.6666666666666666,
+        "dependency_significance": 0.0,
+        "applicability": 0.4,
+        "assessment_suitability": 0.8,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 0.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": true,
+      "selection_reason": "Source-supported explanatory knowledge",
+      "importance": 0.783
+    },
+    {
+      "id": "knowledge-75f9d20fffd8456c",
+      "text": "A large surface area and a short diffusion distance increase the rate of gas exchange.",
+      "proposition": "A large surface area and a short diffusion distance increase the rate of gas exchange.",
+      "concept": "A large surface area and a short diffusion distance",
+      "semantic_type": "MECHANISM",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-3"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [
+        "knowledge-6ecbfefb271f4f96"
+      ],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [
+        "explain_relationship"
+      ],
+      "scores": {
+        "conceptual_importance": 0.8,
+        "explanatory_value": 0.8,
+        "learner_usefulness": 0.8,
+        "source_support": 1.0,
+        "relationship_density": 0.3333333333333333,
+        "dependency_significance": 0.0,
+        "applicability": 0.4,
+        "assessment_suitability": 0.8,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 0.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": true,
+      "selection_reason": "Source-supported explanatory knowledge",
+      "importance": 0.742
+    },
+    {
+      "id": "knowledge-7770a3afbaa740b1",
+      "text": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+      "proposition": "Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+      "concept": "Blood",
+      "semantic_type": "MECHANISM",
+      "source_refs": [
+        {
+          "page_id": "page-1",
+          "number": null,
+          "block_id": "b-3"
+        }
+      ],
+      "support": "source",
+      "confidence": "extractive",
+      "related_knowledge_ids": [
+        "knowledge-6ecbfefb271f4f96"
+      ],
+      "prerequisite_ids": [],
+      "examples": [],
+      "representations": [
+        "GROUNDED_EXPLANATION"
+      ],
+      "assessment_possibilities": [
+        "explain_relationship"
+      ],
+      "scores": {
+        "conceptual_importance": 0.8,
+        "explanatory_value": 0.8,
+        "learner_usefulness": 0.8,
+        "source_support": 1.0,
+        "relationship_density": 0.3333333333333333,
+        "dependency_significance": 0.0,
+        "applicability": 0.4,
+        "assessment_suitability": 0.8,
+        "novelty": 1.0,
+        "redundancy": 0.0,
+        "editorial_likelihood": 0.0,
+        "transition_likelihood": 0.0,
+        "citation_further_reading_likelihood": 0.0
+      },
+      "accepted": true,
+      "selection_reason": "Source-supported explanatory knowledge",
+      "importance": 0.742
+    }
+  ]
+}

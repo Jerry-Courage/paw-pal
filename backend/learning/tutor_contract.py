@@ -11,6 +11,8 @@ ARC = ('HOOK', 'CONTEXT', 'IDEA', 'SHOW', 'CONNECT', 'TRY', 'FEEDBACK_ADAPT', 'V
 
 
 def knowledge_ids(grounding):
+    if grounding.get('pedagogy_revision'):
+        return {item['id'] for item in grounding.get('knowledge', {}).get('knowledge_objects', [])}
     return {item['id'] for items in grounding.get('knowledge', {}).values() for item in items} | {
         'page:' + page['id'] for page in grounding.get('pages', [])}
 
@@ -25,6 +27,10 @@ def prerequisite_state(session, grounding):
 def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
     if not isinstance(raw, dict) or raw.get('version') != 3:
         raise TeachingPlanValidationError('Tutor plan requires version 3')
+    if grounding.get('pedagogy_revision'):
+        from library.pedagogical_knowledge import objective_valid
+        if not objective_valid(objective, grounding):
+            raise TeachingPlanValidationError('Objective has no validated pedagogical target')
     plan = validate_teaching_plan({**raw, 'check_strategy': raw.get('check_strategy') or raw.get('evidence_strategy'),
         'remediation_strategy': raw.get('remediation_strategy') or '; '.join(raw.get('remediation_strategies') or ['Revisit the grounded explanation.'])}, str(objective['id']))
     allowed = knowledge_ids(grounding)
@@ -131,6 +137,13 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         if moment['type'] not in TEACHING | {'CHECK', 'INTERACT', 'REFLECT'} or (moment['type'] in {'CHECK', 'INTERACT'} and not is_check):
             raise TeachingPlanValidationError('Moment has no supported teaching or evidence behavior')
         if is_check:
+            moment['tested_knowledge_ids'] = original.get('tested_knowledge_ids', moment['tests'])
+            if moment['tested_knowledge_ids'] != moment['tests']:
+                raise TeachingPlanValidationError('Assessment knowledge dependencies disagree')
+            if grounding.get('pedagogy_revision'):
+                from library.pedagogical_knowledge import classify_proposition, NON_PRIMARY
+                if classify_proposition(content.get('expected_answer', '')) in NON_PRIMARY - {'UNKNOWN'}:
+                    raise TeachingPlanValidationError('Assessment targets editorial or caption context')
             has_assessment = True
             available_levels.append(moment['level'])
             if not moment['tests'] or not set(moment['tests']) <= established:
@@ -144,6 +157,14 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         elif moment['type'] in TEACHING:
             if not moment['teaches']:
                 raise TeachingPlanValidationError('Teaching must establish identified knowledge')
+            if grounding.get('pedagogy_revision'):
+                objects = {item['id']: item for item in grounding['knowledge']['knowledge_objects']}
+                visible = ' '.join([body, content.get('code', ''), content.get('formula', ''), *content.get('steps', []), *content.get('evidence', [])])
+                for key in moment['teaches']:
+                    item = objects[key]
+                    normalized = lambda value: re.sub(r'\s+', ' ', value).strip()
+                    if normalized(item['text']) not in normalized(visible) or not any(ref['page_id'] in refs for ref in item['source_refs']):
+                        raise TeachingPlanValidationError('Teaching does not establish its knowledge dependency')
             established.update(moment['teaches'])
     if not has_assessment or max(available_levels) < plan['advancement_rule']['minimum_level']:
         raise TeachingPlanValidationError('Plan cannot supply its required evidence')

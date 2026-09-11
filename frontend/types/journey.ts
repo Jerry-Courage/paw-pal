@@ -198,7 +198,7 @@ export interface TeachingSessionResponse {
       critical_misconceptions: string[]
     }
   }
-  evaluation?: { correct: boolean | null; score: number; feedback: string; attempt_id: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' }
+  evaluation?: { correct: boolean | null; score: number | null; feedback: string; attempt_id: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' }
 }
 
 export interface TeachingMoment {

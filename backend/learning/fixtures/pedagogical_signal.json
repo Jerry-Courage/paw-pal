@@ -1,0 +1,27 @@
+{
+  "respiration": {
+    "editorial": "There is an extensive literature covering the scientific work on respiration, and the few references included only serve as a path to more reading.",
+    "instructional": "Gas exchange means diffusion of oxygen and carbon dioxide across a respiratory surface. A large surface area and a short diffusion distance increase the rate of gas exchange. Blood transports oxygen from the lungs to tissues and returns carbon dioxide to the lungs.",
+    "caption": "Figure 2. Gas exchange through skin and primitive lungs."
+  },
+  "mathematics": {
+    "editorial": "This section introduces numerical methods.",
+    "instructional": "The forward difference means approximating a derivative from neighboring values. The forward difference divides the change in measured values by their spacing."
+  },
+  "computer_science": {
+    "editorial": "Many frameworks exist for mobile development.",
+    "instructional": "The API is the interface used by the client. The API validates incoming requests before storing durable records."
+  },
+  "literature": {
+    "editorial": "This story has received much critical attention.",
+    "instructional": "Mara claims that honesty matters more than reputation. Her concealed letter contradicts her claim that honesty matters more than reputation."
+  },
+  "history": {
+    "editorial": "Many scholars have written about the event.",
+    "instructional": "The strike led to food shortages and forced municipal negotiations. Food shortages caused the council to begin negotiations with workers."
+  },
+  "chemistry": {
+    "editorial": "This experiment has been widely studied.",
+    "instructional": "A catalyst is a substance that increases reaction rate without being consumed. Higher temperature causes more frequent effective collisions."
+  }
+}

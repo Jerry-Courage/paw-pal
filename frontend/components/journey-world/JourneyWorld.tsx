@@ -198,7 +198,28 @@ function StudyEncounter({ node, onClose, onCompleted }: { node: WorldNode; onClo
   const sessionQuery = useQuery({ queryKey: ['teaching-session', node.id], queryFn: () => learningApi.getTeachingSession(node.id).then(response => response.data as TeachingSessionResponse) })
   const session = sessionQuery.data
   const send = useMutation({ mutationFn: (text: string) => learningApi.sendTeachingMessage(node.id, { message: text, idempotency_key: crypto.randomUUID() }).then(response => response.data as TeachingSessionResponse), onSuccess: data => { queryClient.setQueryData(['teaching-session', node.id], data); setMessage('') } })
-  const respond = useMutation({ mutationFn: ({ activity, response }: { activity: EncounterActivity; response: unknown }) => learningApi.submitTeachingResponse(node.id, { activity_id: activity.id, response, idempotency_key: crypto.randomUUID() }).then(reply => reply.data as TeachingSessionResponse), onSuccess: (data, variables) => { queryClient.setQueryData(['teaching-session', node.id], data); if (data.evaluation?.outcome === 'insufficient') { setAnswers(current => ({ ...current, [variables.activity.id]: '' })); return } if (data.evaluation) { sounds.play(data.evaluation.correct === false ? 'incorrect' : 'correct', data.evaluation.attempt_id); setResults(current => ({ ...current, [variables.activity.id]: { attempt_id: data.evaluation!.attempt_id, correct: data.evaluation!.correct, score: data.evaluation!.score, feedback: data.evaluation!.feedback, explanation: '', hint: '', evidence_score: data.mastery, attempt_number: 1, recommend_flow: data.evaluation!.correct === false, outcome: data.evaluation!.outcome } })) } } })
+  const respond = useMutation({
+    mutationFn: ({ activity, response }: { activity: EncounterActivity; response: unknown }) => learningApi.submitTeachingResponse(node.id, { activity_id: activity.id, response, idempotency_key: crypto.randomUUID() }).then(reply => reply.data as TeachingSessionResponse),
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(['teaching-session', node.id], data)
+      const evaluation = data.evaluation
+      if (evaluation?.outcome === 'learning_signal') {
+        setAnswers(current => ({ ...current, [variables.activity.id]: '' }))
+        setResults({})
+        return
+      }
+      if (evaluation?.outcome === 'insufficient') {
+        setAnswers(current => ({ ...current, [variables.activity.id]: '' }))
+        return
+      }
+      if (evaluation && evaluation.score !== null) {
+        const score = evaluation.score
+        const outcome = evaluation.outcome
+        sounds.play(evaluation.correct === false ? 'incorrect' : 'correct', evaluation.attempt_id)
+        setResults(current => ({ ...current, [variables.activity.id]: { attempt_id: evaluation.attempt_id, correct: evaluation.correct, score, feedback: evaluation.feedback, explanation: '', hint: '', evidence_score: data.mastery, attempt_number: 1, recommend_flow: evaluation.correct === false, outcome } }))
+      }
+    },
+  })
   const continueStage = useMutation({ mutationFn: (stageId: string) => learningApi.continueTeachingStage(node.id, stageId).then(reply => reply.data as TeachingSessionResponse), onSuccess: data => queryClient.setQueryData(['teaching-session', node.id], data) })
   const complete = useMutation({ mutationFn: () => node.status === 'completed' ? learningApi.reviewConcept(node.id, session?.mastery || 0) : learningApi.finalizeTeachingSession(node.id), onSuccess: response => { sounds.play('xp', `concept-${node.id}`); if (response.data.reward?.flowcoins) sounds.play('flowcoin', `concept-${node.id}`); if (response.data.reward?.level?.leveled_up) sounds.play('level_up', `concept-${node.id}`); onCompleted(response.data.reward || { xp: 0, flowcoins: 0, level: { previous: 0, current: 0, leveled_up: false }, streak: { current: 0, increased: false }, missions: [], achievements: [] }, response.data.mastery ?? session?.mastery ?? 0) } })
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [session?.turns.length, send.isPending])

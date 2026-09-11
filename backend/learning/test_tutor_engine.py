@@ -53,6 +53,19 @@ def fixture(subject='finite_difference'):
         correct_feedback='Your explanation connects the relationship to its meaning.', incorrect_feedback='Explain what connects these values or ideas, including the limitation.', hints=['Name the relationship before explaining it.'])
     check.update(type='CHECK', interaction='SHORT_ANSWER', teaches=[], tests=['page:'+pages[0]['id']])
     plan['teaching_moments'].append(check)
+    # Fixtures use proposition dependencies, never an entire page as evidence.
+    objects = grounding['knowledge']['knowledge_objects']
+    for entry in plan['teaching_moments'][:-1]:
+        candidates = [item for item in objects if any(ref['page_id'] in entry['source_refs'] for ref in item['source_refs'])]
+        target = max(candidates, key=lambda item: len(set(item['text'].lower().split()) & set(entry['content']['body'].lower().split())))
+        entry['teaches'] = [target['id']]
+        entry['source_quote'] = target['text']
+        if target['text'] not in entry['content']['body']:
+            entry['content']['body'] += ' ' + target['text']
+    check['tests'] = plan['teaching_moments'][0]['teaches']
+    check['tested_knowledge_ids'] = check['tests']
+    objective['knowledge_ids'] = check['tests']
+    objective['text'] = 'Explain ' + next(item['concept'] for item in objects if item['id'] == check['tests'][0])
     return plan, objective, grounding
 
 

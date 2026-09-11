@@ -301,7 +301,12 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
     requested_ids = set(objective.get('knowledge_ids') or [])
     items = [item for values in knowledge.values() for item in values
              if isinstance(item, dict) and item.get('support') == 'source' and item.get('id')]
-    target = next((item for item in items if item['id'] in requested_ids), None)
+    if grounding.get('pedagogy_revision'):
+        items = knowledge.get('knowledge_objects', [])
+        legacy = {item['id']: item for values in knowledge.values() for item in values if isinstance(item, dict) and item.get('id')}
+        requested_text = {legacy[key].get('text') for key in requested_ids if key in legacy}
+        requested_ids.update(item['id'] for item in items if item['text'] in requested_text)
+    target = next((item for key in objective.get('knowledge_ids', []) for item in items if item['id'] == key), None)
     if target is None:
         statement = str(objective.get('source_statement') or '')
         target = next((item for item in items if item.get('text') == statement), None)
@@ -320,6 +325,10 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
 
     candidates = [(page['id'], line) for page in pages for line in source_lines(page)
                   if 25 <= len(line) <= 360]
+    if grounding.get('pedagogy_revision'):
+        connected_ids = requested_ids | set(target.get('related_knowledge_ids', []))
+        candidates = [(ref['page_id'], item['text']) for item in items if item['id'] in connected_ids
+                      for ref in item['source_refs'] if ref['page_id'] in page_text and 25 <= len(item['text']) <= 360]
     context_ref, context_quote = next(((ref, line) for ref, line in candidates if line != target_quote),
                                       (target_refs[0], target_quote))
     related = next(((ref, line) for ref, line in reversed(candidates)
@@ -338,6 +347,16 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
         'CODE_TRACE': ('CONTEXT', 'SHOW', 'TRY', 'VERIFY'),
     }
     arc = arc_shapes.get(recommended, ('HOOK', 'IDEA', 'CONNECT', 'VERIFY'))
+    from library.pedagogical_knowledge import terms
+    concept_name = target.get('concept') or title
+    attention = {
+        'DEFINITION': f'Notice what {concept_name} names and the relationship in its definition.',
+        'CAUSE_EFFECT': 'Distinguish the cause from its consequence and the link between them.',
+        'FORMULA': 'Connect each quantity to its role in the calculation.',
+        'WORKED_EXAMPLE': 'Follow the known values, operation, result and its interpretation.',
+        'COMPARISON': 'Notice the shared dimension and the difference between the cases.',
+        'CLAIM': 'Distinguish the claim from the evidence used to support it.',
+    }.get(target.get('semantic_type'), f'Notice what {concept_name} does and what it connects.')
 
     def moment(identifier, phase, purpose, body, teaches, refs, quote, transition):
         if phase == 'CONNECT':
@@ -354,25 +373,29 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
             'id': identifier, 'type': moment_type,
             'representation': 'GROUNDED_EXPLANATION', 'interaction': 'NONE',
             'purpose': purpose, 'arc_phase': phase, 'understanding_change': purpose,
-            'transition': transition, 'attention_cue': f'Focus on {title.lower()}.',
+            'transition': transition, 'attention_cue': attention[:180],
             'next_actions': ['ADVANCE', 'REVEAL_MORE'], 'dialogue': body,
             'mascot_position': 'beside', 'level': 2, 'teaches': teaches, 'tests': [],
             'source_refs': refs, 'source_quote': quote,
-            'content': {'title': title, 'body': body, 'takeaway': target_quote},
+            'content': {'title': title, 'body': body, 'takeaway': quote[:360]},
         }
 
     moments = []
-    if context_quote != target_quote:
-        moments.append(moment('context', arc[0], 'Frame the source problem.', context_quote,
-                              [f'page:{context_ref}'], [context_ref], context_quote,
-                              'Use that context to isolate the central idea.'))
-    moments.append(moment('idea', arc[1], 'Explain the source-supported idea.', target_quote,
+    def taught_ids(quote, page):
+        return [item['id'] for item in items if item['text'] == quote] if grounding.get('pedagogy_revision') else [f'page:{page}']
+    shared = sorted(terms(context_quote) & terms(target_quote))[:3] if context_quote != target_quote else []
+    connection = (' The two explanations connect through ' + ', '.join(shared) + '.') if shared else ''
+    moments.append(moment('idea', arc[0] if context_quote != target_quote else arc[1], 'Establish the central knowledge.', f'We are learning about {concept_name}. {target_quote}',
                           [target['id']], target_refs, target_quote,
                           'Connect the definition to another statement in the material.'))
+    if context_quote != target_quote:
+        moments.append(moment('context', arc[1], 'Explain the connected relationship.', context_quote + connection,
+                              taught_ids(context_quote, context_ref), [context_ref], context_quote,
+                              'Use both ideas together to explain the relationship.'))
     if related:
         related_ref, related_quote = related
-        moments.append(moment('connection', arc[2], 'Connect the idea to its source context.', related_quote,
-                              [f'page:{related_ref}'], [related_ref], related_quote,
+        moments.append(moment('connection', arc[2], 'Connect the idea to its source context.', f'{related_quote} Use this alongside the earlier explanation of {target.get("concept", title)}.',
+                              taught_ids(related_quote, related_ref), [related_ref], related_quote,
                               'Now explain the central idea without copying it.'))
 
     definition = re.match(r'^(.{2,100}?)\s+(?:means|refers to|is defined as)\s+(.+)$', target_quote, re.I)
@@ -381,13 +404,18 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
         prompt = f'According to this material, what does {tested_name} mean?'
     else:
         tested_name, expected = learner_facing_title(target_quote), target_quote
-        prompt = f'Explain this source-supported idea in your own words: {tested_name}'
+        prompt = f'Explain {tested_name} in your own words, including the relationships you learned.'
     check_interaction = select_interaction(subject, objective.get('text', ''), recommended)
     check_content = {'title': f'Explain {tested_name}', 'prompt': prompt, 'expected_answer': expected,
                      'evidence_concepts': [target['id']],
                      'correct_feedback': f'Your answer explains what {tested_name} means in this material.',
-                     'incorrect_feedback': f'You may have named {tested_name}, but the answer still needs the relationship or meaning stated in the material.',
-                     'hints': [f'Look for the sentence that defines or explains {tested_name}.']}
+                     'incorrect_feedback': f'Let’s revisit the explanation of {tested_name} before trying again.',
+                     'hints': [target_quote]}
+    if grounding.get('pedagogy_revision'):
+        # Other extracted interactions may silently test facts outside this lesson.
+        # Select them only when their complete payload is among the taught objects.
+        taught_text = ' '.join(m['source_quote'] for m in moments)
+        knowledge = {kind: [item for item in values if item.get('text', '') in taught_text] for kind, values in knowledge.items()}
     if check_interaction == 'ORDERING':
         ordered = next((item.get('steps') for item in knowledge.get('processes', []) + knowledge.get('sequences', [])
                         if isinstance(item.get('steps'), list) and len(item['steps']) >= 3), None)
@@ -408,20 +436,29 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
             check_content.update(evidence=evidence[:5], correct_evidence=list(range(min(2, len(evidence)))))
         else:
             check_interaction = 'SHORT_ANSWER'
+    tested_ids = [target['id']]
+    if grounding.get('pedagogy_revision') and check_interaction == 'SHORT_ANSWER':
+        taught_ids_set = {key for entry in moments for key in entry['teaches']}
+        tested_items = [item for item in items if item['id'] in requested_ids & taught_ids_set]
+        answer = ' '.join(item['text'] for item in tested_items)
+        if len(tested_items) > 1 and len(answer) <= 360:
+            tested_ids = [item['id'] for item in tested_items]
+            prompt = f'Explain {target.get("concept", tested_name)} and connect it to the other ideas you learned. What relationships matter?'
+            check_content.update(prompt=prompt, expected_answer=answer, evidence_concepts=tested_ids)
     moments.append({
         'id': 'check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
         'interaction': check_interaction, 'purpose': 'Check whether the learner can use the named idea.',
         'arc_phase': arc[3], 'understanding_change': 'Demonstrate use of the central idea.',
         'transition': 'Use the response to advance or reteach.', 'attention_cue': f'Explain {tested_name}, not just its name.',
         'next_actions': ['ADVANCE', 'RETEACH', 'CHANGE_REPRESENTATION'], 'dialogue': prompt,
-        'mascot_position': 'beside', 'level': 2, 'teaches': [], 'tests': [target['id']],
+        'mascot_position': 'beside', 'level': 2, 'teaches': [], 'tests': tested_ids, 'tested_knowledge_ids': tested_ids,
         'source_refs': target_refs, 'source_quote': target_quote,
         'content': check_content,
     })
     raw = {
         'version': 3, 'objective_id': str(objective.get('id') or 'objective-1'),
         'learning_goal': _text(objective.get('text') or concept.title, 360, required=True),
-        'key_insight': target_quote, 'prerequisite_assumptions': [], 'likely_misconceptions': [],
+        'key_insight': (target_quote + connection)[:500], 'prerequisite_assumptions': [], 'likely_misconceptions': [],
         'teaching_strategy': f'Follow the source semantics with {recommended.lower().replace("_", " ")} and collect matching evidence.',
         'recommended_representation': recommended, 'subject_family': subject,
         'difficulty': concept.difficulty, 'evidence_strategy': 'Require a specific explanation of the taught source idea.',
@@ -448,6 +485,17 @@ def _extract_json(value):
 
 def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequisites=None):
     """Generate once, validate strictly, then use a non-fragmenting fallback."""
+    if grounding.get('pedagogy_revision'):
+        from library.pedagogical_knowledge import objective_valid
+        objects = grounding.get('knowledge', {}).get('knowledge_objects', [])
+        if not objective_valid(objective, grounding):
+            matches = [item['id'] for item in objects if item['text'] == objective.get('source_statement')]
+            objective = {**objective, 'knowledge_ids': matches}
+            if matches and not objective_valid(objective, grounding):
+                target = next(item for item in objects if item['id'] == matches[0])
+                objective = {**objective, 'text': f'Explain {target["concept"]} and its relationships.'}
+        if not objective_valid(objective, grounding):
+            raise TeachingPlanValidationError('material_understanding_uncertain: objective has no validated knowledge target')
     fallback = grounded_fallback_plan(concept, objective, grounding, prerequisites)
     enabled = getattr(settings, 'JOURNEY_TEACHING_AI_ENABLED', False) if allow_ai is None else allow_ai
     if not enabled:
@@ -503,6 +551,21 @@ def teaching_plan_fingerprint(concept, objective, grounding):
 def get_or_create_teaching_plan(session, grounding, allow_ai=None):
     index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[index] if session.objectives else {'id': 'objective-1', 'text': session.concept.title}
+    if grounding.get('pedagogy_revision'):
+        from library.pedagogical_knowledge import objective_valid, objectives_from_knowledge
+        if not objective_valid(objective, grounding):
+            replacements = objectives_from_knowledge(grounding)
+            if not replacements:
+                raise TeachingPlanValidationError('material_understanding_uncertain: no teachable knowledge target')
+            old_id = objective.get('id')
+            objective = replacements[0]
+            session.objectives = [*session.objectives[:index], objective, *session.objectives[index+1:]]
+            session.objectives_understood = [key for key in session.objectives_understood if key != old_id]
+            session.objectives_covered = [key for key in session.objectives_covered if key != old_id]
+            session.state = {**session.state, 'player': {}, 'teaching_plans': {},
+                             'objective_evidence': {key: value for key, value in session.state.get('objective_evidence', {}).items() if key != old_id},
+                             'invalidated_objectives': [*session.state.get('invalidated_objectives', [])[-9:], old_id]}
+            session.save(update_fields=['objectives', 'objectives_understood', 'objectives_covered', 'state', 'last_active_at'])
     objective_id = str(objective['id'])
     fingerprint = teaching_plan_fingerprint(session.concept, objective, grounding)
     plans = dict(session.state.get('teaching_plans') or {})
@@ -546,6 +609,7 @@ def teaching_activity_from_plan(concept, objective, plan, activity_id, moment=No
                                    'moment_id': moment['id'], 'tests': moment['tests'], 'teaches': moment['teaches']}})
         if moment['interaction'] != 'NONE':
             activity.update({'type': moment['interaction'].lower(), 'purpose': 'check', 'stage': 'check',
+                             'tested_knowledge_ids': moment.get('tested_knowledge_ids', moment['tests']),
                              'prompt': content['prompt'], 'requires_teaching': True,
                              'rubric': {'source_quote': moment['source_quote'], 'expected': content['expected_answer']}})
             if moment['interaction'] == 'MCQ': activity['options'] = content['options']

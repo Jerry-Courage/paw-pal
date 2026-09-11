@@ -16,8 +16,12 @@ Each moment: id, type, representation, interaction, purpose, arc_phase,
 understanding_change, transition, attention_cue, next_actions (allowed controller actions), dialogue (specific to
 the content, not canned encouragement), mascot_position (upper/beside/edge/center/hidden),
 level (1 recognition,2 explanation,3 application,4 transfer,5 synthesis), teaches and
-tests (source knowledge IDs or page:<page ID>), source_refs (page IDs), source_quote
+tests and tested_knowledge_ids (validated knowledge_objects IDs, never page IDs), source_refs (page IDs), source_quote
 (exact source excerpt), content. Only test IDs established earlier or KNOWN prerequisites.
+Teach validated knowledge_objects, not editorial prose, headings or captions. Include
+each taught proposition verbatim in visible body/steps/evidence, then explain it and
+connect related propositions. A title or citation alone never establishes knowledge.
+Every check must declare tested_knowledge_ids equal to tests and test only taught content.
 Use at most two prerequisite_bridge moments for UNCERTAIN/MISSING prerequisites.
 Content: title, body, prompt, formula (original plain source notation), parts
 [{symbol,meaning}], columns/rows, nodes (strings), edges [[from label,to label,label]],
@@ -71,6 +75,7 @@ def generate(concept, objective, grounding, prerequisites=None, task='TEACHING_G
 
 
 PRIVATE = {'expected_answer', 'expected_concept', 'correct_choice', 'correct_index',
+           'tested_knowledge_ids',
            'correct_order', 'correct_groups', 'correct_evidence', 'target', 'accepted_keywords',
            'correct_matching',
            'feedback_by_choice', 'correct_feedback', 'incorrect_feedback', 'explanation',
@@ -109,7 +114,18 @@ def taught_material(session):
     return found
 
 
+def learning_signal(response):
+    value = response.get('text', response.get('value', ''))
+    if not isinstance(value, str): return ''
+    value = re.sub(r"[^a-z\s]", '', value.casefold())
+    if re.search(r'\b(?:wasnt|was not|not)\s+taught\b', value): return 'missing_teaching'
+    if re.search(r'\b(?:i\s+(?:dont|do not)(?:\s+really)?\s+(?:know|understand)|no idea|can you explain again)\b', value): return 'needs_explanation'
+    return ''
+
+
 def evaluate(activity, response):
+    if learning_signal(response):
+        return None, None, 'Thanks for telling me. Let’s build the explanation before trying another question.', 'learning_signal'
     content = activity.get('content', {})
     kind = activity['type']
     value = response.get('value', response.get('text'))
