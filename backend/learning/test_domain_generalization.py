@@ -86,8 +86,9 @@ class DomainGeneralizationAcceptanceTests(SimpleTestCase):
                 tuple(moment['type'] for moment in plan['teaching_moments']),
             )
         self.assertGreaterEqual(len({value[0] for value in results.values()}), 5)
-        self.assertGreaterEqual(len({value[1] for value in results.values()}), 4)
-        self.assertGreaterEqual(len({value[2] for value in results.values()}), 3)
+        self.assertTrue(all(value[1][-1] == 'VERIFY' for value in results.values()))
+        self.assertTrue(all(value[2] == 'SHORT_ANSWER' for value in results.values()))
+        self.assertTrue(all(value[3][0] in {'EXPLAIN', 'DEMONSTRATE', 'VISUALIZE', 'SHOW', 'COMPARE'} for value in results.values()))
         self.assertGreaterEqual(len({value[3][0] for value in results.values()}), 3)
 
     def test_relationships_are_typed_and_not_only_a_topic_tree(self):
@@ -145,7 +146,7 @@ class DomainGeneralizationAcceptanceTests(SimpleTestCase):
         plan_lengths.add(len(generate_teaching_plan(
             minimal_concept, minimal_objective, minimal_grounding, allow_ai=False,
         )['teaching_moments']))
-        self.assertGreater(len(plan_lengths), 1)
+        self.assertEqual(plan_lengths, {2})
 
     def test_acceptance_phrases_are_not_special_cases_in_production(self):
         production = '\n'.join(path.read_text(encoding='utf-8') for path in (

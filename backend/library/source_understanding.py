@@ -38,7 +38,7 @@ def classify_region(text, *, page_index=0, block_index=0, style='', kind='text')
     lower = value.casefold()
     if kind == 'caption' or re.match(r'^(figure|fig\.|table)\s*\d+\s*[:.-]', lower): return 'CAPTION'
     if re.search(r'\b(?:copyright|all rights reserved|isbn(?:-1[03])?|©)\b', lower): return 'COPYRIGHT'
-    if re.search(r'\b(?:published by|publisher|publishing|imprint|unesco[- ]eolss)\b', lower) or re.match(r'^keywords?\s*:', lower): return 'PUBLISHER_METADATA'
+    if re.search(r'\b(?:published by|publisher|publishing|imprint)\b', lower) or re.match(r'^keywords?\s*:', lower): return 'PUBLISHER_METADATA'
     if re.match(r'^(?:by\b|author(?:s)?\s*:|edited by\b)', lower): return 'AUTHOR_METADATA'
     if re.match(r'^(?:department|school|faculty|college|university)\b', lower) or re.search(r',\s*(?:department|university)\b|\buniversity$', lower): return 'PUBLISHER_METADATA'
     if re.match(r'^(?:table of contents|contents)\s*$', lower) or (len(value) < 160 and re.search(r'\.{3,}\s*\d+', value)): return 'TABLE_OF_CONTENTS'
@@ -463,7 +463,7 @@ def grounding_bundle(model, objective, page_number=None, section=''):
     knowledge = {kind: [item for item in items if item.get('support') != 'enrichment' and
                         any(ref['page_id'] in ids for ref in item['source_refs'])]
                  for kind, items in model.get('knowledge', {}).items()}
-    return {'objective': objective, 'pedagogy_revision': model.get('pedagogy_revision'), 'source_fingerprint': model.get('fingerprint'), 'source_refs':
+    return {'objective': objective, 'pedagogical_relationships': model.get('pedagogical_relationships', []), 'pedagogy_revision': model.get('pedagogy_revision'), 'source_fingerprint': model.get('fingerprint'), 'source_refs':
             [{'page_id': page['id'], 'number': page.get('number'), 'kind': page['kind']} for page in chosen],
             'pages': chosen, 'knowledge': knowledge, 'excerpt': '\n\n'.join(page.get('instructional_text', '') for page in chosen if page.get('instructional_text')),
             'section': section, 'status': 'grounded' if chosen else 'insufficient'}

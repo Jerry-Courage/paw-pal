@@ -74,7 +74,7 @@ class MaterialQualityTests(SimpleTestCase):
         grounding = grounding_bundle(model, objective['text'], 4, 'Gas Exchange')
         plan = generate_teaching_plan(concept, objective, grounding, allow_ai=False)
         self.assertEqual(plan['version'], 3)
-        self.assertEqual([item['arc_phase'] for item in plan['teaching_moments']], ['HOOK', 'IDEA', 'CONNECT', 'VERIFY'])
+        self.assertEqual([item['arc_phase'] for item in plan['teaching_moments']], ['SHOW', 'VERIFY'])
         self.assertEqual(plan['teaching_moments'][-1]['interaction'], 'SHORT_ANSWER')
         self.assertIn('Gas exchange', plan['teaching_moments'][-1]['content']['prompt'])
         self.assertTrue(all(len(item['content'].get('body', '')) < 500 for item in plan['teaching_moments']))

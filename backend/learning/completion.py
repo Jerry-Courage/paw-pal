@@ -29,8 +29,12 @@ def record_objective_evidence(session, objective_id, *, taught=False, interactio
     current['source'] = source
     if misconception:
         current['unresolved_misconception'] = misconception[:500]
+        if evidence_id:
+            current['misconception_ids'] = list(dict.fromkeys([
+                *current.get('misconception_ids', []), str(evidence_id)]))[-8:]
     elif score is not None and int(score) >= PASSING_SCORE:
         current.pop('unresolved_misconception', None)
+        current.pop('misconception_ids', None)
     evidence[objective_id] = current
     session.state = {**session.state, 'objective_evidence': evidence}
 

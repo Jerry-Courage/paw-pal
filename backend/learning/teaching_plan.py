@@ -129,6 +129,15 @@ def validate_teaching_plan(raw, expected_objective_id=None):
             'lead': _text(content.get('lead'), 240), 'takeaway': _text(content.get('takeaway'), 360),
             'prompt': _text(content.get('prompt'), 360),
             'formula': _text(content.get('formula'), 300),
+            'problem': _text(content.get('problem'), 500),
+            'givens': [_text(item, 200) for item in _list(content.get('givens'), 'givens')[:6] if _text(item, 200)],
+            'substitutions': [_text(item, 220) for item in _list(content.get('substitutions'), 'substitutions')[:6] if _text(item, 220)],
+            'result': _text(content.get('result'), 300),
+            'interpretation': _text(content.get('interpretation'), 500),
+            'components': [_text(item, 180) for item in _list(content.get('components'), 'components')[:8] if _text(item, 180)],
+            'connections': [[_text(edge[0], 100), _text(edge[1], 100), _text(edge[2] if len(edge) > 2 else '', 120)] for edge in _list(content.get('connections'), 'connections')[:10] if isinstance(edge, list) and len(edge) >= 2],
+            'claim': _text(content.get('claim'), 500),
+            'relationship': _text(content.get('relationship'), 180),
             'nodes': [_text(item, 180) for item in _list(content.get('nodes'), 'nodes')[:8] if _text(item, 180)],
             'edges': [[_text(edge[0], 100), _text(edge[1], 100), _text(edge[2] if len(edge) > 2 else '', 120)] for edge in _list(content.get('edges'), 'edges')[:10] if isinstance(edge, list) and len(edge) >= 2],
             'columns': [_text(item, 140) for item in _list(content.get('columns'), 'columns')[:3] if _text(item, 140)],
@@ -200,6 +209,8 @@ def validate_teaching_plan(raw, expected_objective_id=None):
     return {
         'version': 3 if raw.get('version') == 3 else 2, 'objective_id': objective_id,
         'fallback_reason': _text(raw.get('fallback_reason'), 240),
+        'selected_representation': _text(raw.get('selected_representation') or representation, 40).upper(),
+        'representation_fallback_reason': _text(raw.get('representation_fallback_reason'), 80).upper(),
         'learning_goal': _text(raw.get('learning_goal'), 360, required=True),
         'key_insight': _text(raw.get('key_insight'), 500, required=True),
         'prerequisite_assumptions': [_text(item, 220) for item in _list(raw.get('prerequisite_assumptions'), 'prerequisite_assumptions')[:5] if _text(item, 220)],
@@ -293,7 +304,165 @@ def safe_fallback_plan(concept, objective, grounding):
     return result
 
 
+def _structured_knowledge_content(selected_representation, target, selected, grounding):
+    """Build renderer-ready content only from source-supported semantic records."""
+    knowledge = grounding.get('knowledge', {})
+    body = '\n'.join(item['text'] for item in selected)
+    base = {'title': target['concept'], 'body': body, 'takeaway': target['text'][:360]}
+    if selected_representation == 'WORKED_EXAMPLE':
+        example = next((item for item in knowledge.get('worked_examples', [])
+                        if item.get('support') == 'source' and item.get('text') == target['text']), None)
+        if example and all(example.get(key) for key in ('problem', 'known', 'operation', 'steps', 'result', 'interpretation')) and len(example['steps']) >= 3:
+            substitutions = [step for step in example['steps'] if re.search(r'\b(?:substitut|replace|insert)\w*\b', step, re.I)]
+            return selected_representation, {**base, 'problem': example['problem'], 'known': example['known'],
+                'givens': example['known'], 'formula': example['operation'], 'substitutions': substitutions,
+                'steps': example['steps'], 'result': example['result'], 'interpretation': example['interpretation']}, ''
+    elif selected_representation == 'ARCHITECTURE':
+        relationships = [item for item in knowledge.get('relationships', []) if item.get('support') == 'source'
+                         and item.get('source') and item.get('target')]
+        edges = [[item['source'], item['target'], item.get('label', '')] for item in relationships]
+        nodes = list(dict.fromkeys(node for edge in edges for node in edge[:2]))[:8]
+        if len(nodes) >= 2 and edges:
+            return selected_representation, {**base, 'nodes': nodes, 'edges': edges[:10],
+                'components': nodes, 'connections': edges[:10]}, ''
+    elif selected_representation == 'PROCESS_FLOW':
+        value = target['text'].strip()
+        nodes, edges, steps = [], [], []
+        arrow = [part.strip(' .') for part in re.split(r'\s*(?:→|->)\s*', value) if part.strip(' .')]
+        conditional = re.match(r'^(?:when|if)\s+(.+?),\s*(.+)$', value, re.I)
+        allowing = re.match(r'^(.+?),\s*allowing\s+(.+)$', value, re.I)
+        if len(arrow) >= 2:
+            nodes, steps = arrow, arrow
+            edges = [[left, right, 'leads to'] for left, right in zip(arrow, arrow[1:])]
+        elif conditional:
+            condition, outcome = conditional.group(1).strip(' .'), conditional.group(2).strip(' .')
+            nodes = [condition, outcome]
+            steps = [f'Condition: {condition}', f'Supported outcome: {outcome}']
+            edges = [[condition, outcome, 'condition for']]
+        elif allowing:
+            first, second = allowing.group(1).strip(' .'), allowing.group(2).strip(' .')
+            nodes = [first, second]
+            steps = [first, second]
+            edges = [[first, second, 'allows']]
+        elif re.search(r'\s+and\s+', value, re.I):
+            first, second = re.split(r'\s+and\s+', value, maxsplit=1, flags=re.I)
+            nodes = [first.strip(' .'), second.strip(' .')]
+            steps = nodes[:]
+            edges = [[nodes[0], nodes[1], 'and']]
+        explicit = next((item for item in knowledge.get('processes', []) if item.get('support') == 'source'
+                         and item.get('text') == value and isinstance(item.get('steps'), list)
+                         and (re.search(r'→|->|\b(?:first|next|then|finally)\b', value, re.I))), None)
+        if explicit and len(explicit['steps']) >= 2:
+            nodes, steps = explicit['steps'][:8], explicit['steps'][:7]
+            edges = [[left, right, 'next'] for left, right in zip(nodes, nodes[1:])]
+        if len(steps) >= 2:
+            return selected_representation, {**base, 'steps': steps, 'nodes': nodes[:8], 'edges': edges[:10]}, ''
+    elif selected_representation == 'TIMELINE':
+        events = [item['text'] for item in knowledge.get('semantic_units', [])
+                  if item.get('support') == 'source' and item.get('semantic_type') == 'TIMELINE_EVENT'
+                  and re.search(r'\b(?:1[0-9]{3}|20[0-9]{2})\b', item.get('text', ''))]
+        events = list(dict.fromkeys(events))[:7]
+        if len(events) >= 2:
+            events.sort(key=lambda item: int(re.search(r'\b(?:1[0-9]{3}|20[0-9]{2})\b', item).group()))
+            return selected_representation, {**base, 'steps': events}, ''
+    elif selected_representation == 'CAUSE_EFFECT':
+        value = target['text'].strip()
+        relation = re.match(r'^(.+?)(?:,\s*caus(?:ing|ed)|\s+because\s+|\s+leads?\s+to\s+|\s+results?\s+in\s+)(.+)$', value, re.I)
+        if relation:
+            cause, effect = relation.group(1).strip(' .'), relation.group(2).strip(' .')
+            return selected_representation, {**base, 'nodes': [cause, effect],
+                'edges': [[cause, effect, 'causes']]}, ''
+    elif selected_representation == 'EVIDENCE_HIGHLIGHT':
+        claim = next((item['text'] for item in selected if item['semantic_type'] == 'CLAIM'), '')
+        evidence = [item['text'] for item in selected if item['semantic_type'] == 'EVIDENCE']
+        if not evidence:
+            evidence = [item['text'] for item in knowledge.get('quotations', []) if item.get('support') == 'source'][:5]
+        ids = {item['id'] for item in selected}
+        relation = next((edge.get('relationship_type', '').replace('_', ' ').lower()
+                         for edge in grounding.get('pedagogical_relationships', [])
+                         if {edge.get('source_id'), edge.get('target_id')} <= ids), '')
+        if claim and evidence:
+            return selected_representation, {**base, 'claim': claim, 'evidence': evidence,
+                'relationship': relation or 'source evidence for the selected claim'}, ''
+    elif selected_representation == 'COMPARISON':
+        comparison = next((item for item in knowledge.get('comparisons', []) if item.get('support') == 'source'
+                           and len(item.get('entities', [])) >= 2 and item.get('dimensions')), None)
+        if comparison:
+            return selected_representation, {**base, 'columns': comparison['entities'][:2],
+                'rows': comparison['dimensions'][:6]}, ''
+    elif selected_representation == 'GROUNDED_EXPLANATION':
+        return selected_representation, base, ''
+    return 'GROUNDED_EXPLANATION', base, 'INSUFFICIENT_STRUCTURED_SOURCE'
+
+
+def knowledge_fallback_plan(concept, objective, grounding, prerequisites=None):
+    """Create one structured, source-authoritative demonstration and a focused check."""
+    from library.pedagogical_knowledge import capability_for, complete_proposition
+    from .tutor_contract import validate_tutor_plan
+    objects = {item['id']: item for item in grounding.get('knowledge', {}).get('knowledge_objects', [])}
+    selected = [objects[key] for key in objective.get('knowledge_ids', []) if key in objects]
+    if not selected or any(not complete_proposition(item['text']) for item in selected):
+        raise TeachingPlanValidationError('material_understanding_uncertain: no complete knowledge target')
+    target = selected[0]
+    if any(len(item['text']) > 650 for item in selected):
+        raise TeachingPlanValidationError('material_understanding_uncertain: knowledge exceeds lesson pacing limit')
+    selected_representation = select_representation(classify_subject(concept, objective['text']), objective['text'], grounding)
+    emitted_representation, content, representation_reason = _structured_knowledge_content(
+        selected_representation, target, selected, grounding)
+    capability = capability_for(target['semantic_type'])
+    label = target['concept']
+    cue = {'DEFINE': 'Separate the named idea from what its definition establishes.',
+           'COMPARE': 'Identify the comparison dimension and how the cases differ.',
+           'CALCULATE': 'Track the givens, substitution, operation, result and interpretation.',
+           'ORDER': 'Track each supported stage and the relationship linking it to the next.',
+           'TRACE': 'Follow each source-supported component and connection.',
+           'IDENTIFY_EVIDENCE': 'Separate the claim from the evidence supporting it.',
+           'APPLY': 'Identify the requirement and when it must hold.',
+           'EXPLAIN_MECHANISM': 'Identify the condition, action and supported outcome.'}.get(
+               capability, 'Identify what acts, what changes, and the stated connection.')
+    moment_type = {'WORKED_EXAMPLE': 'DEMONSTRATE', 'ARCHITECTURE': 'VISUALIZE',
+                   'PROCESS_FLOW': 'VISUALIZE', 'EVIDENCE_HIGHLIGHT': 'SHOW',
+                   'COMPARISON': 'COMPARE'}.get(emitted_representation, 'EXPLAIN')
+    refs = list(dict.fromkeys(ref['page_id'] for item in selected for ref in item['source_refs']))
+    moments = [{'id': 'knowledge-demonstration', 'type': moment_type, 'representation': emitted_representation,
+        'interaction': 'NONE', 'purpose': 'Demonstrate the selected knowledge with its grounded structure.',
+        'arc_phase': 'SHOW' if emitted_representation != 'GROUNDED_EXPLANATION' else 'IDEA',
+        'understanding_change': cue, 'transition': 'Use the demonstrated structure to answer the focused question.',
+        'attention_cue': cue, 'dialogue': cue, 'mascot_position': 'beside', 'level': 2,
+        'teaches': [item['id'] for item in selected], 'tests': [], 'source_refs': refs,
+        'source_quote': target['text'], 'content': content}]
+    prompt = {'DEFINE': f'What does {label} mean?', 'COMPARE': f'How do the cases involving {label} differ?',
+              'CALCULATE': f'How do the givens and operation produce the result in {label}?',
+              'ORDER': f'What supported stages make up {label}?',
+              'TRACE': f'How does information move through {label}?',
+              'IDENTIFY_EVIDENCE': f'What evidence supports {label}?',
+              'APPLY': f'What condition is required for {label}?',
+              'EXPLAIN_MECHANISM': f'How does {label} produce its stated outcome?'}.get(
+                  capability, f'What does the statement about {label} establish?')
+    moments.append({'id': 'knowledge-check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
+        'interaction': 'SHORT_ANSWER', 'purpose': 'Check the selected capability.', 'arc_phase': 'VERIFY',
+        'understanding_change': 'Explain the specific taught claim.', 'transition': 'Use evidence to advance or remediate.',
+        'attention_cue': 'Explain the claim rather than listing keywords.', 'dialogue': prompt,
+        'mascot_position': 'beside', 'level': 2, 'teaches': [], 'tests': [target['id']], 'tested_knowledge_ids': [target['id']],
+        'source_refs': list(dict.fromkeys(ref['page_id'] for ref in target['source_refs'])), 'source_quote': target['text'],
+        'content': {'title': 'Check your understanding', 'prompt': prompt, 'expected_answer': target['text'],
+                    'evidence_concepts': [target['id']], 'correct_feedback': 'Your explanation captures the taught claim.',
+                    'incorrect_feedback': 'The explanation does not yet establish the taught claim.', 'hints': ['Identify the subject and what is asserted about it.']}})
+    raw = {'version': 3, 'objective_id': objective['id'], 'learning_goal': objective['text'],
+        'key_insight': target['text'][:500], 'teaching_strategy': 'Demonstrate validated knowledge in its selected semantic structure, then check its specific capability.',
+        'selected_representation': selected_representation, 'recommended_representation': emitted_representation,
+        'representation_fallback_reason': representation_reason, 'subject_family': classify_subject(concept, objective['text']),
+        'difficulty': concept.difficulty, 'evidence_strategy': 'Require an explanation of the identified claim.',
+        'advancement_rule': {'minimum_level': 2}, 'remediation_strategies': ['Decompose the tested claim and ask a fresh focused question.'],
+        'teaching_moments': moments, 'origin': 'fallback'}
+    result = validate_tutor_plan(raw, objective, grounding, prerequisites)
+    result.update(origin='fallback', fallback_reason='Validated deterministic structured knowledge lesson', plan_revision=5)
+    return result
+
+
 def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
+    if grounding.get('pedagogy_revision'):
+        return knowledge_fallback_plan(concept, objective, grounding, prerequisites)
     """Build a compact evidence-bearing arc when every configured provider fails."""
     pages = grounding.get('pages') or []
     knowledge = grounding.get('knowledge') or {}
@@ -384,7 +553,7 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
     def taught_ids(quote, page):
         return [item['id'] for item in items if item['text'] == quote] if grounding.get('pedagogy_revision') else [f'page:{page}']
     shared = sorted(terms(context_quote) & terms(target_quote))[:3] if context_quote != target_quote else []
-    connection = (' The two explanations connect through ' + ', '.join(shared) + '.') if shared else ''
+    connection = ''
     moments.append(moment('idea', arc[0] if context_quote != target_quote else arc[1], 'Establish the central knowledge.', f'We are learning about {concept_name}. {target_quote}',
                           [target['id']], target_refs, target_quote,
                           'Connect the definition to another statement in the material.'))
@@ -392,7 +561,7 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
         moments.append(moment('context', arc[1], 'Explain the connected relationship.', context_quote + connection,
                               taught_ids(context_quote, context_ref), [context_ref], context_quote,
                               'Use both ideas together to explain the relationship.'))
-    if related:
+    if related and grounding.get('pedagogical_relationships'):
         related_ref, related_quote = related
         moments.append(moment('connection', arc[2], 'Connect the idea to its source context.', f'{related_quote} Use this alongside the earlier explanation of {target.get("concept", title)}.',
                               taught_ids(related_quote, related_ref), [related_ref], related_quote,
@@ -443,7 +612,7 @@ def grounded_fallback_plan(concept, objective, grounding, prerequisites=None):
         answer = ' '.join(item['text'] for item in tested_items)
         if len(tested_items) > 1 and len(answer) <= 360:
             tested_ids = [item['id'] for item in tested_items]
-            prompt = f'Explain {target.get("concept", tested_name)} and connect it to the other ideas you learned. What relationships matter?'
+            prompt = f'What does the statement about {target.get("concept", tested_name)} establish?'
             check_content.update(prompt=prompt, expected_answer=answer, evidence_concepts=tested_ids)
     moments.append({
         'id': 'check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
@@ -483,7 +652,7 @@ def _extract_json(value):
     return json.loads(text)
 
 
-def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequisites=None):
+def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequisites=None, learner_state=None):
     """Generate once, validate strictly, then use a non-fragmenting fallback."""
     if grounding.get('pedagogy_revision'):
         from library.pedagogical_knowledge import objective_valid
@@ -504,7 +673,7 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequ
     if grounding.get('pages'):
         try:
             from .tutor_engine import generate
-            plan = generate(concept, objective, grounding, prerequisites)
+            plan = generate(concept, objective, grounding, prerequisites, learner_state=learner_state)
             plan['origin'] = 'ai'
             return plan
         except Exception as exc:
@@ -543,9 +712,35 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequ
         return fallback
 
 
-def teaching_plan_fingerprint(concept, objective, grounding):
-    payload = json.dumps({'concept': str(concept.id), 'objective': objective, 'grounding': grounding, 'version': 3}, sort_keys=True, default=str)
+def teaching_plan_fingerprint(concept, objective, grounding, learner_state=None):
+    learner_state = {key: value for key, value in (learner_state or {}).items() if value not in ('', None, [], {})}
+    payload = json.dumps({'concept': str(concept.id), 'objective': objective, 'grounding': grounding,
+                          'learner_state': learner_state, 'plan_revision': 5, 'version': 3}, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def learner_generation_state(session, objective_id, prerequisites):
+    """Expose only persisted evidence and controller-owned history to generation."""
+    state = session.state or {}
+    evidence = state.get('objective_evidence', {}).get(objective_id, {})
+    allowed_evidence = {key: evidence[key] for key in
+                        ('taught', 'interactions', 'best_score', 'evidence_ids', 'source') if key in evidence}
+    misconception_ids = evidence.get('misconception_ids', [])
+    if not isinstance(misconception_ids, list):
+        misconception_ids = []
+    used = []
+    for key, cached in (state.get('teaching_plans') or {}).items():
+        if key == objective_id or not isinstance(cached, dict):
+            continue
+        for moment in cached.get('plan', {}).get('teaching_moments', []):
+            representation = moment.get('representation')
+            if representation in REPRESENTATIONS:
+                used.append(representation)
+    used.extend(item for item in state.get('recent_remediation_modes', []) if item in REPRESENTATIONS)
+    return {'known_prerequisite_knowledge_ids': [item['id'] for item in prerequisites if item.get('state') == 'KNOWN'],
+            'prior_objective_evidence': allowed_evidence,
+            'observed_misconception_ids': list(dict.fromkeys(str(item) for item in misconception_ids if item))[-8:],
+            'previously_used_representations': list(dict.fromkeys(used))[-8:]}
 
 
 def get_or_create_teaching_plan(session, grounding, allow_ai=None):
@@ -567,7 +762,10 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
                              'invalidated_objectives': [*session.state.get('invalidated_objectives', [])[-9:], old_id]}
             session.save(update_fields=['objectives', 'objectives_understood', 'objectives_covered', 'state', 'last_active_at'])
     objective_id = str(objective['id'])
-    fingerprint = teaching_plan_fingerprint(session.concept, objective, grounding)
+    from .tutor_contract import prerequisite_state
+    prerequisites = prerequisite_state(session, grounding)
+    learner_state = learner_generation_state(session, objective_id, prerequisites)
+    fingerprint = teaching_plan_fingerprint(session.concept, objective, grounding, learner_state)
     plans = dict(session.state.get('teaching_plans') or {})
     cached = plans.get(objective_id)
     if isinstance(cached, dict) and cached.get('fingerprint') == fingerprint:
@@ -577,12 +775,17 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
                 plan = validate_tutor_plan(cached['plan'], objective, grounding, cached['plan'].get('prerequisite_state'))
             else:
                 plan = validate_teaching_plan(cached.get('plan'), objective_id)
+            plan['plan_revision'] = cached.get('plan', {}).get('plan_revision', 5)
             logger.info('[Journey TeachingPlan] cache=true objective=%s origin=%s representation=%s', objective_id, plan.get('origin'), plan.get('recommended_representation'))
             return plan
         except TeachingPlanValidationError: pass
-    from .tutor_contract import prerequisite_state
-    plan = generate_teaching_plan(session.concept, objective, grounding, allow_ai=allow_ai, prerequisites=prerequisite_state(session, grounding))
-    plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan, 'grounding_input': grounding, 'objective_input': objective}
+    plan = generate_teaching_plan(session.concept, objective, grounding, allow_ai=allow_ai,
+                                  prerequisites=prerequisites, learner_state=learner_state)
+    plan['plan_revision'] = 5
+    logger.info('[JOURNEY OBJECTIVE] objective_id=%s knowledge_ids=%s generation_path=validated_knowledge_objects fallback=%s', objective_id, objective.get('knowledge_ids', []), plan.get('origin') == 'fallback')
+    logger.info('[TUTOR PLAN] plan_revision=5 moment_count=%s representation_types=%s fallback=%s', len(plan['teaching_moments']), sorted({m['representation'] for m in plan['teaching_moments']}), plan.get('origin') == 'fallback')
+    plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan, 'grounding_input': grounding,
+                           'objective_input': objective, 'learner_state_input': learner_state}
     session.state = {**session.state, 'teaching_plans': plans}
     session.save(update_fields=['state', 'last_active_at'])
     return plan

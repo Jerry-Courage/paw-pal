@@ -456,6 +456,8 @@ def _teaching_objectives(concept):
     semantic = grounded_objectives(concept)
     if semantic:
         return semantic
+    if concept.source_resource and concept.source_resource.source_understanding:
+        raise MaterialUnderstandingUncertain(concept.source_resource, concept.source_resource.source_understanding.get('quality', {}))
     title = concept.title.lower()
     if any(term in title for term in ('jacobi', 'gauss-seidel', 'gauss seidel', 'sor')):
         return [
@@ -471,6 +473,40 @@ def _teaching_objectives(concept):
     objectives = [{'id': f'objective-{index + 1}', 'text': sentence[:220]} for index, sentence in enumerate(sentences[:4])]
     objectives.append({'id': 'apply', 'text': f'Apply {concept.title} in a concrete situation.'})
     return objectives
+
+
+def _ensure_current_concept_binding(concept):
+    """Converge a persisted pre-revision node before any lesson artifact is used."""
+    if not concept.source_resource:
+        return False
+    from .material_grounding import resource_knowledge
+    from library.pedagogical_knowledge import learner_concepts, understanding_revision, REVISION
+    model = resource_knowledge(concept.source_resource)
+    if not model or model.get('pedagogy_revision') != REVISION:
+        return False
+    revision = understanding_revision(model)
+    binding = concept.knowledge_binding or {}
+    available = learner_concepts(model)
+    valid_ids = {item['id'] for item in model.get('knowledge', {}).get('knowledge_objects', [])}
+    if binding.get('revision') == revision and set(binding.get('knowledge_ids', [])) <= valid_ids:
+        return False
+    query = set(re.findall(r'\w{4,}', concept.title.casefold()))
+    selected = max(available, key=lambda item: (len(query & set(re.findall(r'\w{4,}', item['summary'].casefold()))), len(item['knowledge_ids'])), default=None)
+    if not selected:
+        raise MaterialUnderstandingUncertain(concept.source_resource, model.get('quality', {}))
+    concept.title = selected['title'][:300]
+    concept.description = selected['summary'][:2000]
+    concept.summary = selected['summary'][:400]
+    concept.source_page = next((ref.get('number') for ref in selected['source_refs'] if ref.get('number') is not None), None)
+    concept.source_section = ''
+    concept.knowledge_binding = {'revision': revision, 'knowledge_ids': selected['knowledge_ids'],
+                                 'concept_source': 'validated_knowledge_objects'}
+    concept.save(update_fields=['title', 'description', 'summary', 'source_page', 'source_section', 'knowledge_binding', 'updated_at'])
+    if concept.unit and concept.order_index == concept.unit.concepts.order_by('order_index').values_list('order_index', flat=True).first():
+        concept.unit.title = concept.title
+        concept.unit.save(update_fields=['title'])
+    logger.info('[JOURNEY SOURCE] resource_id=%s understanding_revision=%s pedagogy_revision=%s concept_source=validated_knowledge_objects legacy_fallback=false knowledge_count=%s rebound=true', concept.source_resource_id, revision, REVISION, len(valid_ids))
+    return True
 
 
 def _public_activity(activity):
@@ -527,8 +563,18 @@ def _session_data(session):
 
 
 def _get_teaching_session(concept, user):
+    rebound = _ensure_current_concept_binding(concept)
     objectives = _teaching_objectives(concept)
     session, created = TeachingSession.objects.get_or_create(user=user, concept=concept, defaults={'objectives': objectives})
+    if rebound and not created:
+        session.objectives = objectives
+        session.objectives_covered = []
+        session.objectives_understood = []
+        session.current_point = 0
+        session.resume_point = 0
+        session.state = {**session.state, 'player': {}, 'teaching_plans': {}, 'objective_evidence': {},
+                         'invalidated_revision': concept.knowledge_binding['revision']}
+        session.save(update_fields=['objectives', 'objectives_covered', 'objectives_understood', 'current_point', 'resume_point', 'state', 'last_active_at'])
     if not session.objectives:
         session.objectives = objectives
         session.save(update_fields=['objectives', 'last_active_at'])
@@ -779,10 +825,14 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
                     moment['id'] = f"{revision}:{moment['id']}"
                 cached = session.state['teaching_plans'][objective_id]
                 cached['plan'] = replacement
-                session.state = {**session.state, 'player': {}, 'teaching_plans': {**session.state['teaching_plans'], objective_id: cached}}
+                first = replacement['teaching_moments'][0]
+                next_id = _activity_id(concept, f"presentation:{objective_id}:{first['id']}:0")
+                player = {**session.state.get('player', {}), 'objective_id': objective_id,
+                          'current_stage_id': f'{objective_id}:{next_id}', 'active_activity_id': ''}
+                session.state = {**session.state, 'player': player, 'teaching_plans': {**session.state['teaching_plans'], objective_id: cached}}
             else:
-                # Honest replay of the grounded lesson; no fabricated transformation.
-                session.state = {**session.state, 'player': {}}
+                # Preserve the current stage if no validated remediation is available.
+                session.state = {**session.state, 'remediation_unavailable': True}
             flow_payload = {'pedagogical_action': 'REMEDIATE'}
             content = feedback
 
@@ -855,13 +905,18 @@ def _extract_resource_concepts(resource) -> list:
     from .material_grounding import resource_knowledge
     model = resource_knowledge(resource)
     if model:
+        from library.pedagogical_knowledge import learner_concepts, understanding_revision, REVISION
         quality = model.get('quality', {})
-        if quality.get('status') != 'ready':
+        concepts = learner_concepts(model)
+        if quality.get('status') != 'ready' or model.get('pedagogy_revision') != REVISION or not concepts:
             raise MaterialUnderstandingUncertain(resource, quality)
+        logger.info('[JOURNEY SOURCE] resource_id=%s understanding_revision=%s pedagogy_revision=%s concept_source=validated_knowledge_objects legacy_fallback=false knowledge_count=%s', resource.id, understanding_revision(model), REVISION, len(model['knowledge']['knowledge_objects']))
         return [{'title': topic['title'][:180], 'description': topic['summary'], 'summary': topic['summary'], 'source_resource': resource,
-                 'source_page': topic.get('page_number'), 'source_section': ' > '.join(topic.get('section_path') or []),
+                 'source_page': next((ref.get('number') for ref in topic['source_refs'] if ref.get('number') is not None), None), 'source_section': '',
+                 'knowledge_binding': {'revision': understanding_revision(model), 'knowledge_ids': topic['knowledge_ids'], 'concept_source': 'validated_knowledge_objects'},
                  'difficulty': 'medium', 'key_definitions': []}
-                for topic in model.get('topics', []) if topic.get('teachability_score', 0) >= .52]
+                for topic in concepts]
+    logger.info('[JOURNEY SOURCE] resource_id=%s understanding_revision=legacy pedagogy_revision=0 concept_source=legacy legacy_fallback=true knowledge_count=0', resource.id)
     raw_concepts = resource.ai_concepts or []
     # Filter: only keep actual concept objects with a title
     real_concepts = [
@@ -872,7 +927,7 @@ def _extract_resource_concepts(resource) -> list:
     notes = (resource.ai_notes_json or {}).get('sections', [])
 
     concepts = []
-    if len(real_concepts) >= 3:
+    if real_concepts:
         concepts = real_concepts
     elif notes:
         for idx, section in enumerate(notes):
@@ -988,7 +1043,9 @@ def _generate_preview_structure(goal: str, all_concepts: list, depth: str) -> di
 
 def _generate_unit_title(goal: str, concepts: list, unit_idx: int) -> str:
     """Generate a short unit title from the concepts it contains."""
-    # Use the most common words across concept titles to infer a theme
+    if any(c.get('knowledge_binding') for c in concepts):
+        return concepts[0]['title'] if len(concepts) == 1 else f"{concepts[0]['title']} and related concepts"
+    # Legacy resources without reconstructable source text only.
     titles = [c.get('title', '') for c in concepts]
     # Simple heuristic: use the first concept's topic area
     if titles:
@@ -1180,6 +1237,7 @@ class LearningPathViewSet(viewsets.ModelViewSet):
                     difficulty=concept_data.get('difficulty', 'medium'),
                     key_definitions=concept_data.get('key_definitions', []),
                     summary=concept_data.get('summary', ''),
+                    knowledge_binding=concept_data.get('knowledge_binding', {}),
                     estimated_minutes=15 if concept_data.get('difficulty') != 'hard' else 25,
                 )
 

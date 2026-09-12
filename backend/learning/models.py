@@ -84,6 +84,7 @@ class ConceptNode(models.Model):
     estimated_minutes = models.IntegerField(default=15, help_text='Estimated study time in minutes')
     key_definitions = models.JSONField(default=list, blank=True, help_text='List of key terms/definitions')
     summary = models.TextField(blank=True, help_text='One-paragraph AI summary of the concept')
+    knowledge_binding = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

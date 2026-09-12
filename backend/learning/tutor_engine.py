@@ -62,12 +62,14 @@ def diagnose_gap(response, expected=''):
     return 'relationship_incomplete_or_confused'
 
 
-def generate(concept, objective, grounding, prerequisites=None, task='TEACHING_GENERATION', adaptation=None):
+def generate(concept, objective, grounding, prerequisites=None, task='TEACHING_GENERATION', adaptation=None,
+             learner_state=None):
     from ai_assistant.services import AIService
     from .teaching_plan import REPRESENTATIONS, MOMENT_TYPES, INTERACTIONS
     return structured_task(AIService(), task, CONTRACT, {
         'objective_id': objective['id'], 'objective': objective, 'goal': concept.path.goal,
         'source_grounding': grounding, 'prerequisite_state': prerequisites or [],
+        'learner_state': learner_state or {},
         'representations': sorted(REPRESENTATIONS - {'SIMPLE_GRAPH', 'LABELED_DIAGRAM'}),
         'moment_types': sorted(MOMENT_TYPES), 'interactions': sorted(INTERACTIONS - {'REVEAL'}),
         'adaptation': adaptation,
@@ -167,7 +169,7 @@ def evaluate(activity, response):
 def remediation(session, objective, activity, response, feedback):
     """Replace a failed check with new teaching + fresh evidence, never a copied answer."""
     if not getattr(settings, 'JOURNEY_TEACHING_AI_ENABLED', False):
-        return None
+        return deterministic_remediation(session, objective, activity, response)
     cached = session.state['teaching_plans'][objective['id']]
     old = cached['plan']
     previous = [m['representation'] for m in old['teaching_moments'] if m['interaction'] == 'NONE']
@@ -188,4 +190,38 @@ def remediation(session, objective, activity, response, feedback):
             raise ValueError('Remediation must supply fresh evidence')
         return plan
     except Exception:
+        return deterministic_remediation(session, objective, activity, response)
+
+
+def deterministic_remediation(session, objective, activity, response):
+    """A bounded decomposition of only the failed knowledge; no full-lesson replay."""
+    from .teaching_plan import knowledge_fallback_plan
+    if not activity.get('tutor') and not activity.get('tested_knowledge_ids'):
         return None
+    cached = session.state['teaching_plans'][objective['id']]
+    grounding = cached['grounding_input']
+    ids = activity.get('tested_knowledge_ids') or activity['tutor']['tests']
+    scoped = {**objective, 'knowledge_ids': ids}
+    plan = knowledge_fallback_plan(session.concept, scoped, grounding)
+    gap = diagnose_gap(response, activity.get('content', {}).get('expected_answer'))
+    cues = {'named_topic_without_explanation': 'Naming the topic is a start. Separate the subject from what the statement tells you about it.',
+            'missed_core_relationship': 'Focus only on the tested claim. Identify its participants and the connection explicitly stated.',
+            'relationship_incomplete_or_confused': 'Rebuild the claim in two parts: what acts or is defined, and what follows or is required.'}
+    for moment in plan['teaching_moments']:
+        if moment['interaction'] == 'NONE':
+            moment.update(type='REMEDIATE', arc_phase='FEEDBACK_ADAPT', dialogue=cues[gap], understanding_change=cues[gap])
+            # The existing evidence renderer highlights the exact proposition while
+            # the dialogue decomposes it, without fabricating a diagram or example.
+            moment['representation'] = 'EVIDENCE_HIGHLIGHT'
+            moment['content']['evidence'] = [moment['source_quote']]
+        else:
+            moment['content']['prompt'] = 'Reconstruct the highlighted claim: what is its subject, and what does it assert about that subject?'
+            moment['dialogue'] = moment['content']['prompt']
+    plan['selected_representation'] = 'EVIDENCE_HIGHLIGHT'
+    plan['recommended_representation'] = 'EVIDENCE_HIGHLIGHT'
+    plan['representation_fallback_reason'] = ''
+    result = validate_tutor_plan(plan, scoped, grounding)
+    result['diagnosed_gap'] = gap
+    result['remediation_mode'] = 'claim_decomposition'
+    result['plan_revision'] = 5
+    return result

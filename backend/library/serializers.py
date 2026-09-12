@@ -29,6 +29,12 @@ class ResourceImageSerializer(serializers.ModelSerializer):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
+    material_understanding = serializers.SerializerMethodField()
+
+    def get_material_understanding(self, obj):
+        from .pedagogical_knowledge import learner_preview
+        return learner_preview(obj.source_understanding or {})
+
     file_url = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
@@ -40,7 +46,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             'id', 'title', 'resource_type', 'file_url', 'url', 'subject',
             'cover_image_url', 'thumbnail_url',
             'status', 'processing_progress', 'status_text', 'file_size', 
-            'ai_summary', 'ai_concepts', 'ai_notes_json',
+            'ai_summary', 'ai_concepts', 'ai_notes_json', 'material_understanding',
             'has_study_kit', 'extracted_images', 'owner_name', 'author_name', 
             'is_public', 'created_at', 'updated_at'
         )

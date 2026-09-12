@@ -1,6 +1,6 @@
 """Pedagogical contracts. AI proposes a sequence; these rules authorize it."""
 import re
-from .teaching_plan import validate_teaching_plan, TeachingPlanValidationError, _text, _list
+from .teaching_plan import REPRESENTATIONS, validate_teaching_plan, TeachingPlanValidationError, _text, _list
 
 TEACHING = {'EXPLAIN', 'VISUALIZE', 'SHOW', 'DEMONSTRATE', 'CONNECT', 'COMPARE', 'EXAMPLE', 'REMEDIATE', 'REINFORCE', 'OPTIONAL_DEPTH'}
 ASSESSMENT = {'MCQ', 'MATCHING', 'ORDERING', 'SORTING', 'TAP_TARGET', 'SHORT_ANSWER', 'STEP_SOLVER', 'EVIDENCE_HIGHLIGHT'}
@@ -33,6 +33,13 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
             raise TeachingPlanValidationError('Objective has no validated pedagogical target')
     plan = validate_teaching_plan({**raw, 'check_strategy': raw.get('check_strategy') or raw.get('evidence_strategy'),
         'remediation_strategy': raw.get('remediation_strategy') or '; '.join(raw.get('remediation_strategies') or ['Revisit the grounded explanation.'])}, str(objective['id']))
+    enforce_representation = 'selected_representation' in raw or raw.get('origin') == 'fallback'
+    selected_representation = str(raw.get('selected_representation') or raw.get('recommended_representation') or '').upper()
+    if selected_representation not in REPRESENTATIONS:
+        raise TeachingPlanValidationError('Invalid selected representation')
+    representation_fallback_reason = str(raw.get('representation_fallback_reason') or '').upper()
+    if representation_fallback_reason not in {'', 'INSUFFICIENT_STRUCTURED_SOURCE', 'UNSUPPORTED_RENDERER', 'VALIDATION_FAILURE'}:
+        raise TeachingPlanValidationError('Invalid representation fallback reason')
     allowed = knowledge_ids(grounding)
     pages = {page['id']: page['text'] for page in grounding.get('pages', [])}
     established = {item['id'] for item in prerequisites or [] if item['state'] == 'KNOWN'}
@@ -81,7 +88,8 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         quote = original.get('source_quote')
         if not isinstance(refs, list) or not refs or not all(isinstance(ref, str) and ref in pages for ref in refs):
             raise TeachingPlanValidationError('Moment requires source page references')
-        if not isinstance(quote, str) or not quote.strip() or not any(quote in pages[ref] for ref in refs):
+        normalized = lambda value: re.sub(r'\s+', ' ', value).strip()
+        if not isinstance(quote, str) or not quote.strip() or normalized(quote) not in normalized(' '.join(pages[ref] for ref in refs)):
             raise TeachingPlanValidationError('Moment requires an exact source excerpt')
         moment['source_refs'], moment['source_quote'] = refs, quote
         content = moment['content']
@@ -101,14 +109,28 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         rep = moment['representation']
         cited_text = ' '.join(pages[ref] for ref in refs)
         body = (content.get('body') or '').strip()
+        if len(body) > 500 and any(body == pages[ref].strip() or (len(body) / max(1, len(pages[ref].strip())) > .8 and body in pages[ref]) for ref in refs):
+            raise TeachingPlanValidationError('Raw source dumps are not teachable moments')
+        if grounding.get('pedagogy_revision'):
+            from library.pedagogical_knowledge import complete_proposition, terms
+            learner_text = ' '.join([body, moment['dialogue'], content.get('prompt', ''), moment['transition']])
+            if re.search(r'\b(?:explanations connect through|other ideas you learned|what relationships matter)\b', learner_text, re.I):
+                raise TeachingPlanValidationError('Lexical glue or untargeted check')
+            if moment['type'] == 'CONNECT' or moment['arc_phase'] == 'CONNECT':
+                relationships = grounding.get('pedagogical_relationships', [])
+                involved = set(moment['teaches']) | established
+                if not any({edge['source_id'], edge['target_id']} <= involved and edge.get('source_refs') for edge in relationships):
+                    raise TeachingPlanValidationError('CONNECT requires a supported semantic relationship')
+            if moment['interaction'] == 'NONE':
+                title_terms = terms(content.get('title', ''))
+                if not complete_proposition(body) or (len(body.split()) <= max(5, len(content.get('title', '').split()) + 2) and not (terms(body) - title_terms)):
+                    raise TeachingPlanValidationError('Teaching must add complete information beyond its heading')
         if len(body) > 650:
             raise TeachingPlanValidationError('Teaching moment exceeds the pacing limit')
         normalized_body = re.sub(r'\W+', ' ', body.casefold()).strip()
         if normalized_body and normalized_body in seen_bodies:
             raise TeachingPlanValidationError('Teaching moments must create distinct understanding')
         if normalized_body: seen_bodies.append(normalized_body)
-        if len(body) > 500 and any(body == pages[ref].strip() or (len(body) / max(1, len(pages[ref].strip())) > .8 and body in pages[ref]) for ref in refs):
-            raise TeachingPlanValidationError('Raw source dumps are not teachable moments')
         # Literal tables, quotations and code are source evidence, not generated facts.
         if rep == 'DATA_TABLE':
             if any(cell not in cited_text for row in content['rows'] for cell in row):
@@ -168,6 +190,11 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
             established.update(moment['teaches'])
     if not has_assessment or max(available_levels) < plan['advancement_rule']['minimum_level']:
         raise TeachingPlanValidationError('Plan cannot supply its required evidence')
+    emitted = {moment['representation'] for moment in plan['teaching_moments'] if moment['interaction'] == 'NONE'}
+    if enforce_representation and selected_representation not in emitted and not representation_fallback_reason:
+        raise TeachingPlanValidationError('Selected representation was silently downgraded')
+    plan['selected_representation'] = selected_representation
+    plan['representation_fallback_reason'] = representation_fallback_reason
     plan['source_grounding'] = {key: grounding[key] for key in ('resource_id', 'resource_title', 'source_refs') if key in grounding}
     plan['source_fingerprint'] = grounding.get('source_fingerprint')
     plan['controller_actions'] = sorted(ACTIONS)

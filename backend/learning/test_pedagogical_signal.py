@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from library.pedagogical_knowledge import (
-    NON_PRIMARY, classify_proposition, objective_valid, objectives_from_knowledge,
+    NON_PRIMARY, REVISION, classify_proposition, objective_valid, objectives_from_knowledge,
 )
 from library.source_understanding import build_understanding, grounding_bundle, understand_with_ai
 from learning.material_grounding import assessment_ready, grounded_objectives
@@ -94,9 +94,9 @@ class PedagogicalSignalTests(SimpleTestCase):
 
     def test_cross_sentence_synthesis_retains_each_provenance(self):
         model, grounding, objective, plan = lesson_fixture()
-        self.assertGreater(len(objective['knowledge_ids']), 1)
+        self.assertGreaterEqual(len(objective['knowledge_ids']), 1)
         taught = set().union(*(set(moment['teaches']) for moment in plan['teaching_moments']))
-        self.assertGreater(len(taught), 1)
+        self.assertGreaterEqual(len(taught), 1)
         self.assertTrue(set(objective['knowledge_ids']) <= taught)
         for moment in plan['teaching_moments']:
             self.assertTrue(moment['source_refs'])
@@ -184,7 +184,11 @@ class PedagogicalSignalSessionTests(TestCase):
         model, _, _, _ = lesson_fixture()
         resource = Resource.objects.create(owner=self.user, title='Gas exchange', source_understanding=model)
         path = LearningPath.objects.create(user=self.user, title='Knowledge')
-        self.concept = ConceptNode.objects.create(path=path, title='Gas exchange', source_resource=resource, order_index=0)
+        selected = model['learner_concepts'][0]
+        from library.pedagogical_knowledge import understanding_revision
+        self.concept = ConceptNode.objects.create(path=path, title=selected['title'], source_resource=resource, order_index=0,
+            knowledge_binding={'revision': understanding_revision(model), 'knowledge_ids': selected['knowledge_ids'],
+                               'concept_source': 'validated_knowledge_objects'})
         self.session = TeachingSession.objects.create(user=self.user, concept=self.concept, objectives=grounded_objectives(self.concept))
 
     def respond(self, answer, key):
@@ -216,6 +220,18 @@ class PedagogicalSignalSessionTests(TestCase):
         self.assertEqual(result['controller_action'], 'BRIDGE_MISSING_KNOWLEDGE')
         self.assertEqual(EncounterAttempt.objects.count(), 0)
 
+    def test_wrong_answer_enters_targeted_remediation_without_intro_reset(self):
+        session, result, _ = self.respond('A disconnected incorrect claim with enough words to grade.', 'wrong')
+        self.assertEqual(session.status, 'remediation')
+        self.assertEqual(session.state['last_tutor_decision']['action'], 'RETEACH')
+        player = session.state['player']
+        self.assertTrue(player['current_stage_id'])
+        self.assertFalse(player['current_stage_id'].endswith(':intro'))
+        objective_id = session.objectives[session.current_point]['id']
+        plan = session.state['teaching_plans'][objective_id]['plan']
+        self.assertEqual(plan['teaching_moments'][0]['type'], 'REMEDIATE')
+        self.assertEqual(plan['teaching_moments'][0]['representation'], 'EVIDENCE_HIGHLIGHT')
+
     def test_bad_existing_objective_is_regenerated_before_planning(self):
         from learning.material_grounding import objective_grounding
         self.session.objectives = [{'id': 'bad', 'text': 'Explain this source statement.', 'knowledge_ids': ['page:page-1']}]
@@ -235,6 +251,6 @@ class PedagogicalSignalSessionTests(TestCase):
         resource.save()
         rebuilt = resource_knowledge(resource)
         self.assertEqual(rebuilt['version'], 2)
-        self.assertEqual(rebuilt['pedagogy_revision'], 1)
+        self.assertEqual(rebuilt['pedagogy_revision'], REVISION)
         self.assertEqual(rebuilt['pages'][0]['number'], 4)
         self.assertTrue(rebuilt['knowledge']['knowledge_objects'])

@@ -1,0 +1,53 @@
+{
+  "fixture": "generic mechanics packet",
+  "resource": {
+    "resource_id": 42,
+    "understanding_revision": "2:2:2692ccaf65d7806609d0778c7949824774772ead6bef59e42fb0130067489c6d",
+    "pedagogy_revision": 2,
+    "concept_source": "validated_knowledge_objects",
+    "legacy_fallback": false,
+    "knowledge_count": 5
+  },
+  "preview": {
+    "count": 5,
+    "count_source": "validated_knowledge_objects",
+    "metadata_heading_selected": false
+  },
+  "journey": {
+    "first_concept": "Predicting later motion",
+    "first_zone": "Predicting later motion",
+    "binding": {
+      "knowledge_ids": ["knowledge-d6ce9aa34a83b973"],
+      "revision": "2:2:2692ccaf65d7806609d0778c7949824774772ead6bef59e42fb0130067489c6d"
+    }
+  },
+  "objective": {
+    "id": "material-knowledge-d6ce9aa34a83b973",
+    "capability": "apply",
+    "text": "Explain the requirement for Predicting later motion.",
+    "knowledge_ids": ["knowledge-d6ce9aa34a83b973"]
+  },
+  "plan": {
+    "version": 3,
+    "plan_revision": 4,
+    "origin": "fallback",
+    "teaching": {
+      "representation": "GROUNDED_EXPLANATION",
+      "text": "Predicting later motion requires the initial momentum, the net force, and the duration of the force.",
+      "teaches": ["knowledge-d6ce9aa34a83b973"]
+    },
+    "check": {
+      "prompt": "What condition is required for Predicting later motion?",
+      "tests": ["knowledge-d6ce9aa34a83b973"]
+    },
+    "lexical_glue_visible": false,
+    "truncated_proposition_visible": false
+  },
+  "wrong_answer": {
+    "diagnosed_gap": "named_topic_without_explanation",
+    "remediation_mode": "claim_decomposition",
+    "changed_representation": "EVIDENCE_HIGHLIGHT",
+    "fresh_check": "Reconstruct the highlighted claim: what is its subject, and what does it assert about that subject?",
+    "reset_to_moment_zero": false
+  }
+}

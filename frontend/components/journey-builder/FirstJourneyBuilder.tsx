@@ -15,7 +15,7 @@ import type { OnboardingUpdate } from '@/types/onboarding'
 import type { FlowCompanionState } from '@/components/onboarding/FlowCompanion'
 
 type Stage = 'intake' | 'processing' | 'reveal' | 'configure' | 'preview' | 'building' | 'ready'
-type ResourceState = { id: number; title: string; subject?: string; resource_type: string; file_size?: number; status: string; processing_progress: number; status_text: string; has_study_kit: boolean; ai_concepts?: Array<{ title?: string; name?: string }>; ai_summary?: string }
+type ResourceState = { id: number; title: string; subject?: string; resource_type: string; file_size?: number; status: string; processing_progress: number; status_text: string; has_study_kit: boolean; ai_concepts?: Array<{ title?: string; name?: string }>; ai_summary?: string; material_understanding?: { concept_count: number; concepts: Array<{ id: string; title: string }>; count_source: string; understanding_revision: string; pedagogy_revision?: number; current: boolean } }
 
 const GOALS = [
   ['Understand it', 'Understand and explain the important ideas clearly'],
@@ -197,7 +197,8 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
   }
 
   const progress = resource?.processing_progress || uploadProgress
-  const discoveries = (resource?.ai_concepts || []).filter(item => item?.title || item?.name).slice(0, 6)
+  const discoveries = (resource?.material_understanding?.concepts || []).slice(0, 6)
+  const conceptCount = resource?.material_understanding?.concept_count || 0
   const friendlyStatus = processingCopy(progress, resource?.status_text)
 
   return (
@@ -229,9 +230,9 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
             <div className="mt-8 border-y border-white/12 py-6">
               <p className="text-xs font-black uppercase tracking-widest text-flow-muted">{resource?.title}</p>
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-3">
-                {discoveries.length ? discoveries.map((concept, index) => <motion.span initial={reduceMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }} key={concept.title || concept.name} className="text-base font-black text-flow-ink"><span className="mr-2 text-flow-orange">●</span>{concept.title || concept.name}</motion.span>) : <span className="text-flow-muted">The study sections are ready.</span>}
+                {discoveries.length ? discoveries.map((concept, index) => <motion.span initial={reduceMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }} key={concept.id} className="text-base font-black text-flow-ink"><span className="mr-2 text-flow-orange">●</span>{concept.title}</motion.span>) : <span className="text-flow-muted">The study sections are ready.</span>}
               </div>
-              <p className="mt-5 text-sm font-bold text-flow-success">{discoveries.length || resource?.ai_concepts?.length || 0} major concepts surfaced</p>
+              <p className="mt-5 text-sm font-bold text-flow-success">{conceptCount} major concepts surfaced</p>
             </div>
             <PrimaryAction onClick={() => setStage('configure')}>Shape the Journey</PrimaryAction>
           </>}

@@ -20,6 +20,9 @@ def resource_knowledge(resource):
                        if isinstance(item, dict) and isinstance(item.get('extracted_text'), str))
     if text:
         return persist_understanding(resource, text)
+    if resource.source_understanding:
+        # A structured record that cannot be reconstructed must fail closed.
+        return resource.source_understanding
     return {}
 
 
@@ -30,10 +33,23 @@ def objective_grounding(concept, objective=None):
     if resource:
         model = resource_knowledge(resource)
         if model:
-            references = (objective or {}).get('source_refs') or []
-            page_number = next((ref.get('number') for ref in references if ref.get('number') is not None), concept.source_page)
-            return {**base, **grounding_bundle(model, (objective or {}).get('text') or concept.title,
-                                              page_number, concept.source_section)}
+            from library.pedagogical_knowledge import understanding_revision
+            objects = model.get('knowledge', {}).get('knowledge_objects', [])
+            binding = getattr(concept, 'knowledge_binding', {}) or {}
+            ids = (objective or {}).get('knowledge_ids') or binding.get('knowledge_ids', [])
+            selected = [item for item in objects if item['id'] in ids]
+            if not selected:
+                selected = [item for item in objects if item['concept'].casefold() == concept.title.casefold()] or objects
+            page_ids = {ref['page_id'] for item in selected for ref in item['source_refs']}
+            pages = [page for page in model.get('pages', []) if page['id'] in page_ids]
+            knowledge = {kind: [item for item in items if any(ref['page_id'] in page_ids for ref in item.get('source_refs', []))]
+                         for kind, items in model.get('knowledge', {}).items()}
+            knowledge['knowledge_objects'] = selected
+            return {**base, 'pedagogy_revision': model.get('pedagogy_revision'), 'understanding_revision': understanding_revision(model),
+                    'source_fingerprint': model.get('fingerprint'), 'pages': pages, 'knowledge': knowledge,
+                    'pedagogical_relationships': model.get('pedagogical_relationships', []),
+                    'source_refs': [ref for item in selected for ref in item['source_refs']],
+                    'excerpt': '\n\n'.join(item['text'] for item in selected), 'status': 'grounded' if selected else 'insufficient'}
     return base
 
 
