@@ -146,7 +146,7 @@ export interface EncounterAttemptResponse {
   evidence_score: number | null
   attempt_number: number
   recommend_flow: boolean
-  outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient'
+  outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal'
 }
 
 export interface TeachingTurn {
@@ -198,7 +198,29 @@ export interface TeachingSessionResponse {
       critical_misconceptions: string[]
     }
   }
-  evaluation?: { correct: boolean | null; score: number | null; feedback: string; attempt_id: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' }
+  evaluation?: { correct: boolean | null; score: number | null; feedback: string; attempt_id: string; objective_id?: string; controller_action?: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' }
+  submission?: JourneySubmission
+}
+
+export interface JourneySubmission {
+  outcome: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal'
+  correct: boolean | null
+  score: number | null
+  feedback: string
+  diagnostic_gap: string
+  concept_id: string
+  objective_id: string
+  moment_id: string
+  tested_knowledge_ids: string[]
+  next_action: 'ADVANCE' | 'REMEDIATE' | 'RETEACH' | 'BRIDGE_MISSING_KNOWLEDGE' | 'BRIDGE_PREREQUISITE' | 'RETRY_CHECK' | string
+  next_stage: { id: string; type: string; objective_id: string; activity_id: string }
+  representation: string
+  attempt: { id: string; status: 'recorded' | 'ungraded'; created: boolean }
+  evidence_status: Record<string, unknown>
+  remediation_requested: boolean
+  progression_unlocked: boolean
+  plan_revision: number | null
+  state_reset: boolean
 }
 
 export interface TeachingMoment {
@@ -212,6 +234,7 @@ export interface TeachingMoment {
 
 export interface TeachingPlan {
   version: number
+  plan_revision?: number
   objective_id: string
   learning_goal: string
   key_insight: string

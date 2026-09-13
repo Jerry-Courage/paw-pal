@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import re
+from copy import deepcopy
 
 from django.conf import settings
 
@@ -768,6 +769,24 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
     fingerprint = teaching_plan_fingerprint(session.concept, objective, grounding, learner_state)
     plans = dict(session.state.get('teaching_plans') or {})
     cached = plans.get(objective_id)
+    # A remediation plan is the authoritative sequence until its fresh check
+    # is completed. Learner-state evidence changes when the failed attempt is
+    # recorded, so its ordinary generation fingerprint is expected to change.
+    # Rebuilding here would discard remediation while serializing the response
+    # and send the player back to the first ordinary lesson stage.
+    if ((getattr(session, 'state', {}) or {}).get('teaching_phase') == 'REMEDIATE' and isinstance(cached, dict)
+            and cached.get('remediation_active') and cached.get('plan', {}).get('version') == 3):
+        try:
+            from .tutor_contract import validate_tutor_plan
+            plan = validate_tutor_plan(deepcopy(cached['plan']), objective, grounding,
+                                       cached['plan'].get('prerequisite_state'))
+            plan['plan_revision'] = cached.get('plan', {}).get('plan_revision', 5)
+            logger.info('[Journey TeachingPlan] remediation_cache=true objective=%s representation=%s',
+                        objective_id, plan.get('recommended_representation'))
+            return plan
+        except TeachingPlanValidationError as exc:
+            logger.warning('[Journey TeachingPlan] rejected stale remediation objective=%s reason=%s',
+                           objective_id, exc)
     if isinstance(cached, dict) and cached.get('fingerprint') == fingerprint:
         try:
             if cached.get('plan', {}).get('version') == 3:

@@ -10,12 +10,13 @@ import MaterialIntake, { MaterialObject, type MaterialDraft } from './MaterialIn
 import JourneyPreview from './JourneyPreview'
 import { API_BASE, getAuthToken, learningApi, libraryApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { journeyDisplayProgress, surfacedConceptLabel } from '@/lib/journeyRuntime'
 import type { BuildJourneyResponse, JourneyDepth, JourneyPreviewResponse } from '@/types/journey'
 import type { OnboardingUpdate } from '@/types/onboarding'
 import type { FlowCompanionState } from '@/components/onboarding/FlowCompanion'
 
 type Stage = 'intake' | 'processing' | 'reveal' | 'configure' | 'preview' | 'building' | 'ready'
-type ResourceState = { id: number; title: string; subject?: string; resource_type: string; file_size?: number; status: string; processing_progress: number; status_text: string; has_study_kit: boolean; ai_concepts?: Array<{ title?: string; name?: string }>; ai_summary?: string; material_understanding?: { concept_count: number; concepts: Array<{ id: string; title: string }>; count_source: string; understanding_revision: string; pedagogy_revision?: number; current: boolean } }
+type ResourceState = { id: number; title: string; subject?: string; resource_type: string; file_size?: number; status: string; stage?: string; ready?: boolean; processing_progress: number; status_text: string; has_study_kit: boolean; ai_concepts?: Array<{ title?: string; name?: string }>; ai_summary?: string; material_understanding?: { concept_count: number; concepts: Array<{ id: string; title: string }>; count_source: string; understanding_revision: string; pedagogy_revision?: number; current: boolean } }
 
 const GOALS = [
   ['Understand it', 'Understand and explain the important ideas clearly'],
@@ -85,7 +86,8 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
       const row = (await libraryApi.getResourceStatus(id)).data
       applyResource({ ...resourceRef.current, id: row.id, title: resourceRef.current?.title || material?.title || 'Material',
         resource_type: resourceRef.current?.resource_type || 'other', status: row.status,
-        processing_progress: row.progress, status_text: row.message, has_study_kit: row.ready } as ResourceState)
+        stage: row.stage, ready: row.ready, processing_progress: row.progress,
+        status_text: row.message, has_study_kit: row.ready } as ResourceState)
     } catch { /* next poll retries */ }
   }, [applyResource, material?.title])
 
@@ -111,7 +113,7 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
         try {
           const rows = JSON.parse(event.data) as Array<any>
           const match = rows.find(row => row.id === resourceId)
-          if (match) applyResource({ ...resourceRef.current, id: match.id, title: resourceRef.current?.title || material?.title || 'Material', resource_type: resourceRef.current?.resource_type || 'other', status: match.status, processing_progress: match.progress, status_text: match.message, has_study_kit: match.ready } as ResourceState)
+          if (match) applyResource({ ...resourceRef.current, id: match.id, title: resourceRef.current?.title || material?.title || 'Material', resource_type: resourceRef.current?.resource_type || 'other', status: match.status, stage: match.stage, ready: match.ready, processing_progress: match.progress, status_text: match.message, has_study_kit: match.ready } as ResourceState)
         } catch { /* malformed event falls through to the next update */ }
       }
       source.addEventListener('snapshot', read as EventListener)
@@ -196,9 +198,12 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
     finally { setBusy(false) }
   }
 
-  const progress = resource?.processing_progress || uploadProgress
-  const discoveries = (resource?.material_understanding?.concepts || []).slice(0, 6)
-  const conceptCount = resource?.material_understanding?.concept_count || 0
+  const ready = Boolean(resource?.ready ?? (resource?.status === 'ready' && resource?.has_study_kit))
+  const statusStage = resource?.stage || (ready ? 'JOURNEY_READY' : undefined)
+  const progress = journeyDisplayProgress(resource?.processing_progress || uploadProgress, ready, statusStage)
+  const currentUnderstanding = resource?.material_understanding?.current ? resource.material_understanding : undefined
+  const discoveries = (currentUnderstanding?.concepts || []).slice(0, 6)
+  const conceptCount = currentUnderstanding?.concept_count || 0
   const friendlyStatus = processingCopy(progress, resource?.status_text)
 
   return (
@@ -232,7 +237,7 @@ export default function FirstJourneyBuilder({ initialResourceIds = [], initialGo
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-3">
                 {discoveries.length ? discoveries.map((concept, index) => <motion.span initial={reduceMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }} key={concept.id} className="text-base font-black text-flow-ink"><span className="mr-2 text-flow-orange">●</span>{concept.title}</motion.span>) : <span className="text-flow-muted">The study sections are ready.</span>}
               </div>
-              <p className="mt-5 text-sm font-bold text-flow-success">{conceptCount} major concepts surfaced</p>
+              <p className="mt-5 text-sm font-bold text-flow-success">{surfacedConceptLabel(conceptCount)}</p>
             </div>
             <PrimaryAction onClick={() => setStage('configure')}>Shape the Journey</PrimaryAction>
           </>}

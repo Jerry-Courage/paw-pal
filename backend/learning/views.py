@@ -3,6 +3,7 @@ import logging
 import re
 import hashlib
 from collections import OrderedDict
+from copy import deepcopy
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -553,9 +554,10 @@ def _session_data(session):
         'unresolved_misconceptions': session.unresolved_misconceptions, 'mastery': session.mastery,
         'conversation_summary': session.conversation_summary, 'turns': [_turn_data(turn) for turn in turns],
         'teaching_preferences': session.state.get('teaching_preferences', {}),
-        'teaching_plan': public((session.state.get('teaching_plans') or {}).get(current_objective_id, {}).get('plan') or {}),
+        'teaching_plan': public(deepcopy((session.state.get('teaching_plans') or {}).get(current_objective_id, {}).get('plan') or {})),
         'teaching_phase': session.state.get('teaching_phase', 'INTRODUCE'),
         'current_objective_id': current_objective_id, 'active_activity_id': active_activity_id,
+        'remediation_context': session.state.get('remediation_context', {}),
         'player': player,
         'last_active_at': session.last_active_at.isoformat(), 'completed': session.status == 'completed',
         'completion_evaluation': evaluation,
@@ -719,9 +721,106 @@ def _unanswered_journey_check(session, activities):
         return None
     activity = next((item for item in activities if item['id'] == activity_id), None)
     if activity:
-        session.state = {**session.state, 'teaching_phase': 'CHECK'}
+        player = {**session.state.get('player', {}), 'objective_id': objective_id,
+                  'current_stage_id': f'{objective_id}:{activity["id"]}',
+                  'active_activity_id': activity['id']}
+        session.state = {**session.state, 'teaching_phase': 'CHECK', 'player': player}
         session.status = 'practicing'
     return activity
+
+
+def _activate_remediation_plan(session, objective, activity, response_data, feedback, revision):
+    """Install and pin a validated remediation sequence for the current objective."""
+    from .tutor_engine import remediation
+    replacement = remediation(session, objective, activity, response_data, feedback)
+    if not replacement:
+        session.state = {**session.state, 'remediation_unavailable': True}
+        return None
+    for moment in replacement['teaching_moments']:
+        moment['id'] = f"{revision}:{moment['id']}"
+    objective_id = objective['id']
+    cached = dict((session.state.get('teaching_plans') or {}).get(objective_id) or {})
+    cached.update({'plan': replacement, 'remediation_active': True,
+                   'remediation_for_activity_id': activity['id']})
+    plans = {**session.state.get('teaching_plans', {}), objective_id: cached}
+    first = replacement['teaching_moments'][0]
+    next_id = _activity_id(session.concept, f"presentation:{objective_id}:{first['id']}:0")
+    player = {**session.state.get('player', {}), 'objective_id': objective_id,
+              'current_stage_id': f'{objective_id}:{next_id}', 'active_activity_id': ''}
+    session.state = {**session.state, 'player': player, 'teaching_plans': plans,
+                     'remediation_context': {
+                         'objective_id': objective_id,
+                         'source_activity_id': activity['id'],
+                         'diagnostic_gap': replacement.get('diagnosed_gap', ''),
+                     }}
+    return replacement
+
+
+def _activity_submission_meta(activity):
+    return {
+        'id': activity.get('id', ''),
+        'concept_id': activity.get('concept_id', ''),
+        'objective_id': activity.get('objective_id', ''),
+        'moment_id': (activity.get('tutor') or {}).get('moment_id', ''),
+        'tested_knowledge_ids': activity.get('tested_knowledge_ids') or (activity.get('tutor') or {}).get('tests', []),
+    }
+
+
+def _response_present(response_data):
+    return isinstance(response_data, dict) and any(
+        bool(value) if isinstance(value, (list, dict)) else bool(str(value).strip())
+        for value in response_data.values()
+    )
+
+
+def _answer_submission_contract(session_data, evaluation, activity, created):
+    """Stable client contract for an in-place Journey check transition."""
+    player = session_data.get('player') or {}
+    active_stage = player.get('active_stage') or {}
+    active_activity = (active_stage.get('payload') or {}).get('activity') or {}
+    outcome = evaluation.get('outcome', 'incorrect')
+    if outcome == 'correct':
+        next_action = 'ADVANCE'
+    elif outcome == 'learning_signal':
+        next_action = evaluation.get('controller_action') or 'RETEACH'
+    elif outcome == 'insufficient':
+        next_action = 'RETRY_CHECK'
+    else:
+        next_action = 'REMEDIATE'
+    remediation = session_data.get('status') == 'remediation' or next_action in {
+        'REMEDIATE', 'RETEACH', 'BRIDGE_MISSING_KNOWLEDGE', 'BRIDGE_PREREQUISITE'
+    }
+    objective_id = evaluation.get('objective_id') or activity.get('objective_id', '')
+    objective_evidence = next((item for item in session_data['completion_evaluation']['objectives']
+                               if item['id'] == objective_id), {})
+    cached = (session_data.get('teaching_plan') or {})
+    return {
+        'outcome': outcome,
+        'correct': evaluation.get('correct'),
+        'score': evaluation.get('score'),
+        'feedback': evaluation.get('feedback', ''),
+        'diagnostic_gap': (session_data.get('remediation_context') or {}).get('diagnostic_gap', ''),
+        'concept_id': activity.get('concept_id', ''),
+        'objective_id': objective_id,
+        'moment_id': activity.get('moment_id') or (activity.get('tutor') or {}).get('moment_id') or activity.get('id', ''),
+        'tested_knowledge_ids': activity.get('tested_knowledge_ids') or (activity.get('tutor') or {}).get('tests', []),
+        'next_action': next_action,
+        'next_stage': {
+            'id': active_stage.get('id', ''),
+            'type': active_stage.get('type', ''),
+            'objective_id': player.get('objective_id', ''),
+            'activity_id': player.get('active_activity_id', ''),
+        },
+        'representation': (active_activity.get('content') or {}).get('knowledge_type') or active_activity.get('type') or active_stage.get('type', ''),
+        'attempt': {'id': evaluation.get('attempt_id', ''),
+                    'status': 'recorded' if evaluation.get('attempt_id') else 'ungraded',
+                    'created': created},
+        'evidence_status': objective_evidence,
+        'remediation_requested': remediation,
+        'progression_unlocked': outcome == 'correct',
+        'plan_revision': cached.get('plan_revision'),
+        'state_reset': active_stage.get('type') == 'FLOW_INTRO' and next_action != 'ADVANCE',
+    }
 
 
 @transaction.atomic
@@ -754,14 +853,17 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         from .tutor_engine import learning_signal
         signal = learning_signal(response_data)
         action = 'BRIDGE_MISSING_KNOWLEDGE' if signal == 'missing_teaching' else 'RETEACH'
-        session.state = {**session.state, 'player': {}, 'teaching_phase': 'INTRODUCE',
+        session.state = {**session.state, 'teaching_phase': 'REMEDIATE',
                          'last_tutor_decision': {'action': action, 'objective_id': objective_id},
                          'last_learning_signal': signal}
-        session.status = 'teaching'
+        session.status = 'remediation'
+        revision = hashlib.sha256(f'{key}:{activity["id"]}:signal'.encode()).hexdigest()[:8]
+        _activate_remediation_plan(session, objective, activity, response_data, feedback, revision)
         result = {'correct': None, 'score': None, 'feedback': feedback, 'attempt_id': '',
                   'objective_id': objective_id, 'outcome': outcome, 'controller_action': action}
         TeachingTurn.objects.create(session=session, role='learner', kind='activity', idempotency_key=key,
-            payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
+            payload={'activity_id': activity['id'], 'activity_meta': _activity_submission_meta(activity),
+                     'response': response_data, 'evaluation': result})
         TeachingTurn.objects.create(session=session, role='flow', content=feedback,
             payload={**result, 'pedagogical_action': action})
         session.save()
@@ -769,10 +871,14 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
     if outcome == 'insufficient':
         result = {'correct': False, 'score': 0, 'feedback': feedback, 'attempt_id': '',
                   'objective_id': objective_id, 'outcome': outcome}
-        session.state = {**session.state, 'teaching_phase': 'CHECK'}
+        player = {**session.state.get('player', {}), 'objective_id': objective_id,
+                  'current_stage_id': f'{objective_id}:{activity["id"]}',
+                  'active_activity_id': activity['id']}
+        session.state = {**session.state, 'teaching_phase': 'CHECK', 'player': player}
         session.status = 'practicing'
         TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key,
-                                    payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
+                                    payload={'activity_id': activity['id'], 'activity_meta': _activity_submission_meta(activity),
+                                             'response': response_data, 'evaluation': result})
         TeachingTurn.objects.create(session=session, role='flow', content=feedback,
                                     payload={**result, 'pedagogical_action': 'CHECK', 'active_activity_id': activity['id'], 'reused': True})
         session.save()
@@ -817,22 +923,7 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         content = f"Close, but that answer mixes up the main distinction. {feedback}\n\nLet’s look at it another way."
         flow_payload = {'pedagogical_action': 'REMEDIATE', **({'activity': _public_activity(remedial)} if remedial else {})}
         if activity.get('tutor'):
-            from .tutor_engine import remediation
-            replacement = remediation(session, objective, activity, response_data, feedback)
-            if replacement:
-                revision = str(attempt.id)[:8]
-                for moment in replacement['teaching_moments']:
-                    moment['id'] = f"{revision}:{moment['id']}"
-                cached = session.state['teaching_plans'][objective_id]
-                cached['plan'] = replacement
-                first = replacement['teaching_moments'][0]
-                next_id = _activity_id(concept, f"presentation:{objective_id}:{first['id']}:0")
-                player = {**session.state.get('player', {}), 'objective_id': objective_id,
-                          'current_stage_id': f'{objective_id}:{next_id}', 'active_activity_id': ''}
-                session.state = {**session.state, 'player': player, 'teaching_plans': {**session.state['teaching_plans'], objective_id: cached}}
-            else:
-                # Preserve the current stage if no validated remediation is available.
-                session.state = {**session.state, 'remediation_unavailable': True}
+            _activate_remediation_plan(session, objective, activity, response_data, feedback, str(attempt.id)[:8])
             flow_payload = {'pedagogical_action': 'REMEDIATE'}
             content = feedback
 
@@ -847,12 +938,14 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         'objective_id': objective_id, 'activity_id': activity['id'], 'attempts': attempt_count}}
     flow_payload = {**flow_payload, 'controller_action': controller_action}
     result = {'correct': correct, 'score': score, 'feedback': feedback, 'attempt_id': str(attempt.id), 'objective_id': objective_id, 'outcome': outcome}
-    TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key, payload={'activity_id': activity['id'], 'response': response_data, 'evaluation': result})
+    TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key,
+                                payload={'activity_id': activity['id'], 'activity_meta': _activity_submission_meta(activity),
+                                         'response': response_data, 'evaluation': result})
     TeachingTurn.objects.create(session=session, role='flow', content=content, payload={**result, **flow_payload})
     evaluation = evaluate_session_completion(session)
     session.mastery = evaluation['mastery']
     session.unresolved_misconceptions = evaluation['unresolved_misconceptions']
-    if evaluation['complete']:
+    if evaluation['complete'] and correct is not False:
         session.status = 'mastery_check'
     session.save()
     return session, result, True
@@ -1823,14 +1916,85 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def teaching_response(self, request, pk=None):
         concept = self.get_object()
+        activity_id = str(request.data.get('activity_id', ''))
+        response_data = request.data.get('response') or {}
+        request_objective_id = str(request.data.get('objective_id') or '')
+        request_moment_id = str(request.data.get('moment_id') or activity_id)
+        request_plan_revision = request.data.get('plan_revision')
+        player_stage_before = 'unknown'
+        submitted_activity = None
         try:
+            if not isinstance(response_data, dict):
+                raise ValueError('Response must be an object')
+            preflight_session = _get_teaching_session(concept, request.user)
+            player_stage_before = (preflight_session.state.get('player') or {}).get('current_stage_id', 'unknown')
+            preflight_activities = _objective_activities(preflight_session, request.user)
+            submitted_activity = next((item for item in preflight_activities
+                                       if item['id'] == activity_id), None)
+            active_objective = _current_objective(preflight_session)
+            active_plan = ((preflight_session.state.get('teaching_plans') or {})
+                           .get(active_objective.get('id', ''), {}).get('plan') or {})
+            submitted_revision = request_plan_revision
+            if submitted_revision is not None and submitted_revision != active_plan.get('plan_revision'):
+                raise ValueError('The lesson plan changed before this answer was checked')
+            if submitted_activity:
+                submitted_objective = request_objective_id
+                submitted_moment = str(request.data.get('moment_id') or '')
+                actual_meta = _activity_submission_meta(submitted_activity)
+                if submitted_objective and submitted_objective != actual_meta['objective_id']:
+                    raise ValueError('The submitted objective does not match the active check')
+                if submitted_moment and submitted_moment != actual_meta['moment_id']:
+                    raise ValueError('The submitted teaching moment does not match the active check')
             session, evaluation, created = submit_teaching_activity(
-                concept, request.user, request.data.get('activity_id', ''),
-                request.data.get('response') or {}, request.data.get('idempotency_key', ''),
+                concept, request.user, activity_id, response_data, request.data.get('idempotency_key', ''),
             )
         except ValueError as exc:
-            return Response({'error': str(exc)}, status=400)
-        return Response({**_session_data(session), 'evaluation': evaluation}, status=201 if created else 200)
+            message = str(exc)
+            if 'lesson plan changed' in message:
+                code, response_status = 'stale_plan_revision', 409
+            elif 'current check' in message or 'active check' in message:
+                code, response_status = 'invalid_active_stage', 409
+            elif 'teaching moments' in message:
+                code, response_status = 'knowledge_binding_mismatch', 409
+            elif 'cannot be evaluated' in message:
+                code, response_status = 'missing_moment', 404
+            else:
+                code, response_status = 'invalid_submission', 422
+            next_action = 'REFRESH_SESSION' if response_status == 409 else 'RETRY'
+            logger.warning('[JOURNEY CHECK] method=%s endpoint=%s concept_id=%s objective_id=%s moment_id=%s knowledge_ids=[] answer_present=%s player_stage_before=%s plan_revision=%s status=%s outcome=error next_action=%s returned_stage=unchanged remediation=false navigation=false state_reset=false',
+                           request.method, request.path, concept.id, request_objective_id, request_moment_id,
+                           _response_present(response_data), player_stage_before, request_plan_revision, response_status, next_action)
+            return Response({'error': code, 'message': message, 'recoverable': True,
+                             'next_action': next_action},
+                            status=response_status)
+        except Exception:
+            transaction.set_rollback(True)
+            logger.exception('[JOURNEY CHECK] method=%s endpoint=%s concept_id=%s objective_id=%s moment_id=%s knowledge_ids=[] answer_present=%s player_stage_before=%s plan_revision=%s status=500 outcome=error next_action=RETRY returned_stage=unchanged remediation=false navigation=false state_reset=false',
+                             request.method, request.path, concept.id, request_objective_id, request_moment_id,
+                             _response_present(response_data), player_stage_before, request_plan_revision)
+            return Response({'error': 'submission_failed',
+                             'message': 'Flow could not check that answer. Your place and answer are still safe.',
+                             'recoverable': True, 'next_action': 'RETRY'}, status=500)
+        data = _session_data(session)
+        activity = submitted_activity
+        # The objective may have advanced, so recover submitted activity metadata
+        # from the persisted learner turn when it is no longer in the active plan.
+        if activity is None:
+            submitted = TeachingTurn.objects.filter(session=session, role='learner', kind='activity',
+                                                     payload__activity_id=activity_id).order_by('-created_at').first()
+            activity = {'id': activity_id, 'concept_id': str(concept.id),
+                        'objective_id': evaluation.get('objective_id', '')}
+            if submitted and isinstance(submitted.payload, dict):
+                activity.update(submitted.payload.get('activity_meta') or {})
+        submission = _answer_submission_contract(data, evaluation, activity, created)
+        response_status = 201 if created else 200
+        logger.info('[JOURNEY CHECK] method=%s endpoint=%s concept_id=%s objective_id=%s moment_id=%s knowledge_ids=%s answer_present=%s player_stage_before=%s plan_revision=%s status=%s outcome=%s next_action=%s returned_stage=%s returned_stage_type=%s remediation=%s navigation=false state_reset=%s',
+                    request.method, request.path, concept.id, submission['objective_id'], submission['moment_id'],
+                    submission['tested_knowledge_ids'], _response_present(response_data), player_stage_before,
+                    submission['plan_revision'], response_status,
+                    submission['outcome'], submission['next_action'], submission['next_stage']['id'],
+                    submission['next_stage']['type'], submission['remediation_requested'], submission['state_reset'])
+        return Response({**data, 'evaluation': evaluation, 'submission': submission}, status=response_status)
 
     @action(detail=True, methods=['post'], url_path='teaching-flashcards/save')
     def save_teaching_flashcards(self, request, pk=None):

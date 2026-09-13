@@ -200,13 +200,14 @@ class PedagogicalSignalSessionTests(TestCase):
         self.session.save()
         return submit_teaching_activity(self.concept, self.user, check['id'], {'text': answer}, key)
 
-    def test_dont_know_reenters_teaching_without_attempt_or_mastery(self):
+    def test_dont_know_reteaches_without_attempt_mastery_or_intro_reset(self):
         from learning.models import EncounterAttempt
         session, result, created = self.respond("I don't know", 'signal')
         self.assertTrue(created)
         self.assertEqual(result['controller_action'], 'RETEACH')
-        self.assertEqual(session.status, 'teaching')
-        self.assertEqual(session.state['player'], {})
+        self.assertEqual(session.status, 'remediation')
+        self.assertTrue(session.state['teaching_plans'][session.objectives[0]['id']]['remediation_active'])
+        self.assertFalse(session.state['player']['current_stage_id'].endswith(':intro'))
         self.assertEqual(session.objectives_understood, [])
         self.assertEqual(EncounterAttempt.objects.count(), 0)
 

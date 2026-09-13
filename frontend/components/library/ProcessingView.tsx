@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { libraryApi } from '@/lib/api'
 import { toast } from 'sonner'
+import { journeyDisplayProgress } from '@/lib/journeyRuntime'
 
 // ── Stage definitions ────────────────────────────────────────────────────────
 const STAGES = [
@@ -87,7 +88,9 @@ export default function ProcessingView({ resource, compact = false, onDelete }: 
   const startedAt = useRef(Date.now()).current
   const elapsed = useElapsed(startedAt)
 
-  const progress = Math.max(resource.processing_progress || 0, 2)
+  const ready = Boolean(resource.ready ?? (resource.status === 'ready' && resource.has_study_kit))
+  const stage = resource.stage || (ready ? 'JOURNEY_READY' : undefined)
+  const progress = Math.max(journeyDisplayProgress(resource.processing_progress || 0, ready, stage), 2)
   const statusText = resource.status_text || 'Initializing...'
   const [isReprocessing, setIsReprocessing] = useState(false)
   const isFailed = resource.status === 'failed'
