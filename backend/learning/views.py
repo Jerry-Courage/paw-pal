@@ -798,7 +798,7 @@ def _answer_submission_contract(session_data, evaluation, activity, created):
         next_action = 'ADVANCE'
     elif outcome == 'learning_signal':
         next_action = evaluation.get('controller_action') or 'RETEACH'
-    elif outcome == 'insufficient':
+    elif outcome in {'insufficient', 'ungradable_system_error'}:
         next_action = 'RETRY_CHECK'
     else:
         next_action = 'REMEDIATE'
@@ -843,6 +843,7 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
     """Evaluate one Activity Engine V2 response and record authoritative Journey evidence once."""
     session = _get_teaching_session(concept, user)
     session = TeachingSession.objects.select_for_update().get(pk=session.pk)
+    player_before_evaluation = deepcopy(session.state.get('player', {}))
     if perf is not None:
         perf.stage('session_lookup')
     key = f'activity:{str(idempotency_key).strip()}'[:80] if idempotency_key else ''
@@ -892,12 +893,15 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
             payload={**result, 'pedagogical_action': action})
         session.save()
         return session, result, True
-    if outcome == 'insufficient':
-        result = {'correct': False, 'score': 0, 'feedback': feedback, 'attempt_id': '',
+    if outcome in {'insufficient', 'ungradable_system_error'}:
+        result = {'correct': None if outcome == 'ungradable_system_error' else False,
+                  'score': None if outcome == 'ungradable_system_error' else 0,
+                  'feedback': feedback, 'attempt_id': '',
                   'objective_id': objective_id, 'outcome': outcome}
-        player = {**session.state.get('player', {}), 'objective_id': objective_id,
-                  'current_stage_id': f'{objective_id}:{activity["id"]}',
-                  'active_activity_id': activity['id']}
+        player = (player_before_evaluation if outcome == 'ungradable_system_error' else {
+            **session.state.get('player', {}), 'objective_id': objective_id,
+            'current_stage_id': f'{objective_id}:{activity["id"]}',
+            'active_activity_id': activity['id']})
         session.state = {**session.state, 'teaching_phase': 'CHECK', 'player': player}
         session.status = 'practicing'
         TeachingTurn.objects.create(session=session, role='learner', kind='activity', content='', idempotency_key=key,

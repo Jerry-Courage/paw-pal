@@ -126,6 +126,24 @@ class InteractionConvergenceTests(TestCase):
         self.assertFalse(submission['state_reset'])
         self.assertTrue(submission['feedback'])
 
+    def test_evaluator_failure_preserves_answer_stage_and_mastery(self):
+        check = self.activate_check()
+        before = deepcopy(TeachingSession.objects.get(pk=self.session.pk).state['player'])
+        failed = {'outcome': 'ungradable_system_error', 'score': None,
+                  'missing_evidence': [], 'path': 'provider_failure'}
+        with patch('learning.assessment.evaluate_open_text', return_value=failed):
+            response = self.submit(check, 'My answer remains available.', 'system-error')
+        self.assertEqual(response.status_code, 201)
+        submission = response.data['submission']
+        self.assertEqual(submission['outcome'], 'ungradable_system_error')
+        self.assertEqual(submission['next_action'], 'RETRY_CHECK')
+        self.assertEqual(submission['attempt']['status'], 'ungraded')
+        self.assertEqual(EncounterAttempt.objects.count(), 0)
+        after = TeachingSession.objects.get(pk=self.session.pk).state['player']
+        self.assertEqual(after['objective_id'], before['objective_id'])
+        self.assertEqual(after['current_stage_id'], before['current_stage_id'])
+        self.assertEqual(after['active_activity_id'], before['active_activity_id'])
+
     def test_duplicate_submission_is_idempotent(self):
         check = self.activate_check()
         first = self.submit(check, 'A disconnected claim that cannot satisfy this check.', 'same-request')

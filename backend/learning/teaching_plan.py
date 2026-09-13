@@ -140,6 +140,8 @@ def validate_teaching_plan(raw, expected_objective_id=None):
             'connections': [[_text(edge[0], 100), _text(edge[1], 100), _text(edge[2] if len(edge) > 2 else '', 120)] for edge in _list(content.get('connections'), 'connections')[:10] if isinstance(edge, list) and len(edge) >= 2],
             'claim': _text(content.get('claim'), 500),
             'relationship': _text(content.get('relationship'), 180),
+            'what_matters': _text(content.get('what_matters'), 360),
+            'why_it_matters': _text(content.get('why_it_matters'), 360),
             'nodes': [_text(item, 180) for item in _list(content.get('nodes'), 'nodes')[:8] if _text(item, 180)],
             'edges': [[_text(edge[0], 100), _text(edge[1], 100), _text(edge[2] if len(edge) > 2 else '', 120)] for edge in _list(content.get('edges'), 'edges')[:10] if isinstance(edge, list) and len(edge) >= 2],
             'columns': [_text(item, 140) for item in _list(content.get('columns'), 'columns')[:3] if _text(item, 140)],
@@ -148,6 +150,7 @@ def validate_teaching_plan(raw, expected_objective_id=None):
             'evidence': [_text(item, 320) for item in _list(content.get('evidence'), 'evidence')[:5] if _text(item, 320)],
             'evidence_concepts': [_text(item, 100) for item in _list(content.get('evidence_concepts'), 'evidence_concepts')[:8] if _text(item, 100)],
             'expected_answer': _text(content.get('expected_answer'), 360),
+            'additional_evidence_required': bool(content.get('additional_evidence_required', False)),
             'options': [_text(item, 220) for item in _list(content.get('options'), 'options')[:6] if _text(item, 220)],
             'correct_index': content.get('correct_index'),
             'items': [_text(item, 180) for item in _list(content.get('items'), 'items')[:8] if _text(item, 180)],
@@ -433,14 +436,8 @@ def knowledge_fallback_plan(concept, objective, grounding, prerequisites=None):
         'attention_cue': cue, 'dialogue': cue, 'mascot_position': 'beside', 'level': 2,
         'teaches': [item['id'] for item in selected], 'tests': [], 'source_refs': refs,
         'source_quote': target['text'], 'content': content}]
-    prompt = {'DEFINE': f'What does {label} mean?', 'COMPARE': f'How do the cases involving {label} differ?',
-              'CALCULATE': f'How do the givens and operation produce the result in {label}?',
-              'ORDER': f'What supported stages make up {label}?',
-              'TRACE': f'How does information move through {label}?',
-              'IDENTIFY_EVIDENCE': f'What evidence supports {label}?',
-              'APPLY': f'What condition is required for {label}?',
-              'EXPLAIN_MECHANISM': f'How does {label} produce its stated outcome?'}.get(
-                  capability, f'What does the statement about {label} establish?')
+    from .assessment import capability_prompt
+    prompt = capability_prompt(capability, label)
     moments.append({'id': 'knowledge-check', 'type': 'CHECK', 'representation': 'GROUNDED_EXPLANATION',
         'interaction': 'SHORT_ANSWER', 'purpose': 'Check the selected capability.', 'arc_phase': 'VERIFY',
         'understanding_change': 'Explain the specific taught claim.', 'transition': 'Use evidence to advance or remediate.',
@@ -884,6 +881,7 @@ def teaching_activity_from_plan(concept, objective, plan, activity_id, moment=No
             activity.update({'type': moment['interaction'].lower(), 'purpose': 'check', 'stage': 'check',
                              'tested_knowledge_ids': moment.get('tested_knowledge_ids', moment['tests']),
                              'prompt': content['prompt'], 'requires_teaching': True,
+                             'assessment_target': moment.get('assessment_target', {}),
                              'rubric': {'source_quote': moment['source_quote'], 'expected': content['expected_answer']}})
             if moment['interaction'] == 'MCQ': activity['options'] = content['options']
             if moment['interaction'] == 'MATCHING':

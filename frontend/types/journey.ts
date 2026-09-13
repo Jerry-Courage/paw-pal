@@ -114,7 +114,7 @@ export interface EncounterActivity {
   dialogue?: string
   mascot_position?: 'upper' | 'beside' | 'edge' | 'center' | 'hidden'
   tutor?: { level: number; minimum_level: number; moment_id: string }
-  content?: { problem?: string; known?: string[]; result?: string; interpretation?: string; code?: string; language?: string; formula_format?: string; revealed_steps?: number; columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; pairs?: Array<{ left: string; right: string }>; groups?: Array<{ id: string; label: string }>; evidence?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string; label?: string }>; progressive?: boolean; knowledge_type?: string; subject_family?: string }
+  content?: { problem?: string; known?: string[]; result?: string; interpretation?: string; code?: string; language?: string; formula_format?: string; revealed_steps?: number; columns?: string[]; rows?: string[][]; idea?: string; example?: string; items?: string[]; pairs?: Array<{ left: string; right: string }>; groups?: Array<{ id: string; label: string }>; evidence?: string[]; mode?: string; title?: string; lead?: string; steps?: Array<string | { label?: string; body: string }>; takeaway?: string; body?: string; key_idea?: string; formula?: string; parts?: Array<{ symbol: string; meaning: string }>; nodes?: Array<{ id?: string; label: string }>; edges?: Array<{ from: string; to: string; label?: string }>; progressive?: boolean; knowledge_type?: string; subject_family?: string; what_matters?: string; why_it_matters?: string; relationship?: string }
   explanation?: string
   hints?: string[]
   difficulty: string
@@ -146,7 +146,7 @@ export interface EncounterAttemptResponse {
   evidence_score: number | null
   attempt_number: number
   recommend_flow: boolean
-  outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal'
+  outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' | 'ungradable_system_error'
 }
 
 export interface TeachingTurn {
@@ -198,12 +198,12 @@ export interface TeachingSessionResponse {
       critical_misconceptions: string[]
     }
   }
-  evaluation?: { correct: boolean | null; score: number | null; feedback: string; attempt_id: string; objective_id?: string; controller_action?: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' }
+  evaluation?: { correct: boolean | null; score: number | null; feedback: string; attempt_id: string; objective_id?: string; controller_action?: string; outcome?: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' | 'ungradable_system_error' }
   submission?: JourneySubmission
 }
 
 export interface JourneySubmission {
-  outcome: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal'
+  outcome: 'correct' | 'incorrect' | 'partial' | 'insufficient' | 'learning_signal' | 'ungradable_system_error'
   correct: boolean | null
   score: number | null
   feedback: string

@@ -163,6 +163,10 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
             moment['tested_knowledge_ids'] = original.get('tested_knowledge_ids', moment['tests'])
             if moment['tested_knowledge_ids'] != moment['tests']:
                 raise TeachingPlanValidationError('Assessment knowledge dependencies disagree')
+            from .assessment import build_assessment_target
+            moment['assessment_target'] = build_assessment_target(objective, original, grounding)
+            if moment['assessment_target']['tested_knowledge_ids'] != moment['tested_knowledge_ids']:
+                raise TeachingPlanValidationError('Assessment target knowledge dependencies disagree')
             if grounding.get('pedagogy_revision'):
                 from library.pedagogical_knowledge import classify_proposition, NON_PRIMARY
                 if classify_proposition(content.get('expected_answer', '')) in NON_PRIMARY - {'UNKNOWN'}:

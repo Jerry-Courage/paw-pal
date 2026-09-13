@@ -239,8 +239,11 @@ class AskFlowTests(TestCase):
             for count in (2,3):self.assertEqual(client.post(base+'/teaching-stage/reveal/',{'activity_id':worked['id'],'count':count},format='json').status_code,200)
             reply=client.post(base+'/teaching-stage/continue/',{'stage_id':data['player']['current_stage_id']},format='json')
             self.assertEqual(reply.status_code,200)
-            args=(self.session.concept,self.user,check['id'],{'text':'It is an approximation from discrete data.'},'once')
-            _,first,created=submit_teaching_activity(*args);_,second,repeated=submit_teaching_activity(*args)
+            expected=next(moment['content']['expected_answer'] for moment in cached['plan']['teaching_moments']
+                          if moment['interaction'] in {'SHORT_ANSWER','STEP_SOLVER'})
+            args=(self.session.concept,self.user,check['id'],{'text':expected},'once')
+            with patch('learning.tutor_engine.evaluate', return_value=(True,100,'Grounded answer.','correct')):
+                _,first,created=submit_teaching_activity(*args);_,second,repeated=submit_teaching_activity(*args)
             self.assertTrue(created);self.assertFalse(repeated);self.assertEqual(first,second)
             self.assertEqual(EncounterAttempt.objects.count(),1)
 
