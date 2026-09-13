@@ -43,3 +43,9 @@ export function submissionErrorCopy(status?: number, payload?: JourneySubmission
   if (status === 422) return 'Flow could not evaluate that response. Adjust it and try again.'
   return 'Flow could not check that answer. Your place and answer are still safe.'
 }
+
+export function beginJourneySubmission(lock: { current: boolean }): boolean {
+  if (lock.current) return false
+  lock.current = true
+  return true
+}

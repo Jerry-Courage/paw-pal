@@ -196,6 +196,18 @@ class TutorContractTests(SimpleTestCase):
         with patch('learning.tutor_engine.generate',return_value=changed):
             self.assertIsNotNone(remediation(session,obj,activity,{'text':'exact'},'Needs approximation'))
 
+    @override_settings(JOURNEY_TEACHING_AI_ENABLED=True)
+    def test_invalid_ai_remediation_quote_falls_back_safely(self):
+        raw,obj,source=fixture();plan=validate_tutor_plan(raw,obj,source)
+        session=SimpleNamespace(concept=Mock(),state={'teaching_plans':{'o':{'plan':plan,'grounding_input':source}}})
+        activity={'prompt':'Old question','content':{'expected_answer':'Approximation'}}
+        safe=copy.deepcopy(plan);safe['remediation_mode']='grounded_fallback'
+        with patch('learning.tutor_engine.deterministic_remediation',side_effect=[None,safe]) as local, \
+             patch('learning.tutor_engine.generate',side_effect=ValueError('Evidence quotation is not in cited source')):
+            result=remediation(session,obj,activity,{'text':'exact'},'Needs approximation')
+        self.assertEqual(result['remediation_mode'],'grounded_fallback')
+        self.assertEqual(local.call_count,2)
+
 
 class AskFlowTests(TestCase):
     def setUp(self):

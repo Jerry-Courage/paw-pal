@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from copy import deepcopy
 
 from django.conf import settings
@@ -714,9 +715,29 @@ def generate_teaching_plan(concept, objective, grounding, allow_ai=None, prerequ
 
 
 def teaching_plan_fingerprint(concept, objective, grounding, learner_state=None):
-    learner_state = {key: value for key, value in (learner_state or {}).items() if value not in ('', None, [], {})}
-    payload = json.dumps({'concept': str(concept.id), 'objective': objective, 'grounding': grounding,
-                          'learner_state': learner_state, 'plan_revision': 5, 'version': 3}, sort_keys=True, default=str)
+    """Fingerprint the stable base lesson, excluding answer-attempt state.
+
+    Remediation is cached separately. A learner answer, score, or misconception
+    must not invalidate and regenerate the lesson that established the topic.
+    """
+    learner_state = learner_state or {}
+    payload = json.dumps({
+        'concept': str(concept.id),
+        'concept_knowledge_binding': getattr(concept, 'knowledge_binding', {}) or {},
+        'objective': objective,
+        'objective_fingerprint': hashlib.sha256(
+            json.dumps(objective, sort_keys=True, default=str).encode()
+        ).hexdigest()[:16],
+        'source_fingerprint': grounding.get('source_fingerprint') or grounding.get('understanding_revision'),
+        'pedagogy_revision': grounding.get('pedagogy_revision'),
+        'relevant_learner_state_class': {
+            'known_prerequisite_knowledge_ids': sorted(
+                learner_state.get('known_prerequisite_knowledge_ids', [])
+            ),
+        },
+        'tutor_plan_schema_revision': 6,
+        'version': 3,
+    }, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
@@ -744,8 +765,9 @@ def learner_generation_state(session, objective_id, prerequisites):
             'previously_used_representations': list(dict.fromkeys(used))[-8:]}
 
 
-def get_or_create_teaching_plan(session, grounding, allow_ai=None):
-    index = min(session.current_point, max(0, len(session.objectives) - 1))
+def get_or_create_teaching_plan(session, grounding, allow_ai=None, objective_index=None, perf=None):
+    index = min(session.current_point if objective_index is None else objective_index,
+                max(0, len(session.objectives) - 1))
     objective = session.objectives[index] if session.objectives else {'id': 'objective-1', 'text': session.concept.title}
     if grounding.get('pedagogy_revision'):
         from library.pedagogical_knowledge import objective_valid, objectives_from_knowledge
@@ -778,9 +800,15 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
             and cached.get('remediation_active') and cached.get('plan', {}).get('version') == 3):
         try:
             from .tutor_contract import validate_tutor_plan
+            validation_started = time.perf_counter()
             plan = validate_tutor_plan(deepcopy(cached['plan']), objective, grounding,
                                        cached['plan'].get('prerequisite_state'))
             plan['plan_revision'] = cached.get('plan', {}).get('plan_revision', 5)
+            if perf is not None:
+                values = {'cache_hit': True, 'validation_ms': round((time.perf_counter() - validation_started) * 1000, 2)}
+                if not perf.values.get('generation_ms'):
+                    values.update(provider='cache', model='remediation')
+                perf.update(**values)
             logger.info('[Journey TeachingPlan] remediation_cache=true objective=%s representation=%s',
                         objective_id, plan.get('recommended_representation'))
             return plan
@@ -789,22 +817,45 @@ def get_or_create_teaching_plan(session, grounding, allow_ai=None):
                            objective_id, exc)
     if isinstance(cached, dict) and cached.get('fingerprint') == fingerprint:
         try:
+            validation_started = time.perf_counter()
             if cached.get('plan', {}).get('version') == 3:
                 from .tutor_contract import validate_tutor_plan
-                plan = validate_tutor_plan(cached['plan'], objective, grounding, cached['plan'].get('prerequisite_state'))
+                plan = validate_tutor_plan(deepcopy(cached['plan']), objective, grounding, cached['plan'].get('prerequisite_state'))
             else:
-                plan = validate_teaching_plan(cached.get('plan'), objective_id)
+                plan = validate_teaching_plan(deepcopy(cached.get('plan')), objective_id)
             plan['plan_revision'] = cached.get('plan', {}).get('plan_revision', 5)
+            if perf is not None:
+                values = {'cache_hit': True, 'validation_ms': round((time.perf_counter() - validation_started) * 1000, 2)}
+                if not perf.values.get('generation_ms'):
+                    values.update(provider='cache', model='base-plan')
+                perf.update(**values)
             logger.info('[Journey TeachingPlan] cache=true objective=%s origin=%s representation=%s', objective_id, plan.get('origin'), plan.get('recommended_representation'))
             return plan
         except TeachingPlanValidationError: pass
+    started = time.perf_counter()
     plan = generate_teaching_plan(session.concept, objective, grounding, allow_ai=allow_ai,
                                   prerequisites=prerequisites, learner_state=learner_state)
+    generation_ms = round((time.perf_counter() - started) * 1000, 2)
+    validation_started = time.perf_counter()
+    if plan.get('version') == 3:
+        from .tutor_contract import validate_tutor_plan
+        plan = validate_tutor_plan(deepcopy(plan), objective, grounding, plan.get('prerequisite_state'))
+    else:
+        plan = validate_teaching_plan(deepcopy(plan), objective_id)
+    validation_ms = round((time.perf_counter() - validation_started) * 1000, 2)
     plan['plan_revision'] = 5
+    if perf is not None:
+        route = (getattr(settings, 'AI_TASK_ROUTES', {}) or {}).get('TEACHING_GENERATION') or []
+        selected = route[0] if route and isinstance(route[0], dict) else {}
+        perf.update(cache_hit=False, generation_ms=generation_ms, validation_ms=validation_ms,
+                    provider=selected.get('provider', 'deterministic' if plan.get('origin') == 'fallback' else 'configured'),
+                    model=selected.get('model', plan.get('origin', 'unknown')))
     logger.info('[JOURNEY OBJECTIVE] objective_id=%s knowledge_ids=%s generation_path=validated_knowledge_objects fallback=%s', objective_id, objective.get('knowledge_ids', []), plan.get('origin') == 'fallback')
     logger.info('[TUTOR PLAN] plan_revision=5 moment_count=%s representation_types=%s fallback=%s', len(plan['teaching_moments']), sorted({m['representation'] for m in plan['teaching_moments']}), plan.get('origin') == 'fallback')
-    plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan, 'grounding_input': grounding,
-                           'objective_input': objective, 'learner_state_input': learner_state}
+    plans[objective_id] = {'fingerprint': fingerprint, 'plan': plan, 'base_fingerprint': fingerprint,
+                           'base_plan': deepcopy(plan), 'grounding_input': grounding,
+                           'objective_input': objective, 'learner_state_input': learner_state,
+                           'plan_schema_revision': 6}
     session.state = {**session.state, 'teaching_plans': plans}
     session.save(update_fields=['state', 'last_active_at'])
     return plan

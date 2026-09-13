@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 // @ts-expect-error Node's native type-strip runner requires the source extension.
-import { journeyDisplayProgress, journeySubmissionTransition, surfacedConceptLabel, submissionErrorCopy } from './journeyRuntime.ts'
+import { beginJourneySubmission, journeyDisplayProgress, journeySubmissionTransition, surfacedConceptLabel, submissionErrorCopy } from './journeyRuntime.ts'
 
 assert.equal(journeyDisplayProgress(100, false, 'ENRICHMENT'), 99)
 assert.equal(journeyDisplayProgress(99.9, false, 'ENRICHMENT'), 99)
@@ -24,5 +24,11 @@ assert.equal(interaction.remediationVisible, true)
 assert.equal(interaction.nextStageId, 'queue-objective:remediation-evidence')
 assert.equal(interaction.navigationRequested, false)
 assert.equal(interaction.stateReset, false)
+
+const submissionLock = { current: false }
+assert.equal(beginJourneySubmission(submissionLock), true)
+assert.equal(beginJourneySubmission(submissionLock), false)
+submissionLock.current = false
+assert.equal(beginJourneySubmission(submissionLock), true)
 
 console.log('Journey runtime regression checks passed')

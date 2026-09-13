@@ -20,6 +20,7 @@ from .spaced_repetition import calculate_next_review, get_due_concepts, get_revi
 from .presentation import classify_presentation, grounded_distractors
 from .teaching_plan import get_or_create_teaching_plan, teaching_activities_from_plan
 from .player import continue_player_stage, sync_player_state
+from .performance import JourneyPerformance
 
 logger = logging.getLogger(__name__)
 
@@ -283,14 +284,24 @@ def _concept_activities(concept, user=None):
     return [item for item in sequence if _valid_activity(item)] or [reflection]
 
 
-def _objective_activities(session, user=None):
+def _objective_activities(session, user=None, allow_plan_generation=True, perf=None):
     """Single factory for checks belonging to the session's current objective."""
     concept = session.concept
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[objective_index] if session.objectives else {'id': 'objective-1', 'text': concept.title}
     objective_id = objective['id']
     grounding = _grounding(concept, objective)
-    plan = get_or_create_teaching_plan(session, grounding)
+    if perf is not None:
+        perf.stage('grounding')
+    if allow_plan_generation:
+        plan = get_or_create_teaching_plan(session, grounding, perf=perf)
+        if perf is not None:
+            perf.stage('plan_lookup')
+    else:
+        cached = (session.state.get('teaching_plans') or {}).get(str(objective_id)) or {}
+        plan = deepcopy(cached.get('plan') or cached.get('base_plan') or {})
+        if not plan:
+            return []
     objective = session.objectives[objective_index] if session.objectives else objective
     objective_id = objective['id']
     presentations = teaching_activities_from_plan(
@@ -533,7 +544,7 @@ def _turn_data(turn):
             'payload': payload, 'created_at': turn.created_at.isoformat()}
 
 
-def _session_data(session):
+def _session_data(session, allow_plan_generation=True, perf=None):
     from .tutor_engine import public
     turns = list(session.turns.exclude(pk__in=session.turns.filter(payload__channel='ask_flow').values('pk')).order_by('-created_at')[:40])
     turns.sort(key=lambda turn: (turn.created_at, 0 if turn.role == 'learner' else 1))
@@ -542,7 +553,8 @@ def _session_data(session):
     current_objective_id = session.objectives[current_index]['id'] if session.objectives else ''
     active = session.state.get('last_learning_object') or {}
     active_activity_id = active.get('activity_id', '') if active.get('objective_id') == current_objective_id else ''
-    player_activities = [_public_activity(activity) for activity in _objective_activities(session, session.user)]
+    player_activities = [_public_activity(activity) for activity in _objective_activities(
+        session, session.user, allow_plan_generation=allow_plan_generation, perf=perf)]
     for activity in player_activities:
         if activity.get('type') == 'worked_example':
             activity.setdefault('content', {})['revealed_steps'] = session.state.get('revealed_steps', {}).get(activity['id'], 1)
@@ -564,7 +576,7 @@ def _session_data(session):
     }
 
 
-def _get_teaching_session(concept, user):
+def _get_teaching_session(concept, user, perf=None):
     rebound = _ensure_current_concept_binding(concept)
     objectives = _teaching_objectives(concept)
     session, created = TeachingSession.objects.get_or_create(user=user, concept=concept, defaults={'objectives': objectives})
@@ -589,7 +601,7 @@ def _get_teaching_session(concept, user):
         first_objective = session.objectives[0]['id'] if session.objectives else ''
         session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, first_objective]))
         record_objective_evidence(session, first_objective, taught=True)
-        activities = _objective_activities(session, user)
+        activities = _objective_activities(session, user, perf=perf)
         teaching = next((item for item in activities if item.get('purpose') == 'learn'), None)
         check = _next_journey_check(session, activities)
         payload = {'pedagogical_action': 'CHECK'}
@@ -740,6 +752,9 @@ def _activate_remediation_plan(session, objective, activity, response_data, feed
         moment['id'] = f"{revision}:{moment['id']}"
     objective_id = objective['id']
     cached = dict((session.state.get('teaching_plans') or {}).get(objective_id) or {})
+    if cached.get('plan') and not cached.get('remediation_active'):
+        cached.setdefault('base_plan', deepcopy(cached['plan']))
+        cached.setdefault('base_fingerprint', cached.get('fingerprint'))
     cached.update({'plan': replacement, 'remediation_active': True,
                    'remediation_for_activity_id': activity['id']})
     plans = {**session.state.get('teaching_plans', {}), objective_id: cached}
@@ -824,16 +839,21 @@ def _answer_submission_contract(session_data, evaluation, activity, created):
 
 
 @transaction.atomic
-def submit_teaching_activity(concept, user, activity_id, response_data, idempotency_key=''):
+def submit_teaching_activity(concept, user, activity_id, response_data, idempotency_key='', activity_hint=None, perf=None):
     """Evaluate one Activity Engine V2 response and record authoritative Journey evidence once."""
     session = _get_teaching_session(concept, user)
     session = TeachingSession.objects.select_for_update().get(pk=session.pk)
+    if perf is not None:
+        perf.stage('session_lookup')
     key = f'activity:{str(idempotency_key).strip()}'[:80] if idempotency_key else ''
     if key:
         existing = TeachingTurn.objects.filter(session=session, role='learner', kind='activity', idempotency_key=key).first()
         if existing:
             return session, existing.payload.get('evaluation', {}), False
-    activity = next((item for item in _objective_activities(session, user) if item['id'] == str(activity_id)), None)
+    activity = activity_hint if activity_hint and activity_hint.get('id') == str(activity_id) else next(
+        (item for item in _objective_activities(session, user, perf=perf) if item['id'] == str(activity_id)), None)
+    if perf is not None:
+        perf.stage('cache_lookup')
     if not activity or activity['type'] in {'comparison', 'worked_example'}:
         raise ValueError('This response cannot be evaluated')
     from .tutor_engine import learning_signal, evaluate as evaluate_tutor
@@ -846,6 +866,8 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         raise ValueError('Only the current check can accept an answer')
     correct, score, feedback, outcome = (evaluate_tutor(activity, response_data) if signal
                                        else _evaluate_activity(concept, activity, response_data))
+    if perf is not None:
+        perf.stage('evaluation')
     objective_index = min(session.current_point, max(0, len(session.objectives) - 1))
     objective = session.objectives[objective_index] if session.objectives else {'id': '', 'text': concept.title}
     objective_id = objective['id']
@@ -859,6 +881,8 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         session.status = 'remediation'
         revision = hashlib.sha256(f'{key}:{activity["id"]}:signal'.encode()).hexdigest()[:8]
         _activate_remediation_plan(session, objective, activity, response_data, feedback, revision)
+        if perf is not None:
+            perf.stage('remediation')
         result = {'correct': None, 'score': None, 'feedback': feedback, 'attempt_id': '',
                   'objective_id': objective_id, 'outcome': outcome, 'controller_action': action}
         TeachingTurn.objects.create(session=session, role='learner', kind='activity', idempotency_key=key,
@@ -884,6 +908,8 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         session.save()
         return session, result, True
     attempt = EncounterAttempt.objects.create(user=user, concept=concept, activity_id=activity['id'], activity_type=activity['type'], stage=activity['stage'], response=response_data, correct=correct, score=score, feedback=feedback)
+    if perf is not None:
+        perf.stage('evidence_recording')
     session.objectives_covered = list(dict.fromkeys([*session.objectives_covered, objective_id]))
     meets_level = not activity.get('tutor') or activity['tutor']['level'] >= activity['tutor']['minimum_level']
     record_objective_evidence(session, objective_id, taught=True, interaction=True, score=score if meets_level else min(score, 69), source='activity', evidence_id=attempt.id, misconception=feedback if correct is False else '')
@@ -924,6 +950,8 @@ def submit_teaching_activity(concept, user, activity_id, response_data, idempote
         flow_payload = {'pedagogical_action': 'REMEDIATE', **({'activity': _public_activity(remedial)} if remedial else {})}
         if activity.get('tutor'):
             _activate_remediation_plan(session, objective, activity, response_data, feedback, str(attempt.id)[:8])
+            if perf is not None:
+                perf.stage('remediation')
             flow_payload = {'pedagogical_action': 'REMEDIATE'}
             content = feedback
 
@@ -1243,6 +1271,15 @@ class LearningPathViewSet(viewsets.ModelViewSet):
             ],
             'total_concepts': preview['total_concepts'],
             'estimated_minutes': preview['estimated_minutes'],
+            'granularity_audit': {
+                'validated_knowledge_object_count': sum(
+                    len([item for item in (res.source_understanding or {}).get('knowledge', {}).get('knowledge_objects', [])
+                         if item.get('accepted')]) for res in resource_objs),
+                'learner_topic_count': len(all_concepts),
+                'journey_concept_count': preview['total_concepts'],
+                'objective_count': sum(len(concept.get('knowledge_binding', {}).get('knowledge_ids', []))
+                                       for unit in preview['units'] for concept in unit['concepts']),
+            },
             'material_understanding': [{'resource_id': res.id,
                 'major_topics': [topic['title'] for topic in (res.source_understanding or {}).get('topics', [])[:8]],
                 'topic_count': (res.source_understanding or {}).get('quality', {}).get('topic_count', 0),
@@ -1346,6 +1383,13 @@ class LearningPathViewSet(viewsets.ModelViewSet):
 
         path.total_concepts = global_order
         path.save(update_fields=['total_concepts', 'status', 'updated_at'])
+
+        if first_concept:
+            concept_id, user_id = str(first_concept.id), request.user.id
+            from django_q.tasks import async_task
+            transaction.on_commit(lambda: async_task(
+                'learning.tasks.prepare_journey_lesson', concept_id, user_id, 0,
+                task_name=f'journey-plan:{concept_id}:first'))
 
         return Response({
             'id': str(path.id),
@@ -1641,8 +1685,20 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='teaching-session')
     def teaching_session(self, request, pk=None):
+        perf = JourneyPerformance('lesson_open')
         concept = self.get_object()
-        return Response(_session_data(_get_teaching_session(concept, request.user)))
+        perf.update(resource_id=concept.source_resource_id, concept_id=concept.id)
+        perf.stage('backend_lookup')
+        session = _get_teaching_session(concept, request.user, perf=perf)
+        perf.stage('concept_objective_lookup')
+        data = _session_data(session, perf=perf)
+        perf.stage('activity_conversion')
+        perf.update(objective_id=data.get('current_objective_id', ''))
+        perf.stage('serialization')
+        perf.finish()
+        from .tasks import queue_journey_lesson
+        queue_journey_lesson(session, min(session.current_point + 1, len(session.objectives)))
+        return Response(data)
 
     @action(detail=True, methods=['post'], url_path='teaching-message')
     @transaction.atomic
@@ -1915,7 +1971,10 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='teaching-response')
     @transaction.atomic
     def teaching_response(self, request, pk=None):
+        perf = JourneyPerformance('check_submission')
         concept = self.get_object()
+        perf.update(resource_id=concept.source_resource_id, concept_id=concept.id)
+        perf.stage('backend_lookup')
         activity_id = str(request.data.get('activity_id', ''))
         response_data = request.data.get('response') or {}
         request_objective_id = str(request.data.get('objective_id') or '')
@@ -1928,7 +1987,8 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                 raise ValueError('Response must be an object')
             preflight_session = _get_teaching_session(concept, request.user)
             player_stage_before = (preflight_session.state.get('player') or {}).get('current_stage_id', 'unknown')
-            preflight_activities = _objective_activities(preflight_session, request.user)
+            preflight_activities = _objective_activities(preflight_session, request.user, perf=perf)
+            perf.stage('concept_objective_lookup')
             submitted_activity = next((item for item in preflight_activities
                                        if item['id'] == activity_id), None)
             active_objective = _current_objective(preflight_session)
@@ -1947,6 +2007,7 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                     raise ValueError('The submitted teaching moment does not match the active check')
             session, evaluation, created = submit_teaching_activity(
                 concept, request.user, activity_id, response_data, request.data.get('idempotency_key', ''),
+                activity_hint=submitted_activity, perf=perf,
             )
         except ValueError as exc:
             message = str(exc)
@@ -1964,7 +2025,14 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             logger.warning('[JOURNEY CHECK] method=%s endpoint=%s concept_id=%s objective_id=%s moment_id=%s knowledge_ids=[] answer_present=%s player_stage_before=%s plan_revision=%s status=%s outcome=error next_action=%s returned_stage=unchanged remediation=false navigation=false state_reset=false',
                            request.method, request.path, concept.id, request_objective_id, request_moment_id,
                            _response_present(response_data), player_stage_before, request_plan_revision, response_status, next_action)
-            return Response({'error': code, 'message': message, 'recoverable': True,
+            safe_message = {
+                'stale_plan_revision': 'This lesson changed while your answer was being checked. Refresh to continue from your saved place.',
+                'invalid_active_stage': 'This check is no longer active. Refresh to continue from your saved place.',
+                'missing_moment': 'This check is no longer available. Refresh the lesson to continue.',
+            }.get(code, 'Flow could not evaluate that response cleanly. Your place and answer are still safe.')
+            perf.update(objective_id=request_objective_id)
+            perf.finish()
+            return Response({'error': code, 'message': safe_message, 'recoverable': True,
                              'next_action': next_action},
                             status=response_status)
         except Exception:
@@ -1972,10 +2040,16 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             logger.exception('[JOURNEY CHECK] method=%s endpoint=%s concept_id=%s objective_id=%s moment_id=%s knowledge_ids=[] answer_present=%s player_stage_before=%s plan_revision=%s status=500 outcome=error next_action=RETRY returned_stage=unchanged remediation=false navigation=false state_reset=false',
                              request.method, request.path, concept.id, request_objective_id, request_moment_id,
                              _response_present(response_data), player_stage_before, request_plan_revision)
+            perf.update(objective_id=request_objective_id)
+            perf.finish()
             return Response({'error': 'submission_failed',
                              'message': 'Flow could not check that answer. Your place and answer are still safe.',
                              'recoverable': True, 'next_action': 'RETRY'}, status=500)
-        data = _session_data(session)
+        # Never generate the next objective while serializing a check response.
+        # The current/base or remediation plan is already cached; a newly
+        # advanced objective is prepared by the bounded worker below.
+        data = _session_data(session, allow_plan_generation=False, perf=perf)
+        perf.stage('serialization')
         activity = submitted_activity
         # The objective may have advanced, so recover submitted activity metadata
         # from the persisted learner turn when it is no longer in the active plan.
@@ -1987,6 +2061,8 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
             if submitted and isinstance(submitted.payload, dict):
                 activity.update(submitted.payload.get('activity_meta') or {})
         submission = _answer_submission_contract(data, evaluation, activity, created)
+        if submission.get('plan_revision') is None:
+            submission['plan_revision'] = request_plan_revision
         response_status = 201 if created else 200
         logger.info('[JOURNEY CHECK] method=%s endpoint=%s concept_id=%s objective_id=%s moment_id=%s knowledge_ids=%s answer_present=%s player_stage_before=%s plan_revision=%s status=%s outcome=%s next_action=%s returned_stage=%s returned_stage_type=%s remediation=%s navigation=false state_reset=%s',
                     request.method, request.path, concept.id, submission['objective_id'], submission['moment_id'],
@@ -1994,6 +2070,15 @@ class ConceptNodeViewSet(viewsets.ModelViewSet):
                     submission['plan_revision'], response_status,
                     submission['outcome'], submission['next_action'], submission['next_stage']['id'],
                     submission['next_stage']['type'], submission['remediation_requested'], submission['state_reset'])
+        perf.update(objective_id=submission['objective_id'])
+        perf.finish()
+        if evaluation.get('outcome') == 'correct':
+            session_id = session.pk
+            def queue_advanced_objective():
+                from .tasks import queue_journey_lesson
+                current = TeachingSession.objects.select_related('concept').get(pk=session_id)
+                queue_journey_lesson(current, current.current_point)
+            transaction.on_commit(queue_advanced_objective)
         return Response({**data, 'evaluation': evaluation, 'submission': submission}, status=response_status)
 
     @action(detail=True, methods=['post'], url_path='teaching-flashcards/save')

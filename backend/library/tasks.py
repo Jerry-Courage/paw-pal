@@ -32,6 +32,33 @@ def get_fallback_study_kit(resource, text: str) -> dict:
     }
 
 
+def generate_optional_enrichment(res_id, features):
+    """Generate nonessential artifacts after Journey core readiness is visible."""
+    from library.models import Resource
+    resource = Resource.objects.get(pk=res_id)
+    bounded = [feature for feature in list(features or [])[:4] if feature != 'notes']
+    if not bounded:
+        return
+    try:
+        logger.info('[Task Queue] Optional enrichment started resource=%s features=%s', res_id, bounded)
+        _generate_selected_features(resource, bounded)
+    except Exception:
+        logger.exception('[Task Queue] Optional enrichment failed resource=%s', res_id)
+
+
+def mark_journey_ready(resource, features=None):
+    """Publish core readiness before bounded optional enrichment starts."""
+    resource.status = 'ready'
+    resource.processing_progress = 100
+    resource.status_text = 'Journey ready'
+    resource.save(update_fields=['status', 'processing_progress', 'status_text'])
+    bounded = [feature for feature in list(features or [])[:4] if feature != 'notes']
+    if bounded:
+        from django_q.tasks import async_task
+        async_task('library.tasks.generate_optional_enrichment', resource.id, bounded,
+                   task_name=f'optional-enrichment:{resource.id}')
+
+
 def create_vector_embeddings(resource, text: str):
     """
     Split text into chunks, generate 384-dim embeddings via AIService,
@@ -638,25 +665,7 @@ def process_resource_task(res_id):
 
         # ─── AUTO-GENERATE SELECTED FEATURES ───
         features = [f for f in (res.selected_features or []) if f != 'notes']
-        if features:
-            # Keep status as generating so SSE stays open during feature generation
-            res.status = 'generating'
-            res.processing_progress = 85
-            res.status_text = f"⚡ Generating {', '.join(features)}..."
-            res.save()
-            logger.info(f'[Task Queue] Auto-generating features {features} for Resource {res.id}')
-            _generate_selected_features(res, features)
-            # Now truly done
-            res.refresh_from_db()
-            res.status = 'ready'
-            res.processing_progress = 100
-            res.status_text = 'Journey ready'
-            res.save(update_fields=['status', 'processing_progress', 'status_text'])
-        else:
-            res.status = 'ready'
-            res.processing_progress = 100
-            res.status_text = 'Journey ready'
-            res.save(update_fields=['status', 'processing_progress', 'status_text'])
+        mark_journey_ready(res, features)
 
         logger.info(f'[Task Queue] Resource {res.id} marked as journey ready.')
         try:

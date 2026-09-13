@@ -331,8 +331,8 @@ def learner_concepts(model):
     groups = {}
     for item in model.get('knowledge', {}).get('knowledge_objects', []):
         if not item.get('accepted') or not complete_proposition(item['text']): continue
-        title = item['concept'].strip(' .')
-        if len(title) > 180: continue
+        title = concept_label(item['text'], item.get('semantic_type', ''), item.get('concept', '')).strip(' .')
+        if not concept_label_valid(title): continue
         key = title.casefold()
         entry = groups.setdefault(key, {'id': item['id'], 'title': title, 'knowledge_ids': [], 'source_refs': [], 'summary': ''})
         entry['knowledge_ids'].append(item['id'])
@@ -347,6 +347,9 @@ def understanding_revision(model):
 
 def learner_preview(model):
     concepts = learner_concepts(model) if model.get('pedagogy_revision') == REVISION else []
+    knowledge_objects = [item for item in model.get('knowledge', {}).get('knowledge_objects', [])
+                         if item.get('accepted')]
     return {'concept_count': len(concepts), 'concepts': [{'id': item['id'], 'title': item['title']} for item in concepts],
+            'knowledge_object_count': len(knowledge_objects), 'learner_topic_count': len(concepts),
             'count_source': 'validated_knowledge_objects', 'understanding_revision': understanding_revision(model),
             'pedagogy_revision': model.get('pedagogy_revision'), 'current': model.get('pedagogy_revision') == REVISION}

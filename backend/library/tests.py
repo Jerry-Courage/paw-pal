@@ -1,10 +1,25 @@
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from .models import Resource, SourceBookmark
+
+
+class JourneyReadinessTests(TestCase):
+    def test_optional_enrichment_is_queued_after_core_readiness(self):
+        user = get_user_model().objects.create_user(username='ready-learner')
+        resource = Resource.objects.create(owner=user, title='Ready source', status='generating', processing_progress=78)
+        from .tasks import mark_journey_ready
+        with patch('django_q.tasks.async_task') as queued:
+            mark_journey_ready(resource, ['videos', 'podcast'])
+        resource.refresh_from_db()
+        self.assertEqual(resource.status, 'ready')
+        self.assertEqual(resource.processing_progress, 100)
+        self.assertEqual(resource.status_text, 'Journey ready')
+        queued.assert_called_once()
 
 class SourceBookmarkTests(TestCase):
     def setUp(self):

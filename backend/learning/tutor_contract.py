@@ -135,7 +135,8 @@ def validate_tutor_plan(raw, objective, grounding, prerequisites=None):
         if rep == 'DATA_TABLE':
             if any(cell not in cited_text for row in content['rows'] for cell in row):
                 raise TeachingPlanValidationError('Table contains unsupported data')
-        if content['evidence'] and any(quote not in cited_text for quote in content['evidence']):
+        normalized_cited = normalized(cited_text)
+        if content['evidence'] and any(normalized(quote) not in normalized_cited for quote in content['evidence']):
             raise TeachingPlanValidationError('Evidence quotation is not in cited source')
         if rep == 'CODE_TRACE' and content['code'] not in cited_text:
             raise TeachingPlanValidationError('Code trace must preserve source code')

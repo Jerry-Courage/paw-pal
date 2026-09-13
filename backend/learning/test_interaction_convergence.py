@@ -1,15 +1,17 @@
 from copy import deepcopy
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from library.models import Resource
-from library.pedagogical_knowledge import learner_concepts, understanding_revision
+from library.pedagogical_knowledge import REVISION, learner_concepts, understanding_revision
 from library.source_understanding import build_understanding
 from learning.material_grounding import grounded_objectives
 from learning.models import ConceptNode, EncounterAttempt, LearningPath, TeachingSession
 from learning.views import _objective_activities
+from learning.teaching_plan import TeachingPlanValidationError
 
 
 SOURCE = (
@@ -76,7 +78,7 @@ class InteractionConvergenceTests(TestCase):
         check = self.activate_check()
         answer = check['content']['expected_answer']
         response = self.submit(check, answer, 'correct-once')
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 201, response.data)
         submission = response.data['submission']
         self.assertEqual(submission['outcome'], 'correct')
         self.assertEqual(submission['next_action'], 'ADVANCE')
@@ -88,7 +90,7 @@ class InteractionConvergenceTests(TestCase):
     def test_incorrect_answer_keeps_objective_and_enters_pinned_remediation(self):
         check = self.activate_check()
         response = self.submit(check, 'A disconnected claim that does not establish the requested relationship.', 'wrong-once')
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 201, response.data)
         submission = response.data['submission']
         self.assertIn(submission['outcome'], {'incorrect', 'partial'})
         self.assertEqual(submission['next_action'], 'REMEDIATE')
@@ -167,4 +169,79 @@ class InteractionConvergenceTests(TestCase):
         model = self.concept.source_resource.source_understanding
         self.assertEqual(preview['concept_count'], len(learner_concepts(model)))
         self.assertEqual(preview['count_source'], 'validated_knowledge_objects')
+        self.assertEqual(preview['learner_topic_count'], len(learner_concepts(model)))
+        self.assertGreaterEqual(preview['knowledge_object_count'], preview['learner_topic_count'])
         self.assertTrue(preview['current'])
+
+    def test_cached_lesson_open_does_not_generate_tutor_plan(self):
+        self.activate_check()
+        with patch('learning.teaching_plan.generate_teaching_plan') as generate, \
+             patch('django_q.tasks.async_task'):
+            response = self.client.get(f'/api/learning/concepts/{self.concept.id}/teaching-session/')
+        self.assertEqual(response.status_code, 200)
+        generate.assert_not_called()
+
+    def test_check_submission_does_not_regenerate_base_plan(self):
+        check = self.activate_check()
+        with patch('learning.teaching_plan.generate_teaching_plan') as generate:
+            response = self.submit(check, check['content']['expected_answer'], 'fast-correct')
+        self.assertEqual(response.status_code, 201)
+        generate.assert_not_called()
+
+    def test_incorrect_answer_preserves_cached_base_plan(self):
+        check = self.activate_check()
+        before = deepcopy(TeachingSession.objects.get(pk=self.session.pk).state['teaching_plans'][check['objective_id']]['plan'])
+        response = self.submit(check, 'This does not establish the tested relationship.', 'base-preserved')
+        self.assertEqual(response.status_code, 201)
+        cached = TeachingSession.objects.get(pk=self.session.pk).state['teaching_plans'][check['objective_id']]
+        self.assertEqual(cached['base_plan'], before)
+        self.assertTrue(cached['remediation_active'])
+
+    def test_internal_remediation_validation_error_is_not_returned(self):
+        check = self.activate_check()
+        internal = 'Evidence quotation is not in cited source'
+        with patch('learning.views._activate_remediation_plan', side_effect=TeachingPlanValidationError(internal)):
+            response = self.submit(check, 'An unsupported answer.', 'hidden-validation')
+        self.assertEqual(response.status_code, 422)
+        self.assertNotIn(internal, response.data['message'])
+        self.assertIn('place and answer', response.data['message'])
+
+    def test_next_objective_prefetch_is_bounded_and_idempotent(self):
+        session = TeachingSession.objects.get(pk=self.session.pk)
+        if len(session.objectives) < 2:
+            session.objectives.append({'id': 'next-objective', 'text': 'Apply queue backpressure.', 'knowledge_ids': []})
+            session.save(update_fields=['objectives', 'last_active_at'])
+        from learning.tasks import queue_journey_lesson
+        with patch('django_q.tasks.async_task') as queued:
+            self.assertTrue(queue_journey_lesson(session, 1))
+            session.refresh_from_db()
+            self.assertFalse(queue_journey_lesson(session, 1))
+        self.assertEqual(queued.call_count, 1)
+
+    def test_first_lesson_is_queued_when_journey_becomes_visible(self):
+        resource = Resource.objects.get(pk=self.concept.source_resource_id)
+        model = deepcopy(resource.source_understanding)
+        model['quality'] = {**model.get('quality', {}), 'status': 'ready'}
+        resource.source_understanding = model
+        resource.save(update_fields=['source_understanding', 'updated_at'])
+        with patch('django_q.tasks.async_task') as queued, self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post('/api/learning/paths/build/', {
+                'goal': 'Understand queue processing',
+                'title': 'Prepared queue Journey',
+                'resources': [self.concept.source_resource_id],
+                'depth': 'quick',
+            }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(any(call.args[0] == 'learning.tasks.prepare_journey_lesson' for call in queued.call_args_list))
+
+    def test_knowledge_objects_are_grouped_into_learner_topics(self):
+        objects = [
+            {'id': 'k1', 'accepted': True, 'text': 'Queue buffering means storing items until a consumer processes them.',
+             'concept': 'Queue buffering', 'semantic_type': 'DEFINITION', 'source_refs': []},
+            {'id': 'k2', 'accepted': True, 'text': 'Queue buffering separates producer speed from consumer speed.',
+             'concept': 'Queue buffering', 'semantic_type': 'CAUSE_EFFECT', 'source_refs': []},
+        ]
+        topics = learner_concepts({'pedagogy_revision': REVISION, 'knowledge': {'knowledge_objects': objects}})
+        self.assertEqual(len(objects), 2)
+        self.assertEqual(len(topics), 1)
+        self.assertEqual(topics[0]['knowledge_ids'], ['k1', 'k2'])
